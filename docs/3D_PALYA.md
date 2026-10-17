@@ -511,6 +511,14 @@ következő pontig futás (kék) és a passz (sárga) nyila —, alatta a lépé
 leírása ("3. fut 3,2 m · passz: 2 → 3"), a lap tetején a kiértékelés. Az
 öltözőbe, a táblához. (/figura-lap — a bemenete a /figura3d-é.)
 
+**Lépésenként.** A figura-oldal "⏯ Lépésenként" gombja (vagy a `lepes=1`
+link-paraméter) bekapcsolva a lejátszás minden kulcs-pozíción MEGÁLL: a
+jelző mutatja, hol tart ("⏸ 2/3 · Közép · labda: 2.") — az edző
+elmagyarázza, hol áll a fal, kinél a labda, ki hova indul —, a ▶ / szóköz
+(VR-ben a ravasz) továbbengedi. Az N / P (VR-ben A / B) a következő /
+előző kulcs-pozícióra ugrik. Vezetve (közös nézés) a megállás a csapatnak
+is átmegy, a jelző a headsetben is látszik ("— az edző magyaráz").
+
 **Támadásból figura.** Az app 3D fülén a "✎ Figurává" a MOSTANI
 pillanat szervezett támadását a Figura-tervezőbe viszi: a támadó csapat
 mezőnyjátékosainak helye három kulcs-pozíción (a támadás elejétől a

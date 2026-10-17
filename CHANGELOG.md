@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **Lépésenként a figurában** (böngésző/VR + motor): a figura-oldal "⏯
+  Lépésenként" gombja (vagy a `lepes=1` link) minden kulcs-pozíción
+  megállítja a lejátszást — az edző magyaráz (hol a fal, kinél a labda,
+  ki hova indul), a ▶ / szóköz / VR-ben a ravasz továbbengedi; az N / P
+  (VR: A / B) a kulcs-pozíciók közt lép. A jelző ("⏸ 2/3 · Közép · labda:
+  2.") a headsetben is látszik, vezetve a csapatnak is. A motor a
+  kulcs-pozíciók idejét is adja.
+
 - **Támadó be és ki a Figura-tervezőben** (app): az alap figura öt
   támadóval indult, újat nem lehetett hozzáadni — a hatfős támadás nem
   volt megrajzolható. Most "+": új támadó a következő szabad posztra (jobb

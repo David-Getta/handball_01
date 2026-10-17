@@ -411,6 +411,42 @@ def test_a_szemevel_nezet_linkrol(tmp_path, monkeypatch):
     assert "szem" not in r.headers["location"]
 
 
+def test_a_kulcs_poziciok_ideje():
+    """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
+    végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""
+    m, e = setplay_3d_match([[(20, 10), (27, 10), (34, 10)], [(24, 4)]],
+                            DefenseModel())
+    assert e["kulcs_t"] == [1.5, 3.5, 5.5]
+    for t, (x, y) in zip(e["kulcs_t"], [(20, 10), (27, 10), (34, 10)]):
+        f = m.frames[int(round(t * m.meta.fps))]
+        p = next(p for p in f.players
+                 if p.team == Team.HOME and p.jersey_number == 1)
+        assert math.isclose(p.x, x) and math.isclose(p.y, y)
+    # Egyetlen pont: egy kulcs-pozíció (az állókép végén).
+    _, e = setplay_3d_match([[(20, 10)]], DefenseModel())
+    assert e["kulcs_t"] == [FIGURA_3D_ALLAS_S]
+
+
+def test_a_figura_lepesenkent():
+    """A "⏯ Lépésenként" gomb: a lejátszás a kulcs-pozíciókon megáll, az
+    N / P (VR: A / B) a kulcs-pozíciók közt lép, a link viszi (lepes=1),
+    a jelző a VR-táblán is látszik."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10), (34, 10)]], DefenseModel())
+    oldal = view3d_html(m, figura=e)
+    assert '"kulcs_t":[1.5,3.5,5.5]' in oldal
+    assert 'lepesGomb.id = "lepesGomb";' in oldal
+    assert '<div id="lepesJelzo"></div>' in oldal
+    assert '"hetesFelirat", "emberJelzo", "lepesJelzo"];' in oldal
+    assert "vetitesFrissit(t0, ido); lepesFrissit(t0, ido);" in oldal
+    assert "if (FIGURA) return kulcsLep(irany);" in oldal
+    assert 'if (FIGURA && lepesMod) q.set("lepes", "1");' in oldal
+    assert 'if (FIGURA && v("lepes") === "1") lepesAllit(true);' in oldal
+    # A követő nem áll meg magától (a vezető megállása jön át).
+    assert 'if (!lepesMod || kozosMod === "kovet") return;' in oldal
+
+
 def test_a_figura_oldal_figura_lap_gombja():
     from handball.pipeline.view3d_html import view3d_html
 

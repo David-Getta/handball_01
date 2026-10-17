@@ -772,6 +772,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #videoAblak img{display:block;width:100%}
  #videoInfo{position:absolute;left:6px;bottom:4px;font-size:11px;color:#dfe7ef;text-shadow:0 0 3px #000}
  #vetitesJelzo{padding:4px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);color:#9fd0ff;font-size:12.5px;display:none}
+ #lepesJelzo{padding:4px 12px;border:1px solid #ffc83d;border-radius:8px;background:rgba(16,24,32,.88);color:#ffc83d;font-size:12.5px;display:none}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
  #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
  #jelenetLista .jfej .kulcs{font-size:11.5px;white-space:nowrap;opacity:.9}
@@ -969,12 +970,13 @@ Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: k
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
-[ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: bal kar — mozgás, jobb kar oldalra — 30°-os fordulás; A/X — következő jelenet (felvétel visszajátszásakor: fejezet), B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; felvétel visszajátszásakor a ravasz szünet/tovább; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés követőként: markolat — ✋ kérdésem van; vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
+[ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai; a figurában: kulcs-pozíció) · V — vetítés: a lista sorai egymás után<br>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: bal kar — mozgás, jobb kar oldalra — 30°-os fordulás; A/X — következő jelenet (felvétel visszajátszásakor: fejezet; a figurában: kulcs-pozíció), B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; felvétel visszajátszásakor a ravasz szünet/tovább; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés követőként: markolat — ✋ kérdésem van; vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
  <div id="vetitesJelzo"></div>
+ <div id="lepesJelzo"></div>
  <div id="jegyzetFelirat"></div>
  <div id="dontesFelirat"></div>
  <div id="szabadFelirat"></div>
@@ -2033,6 +2035,7 @@ function linkEpit(){
   // A figura linkje a figurát is viszi (a pályán kívül nincs mögötte meccs).
   if (FIGURA) for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])
     if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
+  if (FIGURA && lepesMod) q.set("lepes", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -2093,6 +2096,7 @@ function linkAlkalmaz(){
   if (v("vetit") === "1"){ if (csakJegyzet) vetitesVar = true; else vetitesAllit(true); }
   if (v("rajz")){ rajzok.push(...rajzDekodol(v("rajz"))); rajzFrissit(); }
   if (v("video") === "1") videoAllit(true);
+  if (FIGURA && v("lepes") === "1") lepesAllit(true);
   if (v("kovet") === "1") kozosAllit("kovet");
   else if (v("vezet") === "1") kozosAllit("vezet");
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
@@ -3208,7 +3212,79 @@ if (FIGURA){
   lapGomb.title = "A figura nyomtatható lapja (PDF-be is): lépésenként ábra a futásokkal, a passzokkal és a fallal";
   lapGomb.onclick = () => window.open("/figura-lap?" + FIGURA_KOD, "_blank");
   document.getElementById("linkGomb").after(lapGomb);
+  const lepesGomb = document.createElement("button");
+  lepesGomb.id = "lepesGomb";
+  lepesGomb.textContent = "⏯ Lépésenként";
+  lepesGomb.title = "Megáll minden kulcs-pozíción (magyarázathoz) — ▶ / szóköz (VR: ravasz): tovább; N / P (VR: A / B): következő / előző kulcs-pozíció";
+  lepesGomb.onclick = () => lepesAllit(!lepesMod);
+  lapGomb.after(lepesGomb);
 }
+// ---- Lépésenként (figura): megállás minden kulcs-pozíción ------------
+// A motor adja a kulcs-pozíciók idejét (kulcs_t). Bekapcsolva a lejátszás
+// a kulcs-pozíción megáll — az edző magyaráz —, a ▶ / szóköz / ravasz
+// továbbengedi. A követő nem áll meg magától: a vezető megállását a közös
+// nézés hozza (a jelző neki is mutatja, hol tart).
+const KULCS_T = FIGURA && Array.isArray(FIGURA.kulcs_t) ? FIGURA.kulcs_t : [];
+let lepesMod = false;
+const lepesJelzo = document.getElementById("lepesJelzo");
+function lepesAllit(be){
+  lepesMod = !!be && KULCS_T.length > 0;
+  const g = document.getElementById("lepesGomb");
+  if (g) g.classList.toggle("be", lepesMod);
+}
+function kulcsNev(i, n){
+  // (mint a tervezőben és a figura-lapon)
+  if (n === 3) return ["Kezdő", "Közép", "Vég"][i];
+  if (n === 2) return ["Kezdő", "Vég"][i];
+  return (i + 1) + ".";
+}
+function lepesMegall(i){
+  ido = KULCS_T[i]; csuszka.value = ido;
+  megy = false; lejatszasGomb.textContent = "▶";
+}
+function lepesFrissit(t0, t1){
+  if (!lepesMod || kozosMod === "kovet") return;
+  const i = KULCS_T.findIndex(kt => t0 < kt && t1 >= kt);
+  if (i >= 0) lepesMegall(i);
+}
+// N / P és a VR A / B gombja a figurában: a következő / előző kulcs-pozíció
+// (körbe: a végéről az elejére).
+function kulcsLep(irany){
+  if (!KULCS_T.length) return null;
+  let i;
+  if (irany > 0){
+    i = KULCS_T.findIndex(kt => kt > ido + 0.05);
+    if (i < 0) i = 0;
+  } else {
+    i = -1;
+    for (let j = KULCS_T.length - 1; j >= 0; j--)
+      if (KULCS_T[j] < ido - 0.05){ i = j; break; }
+    if (i < 0) i = KULCS_T.length - 1;
+  }
+  lepesMegall(i);
+  return {s: KULCS_T[i]};
+}
+function lepesIndex(){
+  if (megy) return -1;
+  return KULCS_T.findIndex(kt => Math.abs(ido - kt) < 0.06);
+}
+function lepesJelzoFrissit(){
+  if (!FIGURA) return;
+  const i = lepesIndex();
+  let sz = "";
+  if (i >= 0){
+    const lb = (FIGURA.labda || [])[i];
+    sz = "⏸ " + (i + 1) + "/" + KULCS_T.length + " · " + kulcsNev(i, KULCS_T.length)
+      + (Number.isInteger(lb) ? " · labda: " + (lb + 1) + "." : "")
+      + (kozosMod === "kovet" ? " — az edző magyaráz"
+         : " — tovább: ▶ / szóköz (VR: ravasz) · N / P (VR: A / B): lépés");
+  }
+  if (lepesJelzo.textContent !== sz) lepesJelzo.textContent = sz;
+  const lat = sz ? "block" : "none";
+  if (lepesJelzo.style.display !== lat) lepesJelzo.style.display = lat;
+}
+window.lepesProba = () => ({be: lepesMod, kulcs: KULCS_T, megy, ido,
+  jelzo: lepesJelzo.style.display === "block" ? lepesJelzo.textContent : ""});
 function kozosAllit(m){
   if (!KZ_ID){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
   const elozo = kozosMod;
@@ -4297,6 +4373,7 @@ function vrGombEl(kulcs, index, lenyomva){
 // A jelenet-lépés KÖZÖS a kontroller-gombokkal és az N/P billentyűkkel.
 let vrJelenetUtolso = null;
 function jelenetLep(irany){
+  if (FIGURA) return kulcsLep(irany);
   const sorok = jelenetSorokSzurt();
   if (!sorok.length) return null;
   const cel = lapozCel(sorok.map(r => r.s), ido, vrJelenetUtolso, irany);
@@ -4353,7 +4430,7 @@ window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
 // fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
 // előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
 // is bekapcsolja (próbához).
-const VR_FELIRAT_FORRASOK = ["vetitesJelzo", "jegyzetFelirat", "felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
+const VR_FELIRAT_FORRASOK = ["vetitesJelzo", "jegyzetFelirat", "felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo", "lepesJelzo"];
 const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
 const vrTextura = new THREE.CanvasTexture(vrVaszon);
 const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
@@ -4438,11 +4515,11 @@ fest.setAnimationLoop(() => {
   const most = performance.now();
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;
   if (megy){ const t0 = ido; ido = Math.min(veg, ido + dt * sebesseg);
-    vetitesFrissit(t0, ido);
+    vetitesFrissit(t0, ido); lepesFrissit(t0, ido);
     // (a figura ismétel: a végén — az állókép után — elölről)
     if (ido >= veg){ if (FIGURA && veg > 0) ido = 0; else { megy = false; lejatszasGomb.textContent = "▶"; } }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); felvetelFrissit(); valaszJelFrissit(); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); felvetelFrissit(); valaszJelFrissit(); felirat(ido); lepesJelzoFrissit(); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

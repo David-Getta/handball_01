@@ -239,7 +239,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     "hossz_s" (a mozgás), "utak" (támadónként a pályára szorított
     kulcs-pozíciók — a padló nyilaihoz), "labda" (kulcs-pozíciónként a
     labdás sorszáma), "passzok" ([[x1, y1, x2, y2], …] — a passzok a
-    kulcs-pozíciókon)}). ValueError, ha nincs érvényes támadó."""
+    kulcs-pozíciókon), "kulcs_t" (kulcs-pozíciónként az idő mp-ben, a
+    kezdő állóképpel együtt — a lépésenkénti megálláshoz)}). ValueError,
+    ha nincs érvényes támadó."""
     config = config or TacticsConfig()
     utak = []
     for ut in list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]:
@@ -349,6 +351,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
         "utak": [[[round(x, 1), round(y, 1)] for x, y in u] for u in utak],
         "labda": labda,
         "passzok": passzok,
+        # A k. kulcs-pozíció a mozgás k/szakaszok részénél (az állókép után).
+        "kulcs_t": [round((allas + k * (lepesek - 1) / max(1, szakaszok)) / fps, 2)
+                    for k in range(szakaszok + 1)],
     }
 
 
