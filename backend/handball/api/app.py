@@ -3938,6 +3938,8 @@ def create_app():
                    "fejezetek": len(shared3d_felvetel_fejezetek(
                        d.get("allapotok") or [])),
                    "jelen": [str(x) for x in (d.get("jelen") or [])],
+                   # a figura-felvétel paraméterei (a /figura3d lekérdezése)
+                   **({"figura": str(d["figura"])} if d.get("figura") else {}),
                    # a lemezen (az állapotok + a hang) — a takarításhoz
                    "meret": st.st_size + int((d.get("hang") or {}).get(
                        "meret") or 0)}
@@ -3981,6 +3983,25 @@ def create_app():
         ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
         return ki
 
+    def _felvetel_ervenyes(match_id: str) -> bool:
+        """A felvétel gazdája: egy könyvtári meccs vagy a FIGURA közös
+        azonosítója (a figura-oldal felvételei — a figura paramétereivel)."""
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+        return match_id in _store or match_id == FIGURA_KOZOS_ID
+
+    def _figura_felvetel_meta(figura: str):
+        """A figura-felvétel "meccs-fejléce" a listákhoz: match_id a
+        FIGURA közös azonosító, home_team a figura neve (a cim
+        paraméterből), away_team üres."""
+        from types import SimpleNamespace
+        from urllib.parse import parse_qs
+
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID, figura_nev
+        cim = (parse_qs(figura or "").get("cim") or [""])[0]
+        return SimpleNamespace(match_id=FIGURA_KOZOS_ID,
+                               home_team=figura_nev(cim) or "Figura",
+                               away_team="")
+
     def _legutobbi_felvetelek() -> list:
         """A könyvtár MINDEN megbeszélés-felvétele [(fejléc, meta, út)]
         alakban, a legújabb elöl (a /kovet várólapja és a
@@ -3995,6 +4016,14 @@ def create_app():
                 fej = _felvetel_fej(p)
                 if fej is not None:
                     ki.append((fej, meta, p))
+        # A figura-oldal felvételei (a figura neve a "meccs" helyén).
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+        mappa = _felvetel_mappa(FIGURA_KOZOS_ID)
+        if mappa.is_dir():
+            for p in mappa.glob("*.json"):
+                fej = _felvetel_fej(p)
+                if fej is not None and fej.get("figura"):
+                    ki.append((fej, _figura_felvetel_meta(fej["figura"]), p))
         ki.sort(key=lambda s: (s[0]["letrehozva"], s[0]["id"]), reverse=True)
         return ki
 
@@ -4014,7 +4043,7 @@ def create_app():
                                         shared3d_felvetel_allapot,
                                         shared3d_felvetel_jelen,
                                         shared3d_felvetel_nev)
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         nyers = body.get("allapotok")
         if not isinstance(nyers, list) or len(nyers) > SHARED3D_REC_MAX:
@@ -4036,6 +4065,16 @@ def create_app():
             raise HTTPException(status_code=400,
                                 detail="a felvételben kevés a jó állapot")
         sorok.sort(key=lambda s: s[0])
+        # A figura-felvétel a figura paramétereivel (mint a közös nézés).
+        from ..pipeline.play_simulation import (FIGURA_KOZOS_ID,
+                                                FIGURA_KOZOS_MAX)
+        figura = None
+        if match_id == FIGURA_KOZOS_ID:
+            import re as _re_f
+            figura = str(body.get("figura") or "")
+            if (not figura or len(figura) > FIGURA_KOZOS_MAX
+                    or not _re_f.fullmatch(r"[A-Za-z0-9%=&.,;_+\-]+", figura)):
+                raise HTTPException(status_code=400, detail="rossz figura")
         nev = shared3d_felvetel_nev(body.get("nev"))
         rid = uuid.uuid4().hex[:10]
         adat = {"id": rid, "nev": nev or "Megbeszélés",
@@ -4044,7 +4083,8 @@ def create_app():
                 "hossz_s": sorok[-1][0], "allapotok": sorok,
                 # Kik követték élőben (a vezető a felvétel alatt a
                 # jelenlévő, névvel követők neveit gyűjti).
-                "jelen": shared3d_felvetel_jelen(body.get("jelen"))}
+                "jelen": shared3d_felvetel_jelen(body.get("jelen")),
+                **({"figura": figura} if figura else {})}
         mappa = _felvetel_mappa(match_id)
         mappa.mkdir(parents=True, exist_ok=True)
         (mappa / f"{rid}.json").write_text(
@@ -4058,7 +4098,7 @@ def create_app():
         """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
         "letrehozva", "hossz_s", "hang" (van-e hangja), "fejezetek" (a
         fejezetek száma), "nezok" (ki nézte meg)}]} — a legújabb elöl."""
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         ki = []
         mappa = _felvetel_mappa(match_id)
@@ -4075,7 +4115,7 @@ def create_app():
         """Egy felvétel teljes adata (a visszajátszáshoz), a fejezeteivel
         ("fejezetek": court3d.shared3d_felvetel_fejezetek)."""
         from ..pipeline.court3d import shared3d_felvetel_fejezetek
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         if not rid.isalnum():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
@@ -4090,7 +4130,7 @@ def create_app():
     @app.delete("/matches/{match_id}/felvetelek/{rid}")
     def felvetel_torol(match_id: str, rid: str):
         """Egy felvétel törlése."""
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not rid.isalnum() or not p.exists():
@@ -4105,7 +4145,7 @@ def create_app():
         """Egy felvétel átnevezése: {"nev"} (üresen "Megbeszélés"). Válasz:
         {"id", "nev"}. A hálózati őr nem engedi (csak a saját gépről)."""
         from ..pipeline.court3d import shared3d_felvetel_nev
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not rid.isalnum() or not p.exists():
@@ -4130,7 +4170,7 @@ def create_app():
 
         from ..pipeline.court3d import (SHARED3D_REC_AUDIO_MAX,
                                         SHARED3D_REC_AUDIO_TYPES)
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not rid.isalnum() or not p.exists():
@@ -4171,7 +4211,7 @@ def create_app():
         from fastapi.responses import FileResponse
 
         from ..pipeline.court3d import SHARED3D_REC_AUDIO_TYPES
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         h = p.with_suffix(".hang")
@@ -4238,7 +4278,7 @@ def create_app():
         import datetime
 
         from ..pipeline.court3d import quiz_name_key, shared3d_nev
-        if match_id not in _store:
+        if not _felvetel_ervenyes(match_id):
             raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not rid.isalnum() or not p.exists():
@@ -4365,15 +4405,23 @@ def create_app():
                     list(fej.get("jelen") or []) + _felvetel_nezok(p_))}
                 jel = (' · <span style="color:#6e7b8f">✓ láttad</span>' if latta
                        else ' · <b style="color:#ffc83d">• még nem láttad</b>')
+            if fej.get("figura"):
+                # (a figura-felvétel a figura-oldalt nyitja a felvétellel)
+                cel_ = ("/figura3d?" + fej["figura"] + "&felvetel="
+                        + quote(fej["id"], safe=""))
+                alcim_ = f"Figura: {meta.home_team}"
+            else:
+                cel_ = ("/matches/" + quote(meta.match_id, safe="")
+                        + "/view3d?felvetel=" + quote(fej["id"], safe=""))
+                alcim_ = f"{meta.home_team} – {meta.away_team}"
             sorok.append(
                 '<li style="margin:.6em 0"><a style="color:#7ee0d2;'
-                'font-size:1.3em" href="/matches/'
-                + _html.escape(quote(meta.match_id, safe=""))
-                + "/view3d?felvetel=" + _html.escape(quote(fej["id"], safe=""))
-                + (_html.escape("&nev=" + quote(nev_, safe="")) if nev_ else "")
+                'font-size:1.3em" href="'
+                + _html.escape(cel_ + ("&nev=" + quote(nev_, safe="")
+                                       if nev_ else ""))
                 + '">▶ ' + _html.escape(fej["nev"]) + "</a><br>"
                 + '<span style="color:#93a0b4">'
-                + _html.escape(f"{meta.home_team} – {meta.away_team}")
+                + _html.escape(alcim_)
                 + f" · {mp // 60}:{mp % 60:02d}"
                 + (" · 🎙" if fej["hang"] else "") + "</span>" + jel + "</li>")
         lista = ("" if not sorok else

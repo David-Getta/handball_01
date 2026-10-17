@@ -617,7 +617,12 @@ figurára áll (a vezető a figura paramétereit is küldi), a lejátszás, a
 szünet, a nyilak, a mutató, az "📍 Ide mindenki" és a kvíz is megy — pl.
 megállítod a passz előtt, és a játékosok a padlóra mutatnak: hova
 futnál? A kvíz eredménye figuránál nem kerül a jegyzetek közé (nincs
-mögötte meccs), és felvétel sem készül. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
+mögötte meccs). A "⏺ Felvétel" a figurában is megy (a hangoddal): a
+felvétel a figurával együtt mentődik, a figura-oldal "▶ Felvételek"
+listája az ugyanahhoz a figurához tartozókat mutatja, a csapat
+várólapja és a kezdőlap "LEGUTÓBBI MEGBESZÉLÉSEK" kártyája is kínálja
+("Figura: Kereszt") — aki kimaradt, a lépésenkénti magyarázatot
+visszanézi. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
 a klub-hálózatról is elérhető (olvasás).
 
 ## VR-headset

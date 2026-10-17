@@ -3112,7 +3112,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Tooltip(
                           message: recordingPeople(f),
                           child: Text(
-                              "${f["home_team"]} – ${f["away_team"]} · "
+                              // (a figura-oldal felvétele: a figura neve)
+                              "${f["figura"] != null ? "Figura: ${f["home_team"]}" : "${f["home_team"]} – ${f["away_team"]}"} · "
                               "${recordingSubtitle(f)}",
                               overflow: TextOverflow.ellipsis,
                               style: AppText.label.copyWith(fontSize: 11.5)),
@@ -3218,9 +3219,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Egy felvétel a böngészős 3D-ben (a ?felvetel= linkkel magától indul).
   Future<void> _felvetelNyit(Map<String, dynamic> f) async {
-    final url = Uri.parse("${_api.baseUrl}/matches/"
-            "${Uri.encodeComponent("${f["match_id"]}")}/view3d")
-        .replace(queryParameters: {"felvetel": "${f["id"]}"}).toString();
+    // A figura-oldal felvétele a figura-oldalt nyitja (a figurával).
+    final url = f["figura"] is String
+        ? "${_api.baseUrl}/figura3d?${f["figura"]}"
+            "&felvetel=${Uri.encodeComponent("${f["id"]}")}"
+        : Uri.parse("${_api.baseUrl}/matches/"
+                "${Uri.encodeComponent("${f["match_id"]}")}/view3d")
+            .replace(queryParameters: {"felvetel": "${f["id"]}"}).toString();
     final ok = await openInBrowser(url);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(

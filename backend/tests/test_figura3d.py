@@ -280,7 +280,8 @@ def test_a_figura_kozos_nezese(tmp_path, monkeypatch):
     oldal = view3d_html(m, figura=e)
     assert 'const KZ_ID = FIGURA ? "figura" : ADAT.match_id;' in oldal
     assert "...(FIGURA ? {figura: FIGURA_KOD} : {})" in oldal
-    assert 'for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])' in oldal
+    # (a felvétel a figurában is megy — a gombjai nincsenek elrejtve)
+    assert 'for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])' not in oldal
 
 
 def test_a_figura_neve_nem_csonkul(tmp_path, monkeypatch):
@@ -793,6 +794,46 @@ def test_a_figura_video_gyorsitotar(tmp_path, monkeypatch):
     konyvtar.mkdir(parents=True, exist_ok=True)
     (konyvtar / "lista.json").write_text("[1, 2]", encoding="utf-8")
     assert c.get("/figura-fuzet").status_code == 200
+
+
+def test_felvetel_a_figuraban(tmp_path, monkeypatch):
+    """A figura-oldal felvétele a "figura" azonosító alá mentődik a figura
+    paramétereivel (nélkülük / rossz alakkal 400); a lista, a lekérés, a
+    megnézés és a törlés megy; a várólap és a kezdőlap listája a
+    figura-oldalt nyitja ("Figura: <név>"); az oldal rögzít és szűr."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    c = TestClient(_app(tmp_path, monkeypatch))
+    url = "/matches/figura/felvetelek"
+    all_ = [[0, {"t": 1}], [1.5, {"t": 2.5, "playing": True}]]
+    fig = "u=20%2C10%3B24%2C5&l=0%2C1&cim=Kereszt"
+    assert c.post(url, json={"allapotok": all_}).status_code == 400
+    assert c.post(url, json={"allapotok": all_,
+                             "figura": 'u=1"><b>'}).status_code == 400
+    d = c.post(url, json={"nev": "Figura — Kereszt", "allapotok": all_,
+                          "figura": fig}).json()
+    lista = c.get(url).json()["felvetelek"]
+    assert [(f["id"], f["figura"]) for f in lista] == [(d["id"], fig)]
+    assert c.get(f"{url}/{d['id']}").json()["figura"] == fig
+    assert c.post(f"{url}/{d['id']}/megnezte",
+                  json={"nev": "Anna"}).status_code == 200
+    lap = c.get("/kovet").text
+    assert (f'href="/figura3d?{fig.replace("&", "&amp;")}&amp;felvetel={d["id"]}"'
+            in lap)
+    assert "Figura: Kereszt" in lap
+    r = c.get("/library/recordings").json()["felvetelek"][0]
+    assert (r["match_id"], r["home_team"], r["figura"]) == ("figura", "Kereszt", fig)
+    assert c.delete(f"{url}/{d['id']}").status_code == 200
+    assert c.get(url).json()["felvetelek"] == []
+    # (a meccs-felvétel útja nem változott: ismeretlen meccs 404)
+    assert c.post("/matches/nincs/felvetelek",
+                  json={"allapotok": all_}).status_code == 404
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    oldal = view3d_html(m, figura=e)
+    for kell in ('const FV_VAN = !!(ADAT.match_id || FIGURA);',
+                 '...(FIGURA ? {figura: FIGURA_KOD} : {})})});',
+                 ".filter(f => !FIGURA || f.figura === FIGURA_KOD);"):
+        assert kell in oldal, kell
 
 
 def test_a_kulcs_poziciok_ideje():

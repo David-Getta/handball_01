@@ -323,7 +323,7 @@ def test_ki_nezte_meg(tmp_path, monkeypatch):
     assert f"const FV_MEGNEZTE = {SHARED3D_REC_WATCHED_FRAC!r};" in oldal
     for kell in ('"/megnezte", {method: "POST",',
                  "(f.nezett || 0) >= hossz * FV_MEGNEZTE",
-                 "if (!KZ_NEV && ADAT.match_id) nevValasztoMutat(true);", "✓ megnézted",
+                 "if (!KZ_NEV && FV_VAN) nevValasztoMutat(true);", "✓ megnézted",
                  "✓ megnézted (az edző látja)"):
         assert kell in oldal, kell
 

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.174 óta)
 
+- **Felvétel a figurában** (böngésző/VR + app + motor): a "⏺ Felvétel"
+  eddig csak a meccs 3D-jében ment — a figura lépésenkénti magyarázata
+  (megállás a kulcs-pozíciókon, kvíz, mutató, a hangod) nem volt
+  visszanézhető. Most a figura-oldalon is: a felvétel a figurával együtt
+  mentődik, a figura "▶ Felvételek" listája az ugyanahhoz a figurához
+  tartozókat mutatja, a csapat várólapja és a kezdőlap "LEGUTÓBBI
+  MEGBESZÉLÉSEK" kártyája is kínálja ("Figura: Kereszt").
+
 - **Figurák a kezdőlapon** (app): a mentett figurák eddig csak a
   Figura-tervező betöltő ablakából voltak elérhetők. Most a kezdőlap
   "FIGURÁK" kártyája a legutóbbi hat figurát soronként 3D / VR, 🖨 lap és

@@ -1277,10 +1277,8 @@ if (FIGURA){
     const sor = el && el.closest(".sor");
     if (sor) sor.style.display = "none";
   }
-  // A közös nézés marad (a figurát is lehet vezetni), a felvétel nem (a
-  // meccs mellé mentődne).
-  for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])
-    document.getElementById(id).style.display = "none";
+  // A közös nézés és a felvétel marad (a figurát is lehet vezetni és
+  // rögzíteni — a felvétel a "figura" azonosító alá, a figurával).
   const reszek = ["a mozgás " + String(FIGURA.hossz_s).replace(".", ",") + " mp"];
   // A labda útja (passzoknál): "labda 1 → 2 → 3".
   const lu = (FIGURA.labda || []).filter((v, i, a) => i === 0 || v !== a[i - 1]);
@@ -3541,7 +3539,9 @@ function felvetelHangFrissit(f, e){
         else { f.hangTiltva = false; f.hangHiba = true; } });
   }
 }
-const fvCim = () => "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/felvetelek";
+// (a figura-oldal felvételei a "figura" közös azonosító alatt)
+const FV_VAN = !!(ADAT.match_id || FIGURA);
+const fvCim = () => "/matches/" + encodeURIComponent(FIGURA ? "figura" : (ADAT.match_id || "")) + "/felvetelek";
 const fvOra = (s) => { const t = Math.max(0, Math.floor(s));
   return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
 function felvetelGombFelirat(){
@@ -3566,11 +3566,13 @@ async function felvetelMent(){
   const f = kzFelvetel;
   kzFelvetel = null; felvetelGombFelirat();
   const hang = f ? await felvetelHangLeallit(f.hang) : null;
-  if (!f || f.allapotok.length < 2 || !ADAT.match_id) return;
-  const nev = "Megbeszélés " + new Date().toLocaleString("hu-HU", {dateStyle: "short", timeStyle: "short"});
+  if (!f || f.allapotok.length < 2 || !FV_VAN) return;
+  const nev = (FIGURA ? "Figura — " + ADAT.home : "Megbeszélés") + " "
+    + new Date().toLocaleString("hu-HU", {dateStyle: "short", timeStyle: "short"});
   try {
     const v = await fetch(fvCim(), {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({nev, allapotok: f.allapotok, jelen: [...(f.jelen || [])]})});
+      body: JSON.stringify({nev, allapotok: f.allapotok, jelen: [...(f.jelen || [])],
+        ...(FIGURA ? {figura: FIGURA_KOD} : {})})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     const d = await v.json();
     let hangInfo = "";
@@ -3601,11 +3603,13 @@ async function felvetelListaBetolt(){
     setTimeout(() => felvetelIndit(FV_CSOMAG.adat.id), 0);
     return;
   }
-  if (!ADAT.match_id) return;
+  if (!FV_VAN) return;
   try {
     const v = await fetch(fvCim());
     if (!v.ok) return;
-    const lista = (await v.json()).felvetelek || [];
+    // (a figura-oldalon csak az UGYANENNEK a figurának a felvételei)
+    const lista = ((await v.json()).felvetelek || [])
+      .filter(f => !FIGURA || f.figura === FIGURA_KOD);
     felvetelValaszto.textContent = "";
     const fej = document.createElement("option"); fej.value = "";
     fej.textContent = "▶ Felvételek (" + lista.length + ")";
@@ -3662,7 +3666,7 @@ async function felvetelIndit(id){
     fejezetListaToltes(adat);
     // Név nélkül a "Ki vagy?" előjön: a megnézés a névvel számít (a
     // csomagban nincs motor — nincs kinek jelezni).
-    if (!KZ_NEV && ADAT.match_id) nevValasztoMutat(true);
+    if (!KZ_NEV && FV_VAN) nevValasztoMutat(true);
     felvetelGombFelirat();
   } catch (e) { kozosInfo.textContent = "▶ a felvétel nem tölthető: " + e.message; }
 }
@@ -3699,7 +3703,8 @@ function fejezetFelirat(fz, i){
   let jo = null;
   for (const r of jelenetSorokSzurt())
     if (Math.abs(r.s - t) <= FV_FEJEZET_KOZEL && (!jo || Math.abs(r.s - t) < Math.abs(jo.s - t))) jo = r;
-  return (i + 1) + ". " + fvOra(e) + " — " + (jo ? jo.szoveg : "a meccs " + fvOra(t) + " pillanata");
+  return (i + 1) + ". " + fvOra(e) + " — " + (jo ? jo.szoveg
+    : (FIGURA ? "a figura " : "a meccs ") + fvOra(t) + " pillanata");
 }
 function fejezetListaToltes(adat){
   const fz = adat.fejezetek || [];
@@ -3771,7 +3776,7 @@ function felvetelFrissit(){
   if (f.szunet === null && f.utolso !== undefined)
     f.nezett = (f.nezett || 0) + Math.min(1, (most - f.utolso) / 1000);
   f.utolso = most;
-  if (!f.jelentve && KZ_NEV && ADAT.match_id && f.adat.id && (f.nezett || 0) >= hossz * FV_MEGNEZTE){
+  if (!f.jelentve && KZ_NEV && FV_VAN && f.adat.id && (f.nezett || 0) >= hossz * FV_MEGNEZTE){
     f.jelentve = true;
     fetch(fvCim() + "/" + encodeURIComponent(f.adat.id) + "/megnezte", {method: "POST",
       headers: {"Content-Type": "application/json"}, body: JSON.stringify({nev: KZ_NEV})})
