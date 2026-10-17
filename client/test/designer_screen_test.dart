@@ -110,6 +110,32 @@ void main() {
     expect((kivalasztott.first.label as Text).data, "2");
   });
 
+  testWidgets("a fal rendszere választható", (tester) async {
+    tester.view.physicalSize = const Size(700, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final m = Match(
+        meta: MatchMeta(
+            matchId: "t",
+            homeTeam: "A",
+            awayTeam: "B",
+            fps: 25,
+            frameWidth: 1920,
+            frameHeight: 1080),
+        frames: const []);
+    await tester.pumpWidget(MaterialApp(home: DesignerScreen(match: m)));
+    await tester.pump();
+    final valaszto = find.byKey(const Key("rendszerValaszto"));
+    await tester.ensureVisible(valaszto);
+    await tester.tap(valaszto);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("3-2-1").last);
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<DropdownButton<String>>(valaszto).value, "3-2-1");
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets("támadó be és ki (2–7)", (tester) async {
     tester.view.physicalSize = const Size(900, 700);
     tester.view.devicePixelRatio = 1.0;

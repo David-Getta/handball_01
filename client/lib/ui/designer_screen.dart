@@ -106,6 +106,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
 
   late int _numDefenders;
   double _lineDepth = 6.0;
+  // A kézi fal rendszere (6-0, 5-1, 4-2, 3-2-1, 3-3).
+  String _rendszer = "6-0";
 
   bool _playing = false;
   // A legutóbbi "tanult védelem" (meccs + védekező oldal) és a figura
@@ -179,7 +181,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     super.dispose();
   }
 
-  DefenseModel get _model => DefenseModel(numDefenders: _numDefenders, lineDepthM: _lineDepth);
+  DefenseModel get _model => DefenseModel(
+      numDefenders: _numDefenders, lineDepthM: _lineDepth, rendszer: _rendszer);
 
   void _onPan(Offset localPos, Size size, {bool start = false}) {
     if (_playing) return;
@@ -398,6 +401,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     } else {
       q["vedok"] = "$_numDefenders";
       q["melyseg"] = _lineDepth.toStringAsFixed(1);
+      if (_rendszer != "6-0") q["rendszer"] = _rendszer;
     }
     final url = Uri.parse("${_api.baseUrl}/$ut")
         .replace(queryParameters: q)
@@ -871,12 +875,30 @@ class _DesignerScreenState extends State<DesignerScreen> {
             ),
           ]),
           const SizedBox(height: AppSpacing.md),
-          Text("VÉDŐFAL (ALAP: 6-0, A HATOSON KÍVÜL)",
-              style: AppText.sectionLabel),
+          Text("VÉDŐFAL (A HATOSON KÍVÜL)", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text("Védők", style: AppText.label),
             Text("$_numDefenders", style: AppText.value),
+          ]),
+          // A rendszer: az előretolt védők a 9 m körül (a 3-2-1 csúcsa
+          // 11 m-en), a labdát követve — a 3D és a figura-lap is viszi.
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text("Rendszer", style: AppText.label),
+            DropdownButton<String>(
+              key: const Key("rendszerValaszto"),
+              value: _rendszer,
+              isDense: true,
+              underline: const SizedBox.shrink(),
+              style: AppText.value,
+              items: [
+                for (final r in defenseSystems.keys)
+                  DropdownMenuItem(value: r, child: Text(r)),
+              ],
+              onChanged: _playing
+                  ? null
+                  : (v) => setState(() => _rendszer = v ?? "6-0"),
+            ),
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text("Vonalmélység", style: AppText.label),

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **A fal rendszere a figurában** (app + böngésző/VR + motor): a
+  Figura-tervező fala eddig mindig 6-0 volt — most választható ("Rendszer":
+  6-0, 5-1, 4-2, 3-2-1, 3-3): az előretolt védők a 9 m körül (a 3-2-1
+  csúcsa 11 m-en) állnak és a labdát követik. Kipróbálható, hogyan fut a
+  figura az 5-1 ellen — a kiértékelés, a 3D, a figura-lap és a link is
+  viszi. A meccsből tanult fal a csapat leggyakoribb felismert
+  rendszerében áll.
+
 - **Ismert figuráik — mivel zárulnak** (felderítés + motor): az "ISMERT
   FIGURÁIK (a könyvtárunkból)" kártya eddig csak azt mondta, melyik
   mentett figuránkat hányszor játsszák — most azt is, mivel zárult

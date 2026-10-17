@@ -36,6 +36,24 @@ GOAL_AREA_RADIUS_M = 6.0
 GOAL_AREA_MARGIN_M = 0.5
 _GOAL_HALF_W = 1.5  # kapufák: y = 8,5 és 11,5
 
+# A fal VÉDEKEZÉSI RENDSZEREI: az előretolt védők — (mélység m-ben a saját
+# kaputól, y-eltolás a pálya közepétől, mennyire követik a labda y-ját).
+# A többi védő a hatos előtti vonalban (a 6-0 geometriája). A mélységek a
+# forma-felismerés sávjaiba esnek (tactics.detect_formation: hátsó ≤ 7 m,
+# közép ≤ 10,5 m, előretolt e fölött) — a szimulált fal ugyanazt a
+# címkét kapja, mint a valódi. A sorrend a fontosság: kevés védőnél az
+# első előretoltak maradnak (legalább egy védő a vonalban áll).
+VEDEKEZESI_RENDSZEREK = {
+    "6-0": (),
+    "5-1": ((9.5, 0.0, 0.8),),
+    "4-2": ((9.0, -3.5, 0.6), (9.0, 3.5, 0.6)),
+    "3-2-1": ((8.5, -4.5, 0.6), (8.5, 4.5, 0.6), (11.0, 0.0, 0.8)),
+    "3-3": ((9.0, -5.5, 0.6), (9.5, 0.0, 0.7), (9.0, 5.5, 0.6)),
+}
+# Az előretolt védő legalább ennyivel a vonal előtt áll (a kitolt
+# vonalnál az előretoltak is kijjebb kerülnek).
+ELORETOLT_MIN_ELONY_M = 1.5
+
 
 # ---- Tanult védekezési modell ---------------------------------------------
 
@@ -46,10 +64,13 @@ class DefenseModel:
     - num_defenders: hány mezőnyvédő áll a vonalban (kapus nélkül).
     - line_depth_m:  a védővonal átlagos mélysége a SAJÁT kaputól (méter).
     - lateral_gain:  mennyire követi a védelem a labda y-helyzetét (0..1).
+    - rendszer:      a védekezési rendszer (VEDEKEZESI_RENDSZEREK kulcsa:
+                     "6-0", "5-1", "4-2", "3-2-1", "3-3").
     """
     num_defenders: int = 6
     line_depth_m: float = 6.0
     lateral_gain: float = 0.5
+    rendszer: str = "6-0"
 
     @classmethod
     def learn(cls, match: Match, defending_team: Team,
@@ -57,11 +78,18 @@ class DefenseModel:
         """Megtanulja a védekezési stílust azokból a frame-ekből, ahol a csapat véd.
 
         A csapat akkor véd, amikor az ellenfél támad. Ezeken a frame-eken a
-        mezőnyvédők (kapus nélkül) átlagos mélységét és átlagos számát becsüljük.
+        mezőnyvédők (kapus nélkül) átlagos mélységét és átlagos számát becsüljük,
+        és a felismert formák (tactics.detect_formation) közül a
+        VEDEKEZESI_RENDSZEREK-ben szereplő leggyakoribbat — nem 6-0
+        rendszernél a vonal mélysége a HÁTSÓ sor védőiből (az előretoltak
+        nélkül), különben az összesből.
         """
+        from .tactics import _BACK_MAX, detect_formation
         config = config or TacticsConfig()
         goal_x = config.own_goal_x(defending_team)
         depths: list[float] = []
+        hatso: list[float] = []
+        formak: dict[str, int] = {}
         counts: list[int] = []
         for f in match.frames:
             ph = classify_phase(f, config)
@@ -74,9 +102,20 @@ class DefenseModel:
             if outfield:
                 counts.append(len(outfield))
                 depths.extend(abs(p.x - goal_x) for p in outfield)
+                hatso.extend(abs(p.x - goal_x) for p in outfield
+                             if abs(p.x - goal_x) <= _BACK_MAX)
+                cimke = detect_formation(f, defending_team, config).label
+                if cimke in VEDEKEZESI_RENDSZEREK:
+                    formak[cimke] = formak.get(cimke, 0) + 1
+        # A leggyakoribb (holtversenyben a címke szerint — determinisztikus).
+        rendszer = (max(formak.items(), key=lambda kv: (kv[1], kv[0]))[0]
+                    if formak else "6-0")
+        melyseg = (statistics.fmean(hatso) if rendszer != "6-0" and hatso
+                   else statistics.fmean(depths) if depths else 6.0)
         return cls(
             num_defenders=round(statistics.fmean(counts)) if counts else 6,
-            line_depth_m=statistics.fmean(depths) if depths else 6.0,
+            line_depth_m=melyseg,
+            rendszer=rendszer,
         )
 
     def respond(self, ball: Ball, goal_x: float) -> list[tuple[float, float]]:
@@ -86,11 +125,16 @@ class DefenseModel:
         védő sem léphet a hatoson belülre. A `line_depth_m` a fal
         frontális mélysége — a hatoshoz képest tolja kijjebb az egész
         falat (alapból fél méterrel a hatos előtt), a széleken a fal a
-        hatos ívére simul.
+        hatos ívére simul. A `rendszer` előretolt védői
+        (VEDEKEZESI_RENDSZEREK) a vonal ELŐTT állnak — legalább
+        ELORETOLT_MIN_ELONY_M-rel —, és a labdát a saját mértékükben
+        követik; a kimenetben a vonal után jönnek.
         """
         sign = -1.0 if goal_x == COURT_LENGTH_M else 1.0
 
-        n = max(1, self.num_defenders)
+        n_osszes = max(1, self.num_defenders)
+        elol = VEDEKEZESI_RENDSZEREK.get(self.rendszer, ())[:n_osszes - 1]
+        n = n_osszes - len(elol)
         # Egyenletes y-eloszlás a [3, 17] sávban.
         if n == 1:
             base_ys = [COURT_WIDTH_M / 2.0]
@@ -110,6 +154,14 @@ class DefenseModel:
             boundary = (math.sqrt(GOAL_AREA_RADIUS_M ** 2 - lateral ** 2)
                         if lateral < GOAL_AREA_RADIUS_M else 0.0)
             out.append((goal_x + sign * (boundary + offset), y))
+        # Az előretoltak: a rendszer mélységén (a kitolt vonal előtt
+        # legalább ELORETOLT_MIN_ELONY_M-rel), a labda felé lépve.
+        eleje = GOAL_AREA_RADIUS_M + offset
+        for melyseg, dy, kovet in elol:
+            y = max(1.0, min(COURT_WIDTH_M - 1.0, COURT_WIDTH_M / 2.0 + dy
+                             + kovet * (ball.y - COURT_WIDTH_M / 2.0)))
+            out.append((goal_x + sign * max(melyseg,
+                                            eleje + ELORETOLT_MIN_ELONY_M), y))
         return out
 
 

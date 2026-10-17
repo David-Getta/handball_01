@@ -13,22 +13,48 @@ import "../ui/court_geometry.dart";
 import "decisions.dart" show shotValue;
 import "tactics.dart";
 
+/// A fal védekezési rendszerei — a backend
+/// play_simulation.VEDEKEZESI_RENDSZEREK párja (őr-teszt ellenőrzi):
+/// rendszerenként az előretolt védők [mélység m a saját kaputól, y-eltolás
+/// a középtől, labdakövetés]; a többi védő a hatos előtti vonalban.
+const Map<String, List<List<double>>> defenseSystems = {
+  "6-0": [],
+  "5-1": [[9.5, 0.0, 0.8]],
+  "4-2": [[9.0, -3.5, 0.6], [9.0, 3.5, 0.6]],
+  "3-2-1": [[8.5, -4.5, 0.6], [8.5, 4.5, 0.6], [11.0, 0.0, 0.8]],
+  "3-3": [[9.0, -5.5, 0.6], [9.5, 0.0, 0.7], [9.0, 5.5, 0.6]],
+};
+
+/// Az előretolt védő legalább ennyivel a vonal előtt áll (a backend
+/// ELORETOLT_MIN_ELONY_M-je).
+const double advancedMinLeadM = 1.5;
+
 /// Egy csapat tanult védekezési stílusa.
 class DefenseModel {
   final int numDefenders;
   final double lineDepthM;  // a védővonal mélysége a saját kaputól
   final double lateralGain; // mennyire követi a labda y-helyzetét
+  final String rendszer;    // védekezési rendszer (defenseSystems kulcsa)
 
-  const DefenseModel({this.numDefenders = 6, this.lineDepthM = 6.0, this.lateralGain = 0.5});
+  const DefenseModel(
+      {this.numDefenders = 6,
+      this.lineDepthM = 6.0,
+      this.lateralGain = 0.5,
+      this.rendszer = "6-0"});
 
   /// A fal a hatos ívét követi KÍVÜLRŐL (6-0 fal): egy védő sem léphet a
   /// kapuelőtérbe — a lineDepthM a frontális mélység (alap: fél méterrel a
-  /// hatos előtt), a széleken a fal az ívre simul. A backend
+  /// hatos előtt), a széleken a fal az ívre simul. A rendszer előretolt
+  /// védői a vonal előtt (a vonal után a listában). A backend
   /// play_simulation.py respond-jával azonos geometria.
   List<Offset> respond(double ballY, double goalX) {
     const margin = 0.5; // ennyivel a hatos íve előtt áll a fal alapból
     final sign = goalX == courtLength ? -1.0 : 1.0;
-    final n = math.max(1, numDefenders);
+    final nOsszes = math.max(1, numDefenders);
+    final elol = (defenseSystems[rendszer] ?? const <List<double>>[])
+        .take(nOsszes - 1)
+        .toList();
+    final n = nOsszes - elol.length;
     final baseYs = <double>[];
     if (n == 1) {
       baseYs.add(courtWidth / 2);
@@ -51,6 +77,15 @@ class DefenseModel {
           ? math.sqrt(goalAreaRadius * goalAreaRadius - lateral * lateral)
           : 0.0;
       out.add(Offset(goalX + sign * (boundary + offset), y));
+    }
+    // Az előretoltak: a rendszer mélységén (a kitolt vonal előtt legalább
+    // advancedMinLeadM-rel), a labda felé lépve.
+    final eleje = goalAreaRadius + offset;
+    for (final e in elol) {
+      final y = (courtWidth / 2 + e[1] + e[2] * (ballY - courtWidth / 2))
+          .clamp(1.0, courtWidth - 1.0)
+          .toDouble();
+      out.add(Offset(goalX + sign * math.max(e[0], eleje + advancedMinLeadM), y));
     }
     return out;
   }

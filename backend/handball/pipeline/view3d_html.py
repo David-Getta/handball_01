@@ -2033,7 +2033,7 @@ function linkEpit(){
   if (videoBe) q.set("video", "1");
   if (kozosMod === "kovet"){ q.set("kovet", "1"); if (KZ_NEV) q.set("nev", KZ_NEV); }
   // A figura linkje a figurát is viszi (a pályán kívül nincs mögötte meccs).
-  if (FIGURA) for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])
+  if (FIGURA) for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg", "rendszer"])
     if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
   if (FIGURA && lepesMod) q.set("lepes", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
@@ -3199,7 +3199,7 @@ kzNevValaszto.onchange = () => {
 const KZ_ID = FIGURA ? "figura" : ADAT.match_id;
 const FIGURA_KOD = FIGURA ? (() => {
   const q = new URLSearchParams();
-  for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])
+  for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg", "rendszer"])
     if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
   return q.toString();
 })() : "";

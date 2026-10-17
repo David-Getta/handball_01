@@ -179,7 +179,7 @@ def test_az_oldal_figura_modja():
                  'if (FIGURA) ADAT.match_id = "";',
                  "if (FIGURA && veg > 0) ido = 0;",
                  'document.getElementById("eszkoz").prepend(fs);',
-                 'for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])',
+                 'for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg", "rendszer"])',
                  "if (k.ix === 0 && k.iy === 0){"):
         assert kell in oldal, kell
     assert '"figura":{' in oldal
@@ -453,6 +453,88 @@ def test_a_szemevel_nezet_linkrol(tmp_path, monkeypatch):
     assert r.headers["location"] == f"/figura3d?{fig}&kovet=1&nev=Anna&szem=h3"
     r = c.get("/kovet", params={"szem": "x\"><"}, follow_redirects=False)
     assert "szem" not in r.headers["location"]
+
+
+@pytest.mark.parametrize("rendszer", ["6-0", "5-1", "4-2", "3-2-1", "3-3"])
+def test_a_fal_rendszere(rendszer):
+    """A fal a rendszere szerint áll: a forma-felismerés (detect_formation)
+    ugyanazt a címkét adja; senki sincs a hatoson belül; a kitolt
+    vonal előtt az előretoltak is kijjebb kerülnek; kevés védőnél egy
+    védő a vonalban marad."""
+    from handball.pipeline.tactics import TacticsConfig, detect_formation
+
+    m = DefenseModel(rendszer=rendszer)
+    for by in (3.0, 10.0, 17.0):
+        pos = m.respond(Ball(x=28.0, y=by, confidence=1.0), goal_x=40.0)
+        assert len(pos) == 6
+        for x, y in pos:
+            kapufa = min(11.5, max(8.5, y))
+            assert math.hypot(x - 40.0, y - kapufa) >= 6.0 - 1e-9
+        f = Frame(t=0, players=[PlayerPosition(
+            track_id=100 + i, team=Team.AWAY, x=x, y=y,
+            source=PositionSource.MEASURED, confidence=1.0)
+            for i, (x, y) in enumerate(pos)])
+        # (középre lőtt labdánál — a sarokba szorult szélső védőt, a
+        # 6-0-ban is, a felismerés kapusnak veszi)
+        if by == 10.0:
+            assert detect_formation(f, Team.AWAY, TacticsConfig()).label == rendszer
+    kitolt = DefenseModel(rendszer=rendszer, line_depth_m=9.0).respond(
+        Ball(x=28.0, y=10.0, confidence=1.0), goal_x=40.0)
+    elol = kitolt[6 - {"6-0": 0, "5-1": 1, "4-2": 2, "3-2-1": 3, "3-3": 3}[rendszer]:]
+    assert all(x <= 40.0 - 9.5 - 1.5 + 1e-9 for x, _ in elol)
+    ketto = DefenseModel(num_defenders=2, rendszer=rendszer).respond(
+        Ball(x=28.0, y=10.0, confidence=1.0), goal_x=40.0)
+    assert len(ketto) == 2 and ketto[0][0] > 33.0   # az első a vonalban
+
+
+def test_a_tanult_fal_rendszere():
+    """Az 5-1-ben védő csapatból tanult fal 5-1, a vonal mélysége a hátsó
+    sorból (6 m — az előretolt 9,5 m-e nélkül)."""
+    frames = []
+    for t in range(10):
+        players = [PlayerPosition(track_id=i + 1, team=Team.HOME, x=28.0,
+                                  y=10.0, source=PositionSource.MEASURED,
+                                  confidence=1.0) for i in range(3)]
+        players += [PlayerPosition(track_id=100 + i, team=Team.AWAY, x=x, y=y,
+                                   source=PositionSource.MEASURED,
+                                   confidence=1.0)
+                    for i, (x, y) in enumerate([(34, 3), (34, 6.5), (34, 10),
+                                                (34, 13.5), (34, 17),
+                                                (30.5, 10)])]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+    m = DefenseModel.learn(Match(MatchMeta(match_id="t", home_team="A",
+                                           away_team="B", fps=25), frames),
+                           Team.AWAY)
+    assert (m.rendszer, m.num_defenders) == ("5-1", 6)
+    assert abs(m.line_depth_m - 6.0) < 1e-6
+
+
+def test_a_figura3d_rendszerrel(tmp_path, monkeypatch):
+    c = TestClient(_app(tmp_path, monkeypatch))
+    r = c.get("/figura3d", params={"u": U, "rendszer": "5-1"})
+    assert r.status_code == 200
+    assert "Figura vs Védelem (5-1, 6 védő, 6,0 m) — 3D" in r.text
+    assert c.get("/figura3d", params={"u": U, "rendszer": "7-0"}).status_code == 400
+    r = c.get("/figura-lap", params={"u": U, "rendszer": "3-2-1"})
+    assert r.status_code == 200 and "Védelem (3-2-1, 6 védő, 6,0 m)" in r.text
+
+
+def test_a_rendszerek_a_kliensben_is():
+    """A Dart-tükör (analytics/play_simulation.dart defenseSystems) a
+    motor VEDEKEZESI_RENDSZEREK-ével azonos."""
+    from pathlib import Path
+
+    from handball.pipeline.play_simulation import (ELORETOLT_MIN_ELONY_M,
+                                                   VEDEKEZESI_RENDSZEREK)
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "analytics" / "play_simulation.dart").read_text(encoding="utf-8")
+    for nev, elol in VEDEKEZESI_RENDSZEREK.items():
+        sor = (f'  "{nev}": ['
+               + ", ".join("[" + ", ".join(str(float(v)) for v in e) + "]"
+                           for e in elol) + "],")
+        assert sor in dart, sor
+    assert f"const double advancedMinLeadM = {ELORETOLT_MIN_ELONY_M};" in dart
 
 
 def test_a_kulcs_poziciok_ideje():

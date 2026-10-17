@@ -503,6 +503,14 @@ kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor
 A támadók útjai kék nyílként a padlón, a passzok sárgán (a Rajz-réteg
 nyilai: a "Törlés" leveszi, a link viszi).
 
+**A fal rendszere.** A tervező kézi fala választható rendszerben áll
+("Rendszer": 6-0, 5-1, 4-2, 3-2-1, 3-3): az előretolt védők a 9 m körül
+(a 3-2-1 csúcsa 11 m-en), a labdát követve, a többiek a hatos előtti
+vonalban — így kipróbálható, hogyan fut a figura az 5-1 ellen. A 3D, a
+figura-lap és a link (`rendszer=5-1`) is viszi. A meccsből tanult fal a
+csapat leggyakoribb felismert rendszerében áll ("Tanult védelem — B
+(5-1)"), a vonal mélysége a hátsó sor védőiből.
+
 **Figura-lap.** A tervező "Figura-lap ↗" gombja a figurát nyomtatható
 lapként nyitja (böngészőből PDF-be is): kulcs-pozíciónként egy
 felülnézeti ábra a támadó térfélre vágva — a támadók a sorszámukkal, a

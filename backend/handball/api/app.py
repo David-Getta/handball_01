@@ -3098,13 +3098,20 @@ def create_app():
     _utolso_figura: dict = {}
 
     def _figura_bemenet(u: str, l: str, meccs: str, vedo: str, vedok: int,
-                        melyseg: float):
+                        melyseg: float, rendszer: str = "6-0"):
         """A figura-linkek közös bemenete (/figura3d, /figura-lap): az utak
         ("x,y,…;x,y,…"), a labdás-sor ("0,1,…") és a védelem — a `meccs`
-        `vedo` csapatából TANULT, különben a kézi fal (`vedok`, `melyseg`).
-        Visszaad: (utak, labda, modell, a védelem neve); 400 / 404 hibánál."""
+        `vedo` csapatából TANULT (a leggyakoribb rendszerében), különben a
+        kézi fal (`vedok`, `melyseg`, `rendszer`: 6-0, 5-1, 4-2, 3-2-1,
+        3-3). Visszaad: (utak, labda, modell, a védelem neve); 400 / 404
+        hibánál."""
         from ..pipeline.play_simulation import (
-            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, DefenseModel)
+            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, VEDEKEZESI_RENDSZEREK,
+            DefenseModel)
+        if rendszer not in VEDEKEZESI_RENDSZEREK:
+            raise HTTPException(
+                status_code=400,
+                detail="rendszer: " + ", ".join(VEDEKEZESI_RENDSZEREK))
         try:
             utak = []
             for resz in u.split(";")[:FIGURA_3D_MAX_JATEKOS]:
@@ -3132,17 +3139,20 @@ def create_app():
             modell = DefenseModel.learn(match, csapat)
             vedo_nev = "Tanult védelem — " + (
                 match.meta.home_team if csapat == Team.HOME
-                else match.meta.away_team)
+                else match.meta.away_team) + (
+                f" ({modell.rendszer})" if modell.rendszer != "6-0" else "")
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
-                                  line_depth_m=max(6.0, min(12.0, float(melyseg))))
-            vedo_nev = (f"Védelem ({modell.num_defenders} védő, "
-                        f"{modell.line_depth_m:.1f} m)".replace(".", ","))
+                                  line_depth_m=max(6.0, min(12.0, float(melyseg))),
+                                  rendszer=rendszer)
+            vedo_nev = ("Védelem (" + (f"{rendszer}, " if rendszer != "6-0" else "")
+                        + f"{modell.num_defenders} védő, "
+                        + f"{modell.line_depth_m:.1f} m)".replace(".", ","))
         return utak, labda, modell, vedo_nev
 
     def figura3d(request: Request, u: str = "", cim: str = "",
                  meccs: str = "", vedo: str = "away", vedok: int = 6,
-                 melyseg: float = 6.0, l: str = ""):
+                 melyseg: float = 6.0, l: str = "", rendszer: str = "6-0"):
         """A figura-tervező figurája böngészős 3D-ben / VR-ben.
 
         `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
@@ -3152,13 +3162,13 @@ def create_app():
         védelem
         a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
         meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
-        vonal). Valós tempóban, kapussal, ismétlődve játszik
+        vonal, `rendszer`: 6-0, 5-1, 4-2, 3-2-1, 3-3). Valós tempóban, kapussal, ismétlődve játszik
         (play_simulation.setplay_3d_match); a fejléc a kiértékelést mutatja."""
         from ..pipeline import court3d as _c3
         from ..pipeline.play_simulation import figura_nev, setplay_3d_match
         from ..pipeline.view3d_html import view3d_html
         utak, labda, modell, vedo_nev = _figura_bemenet(
-            u, l, meccs, vedo, vedok, melyseg)
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
         try:
             sim, ertekeles = setplay_3d_match(
                 utak, modell, ball=labda, name=figura_nev(cim) or None,
@@ -3183,7 +3193,7 @@ def create_app():
     @app.get("/figura-lap")
     def figura_lap(u: str = "", cim: str = "", meccs: str = "",
                    vedo: str = "away", vedok: int = 6, melyseg: float = 6.0,
-                   l: str = ""):
+                   l: str = "", rendszer: str = "6-0"):
         """A figura KIOSZTHATÓ lapja (nyomtatható HTML — böngészőből PDF):
         kulcs-pozíciónként felülnézeti ábra (a támadók, a fal, a labda, a
         futás- és passz-nyilak) a lépések leírásával és a kiértékeléssel
@@ -3193,7 +3203,7 @@ def create_app():
         from ..pipeline.figura_lap import figura_lap_html
         from ..pipeline.play_simulation import figura_nev
         utak, labda, modell, vedo_nev = _figura_bemenet(
-            u, l, meccs, vedo, vedok, melyseg)
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
         try:
             oldal = figura_lap_html(utak, labda, modell,
                                     nev=figura_nev(cim) or "Figura",
