@@ -9,6 +9,7 @@ library;
 
 import "dart:async";
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 
 import "../analytics/play_simulation.dart";
 import "../models/tracking.dart";
@@ -16,12 +17,18 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
+import "../services/browser_open.dart";
 import "court_painter.dart";
 import "error_text.dart";
+import "num_format.dart";
 
 class DesignerScreen extends StatefulWidget {
   final Match match; // ebből tanuljuk a védelmet
-  const DesignerScreen({super.key, required this.match});
+  /// Kezdő figura egy meccs támadásából (GET …/attack-figure — a 3D
+  /// "✎ Figurává" gombja): az utak, a labdás-sor, a csapat; a védelem a
+  /// meccs másik csapatáé (a 3D/VR is ellene nyit).
+  final Map<String, dynamic>? initial;
+  const DesignerScreen({super.key, required this.match, this.initial});
 
   @override
   State<DesignerScreen> createState() => _DesignerScreenState();
@@ -45,11 +52,90 @@ class _DesignerScreenState extends State<DesignerScreen> {
   }
   int _editStep = 0;
   int? _dragIndex;
+  // Kulcs-pozíciónként a labdás támadó (0-tól): ahol a következő pontnál
+  // más, ott PASSZ — a figura így nem csak futás, a labda is jár.
+  List<int> _labda = [0, 0, 0];
+  bool get _vanPassz => _labda.any((v) => v != 0);
+  int get _pontok => _attackers.isEmpty ? 3 : _attackers.first.length;
+
+  /// Új kulcs-pozíció a mostani UTÁN (a következő pont felé félúton — a
+  /// végén a mostani másolata); a labdás a mostanié. Kereszt, visszaadás:
+  /// három ponttal nem rajzolható.
+  void _pontBe() {
+    if (_playing || _pontok >= designerMaxPoints) return;
+    final i = _editStep;
+    setState(() {
+      for (final a in _attackers) {
+        final uj = i + 1 < a.length ? Offset.lerp(a[i], a[i + 1], 0.5)! : a[i];
+        a.insert(i + 1, uj);
+      }
+      _labda.insert(i + 1, _labda[i]);
+      _editStep = i + 1;
+    });
+  }
+
+  /// A mostani kulcs-pozíció törlése (legalább kettő marad).
+  void _pontKi() {
+    if (_playing || _pontok <= 2) return;
+    final i = _editStep;
+    setState(() {
+      for (final a in _attackers) {
+        a.removeAt(i);
+      }
+      _labda.removeAt(i);
+      _editStep = i.clamp(0, _pontok - 1);
+    });
+  }
+
+  /// Új támadó (a következő szabad alap-posztra, minden kulcs-pozíción
+  /// ugyanott — az edző elhúzza).
+  void _jatekosBe() {
+    if (_playing || _attackers.length >= designerMaxAttackers) return;
+    final hely = newAttackerSpot(_attackers.length);
+    setState(() => _attackers.add(List<Offset>.filled(_pontok, hely, growable: true)));
+  }
+
+  /// A kézi fal állítása (védőszám, rendszer, mélység) a KÉZI falra vált:
+  /// a 3D, a lap, a videó és a füzet is ezt viszi (eddig a legutóbbi
+  /// tanult fal maradt, és a kézi beállítás a linkekre nem hatott).
+  void _kezifal() {
+    _tanultMeccs = null;
+    _tanultVedok = null;
+  }
+
+  /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
+  void _vedoValt(int d) {
+    final n = _numDefenders + d;
+    if (_playing || n < designerMinDefenders || n > designerMaxDefenders) return;
+    setState(() {
+      _numDefenders = n;
+      _kezifal();
+    });
+  }
+
+  /// Az utolsó támadó kiesik; a labdás-sor a megmaradókra szorul.
+  void _jatekosKi() {
+    if (_playing || _attackers.length <= designerMinAttackers) return;
+    setState(() {
+      _attackers.removeLast();
+      _labda = [for (final v in _labda) v.clamp(0, _attackers.length - 1)];
+    });
+  }
 
   late int _numDefenders;
   double _lineDepth = 6.0;
+  // A kézi fal rendszere (6-0, 5-1, 4-2, 3-2-1, 3-3).
+  String _rendszer = "6-0";
 
   bool _playing = false;
+  // A legutóbbi "tanult védelem" (meccs + védekező oldal) és a figura
+  // neve (mentve / betöltve) — a böngészős 3D ugyanazt mutatja.
+  String? _tanultMeccs;
+  String _tanultOldal = "away";
+  // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
+  // hozott figuránál még ismeretlen).
+  int? _tanultVedok;
+  String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
   int _playIndex = 0;
@@ -65,6 +151,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _numDefenders = 6;
     _lineDepth = 6.0;
 
+    final kezdo = widget.initial;
+    if (kezdo != null && _kezdoFiguraBetolt(kezdo)) return;
     // Alap figura: irányító, két átlövő, szélső, beálló — az edző átrendezi.
     _attackers = [
       _path3(const Offset(22, 10), const Offset(22, 10)), // irányító (labdás)
@@ -75,13 +163,48 @@ class _DesignerScreenState extends State<DesignerScreen> {
     ];
   }
 
+  /// A meccs támadásából kapott kezdő figura (a 3D "✎ Figurává"): igaz,
+  /// ha használható volt.
+  bool _kezdoFiguraBetolt(Map<String, dynamic> f) {
+    try {
+      final utak = [
+        for (final a in (f["attackers"] as List))
+          [
+            for (final p in a as List)
+              Offset(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble())
+          ]
+      ];
+      if (utak.length < 2 || utak.any((u) => u.isEmpty)) return false;
+      final k = utak.first.length.clamp(2, designerMaxPoints);
+      _attackers = [for (final u in utak) resamplePath(u, k)];
+      final l = [
+        for (final v in (f["labda"] as List?) ?? const [])
+          (v as num).toInt().clamp(0, _attackers.length - 1)
+      ];
+      _labda = [for (int i = 0; i < k; i++) i < l.length ? l[i] : (l.isEmpty ? 0 : l.last)];
+      final t0 = ((f["t0_s"] as num?) ?? 0).toInt();
+      _nev = "${f["csapat"] ?? "Támadás"} támadása "
+          "${t0 ~/ 60}:${(t0 % 60).toString().padLeft(2, "0")}";
+      // A védelem: a meccs MÁSIK csapatáé (a 3D is ellene nyit).
+      if (f["match_id"] is String) {
+        _tanultMeccs = f["match_id"] as String;
+        _tanultVedok = null;
+        _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
   }
 
-  DefenseModel get _model => DefenseModel(numDefenders: _numDefenders, lineDepthM: _lineDepth);
+  DefenseModel get _model => DefenseModel(
+      numDefenders: _numDefenders, lineDepthM: _lineDepth, rendszer: _rendszer);
 
   void _onPan(Offset localPos, Size size, {bool start = false}) {
     if (_playing) return;
@@ -122,7 +245,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       }
       interp.add(path);
     }
-    final setplay = SetPlay(interp, List<int>.filled(_animSteps, 0));
+    final setplay = SetPlay(interp, setplayBallSteps(_labda, _animSteps));
     final sim = simulateSetPlay(setplay, _model);
     final eval = evaluateSetPlay(sim);
 
@@ -244,12 +367,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
       final resp = await _api.simulateSetplayVsMatch(
         matchId!,
         attackers: attackers,
-        ballCarrier: List<int>.filled(_animSteps, 0),
+        ballCarrier: setplayBallSteps(_labda, _animSteps),
         defending: side,
       );
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
       final eval = evaluateSetPlay(sim);
       if (!mounted) return;
+      _tanultMeccs = matchId;
+      _tanultOldal = side;
+      _tanultVedok =
+          ((resp["defense_model"] as Map?)?["num_defenders"] as num?)?.toInt();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -272,6 +399,168 @@ class _DesignerScreenState extends State<DesignerScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Szimulációs hiba: ${humanError(e)}")));
     }
+  }
+
+  /// A figura böngészős 3D-ben / VR-ben (a motor /figura3d oldala):
+  /// valós tempóban, kapussal, ismétlődve — a játékos a saját útját a
+  /// saját szemével járja be. A védelem a legutóbbi "tanult védelem"
+  /// (meccs + oldal), különben a kézi fal (védőszám, mélység). A csapat
+  /// várólapja (/kovet) is linkeli.
+  Future<void> _bongeszos3d() =>
+      _figura3dNyit(_attackers, _labda, _nev);
+
+  /// A /figura3d (vagy `ut`: a /figura-lap) megnyitása adott utakkal,
+  /// labdás-sorral és névvel (a tervező mostani figurája, vagy egy mentett
+  /// a listából).
+  Future<void> _figura3dNyit(
+      List<List<Offset>> utak, List<int> labda, String? nev,
+      {String ut = "figura3d"}) async {
+    final q = <String, String>{"u": setplay3dPoints(utak)};
+    if (labda.any((v) => v != 0)) q["l"] = labda.join(",");
+    if ((nev ?? "").isNotEmpty) q["cim"] = nev!;
+    q.addAll(_vedelemParams());
+    final url = Uri.parse("${_api.baseUrl}/$ut")
+        .replace(queryParameters: q)
+        .toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(!ok
+            ? "Nyisd meg kézzel a böngészőben: $url"
+            : ut == "figura-lap"
+                ? "A figura-lap a böngészőben — nyomtatható (Ctrl+P, PDF-be "
+                    "is): lépésenként ábra a futásokkal, a passzokkal és a "
+                    "fallal."
+                : ut == "figura-video"
+                ? "A figura videója letöltődik (MP4) — elküldhető a "
+                    "csapatnak."
+                : "A figura a böngészőben, 3D-ben — VR-ben bejárható; a "
+                    "csapat a /kovet várólapon is eléri (▶ Figura).")));
+  }
+
+  /// A fal link-paraméterei (a figura-oldalaknak): a legutóbbi tanult
+  /// védelem (meccs + oldal), különben a kézi fal (védőszám, mélység,
+  /// rendszer).
+  Map<String, String> _vedelemParams() {
+    final m = _tanultMeccs;
+    if (m != null) return {"meccs": m, "vedo": _tanultOldal};
+    return {
+      "vedok": "$_numDefenders",
+      "melyseg": _lineDepth.toStringAsFixed(1),
+      if (_rendszer != "6-0") "rendszer": _rendszer,
+    };
+  }
+
+  /// Egy mentett figura (betöltés nélkül) a böngészőben: `ut` a
+  /// figura-oldal ("figura3d"), a lap ("figura-lap") vagy a videó
+  /// ("figura-video") — a passzaival, a mostani fallal.
+  Future<void> _mentettNyit(String id, String ut) async {
+    try {
+      final play = await _api.fetchPlay(id);
+      final utak = [
+        for (final a in play["attackers"] as List)
+          [
+            for (final pt in a as List)
+              Offset(((pt as List)[0] as num).toDouble(),
+                  (pt[1] as num).toDouble())
+          ]
+      ];
+      final labda = [
+        for (final v in (play["labda"] as List?) ?? const [])
+          (v as num).toInt()
+      ];
+      await _figura3dNyit(utak, labda, "${play["name"] ?? ""}", ut: ut);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A figura nem nyílt meg: ${humanError(e)}")));
+    }
+  }
+
+  /// A csapat figurafüzete (/figura-fuzet): a mentett figurák egy
+  /// nyomtatható dokumentumban, figuránként egy oldal — a mostani fallal.
+  Future<void> _figuraFuzetNyit() async {
+    final url = Uri.parse("${_api.baseUrl}/figura-fuzet")
+        .replace(queryParameters: _vedelemParams())
+        .toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "A figurafüzet a böngészőben — nyomtatható (Ctrl+P, PDF-be "
+                "is): tartalomjegyzék, figuránként egy oldal."
+            : "Nyisd meg kézzel a böngészőben: $url")));
+  }
+
+  /// Csapat-linkek futónként: a játékos a saját futójában áll, amikor a
+  /// figurát vezeted. A klub-hálózati cím, ha az be van kapcsolva,
+  /// különben a gép saját címe (USB + adb reverse).
+  Future<void> _csapatLinkek() async {
+    var kovet = "${_api.baseUrl}/kovet";
+    try {
+      final h = await _api.fetchNetworkLinks();
+      if (h.isNotEmpty) kovet = h.first;
+    } catch (_) {}
+    if (!mounted) return;
+    final linkek = runnerLinks(kovet, _attackers.length);
+    // A fal: a kapus és a védők (a tanult falnál hat védővel számolunk).
+    final falLinkek = defenderLinks(
+        kovet, _tanultMeccs != null ? (_tanultVedok ?? 6) : _numDefenders);
+    Widget linkSor(String cimke, String link) => Row(children: [
+          SizedBox(
+              width: 64,
+              child: Text(cimke, style: AppText.value.copyWith(fontSize: 12.5))),
+          Expanded(
+              child: SelectableText(link,
+                  style: AppText.label.copyWith(fontSize: 12))),
+          IconButton(
+            tooltip: "Másolás",
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.copy),
+            onPressed: () =>
+                Clipboard.setData(ClipboardData(text: link)).catchError((_) {}),
+          ),
+        ]);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Csapat-linkek futónként (VR)"),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    "Nyisd meg a figurát (3D / VR ↗) és vezesd (📡 Vezetem): a "
+                    "játékos a saját linkjével a saját futójában áll — a saját "
+                    "útját a saját szemével futja végig. A név: &nev=Anna.",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                const SizedBox(height: AppSpacing.md),
+                for (int i = 0; i < linkek.length; i++)
+                  linkSor("${i + 1}. futó", linkek[i]),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                    "A fal szemével (védekezés-gyakorláshoz): a védő a falban "
+                    "áll, a feje a labdát követi; a kapus a kapuban.",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                const SizedBox(height: AppSpacing.sm),
+                for (int i = 0; i < falLinkek.length; i++)
+                  linkSor(i == 0 ? "Kapus" : "${i + 1}. védő", falLinkek[i]),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Bezárás")),
+        ],
+      ),
+    );
   }
 
   void _backToEdit() {
@@ -321,7 +610,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
         for (final a in _attackers)
           [for (final p in a) [p.dx, p.dy]],
       ];
-      await _api.savePlay(name, attackers);
+      await _api.savePlay(name, attackers, labda: _vanPassz ? _labda : null);
+      _nev = name;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Figura mentve: $name")));
@@ -365,21 +655,53 @@ class _DesignerScreenState extends State<DesignerScreen> {
                           subtitle: Text("${p["players"]} játékos",
                               style: AppText.label.copyWith(fontSize: 11)),
                           onTap: () => Navigator.pop(ctx, p["id"] as String),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: AppColors.textFaint),
-                            onPressed: () async {
-                              try {
-                                await _api.deletePlay(p["id"] as String);
-                                setDlg(() => plays.remove(p));
-                              } catch (_) {}
-                            },
-                          ),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            // Egy kattintással 3D-ben (a passzaival), a
+                            // lapja és a videója — betöltés nélkül.
+                            IconButton(
+                              tooltip: "3D / VR — a böngészőben",
+                              icon: const Icon(Icons.view_in_ar_outlined,
+                                  size: 18, color: AppColors.accent),
+                              onPressed: () =>
+                                  _mentettNyit(p["id"] as String, "figura3d"),
+                            ),
+                            IconButton(
+                              tooltip: "Figura-lap (nyomtatható)",
+                              icon: const Icon(Icons.print_outlined,
+                                  size: 18, color: AppColors.textSecondary),
+                              onPressed: () =>
+                                  _mentettNyit(p["id"] as String, "figura-lap"),
+                            ),
+                            IconButton(
+                              tooltip: "Videó (MP4) — a csapatnak",
+                              icon: const Icon(Icons.movie_outlined,
+                                  size: 18, color: AppColors.textSecondary),
+                              onPressed: () => _mentettNyit(
+                                  p["id"] as String, "figura-video"),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 18, color: AppColors.textFaint),
+                              onPressed: () async {
+                                try {
+                                  await _api.deletePlay(p["id"] as String);
+                                  setDlg(() => plays.remove(p));
+                                } catch (_) {}
+                              },
+                            ),
+                          ]),
                         ),
                     ],
                   ),
           ),
           actions: [
+            // A mentett figurák egy nyomtatható füzetben (a mostani fallal).
+            if (plays.isNotEmpty)
+              TextButton.icon(
+                onPressed: _figuraFuzetNyit,
+                icon: const Icon(Icons.print_outlined, size: 18),
+                label: const Text("Figurafüzet ↗"),
+              ),
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Bezárás")),
           ],
         ),
@@ -395,15 +717,31 @@ class _DesignerScreenState extends State<DesignerScreen> {
           .toList();
       if (!mounted) return;
       setState(() {
-        // A tervező 3 kulcs-pozícióval dolgozik: első / középső / utolsó pont.
+        // A mentett kulcs-pozíciók (legfeljebb designerMaxPoints, és
+        // minimum 3 — a régi kétpontos mentés közép-pontot kap); minden
+        // játékos ugyanannyi ponton.
+        final k = attackers
+            .map((a) => a.length)
+            .fold<int>(3, (m, n) => n > m ? n : m)
+            .clamp(3, designerMaxPoints);
         _attackers = [
           for (final a in attackers)
-            if (a.isNotEmpty)
-              a.length >= 3
-                  ? [a.first, a[a.length ~/ 2], a.last]
-                  : _path3(a.first, a.last),
+            if (a.isNotEmpty) resamplePath(a, k),
         ];
         _editStep = 0;
+        _nev = "${play["name"] ?? ""}";
+        // A mentett labdás-sor (a passzok) a pontokra vetítve, a létező
+        // játékosokra szorítva; régi mentésnél végig az 1.
+        final l = [
+          for (final v in (play["labda"] as List?) ?? const [])
+            (v as num).toInt().clamp(0, _attackers.length - 1)
+        ];
+        _labda = [
+          for (int i = 0; i < k; i++)
+            l.isEmpty
+                ? 0
+                : l[(l.length == 1 ? 0 : (i * (l.length - 1) / (k - 1)).round())]
+        ];
       });
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Betöltve: ${play["name"]}")));
@@ -480,7 +818,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
             onPanUpdate: (d) => _onPan(d.localPosition, size),
             onPanEnd: (_) => _dragIndex = null,
             child: CustomPaint(
-              painter: _DesignerPainter(attackers: _attackers, step: _editStep, model: _model),
+              painter: _DesignerPainter(
+                  attackers: _attackers, step: _editStep, model: _model,
+                  labda: _labda),
               size: size,
             ),
           );
@@ -493,21 +833,70 @@ class _DesignerScreenState extends State<DesignerScreen> {
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.lg),
+      // A felső rész görgethető: alacsony ablakban (700×600) a lenti
+      // gombok (a "3D / VR ↗"-val együtt) így is a helyükön maradnak.
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text("KULCS-POZÍCIÓ", style: AppText.sectionLabel),
+         Expanded(
+          child: SingleChildScrollView(
+           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+          Row(children: [
+            Expanded(
+                child: Text("KULCS-POZÍCIÓ", style: AppText.sectionLabel)),
+            // Több pont: kereszt, visszaadás (a 3D is viszi).
+            IconButton(
+              tooltip: "Új kulcs-pozíció a mostani után (legfeljebb "
+                  "$designerMaxPoints) — kereszt, visszaadás",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _pontok >= designerMaxPoints
+                  ? null
+                  : _pontBe,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+            IconButton(
+              tooltip: "A mostani kulcs-pozíció törlése",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _pontok <= 2 ? null : _pontKi,
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+          ]),
           const SizedBox(height: AppSpacing.sm),
           SegmentedButton<int>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 0, label: Text("Kezdő")),
-              ButtonSegment(value: 1, label: Text("Közép")),
-              ButtonSegment(value: 2, label: Text("Vég")),
+            segments: [
+              for (int i = 0; i < _pontok; i++)
+                ButtonSegment(value: i, label: Text(keypointLabel(i, _pontok))),
             ],
             selected: {_editStep},
             onSelectionChanged: _playing ? null : (s) => setState(() => _editStep = s.first),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // A labdás ennél a kulcs-pozíciónál: ha a következő pontnál más,
+          // ott passz (a 3D-ben a labda repül).
+          Tooltip(
+            message: "Kinél van a labda ennél a kulcs-pozíciónál? Ha a "
+                "következő pontnál másnál, az passz — a 3D-ben a labda "
+                "átrepül, és a padlón sárga nyíl mutatja.",
+            child: Text("LABDA ENNÉL A PONTNÁL",
+                style: AppText.label.copyWith(fontSize: 10.5)),
+          ),
+          const SizedBox(height: 4),
+          Wrap(spacing: 4, runSpacing: 4, children: [
+            for (int i = 0; i < _attackers.length; i++)
+              ChoiceChip(
+                label: Text("${i + 1}"),
+                visualDensity: VisualDensity.compact,
+                selected: _labda[_editStep] == i,
+                onSelected: _playing
+                    ? null
+                    : (_) => setState(() => _labda[_editStep] = i),
+              ),
+          ]),
           const SizedBox(height: AppSpacing.lg),
           // Figura-könyvtár: a megrajzolt figura mentése / visszatöltése.
           Row(children: [
@@ -537,23 +926,98 @@ class _DesignerScreenState extends State<DesignerScreen> {
               ),
             ),
           ]),
-          const SizedBox(height: AppSpacing.xl),
-          Text("VÉDŐFAL (ALAP: 6-0, A HATOSON KÍVÜL)",
-              style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.md),
+          // A támadók száma (2–7): a hatfős támadás is megrajzolható.
+          Row(children: [
+            Expanded(
+                child: Text("TÁMADÓK: ${_attackers.length}",
+                    style: AppText.sectionLabel)),
+            IconButton(
+              tooltip: "Új támadó (legfeljebb $designerMaxAttackers) — a "
+                  "következő szabad posztra, elhúzható",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _attackers.length >= designerMaxAttackers
+                  ? null
+                  : _jatekosBe,
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+            ),
+            IconButton(
+              tooltip: "Az utolsó támadó ki",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _attackers.length <= designerMinAttackers
+                  ? null
+                  : _jatekosKi,
+              icon: const Icon(Icons.person_remove_alt_1_outlined),
+            ),
+          ]),
+          const SizedBox(height: AppSpacing.md),
+          Text("VÉDŐFAL (A HATOSON KÍVÜL)", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          // Emberelőny-figura: 5 vagy 4 védő (kiállítás után).
+          Row(children: [
             Text("Védők", style: AppText.label),
-            Text("$_numDefenders", style: AppText.value),
+            const Spacer(),
+            IconButton(
+              tooltip: "Egy védővel kevesebb (kiállítás — emberelőny)",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _numDefenders <= designerMinDefenders
+                  ? null
+                  : () => _vedoValt(-1),
+              icon: const Icon(Icons.exposure_neg_1),
+            ),
+            Text("$_numDefenders",
+                key: const Key("vedoSzam"), style: AppText.value),
+            IconButton(
+              tooltip: "Egy védővel több (legfeljebb 6)",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _numDefenders >= designerMaxDefenders
+                  ? null
+                  : () => _vedoValt(1),
+              icon: const Icon(Icons.exposure_plus_1),
+            ),
+          ]),
+          // A rendszer: az előretolt védők a 9 m körül (a 3-2-1 csúcsa
+          // 11 m-en), a labdát követve — a 3D és a figura-lap is viszi.
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text("Rendszer", style: AppText.label),
+            DropdownButton<String>(
+              key: const Key("rendszerValaszto"),
+              value: _rendszer,
+              isDense: true,
+              underline: const SizedBox.shrink(),
+              style: AppText.value,
+              items: [
+                for (final r in defenseSystems.keys)
+                  DropdownMenuItem(value: r, child: Text(r)),
+              ],
+              onChanged: _playing
+                  ? null
+                  : (v) => setState(() {
+                        _rendszer = v ?? "6-0";
+                        _kezifal();
+                      }),
+            ),
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text("Vonalmélység", style: AppText.label),
-            Text("${_lineDepth.toStringAsFixed(1)} m", style: AppText.value),
+            Text("${huNum(_lineDepth)} m", style: AppText.value),
           ]),
           Slider(
             value: _lineDepth, min: 6, max: 12,
-            onChanged: _playing ? null : (v) => setState(() => _lineDepth = v),
+            onChanged: _playing
+                ? null
+                : (v) => setState(() {
+                      _lineDepth = v;
+                      _kezifal();
+                    }),
           ),
-          const Spacer(),
+            ]),
+          ),
+         ),
           if (_eval != null) _evalCard(_eval!),
           const SizedBox(height: AppSpacing.md),
           _playing
@@ -578,6 +1042,56 @@ class _DesignerScreenState extends State<DesignerScreen> {
                     icon: const Icon(Icons.psychology_outlined),
                     label: const Text("Egy CSAPAT tanult védelme ellen"),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // A figura 3D-ben / VR-ben (a böngészőben, bejárható).
+                  Tooltip(
+                    message: "A figura a böngészős 3D-ben (VR-ben is): valós "
+                        "tempóban, kapussal, ismétlődve — a játékos a saját "
+                        "útját a saját szemével járja be. A védelem a "
+                        "legutóbbi tanult védelem, különben a fenti fal; a "
+                        "csapat a /kovet várólapon is eléri.",
+                    child: OutlinedButton.icon(
+                      onPressed: _bongeszos3d,
+                      icon: const Icon(Icons.view_in_ar_outlined, size: 18),
+                      label: const Text("3D / VR ↗"),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // Kiosztható lap: lépésenként ábra (nyomtatható, PDF).
+                  Tooltip(
+                    message: "Figura-lap: nyomtatható (PDF-be is menthető) "
+                        "lap — kulcs-pozíciónként felülnézeti ábra a "
+                        "futásokkal, a passzokkal és a fallal, a lépések "
+                        "leírásával. Az öltözőbe, a táblához.",
+                    child: OutlinedButton.icon(
+                      onPressed: () => _figura3dNyit(_attackers, _labda, _nev,
+                          ut: "figura-lap"),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: const Text("Figura-lap ↗"),
+                    ),
+                  ),
+                  // Futónként a csapat linkje (VR: a saját futójában) és
+                  // a figura videója (MP4 — a csapatnak elküldhető).
+                  Wrap(alignment: WrapAlignment.center, children: [
+                    TextButton.icon(
+                      onPressed: _csapatLinkek,
+                      icon: const Icon(Icons.groups_outlined, size: 16),
+                      label: const Text("Csapat-linkek (VR)",
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                    Tooltip(
+                      message: "A figura felülnézeti videója (MP4) — "
+                          "letöltődik, elküldhető a csapatnak (a 3D link "
+                          "csak a klub-hálózaton él).",
+                      child: TextButton.icon(
+                        onPressed: () => _figura3dNyit(_attackers, _labda,
+                            _nev, ut: "figura-video"),
+                        icon: const Icon(Icons.movie_outlined, size: 16),
+                        label: const Text("Videó ↗",
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ]),
                 ]),
         ],
       ),
@@ -592,7 +1106,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       decoration: BoxDecoration(
         color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accent.withOpacity(0.4)),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,25 +1128,32 @@ class _DesignerPainter extends CustomPainter {
   final List<List<Offset>> attackers;
   final int step;
   final DefenseModel model;
+  final List<int> labda; // kulcs-pozíciónként a labdás
 
-  _DesignerPainter({required this.attackers, required this.step, required this.model});
+  _DesignerPainter(
+      {required this.attackers,
+      required this.step,
+      required this.model,
+      required this.labda});
+
+  int get _labdas => labda[step].clamp(0, attackers.length - 1);
 
   @override
   void paint(Canvas canvas, Size size) {
     final tr = CourtTransform.fit(size);
     _drawCourt(canvas, tr);
 
-    // Védelem-előnézet (a labda az 1. támadónál).
-    final ballY = attackers[0][step].dy;
+    // Védelem-előnézet (a labdára reagál).
+    final ballY = attackers[_labdas][step].dy;
     final defs = model.respond(ballY, courtLength);
     for (final d in defs) {
       final c = tr.toScreen(d.dx, d.dy);
-      canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withOpacity(0.45));
+      canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withValues(alpha: 0.45));
     }
 
     // Útvonal-előnézet: halvány vonal a kulcs-pozíciókon át (látszik az ív).
     final routePaint = Paint()
-      ..color = AppColors.home.withOpacity(0.35)
+      ..color = AppColors.home.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
     for (final a in attackers) {
@@ -649,13 +1170,26 @@ class _DesignerPainter extends CustomPainter {
     for (int i = 0; i < attackers.length; i++) {
       final p = attackers[i][step];
       final c = tr.toScreen(p.dx, p.dy);
-      canvas.drawCircle(c, 0.85 * tr.scale, Paint()..color = AppColors.home.withOpacity(0.18));
+      canvas.drawCircle(c, 0.85 * tr.scale, Paint()..color = AppColors.home.withValues(alpha: 0.18));
       canvas.drawCircle(c, 0.65 * tr.scale, Paint()..color = AppColors.home);
       _label(canvas, c, "${i + 1}", 0.65 * tr.scale);
     }
 
-    // Labda (az 1. támadónál).
-    final b = tr.toScreen(attackers[0][step].dx, attackers[0][step].dy);
+    // A passz, ami ERRE a pontra érkezik (az előző pont labdásától).
+    if (step > 0) {
+      final elozo = labda[step - 1].clamp(0, attackers.length - 1);
+      if (elozo != _labdas) {
+        canvas.drawLine(
+            tr.toScreen(attackers[elozo][step].dx, attackers[elozo][step].dy),
+            tr.toScreen(attackers[_labdas][step].dx, attackers[_labdas][step].dy),
+            Paint()
+              ..color = AppColors.ball.withValues(alpha: 0.8)
+              ..strokeWidth = 2.2);
+      }
+    }
+    // Labda (a labdásnál).
+    final b = tr.toScreen(
+        attackers[_labdas][step].dx, attackers[_labdas][step].dy);
     canvas.drawCircle(b, 0.32 * tr.scale, Paint()..color = AppColors.ball);
   }
 
@@ -677,8 +1211,24 @@ class _DesignerPainter extends CustomPainter {
         path.lineTo(pt.dx, pt.dy);
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = AppColors.accent.withOpacity(0.07));
+      canvas.drawPath(path, Paint()..color = AppColors.accent.withValues(alpha: 0.07));
       canvas.drawPath(path, line);
+    }
+    // 9 m-es szaggatott szabaddobási vonal — a figura-tervezőben ez a
+    // vonatkoztatás: a fal és az indulási helyek ehhez képest olvashatók
+    // (a felülnézeti meccs-kép ugyanezt rajzolja).
+    final dash = Paint()
+      ..color = AppColors.courtLine.withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (final leftSide in [true, false]) {
+      final pts = freeThrowBoundary(leftSide: leftSide, segments: 22)
+          .map((o) => tr.toScreen(o.dx, o.dy))
+          .toList();
+      for (var i = 0; i + 1 < pts.length; i += 2) {
+        canvas.drawLine(pts[i], pts[i + 1], dash);
+      }
     }
   }
 
@@ -690,7 +1240,9 @@ class _DesignerPainter extends CustomPainter {
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 
+  // Mindig: a támadók és a labdás-sor listája HELYBEN változik (az
+  // azonosság-összevetés a húzást, a labdást, a fal rendszerét és
+  // védőszámát elnézte), a rajz pedig olcsó.
   @override
-  bool shouldRepaint(covariant _DesignerPainter old) =>
-      old.attackers != attackers || old.step != step || old.model.lineDepthM != model.lineDepthM;
+  bool shouldRepaint(covariant _DesignerPainter old) => true;
 }

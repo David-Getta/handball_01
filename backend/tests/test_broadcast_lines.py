@@ -117,3 +117,67 @@ def test_suggest_calibration_quad_rejects_small():
             {"x": 20, "y": 20, "lines": (3, 1)},
             {"x": 10, "y": 20, "lines": (3, 2)}]
     assert suggest_calibration_quad(tiny, width=240, height=160) is None
+
+
+# --- Színes vonalak (több sportot kiszolgáló csarnok) --------------------
+# A felhasználó felvételén (THW Kiel vs BT Füchse, Graz) a csarnok padlóján
+# egymáson futnak a sportágak vonalai: a KÉZILABDA-pályát PIROS vonal
+# jelöli, mellette kék/zöld vonalak és nagy festett mezők (sárga
+# kapuelőtér). Ezek a tesztek ezt a helyzetet modellezik.
+
+def _hall(h=160, w=240, floor=(205, 180, 140)):
+    """Világos (fa) padló, RGB."""
+    img = np.zeros((h, w, 3), dtype=np.uint8)
+    img[:, :] = floor
+    return img
+
+
+def test_color_line_mask_finds_the_red_line_not_the_blue_one():
+    """A piros maszk a PIROS vonalat jelöli, a kéket nem (és fordítva)."""
+    from handball.pipeline.broadcast_lines import color_line_mask
+
+    img = _hall()
+    img[80:83, :] = (215, 45, 40)      # piros kézilabda-vonal
+    img[:, 120:123] = (40, 70, 210)    # kék (másik sport) vonal
+    red = color_line_mask(img, "piros")
+    blue = color_line_mask(img, "kek")
+    assert red[81, 30] and not red[30, 121]
+    assert blue[30, 121] and not blue[81, 30]
+
+
+def test_color_mask_ignores_the_inside_of_a_painted_area():
+    """A nagy festett MEZŐ belseje nem vonal — csak a széle jelölődik
+    (a sárga kapuelőtér különben elárasztaná a Hough-teret)."""
+    from handball.pipeline.broadcast_lines import color_line_mask
+
+    img = _hall()
+    img[40:120, 60:180] = (225, 215, 45)   # nagy sárga festett mező
+    mask = color_line_mask(img, "sarga")
+    assert not mask[80, 120], "a mező KÖZEPE nem lehet vonal-pixel"
+
+
+def test_auto_picks_the_red_court_lines_in_a_multi_sport_hall():
+    """Auto módban a piros (kézilabda) vonalak nyernek, ha azokból van a
+    legtöbb — a fehér vonal hiányában is talál pályát a rendszer."""
+    from handball.pipeline.broadcast_lines import detect_court_lines_color
+
+    img = _hall()
+    for y in (30, 130):                       # két piros oldalvonal
+        img[y:y + 3, :] = (215, 45, 40)
+    img[:, 20:23] = (215, 45, 40)             # piros alapvonal
+    img[:, 200:202] = (40, 70, 210)           # egy kék idegen vonal
+    found = detect_court_lines_color(img, "auto")
+    assert found["color"] == "piros", found["pixels"]
+    assert found["pixels"]["piros"] > found["pixels"]["kek"]
+    assert len(found["lines"]) >= 2
+
+
+def test_explicit_color_overrides_auto():
+    """A felhasználó felülbírálhatja a szín-választást."""
+    from handball.pipeline.broadcast_lines import detect_court_lines_color
+
+    img = _hall()
+    img[80:83, :] = (215, 45, 40)
+    img[:, 120:123] = (40, 70, 210)
+    assert detect_court_lines_color(img, "kek")["color"] == "kek"
+    assert detect_court_lines_color(img, "feher")["color"] == "feher"

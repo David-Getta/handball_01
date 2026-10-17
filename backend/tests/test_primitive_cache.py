@@ -264,3 +264,89 @@ def test_frame_level_cache_is_off_without_scope():
         cached_frame("teszt_kocka2", m.frames[0], cfg,
                      lambda: calls.append(1))
     assert len(calls) == 2, calls
+
+
+def test_az_alapertelmezett_beallitas_kulcsa_azonos_a_none_eval():
+    """`réteg(meccs)` és `réteg(meccs, TacticsConfig())` UGYANAZ.
+
+    A rétegek `config=None` esetén maguk állítanak elő egy
+    alapértelmezett beállítást (`config or TacticsConfig()`), tehát a
+    két hívás szó szerint ugyanazt számolja. Külön kulccsal viszont
+    kétszer futott le — mérve az edzői összefoglalóban a
+    teendő-rangsoron.
+    """
+    from handball.pipeline.primitive_cache import _arg_key
+    from handball.pipeline.tactics import TacticsConfig
+
+    assert _arg_key(None) == _arg_key(TacticsConfig())
+
+
+def test_a_modositott_beallitas_kulcsa_MAS():
+    """A normalizálás nem moshatja össze a KÜLÖNBÖZŐ beállításokat —
+    az azt jelentené, hogy egy réteg más beállítás eredményét olvassa."""
+    from handball.pipeline.primitive_cache import _arg_key
+    from handball.pipeline.tactics import TacticsConfig
+
+    mas = TacticsConfig()
+    mas.possession_radius_m = mas.possession_radius_m + 1.0
+    assert _arg_key(mas) != _arg_key(None)
+    assert _arg_key(mas) != _arg_key(TacticsConfig())
+
+
+def test_a_hatokor_egyszer_szamol_akkor_is_ha_az_egyik_hivo_atadja():
+    """A tényleges viselkedés: két hívás, egy számolás."""
+    from handball.pipeline.primitive_cache import (memoize_primitive,
+                                                   primitive_cache)
+    from handball.pipeline.tactics import TacticsConfig
+
+    hivasok = []
+
+    @memoize_primitive("proba_reteg")
+    def proba(match, config=None):
+        hivasok.append(1)
+        return {"home": {}, "away": {}}
+
+    m = Match(_meta(), [])
+    with primitive_cache(m):
+        proba(m)                       # config nélkül
+        proba(m, None)                 # kifejezett None
+        proba(m, TacticsConfig())      # kifejezett alapértelmezés
+    assert len(hivasok) == 1, f"{len(hivasok)} számolás egy helyett"
+
+
+def test_a_melyen_masolt_reteg_egyszer_fut_es_nem_szivarog():
+    """A sokszor hívott rétegek (pl. sprint_threats) a hatókörben
+    meccsenként egyszer futnak, és MÉLY védő-másolatot adnak: ha egy
+    hívó a beágyazott listát módosítja, a következő hívó eredménye
+    érintetlen marad (a sekély másolat a belső listát megosztaná)."""
+    import copy as _copy
+
+    from handball.pipeline import stats
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    hivasok = []
+    eredeti = stats.sprint_threats.uncached
+
+    def szamlalo(*a, **k):
+        hivasok.append(1)
+        return eredeti(*a, **k)
+
+    with primitive_cache(m):
+        stats.sprint_threats.__wrapped__ = szamlalo  # noqa: B010
+        try:
+            elso = stats.sprint_threats(m)
+            tiszta = _copy.deepcopy(elso)
+            # Mély módosítás az első hívó példányán.
+            for side in elso.values():
+                if isinstance(side, dict):
+                    for v in side.values():
+                        if isinstance(v, list):
+                            v.append({"szennyezes": True})
+                    side["szennyezes"] = True
+            masodik = stats.sprint_threats(m)
+        finally:
+            del stats.sprint_threats.__wrapped__
+    assert masodik == tiszta

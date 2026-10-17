@@ -84,6 +84,65 @@ def test_impact_counts_goals_after():
     assert r["events"][0]["goals_for_after"] == 1
 
 
+def _sby_match(n=4, concede=True):
+    """`n` hazai csere; `concede` esetén minden csere után a vendég
+    gólt dob (a labda a hazai kapuba száguld)."""
+    frames = []
+    t = 0
+    for k in range(n):
+        out_id, in_id = 10 + 2 * k, 11 + 2 * k
+        for i in range(210):
+            players = [_pl(1, Team.HOME, 25.0, 10.0)]
+            if i <= 200:
+                frac = i / 200.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=22.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(120):
+            frac = min(1.0, i / 100.0)
+            players = [_pl(1, Team.HOME, 25.0, 10.0),
+                       _pl(in_id, Team.HOME,
+                           20.0 + (30.0 - 20.0) * frac,
+                           1.0 + (12.0 - 1.0) * frac)]
+            bx = 22.0
+            if concede and 20 <= i < 27:
+                bx = max(6.0 - (i - 20) * 1.2, 0.0)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(200):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+                ball=Ball(x=22.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_substitution_yield_flags_losing_change_window():
+    """Ha a cseréik után rendre gólt kapnak, a csere-pillanat
+    célzottan támadható."""
+    from handball.pipeline.substitutions import (SBY_MIN_ROTATIONS,
+                                                 substitution_yield)
+
+    rec = substitution_yield(_sby_match())["home"]
+    assert rec["rotations"] >= SBY_MIN_ROTATIONS, rec
+    assert rec["diff"] < 0, rec
+    assert rec["verdict"] and "célzottan támadható" in rec["verdict"], rec
+
+
+def test_substitution_yield_silent_with_few_rotations():
+    """Néhány cseréből nincs ítélet."""
+    from handball.pipeline.substitutions import substitution_yield
+
+    rec = substitution_yield(_sby_match(n=2))["home"]
+    assert rec["verdict"] is None, rec
+
+
 def test_late_sub_flags_fading_player_left_on_court():
     """A 2. félidőben 20%+ tempót eső, le nem cserélt játékos késő-csere
     jelzést kap; az egyenletes tempójú nem."""
@@ -502,3 +561,294 @@ def test_gap_punishment_no_gaps_no_verdict():
 
     rec = gap_punishment(_gpn_match(False, gap_runs=0))["home"]
     assert rec["gap_s"] == 0.0 and rec["verdict"] is None
+
+
+# ---- Forgatott-poszt (melyik posztjukat cserélik) --------------------------
+
+
+def _sbr_match(out_plan, fps=25.0):
+    """Poszt-minta (7/17/27: beálló-tájék, 9: szélső), majd az
+    `out_plan` szerinti cserehullámok: a lecserélt a cserezónában
+    tűnik el, a beálló új track ott jelenik meg."""
+    spos = {7: (34.0, 10.0), 17: (33.5, 9.0), 27: (34.5, 11.0),
+            9: (35.0, 3.0)}
+    on_court = dict(spos)   # track_id -> aktuális hely
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (out_tid, in_tid) in out_plan:
+        spot = on_court[out_tid]
+        for i in range(50):          # a lecserélt a zóna felé tart
+            frac = (i + 1) / 50.0
+            x = spot[0] + (20.0 - spot[0]) * frac
+            y = spot[1] + (1.0 - spot[1]) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()
+                       if tid != out_tid] + [_pl(out_tid, Team.HOME,
+                                                 x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        del on_court[out_tid]        # eltűnik a zónában
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+        for i in range(50):          # az új track a zónából áll be
+            frac = (i + 1) / 50.0
+            x = 20.0 + (spot[0] - 20.0) * frac
+            y = 1.0 + (spot[1] - 1.0) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()] \
+                + [_pl(in_tid, Team.HOME, x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        on_court[in_tid] = spot
+        for _ in range(250):         # két hullám közt eltelik az idő
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+    for _ in range(150):             # záró poszt-minta a beállókkal
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_substituted_roles_names_the_rotated_post():
+    """Négy cseréből három a beálló-tájékot érinti → a fárasztást a
+    nem forgatott posztokra kell tenni."""
+    from handball.pipeline.substitutions import (SBR_MIN_OUTS,
+                                                 substituted_roles)
+
+    rec = substituted_roles(
+        _sbr_match([(7, 107), (17, 117), (27, 127),
+                    (9, 119)]))["home"]
+    assert rec["outs"] >= SBR_MIN_OUTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "friss ember" in rec["verdict"], rec
+
+
+def test_substituted_roles_silent_with_few_subs():
+    """Néhány cseréből nincs ítélet."""
+    from handball.pipeline.substitutions import substituted_roles
+
+    rec = substituted_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Beérkező-poszt (melyik posztra hoz frissítést a padjuk) ---------------
+
+
+def test_sub_in_roles_names_the_refreshed_post():
+    """Négy beállásból három a beálló-tájékra érkezik → a hullám után
+    arra a sávra kell váltani."""
+    from handball.pipeline.substitutions import (IBR_MIN_INS,
+                                                 sub_in_roles)
+
+    rec = sub_in_roles(
+        _sbr_match([(7, 107), (17, 117), (27, 127),
+                    (9, 119)]))["home"]
+    assert rec["ins"] >= IBR_MIN_INS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "friss láb" in rec["verdict"], rec
+
+
+def test_sub_in_roles_silent_with_few_ins():
+    """Néhány beállásból nincs ítélet."""
+    from handball.pipeline.substitutions import sub_in_roles
+
+    rec = sub_in_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Csere-stílus (posztot tart vagy átszab a pad) -------------------------
+
+
+def _sws_match(swaps, fps=25.0):
+    """Poszt-minta + cserehullámok: a `swaps` elemei (ki, be,
+    be-hely) hármasok — a be-hely None esetén a beálló a lecserélt
+    helyét veszi át (posztot tartó), különben a megadott új helyre
+    áll (átszabó)."""
+    spos = {7: (34.0, 10.0), 17: (33.5, 9.0), 27: (34.5, 11.0),
+            9: (35.0, 3.0)}
+    on_court = dict(spos)
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (out_tid, in_tid, in_spot) in swaps:
+        spot = on_court[out_tid]
+        dest = in_spot if in_spot is not None else spot
+        for i in range(50):          # a lecserélt a zóna felé tart
+            frac = (i + 1) / 50.0
+            x = spot[0] + (20.0 - spot[0]) * frac
+            y = spot[1] + (1.0 - spot[1]) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()
+                       if tid != out_tid] + [_pl(out_tid, Team.HOME,
+                                                 x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        del on_court[out_tid]
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+        for i in range(50):          # az új track a zónából áll be
+            frac = (i + 1) / 50.0
+            x = 20.0 + (dest[0] - 20.0) * frac
+            y = 1.0 + (dest[1] - 1.0) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()] \
+                + [_pl(in_tid, Team.HOME, x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        on_court[in_tid] = dest
+        for _ in range(250):         # két hullám közt eltelik az idő
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+    bx, by = next(iter(on_court.values()))
+    for _ in range(150):             # záró poszt-minta a beállókkal
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=bx + 0.2, y=by, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_swap_style_names_the_post_keeping_bench():
+    """Három azonos-posztú váltás → posztot tartó pad."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, None), (17, 117, None), (27, 127, None)]))["home"]
+    assert rec["pairs"] >= 3, rec
+    assert rec["same_pct"] and rec["same_pct"] >= 70.0, rec
+    assert rec["verdict"] and "posztot tartó" in rec["verdict"], rec
+
+
+def test_swap_style_names_the_reshaping_bench():
+    """Három átszabó váltás (beálló-tájék ki, szélső-hely be) →
+    átszabó pad."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, (36.0, 17.0)), (17, 117, (36.0, 2.0)),
+         (27, 127, (28.5, 10.0))]))["home"]
+    assert rec["pairs"] >= 3, rec
+    assert rec["same_pct"] is not None and rec["same_pct"] <= 40.0, rec
+    assert rec["verdict"] and "átszabó" in rec["verdict"], rec
+
+
+def test_swap_style_silent_with_few_pairs():
+    """Kevés ki-be párosból nincs ítélet."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, None), (9, 119, None)]))["home"]
+    assert rec["same_pct"] is None and rec["verdict"] is None, rec
+
+
+def _phase_match(holder: Team, n_waves=4, fps=25.0):
+    """`n_waves` egyfős HAZAI cserehullám; a labdát végig a megadott
+    csapat 1-es játékosa tartja (a csere-fázis ebből dől el)."""
+    frames = []
+    plan = []
+    tid = 500
+    for k in range(n_waves):
+        plan.append((400 + k * 900, tid, tid + 1))
+        tid += 2
+    total = 400 + n_waves * 900 + 300
+
+    for t in range(total):
+        players = [_pl(1, holder, 25.0, 10.0)]
+        # A másik csapat egy embere távolabb áll (ne ő legyen a labdás).
+        players.append(_pl(2, Team.AWAY if holder == Team.HOME else Team.HOME,
+                           12.0, 4.0))
+        for (t_wave, out_id, in_id) in plan:
+            if t_wave - 150 <= t <= t_wave:
+                frac = (t - (t_wave - 150)) / 150.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            if t_wave + 10 <= t <= t_wave + 150:
+                frac = (t - (t_wave + 10)) / 140.0
+                players.append(_pl(in_id, Team.HOME,
+                                   20.0 + 10.0 * frac,
+                                   1.0 + 11.0 * frac))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_substitution_phase_flags_the_risky_rotation():
+    """Ha a cserék az ELLENFÉL birtoklása közben indulnak, kockázatos
+    csere-rend (a fal egy emberrel kevesebbel áll fel)."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.AWAY))["home"]
+    assert rec["subs"] == 4, rec
+    assert rec["opp_ball"] == 4 and rec["own_ball"] == 0, rec
+    assert rec["risky_pct"] == 100.0
+    assert rec["verdict"] == "védekezés közben is cserélnek (kockázatos)"
+
+
+def test_substitution_phase_flags_the_disciplined_rotation():
+    """Saját birtoklás közbeni cserék → fegyelmezett csere-rend."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.HOME))["home"]
+    assert rec["own_ball"] == 4 and rec["opp_ball"] == 0, rec
+    assert rec["risky_pct"] == 0.0
+    assert rec["verdict"] == ("fegyelmezett csere-rend "
+                              "(birtokláskor váltanak)")
+
+
+def test_substitution_phase_silent_on_few_subs():
+    """Kevés cserénél nincs ítélet (sose hallgatólagos csere-rend)."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.AWAY, n_waves=2))["home"]
+    assert rec["subs"] == 2 and rec["verdict"] is None, rec
+    assert rec["risky_pct"] is None, rec

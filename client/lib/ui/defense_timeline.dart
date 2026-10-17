@@ -8,6 +8,7 @@ import "package:flutter/material.dart";
 
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
+import "num_format.dart";
 
 /// Rögzített forma→szín kiosztás (a szín az entitást követi, nem a
 /// sorrendet): a gyakori formák kapják a megkülönböztethető színeket,
@@ -94,15 +95,14 @@ class DefenseTimeline extends StatelessWidget {
                   child: Tooltip(
                     message: sel(w) == null
                         ? "nem védekezett"
-                        : "${sel(w)} · ${(w.startFrame / fps / 60).toStringAsFixed(1)}. perc",
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 1),
-                      decoration: BoxDecoration(
-                        color: sel(w) == null
-                            ? AppColors.surfaceAlt
-                            : (_formationColors[sel(w)] ?? _otherColor),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                        : "${sel(w)} · ${huNum(w.startFrame / fps / 60)}. perc",
+                    // A szakasz "megfogható": rámutatásra kicsit
+                    // felfénylik, és a hozzá tartozó forma neve a
+                    // súgóbuborékban azonnal olvasható.
+                    child: _StripCell(
+                      color: sel(w) == null
+                          ? AppColors.surfaceAlt
+                          : (_formationColors[sel(w)] ?? _otherColor),
                     ),
                   ),
                 ),
@@ -111,5 +111,47 @@ class DefenseTimeline extends StatelessWidget {
         }),
       ),
     ]);
+  }
+}
+
+/// A védekezés-sáv egy szakasza: finom, lekerekített csempe, amely
+/// rámutatásra felfénylik és enyhén megnyúlik — így látszik, melyik
+/// szakaszra fog ugrani a lejátszó.
+class _StripCell extends StatefulWidget {
+  const _StripCell({required this.color});
+
+  final Color color;
+
+  @override
+  State<_StripCell> createState() => _StripCellState();
+}
+
+class _StripCellState extends State<_StripCell> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        margin: EdgeInsets.only(right: 1, top: _hover ? 0 : 1.5,
+            bottom: _hover ? 0 : 1.5),
+        decoration: BoxDecoration(
+          color: _hover
+              ? Color.lerp(widget.color, Colors.white, 0.25)
+              : widget.color,
+          borderRadius: BorderRadius.circular(3),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                      color: widget.color.withValues(alpha: 0.5), blurRadius: 8),
+                ]
+              : const [],
+        ),
+      ),
+    );
   }
 }
