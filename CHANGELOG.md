@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.176 óta)
+## v0.1.177 — kiadva (2026-10-18)
+
+> Kiadás-jegyzet: Apple Silicon Macen a feldolgozás nem áll le 2%-nál.
+> A becsomagolt motor a detektálás első kockáinál összeomlott (a Mac
+> grafikus gyorsítója nem szál-biztos, és két szál használta egyszerre)
+> — minden videónál. Most a GPU-t egyetlen szál használja. Az új
+> feldolgozási füstteszt a kiadás-buildben a GitHub Macen ezt pontosan
+> reprodukálta, a javítás után pedig végigfut: minden kiadás csak akkor
+> megy ki, ha a becsomagolt motor ténylegesen feldolgoz egy videót.
 
 - **Apple Silicon Macen a feldolgozás nem áll le 2%-nál** (motor): a
   becsomagolt motor a detektálás első kockáinál összeomlott — a Mac
