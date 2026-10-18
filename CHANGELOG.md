@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.175 óta)
+## v0.1.176 — kiadva (2026-10-18)
+
+> Kiadás-jegyzet: a meccs-időablak (és az utólagos vágás) egy óránál
+> hosszabb felvételen az óra:perc:másodperc alakot is érti ("1:23:40");
+> értelmezhetetlen időpontnál az indítás előtti lista is szól.
 
 - **Óra:perc:másodperc a meccs-időablakban** (app): a feltöltés "Meccs
   vége" mezője csak a perc:másodperc alakot értette — egy óránál
