@@ -3989,6 +3989,36 @@ def create_app():
         from ..pipeline.play_simulation import FIGURA_KOZOS_ID
         return match_id in _store or match_id == FIGURA_KOZOS_ID
 
+    def _figura_oldal_lekerdezesbol(figura: str) -> str:
+        """A figura-oldal (a /figura3d-é) a figura lekérdezéséből — a
+        figura-felvétel csomagjához. 404, ha nincs figura; 400 a hibásra
+        (mint a /figura3d)."""
+        from urllib.parse import parse_qs
+
+        from ..pipeline.play_simulation import figura_nev, setplay_3d_match
+        from ..pipeline.view3d_html import view3d_html
+        if not figura:
+            raise HTTPException(status_code=404,
+                                detail="a felvételhez nincs figura")
+        q = parse_qs(figura)
+
+        def g(k: str, alap: str = "") -> str:
+            return (q.get(k) or [alap])[0]
+        try:
+            vedok, melyseg = int(g("vedok", "6")), float(g("melyseg", "6"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="hibás figura")
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            g("u"), g("l"), g("meccs"), g("vedo", "away"), vedok, melyseg,
+            g("rendszer", "6-0"))
+        try:
+            sim, ertekeles = setplay_3d_match(
+                utak, modell, ball=labda, name=figura_nev(g("cim")) or None,
+                defense_name=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        return view3d_html(sim, figura=ertekeles)
+
     def _figura_felvetel_meta(figura: str):
         """A figura-felvétel "meccs-fejléce" a listákhoz: match_id a
         FIGURA közös azonosító, home_team a figura neve (a cim
@@ -4238,11 +4268,15 @@ def create_app():
 
         from ..pipeline.court3d import (SHARED3D_REC_AUDIO_TYPES,
                                         shared3d_felvetel_fejezetek)
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
         from ..pipeline.primitive_cache import primitive_cache
         from ..pipeline.view3d_html import view3d_csomag
-        match = _store.get(match_id)
-        if match is None:
-            raise HTTPException(status_code=404, detail="match not found")
+        # (a figura-felvétel csomagja a felvétel figurájából épül)
+        match = None
+        if match_id != FIGURA_KOZOS_ID:
+            match = _store.get(match_id)
+            if match is None:
+                raise HTTPException(status_code=404, detail="match not found")
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not rid.isalnum() or not p.exists():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
@@ -4254,8 +4288,11 @@ def create_app():
         h = p.with_suffix(".hang")
         if tipus in SHARED3D_REC_AUDIO_TYPES and h.exists():
             hang = (h.read_bytes(), tipus)
-        with primitive_cache(match):
-            oldal = _view3d_oldal(match_id, match)
+        if match is None:
+            oldal = _figura_oldal_lekerdezesbol(adat.get("figura") or "")
+        else:
+            with primitive_cache(match):
+                oldal = _view3d_oldal(match_id, match)
         html = view3d_csomag(oldal, adat, hang)
         alap = unicodedata.normalize("NFKD", str(adat.get("nev") or ""))
         alap = re.sub(r"[^A-Za-z0-9]+", "_",

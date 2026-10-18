@@ -3127,6 +3127,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: const Text("3D / VR",
                         style: TextStyle(fontSize: 12)),
                   ),
+                  // 📦 otthonra: egyetlen HTML-fájl (motor és internet nélkül)
+                  IconButton(
+                    tooltip: "📦 Letöltés egyetlen HTML-fájlként — "
+                        "elküldhető, otthon motor és internet nélkül fut",
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    icon: const Icon(Icons.download_outlined,
+                        color: AppColors.accent),
+                    onPressed: () => _felvetelCsomag(f),
+                  ),
                 ]),
               ),
           ],
@@ -3215,6 +3225,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? "A figura videója letöltődik (MP4)."
                 : "Megnyitva a böngészőben: $url")
             : "Nyisd meg kézzel a böngészőben: $url")));
+  }
+
+  /// 📦 A felvétel (a figuráé is) egyetlen HTML-fájlként — elküldhető.
+  Future<void> _felvetelCsomag(Map<String, dynamic> f) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await _api.fetchRecordingPackage(
+          "${f["match_id"]}", "${f["id"]}");
+      final nev = "${f["nev"]}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Felvétel mentése (egyetlen HTML-fájl)",
+        fileName: "megbeszeles_$nev.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      messenger.showSnackBar(SnackBar(
+          content: Text("Felvétel mentve: $path — elküldhető; bármely "
+              "böngészőben (headsetben is) internet és motor nélkül fut.")));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text("A csomag nem készült el: ${humanError(e)}")));
+    }
   }
 
   /// Egy felvétel a böngészős 3D-ben (a ?felvetel= linkkel magától indul).

@@ -622,7 +622,8 @@ felvétel a figurával együtt mentődik, a figura-oldal "▶ Felvételek"
 listája az ugyanahhoz a figurához tartozókat mutatja, a csapat
 várólapja és a kezdőlap "LEGUTÓBBI MEGBESZÉLÉSEK" kártyája is kínálja
 ("Figura: Kereszt") — aki kimaradt, a lépésenkénti magyarázatot
-visszanézi. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
+visszanézi. Otthonra a kártya "📦" gombja egyetlen HTML-fájlt ad (a
+figura-oldal a felvétellel és a hanggal — motor és internet nélkül fut). A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
 a klub-hálózatról is elérhető (olvasás).
 
 ## VR-headset

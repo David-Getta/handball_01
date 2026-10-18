@@ -278,7 +278,7 @@ def test_a_figura_kozos_nezese(tmp_path, monkeypatch):
     assert c.put("/matches/nincs/shared3d", json={"t": 1}).status_code == 404
     m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
     oldal = view3d_html(m, figura=e)
-    assert 'const KZ_ID = FIGURA ? "figura" : ADAT.match_id;' in oldal
+    assert 'const KZ_ID = FIGURA && !FV_CSOMAG ? "figura" : ADAT.match_id;' in oldal
     assert "...(FIGURA ? {figura: FIGURA_KOD} : {})" in oldal
     # (a felvétel a figurában is megy — a gombjai nincsenek elrejtve)
     assert 'for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])' not in oldal
@@ -830,10 +830,36 @@ def test_felvetel_a_figuraban(tmp_path, monkeypatch):
                   json={"allapotok": all_}).status_code == 404
     m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
     oldal = view3d_html(m, figura=e)
-    for kell in ('const FV_VAN = !!(ADAT.match_id || FIGURA);',
+    for kell in ('const FV_VAN = !!(ADAT.match_id || FIGURA) && !FV_CSOMAG;',
                  '...(FIGURA ? {figura: FIGURA_KOD} : {})})});',
                  ".filter(f => !FIGURA || f.figura === FIGURA_KOD);"):
         assert kell in oldal, kell
+
+
+def test_a_figura_felvetel_csomagja(tmp_path, monkeypatch):
+    """📦 A figura-felvétel csomagja: a figura-oldal a felvétel figurájából,
+    a felvétellel beágyazva (motor nélkül — a figura motoros gombjai
+    ki); figura nélküli felvételhez 404."""
+    import json
+
+    c = TestClient(_app(tmp_path, monkeypatch))
+    url = "/matches/figura/felvetelek"
+    fig = "u=20%2C10%2C27%2C10%3B24%2C5&l=0%2C1&cim=Kereszt&rendszer=5-1"
+    d = c.post(url, json={"allapotok": [[0, {"t": 1}], [2, {"t": 3}]],
+                          "figura": fig}).json()
+    r = c.get(f"{url}/{d['id']}/csomag")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    html = r.text
+    assert "const FV_CSOMAG = {" in html and d["id"] in html
+    assert '"figura":{' in html and "Kereszt vs Védelem (5-1, 6 védő, 6,0 m)" in html
+    assert ('if (FV_CSOMAG){ lapGomb.style.display = "none"; '
+            'videoLe.style.display = "none"; }') in html
+    # figura nélküli (sérült) felvétel: nincs miből építeni
+    fajl = next(tmp_path.rglob(f"figura.felvetelek/{d['id']}.json"))
+    adat = json.loads(fajl.read_text(encoding="utf-8"))
+    adat.pop("figura")
+    fajl.write_text(json.dumps(adat), encoding="utf-8")
+    assert c.get(f"{url}/{d['id']}/csomag").status_code == 404
 
 
 def test_a_kulcs_poziciok_ideje():

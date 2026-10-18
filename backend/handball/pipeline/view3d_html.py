@@ -3197,7 +3197,7 @@ kzNevValaszto.onchange = () => {
 };
 // A közös nézés azonosítója: a meccs — figura-módban a "figura" munkamenet
 // (a vezető a figura paramétereit is küldi, a /kovet arra irányít).
-const KZ_ID = FIGURA ? "figura" : ADAT.match_id;
+const KZ_ID = FIGURA && !FV_CSOMAG ? "figura" : ADAT.match_id;
 const FIGURA_KOD = FIGURA ? (() => {
   const q = new URLSearchParams();
   for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg", "rendszer"])
@@ -3228,6 +3228,8 @@ if (FIGURA){
   lepesGomb.title = "Megáll minden kulcs-pozíción (magyarázathoz) — ▶ / szóköz (VR: ravasz): tovább; N / P (VR: A / B): következő / előző kulcs-pozíció";
   lepesGomb.onclick = () => lepesAllit(!lepesMod);
   videoLe.after(lepesGomb);
+  // (a csomagban nincs motor: a lap és a videó nem kérhető)
+  if (FV_CSOMAG){ lapGomb.style.display = "none"; videoLe.style.display = "none"; }
 }
 // ---- Lépésenként (figura): megállás minden kulcs-pozíción ------------
 // A motor adja a kulcs-pozíciók idejét (kulcs_t). Bekapcsolva a lejátszás
@@ -3540,7 +3542,7 @@ function felvetelHangFrissit(f, e){
   }
 }
 // (a figura-oldal felvételei a "figura" közös azonosító alatt)
-const FV_VAN = !!(ADAT.match_id || FIGURA);
+const FV_VAN = !!(ADAT.match_id || FIGURA) && !FV_CSOMAG;
 const fvCim = () => "/matches/" + encodeURIComponent(FIGURA ? "figura" : (ADAT.match_id || "")) + "/felvetelek";
 const fvOra = (s) => { const t = Math.max(0, Math.floor(s));
   return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };

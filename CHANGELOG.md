@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.174 óta)
 
+- **📦 A figura-felvétel otthonra** (app + motor): a megbeszélés-felvétel
+  egyetlen HTML-fájlként eddig csak a meccs-felvételre készült — most a
+  figura lépésenkénti magyarázata is elküldhető (motor és internet
+  nélkül fut). A kezdőlap "LEGUTÓBBI MEGBESZÉLÉSEK" kártyáján minden
+  felvétel mellett "📦" (a meccs-felvételé is).
+
 - **Felvétel a figurában** (böngésző/VR + app + motor): a "⏺ Felvétel"
   eddig csak a meccs 3D-jében ment — a figura lépésenkénti magyarázata
   (megállás a kulcs-pozíciókon, kvíz, mutató, a hangod) nem volt
