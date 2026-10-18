@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.174 óta)
+## v0.1.175 — kiadva (2026-10-18)
+
+> Kiadás-jegyzet: ha a motor feldolgozás közben összeomlik, most kiderül,
+> hol és miért. A natív összeomlás nyoma az engine-crash.log-ba kerül,
+> az újrainduló motor a félbehagyott munkát okkal adja vissza (melyik
+> lépésnél, a videó olvasása vagy a modell futtatása közben), a
+> hibakártyán "Diagnosztika másolása" és — ha van mentés — Folytatás. A
+> kezdőkocka előtti kockákat nem detektáljuk többé (az elején nem áll a
+> haladás, a Folytatás nem dolgozza fel újra a kész részt); a "kb. null
+> lesz" felirat javítva. Figurák a kezdőlapon (3D / lap / videó egy
+> kattintással), felvétel a figurában (a lépésenkénti magyarázat
+> visszanézhető), és a figura-felvétel egyetlen HTML-fájlként otthonra.
+> (A kezdőkockára tekerő olvasót a valódi YOLO-val CPU-n próbáltuk ki;
+> Apple-GPU-n még nem.)
 
 - **Motor-összeomlás a feldolgozás közben: kiderül, hol és miért**
   (motor + app): ha a motor-folyamat feldolgozás közben meghalt (natív
