@@ -2190,26 +2190,12 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Csapatok felcserélése — ha a színfelismerés fordítva osztotta ki, melyik
   /// szín a hazai. Megerősítés után a backend átbillenti minden játékos
   /// csapat-mezőjét, és a nézet újratölt (statisztika is frissül).
-  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
-  static double? _parseIdo(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return null;
-    if (t.contains(":")) {
-      final d = t.split(":");
-      if (d.length != 2) return null;
-      final p = int.tryParse(d[0]);
-      final mp = double.tryParse(d[1].replaceAll(",", "."));
-      if (p == null || mp == null) return null;
-      return p * 60 + mp;
-    }
-    return double.tryParse(t.replaceAll(",", "."));
-  }
+  /// "p:mp", "ó:p:mp" vagy puszta másodperc → másodperc. Hibás alaknál
+  /// null (num_format.parseClockSeconds).
+  static double? _parseIdo(String s) => parseClockSeconds(s);
 
-  /// Másodperc → "p:mp" (pl. 549 → "9:09").
-  static String _fmtIdoPmp(double s) {
-    final t = s.round();
-    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}";
-  }
+  /// Másodperc → "p:mp" (549 → "9:09"), egy óra fölött "ó:p:mp".
+  static String _fmtIdoPmp(double s) => formatClock(s);
 
   /// UTÓLAGOS vágás a meccs-nézetből: itt látja a felhasználó a
   /// bemutatás-kori ál-eseményeket — ne kelljen a könyvtárba
@@ -2284,7 +2270,7 @@ class _MatchScreenState extends State<MatchScreen> {
             TextField(
               controller: fromCtrl,
               decoration: const InputDecoration(
-                labelText: "A meccs kezdete (p:mp vagy mp)",
+                labelText: "A meccs kezdete (p:mp, ó:p:mp vagy mp)",
                 hintText: "pl. 9:09 vagy 549",
                 prefixIcon: Icon(Icons.content_cut, size: 18,
                     color: AppColors.gold),
@@ -2295,7 +2281,7 @@ class _MatchScreenState extends State<MatchScreen> {
               controller: toCtrl,
               decoration: const InputDecoration(
                 labelText: "A meccs vége (üres = a felvétel vége)",
-                hintText: "pl. 92:00",
+                hintText: "pl. 92:00 vagy 1:32:00",
                 prefixIcon: Icon(Icons.content_cut, size: 18,
                     color: AppColors.textFaint),
               ),

@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.175 óta)
+
+- **Óra:perc:másodperc a meccs-időablakban** (app): a feltöltés "Meccs
+  vége" mezője csak a perc:másodperc alakot értette — egy óránál
+  hosszabb felvételen a lejátszóról beírt "1:23:40"-re azt írta, hogy
+  "Nem értelmezhető időpont", miközben az indítás előtti lista
+  "megadva"-t mutatott (a vég némán kimaradt). Most a "4:30", "83:40",
+  "1:23:40" és a puszta másodperc is megy — a feltöltésnél és az
+  utólagos vágásnál (könyvtár, meccs-nézet) is, a kiírás egy óra fölött
+  "1:23:40"; az indítás előtti lista szól, ha egy időpont
+  értelmezhetetlen.
+
 ## v0.1.175 — kiadva (2026-10-18)
 
 > Kiadás-jegyzet: ha a motor feldolgozás közben összeomlik, most kiderül,

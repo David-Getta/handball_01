@@ -2584,6 +2584,16 @@ def test_a_bemutatas_utolag_is_levaghato():
     # p:mp ÉS puszta másodperc is elfogadott — az edző órát mond, a
     # csúszka másodpercet mutat.
     assert "_parseIdo" in kezdo, "nincs idő-értelmező (p:mp / mp)"
+    # Egy óránál hosszabb felvételen a lejátszó "1:23:40"-et mutat: a
+    # vágás és a feltöltés meccs-ablaka is a közös értelmezőt használja.
+    feltolt = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    szamok = (lib / "ui" / "num_format.dart").read_text(encoding="utf-8")
+    assert "double? parseClockSeconds(" in szamok
+    for forras in (kezdo, feltolt,
+                   (lib / "ui" / "match_screen.dart").read_text(
+                       encoding="utf-8")):
+        assert "parseClockSeconds(" in forras
+    assert "1:23:40" in feltolt and "_ablakHibas()" in feltolt
     # A párbeszéd kimondja, hogy a vágás végleges, de a videót nem bántja.
     assert "VÉGLEG" in kezdo and "videófájlt nem érinti" in kezdo
 

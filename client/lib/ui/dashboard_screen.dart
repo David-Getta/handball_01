@@ -1930,26 +1930,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (changed) await _load();
   }
 
-  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
-  static double? _parseIdo(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return null;
-    if (t.contains(":")) {
-      final d = t.split(":");
-      if (d.length != 2) return null;
-      final p = int.tryParse(d[0]);
-      final mp = double.tryParse(d[1].replaceAll(",", "."));
-      if (p == null || mp == null) return null;
-      return p * 60 + mp;
-    }
-    return double.tryParse(t.replaceAll(",", "."));
-  }
+  /// "p:mp", "ó:p:mp" vagy puszta másodperc → másodperc. Hibás alaknál
+  /// null (num_format.parseClockSeconds).
+  static double? _parseIdo(String s) => parseClockSeconds(s);
 
-  /// Másodperc → "p:mp" (pl. 549 → "9:09").
-  static String _fmtIdo(double s) {
-    final t = s.round();
-    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}";
-  }
+  /// Másodperc → "p:mp" (549 → "9:09"), egy óra fölött "ó:p:mp".
+  static String _fmtIdo(double s) => formatClock(s);
 
   /// UTÓLAGOS vágás: a bemutatás/bemelegítés levágása a kész
   /// elemzésből. A felhasználó pontosan tudja, mikor kezdődött a meccs
@@ -2024,7 +2010,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             TextField(
               controller: fromCtrl,
               decoration: const InputDecoration(
-                labelText: "A meccs kezdete (p:mp vagy mp)",
+                labelText: "A meccs kezdete (p:mp, ó:p:mp vagy mp)",
                 hintText: "pl. 9:09 vagy 549",
                 prefixIcon: Icon(Icons.content_cut, size: 18,
                     color: AppColors.gold),
@@ -2035,7 +2021,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               controller: toCtrl,
               decoration: const InputDecoration(
                 labelText: "A meccs vége (üres = a felvétel vége)",
-                hintText: "pl. 92:00",
+                hintText: "pl. 92:00 vagy 1:32:00",
                 prefixIcon: Icon(Icons.content_cut, size: 18,
                     color: AppColors.textFaint),
               ),

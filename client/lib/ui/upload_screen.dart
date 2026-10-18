@@ -165,28 +165,23 @@ class _UploadScreenState extends State<UploadScreen> {
     });
   }
 
-  /// "12:30" vagy "750" → másodperc. Üresnél/értelmezhetetlennél null.
+  /// "12:30", "1:23:40" vagy "750" → másodperc. Üresnél /
+  /// értelmezhetetlennél null.
   ///
-  /// Két alak megy: perc:másodperc (ahogy a lejátszóban látszik) és
-  /// puszta másodperc. Aki elgépeli, ne kapjon hibát — csak nem lesz
-  /// kézi ablak (marad az automatikus felismerés).
-  static double? _idoMasodpercben(String szoveg) {
-    final t = szoveg.trim();
-    if (t.isEmpty) return null;
-    if (t.contains(":")) {
-      final reszek = t.split(":");
-      if (reszek.length != 2) return null;
-      final perc = int.tryParse(reszek[0].trim());
-      final mp = int.tryParse(reszek[1].trim());
-      if (perc == null || mp == null || perc < 0 || mp < 0 || mp > 59) {
-        return null;
-      }
-      return perc * 60.0 + mp;
-    }
-    final mp = double.tryParse(t);
-    if (mp == null || mp < 0) return null;
-    return mp;
-  }
+  /// A lejátszó alakjai mennek: perc:másodperc, egy óránál hosszabb
+  /// felvételen óra:perc:másodperc, és a puszta másodperc
+  /// (num_format.parseClockSeconds). Aki elgépeli, ne kapjon hibát —
+  /// csak nem lesz kézi ablak (marad az automatikus felismerés).
+  static double? _idoMasodpercben(String szoveg) => parseClockSeconds(szoveg);
+
+  /// Van-e a meccs-ablak mezőiben értelmezhetetlen időpont (a mező nem
+  /// üres, de nem olvasható) — a mezők alatt és az indítás előtti
+  /// listán is szólunk.
+  bool _ablakHibas() =>
+      (_startSCtrl.text.trim().isNotEmpty &&
+          _idoMasodpercben(_startSCtrl.text) == null) ||
+      (_endSCtrl.text.trim().isNotEmpty &&
+          _idoMasodpercben(_endSCtrl.text) == null);
 
   /// A kézi ablak kezdete másodpercben (vagy null: marad az automatika).
   double? _ablakKezdet() {
@@ -208,8 +203,7 @@ class _UploadScreenState extends State<UploadScreen> {
   Widget _matchWindowFields() {
     final kezd = _idoMasodpercben(_startSCtrl.text);
     final veg = _idoMasodpercben(_endSCtrl.text);
-    final rossz = (_startSCtrl.text.trim().isNotEmpty && kezd == null) ||
-        (_endSCtrl.text.trim().isNotEmpty && veg == null);
+    final rossz = _ablakHibas();
     final sorrendBaj = kezd != null && veg != null && veg <= kezd;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,7 +215,8 @@ class _UploadScreenState extends State<UploadScreen> {
             "add meg, hol kezdődik az első kezdődobás — enélkül a "
             "bemelegítő lövésekből is „lövés”, az álldogálásból „eladott "
             "labda” lesz. Üresen hagyva a rendszer maga próbálja "
-            "megtalálni. Alak: perc:másodperc (pl. 4:30).",
+            "megtalálni. Alak: perc:másodperc (pl. 4:30), egy óra fölött "
+            "óra:perc:másodperc (pl. 1:23:40).",
             style: AppText.label.copyWith(fontSize: 12)),
         const SizedBox(height: AppSpacing.sm),
         Row(children: [
@@ -266,8 +261,9 @@ class _UploadScreenState extends State<UploadScreen> {
                   ? "A vége korábban van, mint a kezdet — így nem indul el a "
                       "kézi ablak."
                   : "Nem értelmezhető időpont — használd a perc:másodperc "
-                      "alakot (pl. 4:30). Amíg így marad, az automatikus "
-                      "meccs-ablak dönt.",
+                      "(pl. 4:30) vagy az óra:perc:másodperc (pl. 1:23:40) "
+                      "alakot. Amíg így marad, ezt a mezőt nem vesszük "
+                      "figyelembe.",
               style: AppText.label
                   .copyWith(fontSize: 11.5, color: AppColors.away)),
         ],
@@ -344,11 +340,18 @@ class _UploadScreenState extends State<UploadScreen> {
                       ? "rendben"
                       : "${_previewOnCourt ?? "?"} ember esik a pályára "
                           "(legfeljebb 14 lehet) — a kalibráció hibás")),
-          sor(ablak, false, "Meccs időablaka",
-              ablak
-                  ? "megadva"
-                  : "nincs megadva — ha a videóban benne van a "
-                      "bemelegítés, add meg a kezdést"),
+          // Az értelmezhetetlen időpont NEM "megadva": a hibás mező
+          // némán kimaradna (pl. a vég, ha csak a kezdet olvasható).
+          if (_ablakHibas())
+            sor(false, true, "Meccs időablaka",
+                "nem értelmezhető időpont — javítsd (pl. 4:30 vagy "
+                    "1:23:40), addig az a mező kimarad")
+          else
+            sor(ablak, false, "Meccs időablaka",
+                ablak
+                    ? "megadva"
+                    : "nincs megadva — ha a videóban benne van a "
+                        "bemelegítés, add meg a kezdést"),
         ],
       ),
     );
