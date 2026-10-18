@@ -465,6 +465,19 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
               "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
     print(f"inferencia-eszköz: {labels[device]}")
+    # AZ APPLE-GPU (MPS) NEM SZÁL-BIZTOS. A detektálást a termelő szál
+    # futtatja (StallSkippingFeed), a kockák feldolgozása a hívó szálon
+    # megy — és ha az a GPU-n lévő eredmény-tenzorokat olvassa
+    # (b.xyxy[0].tolist()), miközben a termelő már a következő kockát
+    # számolja, a Metal "failed assertion … MTLCommandBufferStatusCommitted"
+    # hibával LEÁLLÍTJA a motort (terepen és a CI Macen is: minden videó a
+    # detektálás elején, 2%-nál). Ezért a GPU-t CSAK a termelő szál
+    # használja: az eredményt még ott CPU-ra másoljuk, a más szálon futó
+    # labda-újrakeresés pedig MPS helyett a CPU-n fut.
+    reacq_device = "cpu" if device == "mps" else device
+
+    def _cpu(r):
+        return r.cpu() if hasattr(r, "cpu") else r
     # A felület is tudja: a modell betöltve, az első kockák jönnek. Ha
     # a motor ezután hal meg, a félbeszakadt munka ezt a lépést mutatja
     # (nem a "kalibráció"-t, ami a modell betöltése előtt csak az
@@ -559,7 +572,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                                 tracker="bytetrack.yaml",
                                 verbose=False)
                             if rr:
-                                yield rr[0]
+                                yield _cpu(rr[0])
                     pos += 1
             finally:
                 cap.release()
@@ -577,10 +590,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pos0 > 0:
         results = _resume_from(pos0, mdl0=model)
     else:
-        results = model.track(source=video_path, stream=True, persist=True,
-                              classes=person_ids + ball_ids, imgsz=1920,
-                              conf=0.05, device=device, vid_stride=stride,
-                              tracker="bytetrack.yaml", verbose=False)
+        # (a generátort a termelő szál járja be: a CPU-ra másolás is ott fut)
+        results = (_cpu(r) for r in model.track(
+            source=video_path, stream=True, persist=True,
+            classes=person_ids + ball_ids, imgsz=1920, conf=0.05,
+            device=device, vid_stride=stride, tracker="bytetrack.yaml",
+            verbose=False))
 
     feed = StallSkippingFeed(results, resume_factory=_resume_from,
                              stride=stride, start_pos=pos0,
@@ -736,7 +751,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if mdl is None:
                         return None
                     rr = mdl.predict(crop, imgsz=640, conf=0.03,
-                                     classes=ball_ids, device=device,
+                                     classes=ball_ids, device=reacq_device,
                                      verbose=False)
                     best = None
                     for r2 in rr:

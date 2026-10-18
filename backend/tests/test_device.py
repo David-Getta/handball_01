@@ -78,3 +78,23 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_az_apple_gpu_csak_a_termelo_szalon_fut():
+    """REGRESSZIÓ (a CI Macen reprodukálva): a becsomagolt motor a
+    detektálás elején leállt — Metal "failed assertion …
+    MTLCommandBufferStatusCommitted", Fatal Python error: Aborted —, mert a
+    hívó szál a GPU-n lévő eredmény-tenzorokat olvasta, miközben a termelő
+    szál a következő kockát számolta. Az eredményt a termelő CPU-ra másolja
+    (a folyam- és a folytató-olvasó is), a más szálon futó
+    labda-újrakeresés és a futó munka melletti detektálás-próba MPS helyett
+    CPU-n fut."""
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[1]
+    src = (gyoker / "scripts" / "process_video.py").read_text(encoding="utf-8")
+    assert 'reacq_device = "cpu" if device == "mps" else device' in src
+    assert "results = (_cpu(r) for r in model.track(" in src
+    assert "yield _cpu(rr[0])" in src
+    assert "device=reacq_device" in src
+    app = (gyoker / "handball" / "api" / "app.py").read_text(encoding="utf-8")
+    assert 'if eszkoz == "mps" and any(j.get("status") == "running"' in app

@@ -167,12 +167,19 @@ def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
         vw.write(np.full((64, 96, 3), 8 * k, dtype=np.uint8))
     vw.release()
 
-    hivasok = {"folyam": 0, "kockak": [], "peldany": 0}
+    import threading
+
+    hivasok = {"folyam": 0, "kockak": [], "peldany": 0, "cpu_szal": []}
 
     class _Res:
-        def __init__(self, img):
+        def __init__(self, img, eszkoz="mps"):
             self.orig_img = img
             self.boxes = None
+            self.eszkoz = eszkoz
+
+        def cpu(self):
+            hivasok["cpu_szal"].append(threading.current_thread().name)
+            return _Res(self.orig_img, "cpu")
 
     class _FakeModel:
         names = {0: "person", 32: "sports ball"}
@@ -195,9 +202,23 @@ def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
     monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
 
     raw, jegyzet = [], []
+    latott = []
+    eredeti = pv._is_dark
+
+    def _figyelo(img, *a, **k):
+        latott.append(threading.current_thread().name)
+        return eredeti(img, *a, **k)
+
+    monkeypatch.setattr(pv, "_is_dark", _figyelo)
     pv._process_yolo(str(v), str(w), stride=2, max_frames=100, imgsz=640,
-                     conf=0.2, start=20, skip_dark=False, raw_out=raw,
+                     conf=0.2, start=20, skip_dark=True, raw_out=raw,
                      colors_out=[], on_note=jegyzet.append, ball_recover=False)
+    # Az Apple-GPU nem szál-biztos: az eredmény CPU-ra másolása a TERMELŐ
+    # szálon fut, a hívó szál (a kockák feldolgozása) már a CPU-s
+    # eredményt kapja.
+    fo = threading.current_thread().name
+    assert hivasok["cpu_szal"] and fo not in hivasok["cpu_szal"]
+    assert latott and set(latott) == {fo}
     assert hivasok["folyam"] == 0           # a folyam-olvasó nem indult
     assert hivasok["peldany"] == 1          # a közös modellel ment
     assert len(hivasok["kockak"]) == 5 == len(raw)   # 20, 22, …, 28

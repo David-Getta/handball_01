@@ -1455,8 +1455,15 @@ def create_app():
                 detail=f"a detektor nem érhető el: {e}")
 
         person_ids, ball_ids = _class_ids(getattr(model, "names", None))
+        # Futó feldolgozás mellett az Apple-GPU-t (MPS) a feldolgozás
+        # termelő szála használja — egy MÁSIK szálból indított GPU-munka a
+        # Metal-assertionnel leállítaná a motort (lásd _process_yolo).
+        eszkoz = _pick_device()
+        if eszkoz == "mps" and any(j.get("status") == "running"
+                                   for j in _jobs.values()):
+            eszkoz = "cpu"
         res = model.predict(frame, imgsz=imgsz, conf=0.2, verbose=False,
-                            device=_pick_device())[0]
+                            device=eszkoz)[0].cpu()
 
         persons = []   # (x1, y1, x2, y2, mezszín)
         referees = 0

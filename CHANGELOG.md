@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.176 óta)
 
+- **Apple Silicon Macen a feldolgozás nem áll le 2%-nál** (motor): a
+  becsomagolt motor a detektálás első kockáinál összeomlott — a Mac
+  grafikus gyorsítója (MPS) nem szál-biztos, és a kockák feldolgozása
+  egy másik szálból olvasta a GPU-n lévő eredményt, miközben a
+  detektálás már a következő kockát számolta ("a motor feldolgozás
+  közben újraindult", minden videónál). A kiadás-build új feldolgozási
+  füsttesztje a GitHub Macen pontosan ezt reprodukálta. Most a GPU-t
+  egyetlen szál használja (az eredmény még ott CPU-ra kerül), a
+  labda-újrakeresés és a futó munka melletti detektálás-próba a CPU-n
+  fut.
+
 - **Feldolgozási füstteszt a kiadás-buildben** (csomagolás): a
   becsomagolt motor füsttesztje eddig csak az indulást és a fiók-utat
   nézte — valódi feldolgozást sosem futtatott, így ha a csomagba került
