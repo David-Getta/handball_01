@@ -130,6 +130,13 @@ def main() -> int:
         # kivételt dob. Eddig ez a try-n KÍVÜL volt, tehát a motor nyom
         # nélkül halt meg — a hibajelentő maga sem futott le.
         _ensure_streams()
+        # NATÍV összeomlás nyoma (handball.crashlog): a videó-dekóder
+        # vagy a modell natív kódjának összeomlásakor Python-kivétel
+        # nincs — a faulthandler az összes szál hívásláncát az
+        # engine-crash.log-ba írja, és az újrainduló motor ebből mondja
+        # meg a félbeszakadt munkáról, hol és miért állt le.
+        from handball.crashlog import enable_fault_log
+        enable_fault_log()
         # Az ELSŐ sor még a nehéz importok előtt megy ki: ebből tudjuk,
         # hogy a program egyáltalán elindult (a becsomagolt indító
         # lefutott).

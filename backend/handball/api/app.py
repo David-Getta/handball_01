@@ -1871,9 +1871,137 @@ def create_app():
                 pass  # a riasztás hibája nem érintheti a mentést
         return ment
 
+    # FUTÓ-MUNKA JEL: a futó feldolgozás állása a lemezen is. Terepen
+    # látott hiba: a motor-folyamat feldolgozás közben MEGHAL (a
+    # videó-dekóder vagy a modell natív kódja összeomlik, vagy a rendszer
+    # leállítja), az őrkutya újraindítja — és a memóriabeli munka-lista
+    # vele vész: a kliens csak annyit tudott mondani, hogy "a motor
+    # újraindult, a munka elveszett". A jelből az újrainduló motor tudja,
+    # MI futott, MEDDIG jutott, és (a natív összeomlás naplójából,
+    # handball.crashlog) MIÉRT állt le: a munka hibaként, okkal kerül
+    # vissza a listába.
+    import uuid as _uuid_mod
+    _futo_mappa = data_root() / "data" / "futo_munkak"
+    _boot_id = _uuid_mod.uuid4().hex
+    # A jel lemezre írása legfeljebb ennyi mp-enként (lépésváltáskor azonnal).
+    FUTO_JEL_S = 5.0
+    _futo_allapot: dict = {}   # job_id -> utolsó írás, lépés, napló-offset
+    _LEPES_NEVEK = {"A": "Kalibráció", "B": "Detektálás",
+                    "C": "Követés", "D": "Csapatszín / kapus / bíró",
+                    "E": "Pálya-koordináta", "F": "Képen kívüli becslés",
+                    "H": "Statisztika"}
+
+    def _futo_jel(job, uj=False):
+        """A futó munka állása a lemezre (ritkítva). A hibája sosem
+        állíthatja meg a feldolgozást."""
+        import os as _o
+        import time as _t
+        try:
+            jid = job["job_id"]
+            all_ = _futo_allapot.get(jid)
+            most = _t.time()
+            if uj or all_ is None:
+                # Az összeomlás-napló MOSTANI mérete: újraindulás után
+                # csak az EZUTÁN írt nyom tartozik ehhez a munkához.
+                from ..crashlog import crash_log_size
+                all_ = _futo_allapot[jid] = {"t": 0.0, "stage": None,
+                                             "offset": crash_log_size()}
+            if (not uj and all_["stage"] == job.get("stage")
+                    and most - all_["t"] < FUTO_JEL_S):
+                return
+            all_["t"], all_["stage"] = most, job.get("stage")
+            rec = {k: job.get(k) for k in (
+                "job_id", "match_id", "video", "stage", "progress",
+                "message", "created", "started", "video_seconds",
+                "stride", "imgsz")}
+            rec.update(boot=_boot_id, pid=_o.getpid(),
+                       crash_offset=all_["offset"], updated=most)
+            _futo_mappa.mkdir(parents=True, exist_ok=True)
+            p = _futo_mappa / f"{jid}.json"
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(rec, ensure_ascii=False),
+                           encoding="utf-8")
+            _o.replace(tmp, p)
+        except Exception:
+            pass
+
+    def _futo_jel_torol(job):
+        _futo_allapot.pop(job.get("job_id"), None)
+        try:
+            (_futo_mappa / f"{job['job_id']}.json").unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def _felbehagyott_munkak():
+        """Az ELŐZŐ motor-folyamat félbehagyott munkái (futó-munka jel
+        maradt utánuk) hibaként, OKKAL vissza a munka-listába és a
+        naplóba: a kliens így a "munka elveszett" helyett azt mondja meg,
+        hol és miért állt le a motor (a Folytatás az ellenőrző-mentéstől
+        ugyanúgy él). Egy MÁSIK, még élő motor-példány munkájához nem
+        nyúlunk."""
+        import os as _o
+        from ..crashlog import crash_summary, pid_alive
+        try:
+            jelek = sorted(_futo_mappa.glob("*.json"))
+        except Exception:
+            return
+        for p in jelek:
+            try:
+                rec = json.loads(p.read_text(encoding="utf-8"))
+                if not isinstance(rec, dict):
+                    raise ValueError("nem jel")
+            except Exception:
+                try:
+                    p.unlink(missing_ok=True)  # sérült jel
+                except Exception:
+                    pass
+                continue
+            if rec.get("boot") == _boot_id:
+                continue
+            pid = rec.get("pid")
+            if pid != _o.getpid() and pid_alive(pid):
+                continue
+            jid = str(rec.get("job_id") or p.stem)
+            stage = str(rec.get("stage") or "A")
+            try:
+                prog = float(rec.get("progress") or 0.0)
+            except (TypeError, ValueError):
+                prog = 0.0
+            hol = f"{_LEPES_NEVEK.get(stage, stage)} [{stage}], {round(prog * 100)}%"
+            utolso = str(rec.get("message") or "").split(" — FIGYELEM:")[0].strip()
+            if utolso:
+                hol += f": „{utolso}”"
+            try:
+                ok = crash_summary(int(rec.get("crash_offset") or 0))
+            except Exception:
+                ok = None
+            msg = f"a motor váratlanul leállt a feldolgozás közben ({hol})"
+            msg += (f" — {ok}" if ok else
+                    " — a leállás nem hagyott nyomot a naplóban: ilyenkor "
+                    "jellemzően a rendszer állította le a motort (pl. "
+                    "elfogyott a memória), vagy a gép leállt / elaludt")
+            msg += (". A „Diagnosztika másolása” gomb összegyűjti a "
+                    "naplókat a hibabejelentéshez.")
+            job = {k: rec.get(k) for k in (
+                "match_id", "video", "created", "started", "video_seconds",
+                "stride", "imgsz")}
+            job.update(job_id=jid, status="error", stage=stage,
+                       progress=round(prog, 3), error=msg,
+                       message=f"hiba: {msg}", crashed=True)
+            if jid not in _jobs:
+                _jobs[jid] = job
+                _log_job(job)
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     def _run_job(job, body):
         match_id = job["match_id"]
         path = body.get("path")
+        # A futó-munka jel: ha a motor a munka közben meghal, az
+        # újrainduló ebből tudja, mi futott és meddig jutott.
+        _futo_jel(job, uj=True)
         # ALVÁS-GÁTLÁS a munka idejére: a feldolgozás percekig-órákig
         # tart, és közben a felhasználó nem a képernyőt nézi (lehajtja a
         # laptop tetejét, elmegy). Zár nélkül a rendszer tétlenségi
@@ -1912,6 +2040,7 @@ def create_app():
                     else:
                         msg = f"leállítás — az eddigi rész mentése… ({msg})"
                 job["message"] = msg
+                _futo_jel(job)
 
             try:
                 match = process(
@@ -1997,6 +2126,7 @@ def create_app():
             # ébren maradna, ami a felhasználó akkumulátorát enné.
             _awake.stop()
             job.pop("keep_awake", None)
+            _futo_jel_torol(job)
         _log_job(job)
 
     # Feldolgozás-napló: a LEZÁRT job-ok (kész/hiba/megszakítva) egy sora
@@ -2039,6 +2169,9 @@ def create_app():
         except FileNotFoundError:
             pass
         return rows
+
+    # Az előző (meghalt) motor-folyamat félbehagyott munkái — okkal.
+    _felbehagyott_munkak()
 
     @app.get("/jobs/history")
     def job_history(limit: int = 20):

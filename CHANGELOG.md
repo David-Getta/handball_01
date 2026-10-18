@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.174 óta)
 
+- **Motor-összeomlás a feldolgozás közben: kiderül, hol és miért**
+  (motor + app): ha a motor-folyamat feldolgozás közben meghalt (natív
+  összeomlás a videó-dekóderben vagy a modellben, vagy a rendszer
+  állította le), a felület eddig csak annyit mondott: "a motor
+  újraindult, a munka elveszett". Most a natív összeomlás hívásláncai
+  az engine-crash.log-ba kerülnek, és az újrainduló motor a félbehagyott
+  munkát hibaként, OKKAL adja vissza (melyik lépésnél, hány %-nál, és
+  hogy a videó olvasása vagy a modell futtatása közben halt-e meg); a
+  hibakártyán "Diagnosztika másolása" és — ha van ellenőrző-mentés —
+  Folytatás. A modell betöltése után a felület is jelzi, hogy az első
+  kockák jönnek (a modell-betöltés és a videó-olvasás szétválik).
+- **A kezdőkocka előtti kockákat nem detektáljuk** (motor): a
+  feldolgozás eddig a videó elejétől minden ritkított kockán lefuttatta
+  a detektálást, és csak utána dobta el a kezdőkocka (a kalibráció
+  kockája, a meccs kezdete) előttieket — az elején percekig állt a
+  haladás, a Folytatás pedig a már kész részt teljesen újradetektálta.
+  Most a feldolgozás a kezdőkockára teker.
+- **"kb. null lesz"** (app): az indítás előtti idő-becslés kártyája
+  mérés nélkül is megjelent (a profil-javaslat miatt), "null" idővel.
+  Becslés nélkül most hallgat.
+
 - **📦 A figura-felvétel otthonra** (app + motor): a megbeszélés-felvétel
   egyetlen HTML-fájlként eddig csak a meccs-felvételre készült — most a
   figura lépésenkénti magyarázata is elküldhető (motor és internet

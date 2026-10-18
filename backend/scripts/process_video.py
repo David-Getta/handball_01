@@ -465,6 +465,14 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
               "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
     print(f"inferencia-eszköz: {labels[device]}")
+    # A felület is tudja: a modell betöltve, az első kockák jönnek. Ha
+    # a motor ezután hal meg, a félbeszakadt munka ezt a lépést mutatja
+    # (nem a "kalibráció"-t, ami a modell betöltése előtt csak az
+    # indulás jele) — a modell-betöltés és a videó-olvasás így
+    # szétválik.
+    if on_note is not None:
+        on_note(f"a detektáló modell betöltve ({labels[device].split(' (')[0]})"
+                " — az első kockák olvasása")
     poly = np.array(court_poly, np.int32) if court_poly else None
     # Pásztázás-követés: a kamera mozgását becsüljük, hogy a kalibráció a
     # pásztázás közben is érvényes maradjon (aktuális → alap képkocka mátrix).
@@ -497,10 +505,6 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     # Osztály-kiosztás a modell NEVEI alapján (COCO: person=0, sports ball=32;
     # saját finomhangolt modell: person=0, ball=1) — mindkettő működik.
     person_ids, ball_ids = _class_ids(getattr(model, "names", None))
-    results = model.track(source=video_path, stream=True, persist=True,
-                          classes=person_ids + ball_ids, imgsz=1920, conf=0.05,
-                          device=device,
-                          vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
 
     # ELAKADÁS-VÉDŐ: a kocka-generátort külön szál húzza, a feldolgozó
     # időkorlátos sorból olvas (StallSkippingFeed). Ha a videó-olvasás/
@@ -514,9 +518,10 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     STALL_SKIP_S = 30.0
     STALL_MAX_SKIPS = 20
 
-    def _resume_from(start_frame):
+    def _resume_from(start_frame, mdl0=None):
         """Folytató-olvasó az elakadt kocka UTÁNI pozíciótól: saját
-        VideoCapture + kockánkénti track() hívás.
+        VideoCapture + kockánkénti track() hívás. (`mdl0`: a KEZDŐ
+        olvasó — start > 0 — a közös modellel indul, lásd lent.)
 
         SAJÁT modell-példánnyal dolgozik: az elakadt szál a natív
         hívásban ragadt bent, és ott feltehetően a KÖZÖS modellt
@@ -527,12 +532,15 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         egy elakadás után a folytonosság úgyis megszakadt.
         """
         def _iter():
-            try:
-                mdl = YOLO(resolved)
-            except Exception as e:
-                print("FIGYELEM: a folytató modell nem tölthető be "
-                      f"({e}) — a közös példánnyal próbáljuk.")
-                mdl = model
+            if mdl0 is not None:
+                mdl = mdl0
+            else:
+                try:
+                    mdl = YOLO(resolved)
+                except Exception as e:
+                    print("FIGYELEM: a folytató modell nem tölthető be "
+                          f"({e}) — a közös példánnyal próbáljuk.")
+                    mdl = model
             from handball.video_io import open_capture
             cap = open_capture(video_path)
             try:
@@ -557,8 +565,25 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                 cap.release()
         return _iter()
 
+    # A `start` ELŐTTI kockákat NEM detektáljuk. A folyam-olvasó
+    # (model.track(source=...)) a videó elejétől indul, és eddig a
+    # kezdőkocka előtti MINDEN ritkított kockán lefutott a teljes
+    # detektálás — csak hogy utána eldobjuk: a kalibráció kockájától
+    # induló feldolgozás percekig állt az elején, a Folytatás (start =
+    # az utolsó mentés) pedig a már kész részt TELJESEN újradetektálta.
+    # start > 0-nál a folytató-olvasó indul (saját videó-olvasó a
+    # kezdőkockára tekerve, a KÖZÖS modellel); 0-nál a folyam-olvasó.
+    pos0 = max(0, int(start or 0))
+    if pos0 > 0:
+        results = _resume_from(pos0, mdl0=model)
+    else:
+        results = model.track(source=video_path, stream=True, persist=True,
+                              classes=person_ids + ball_ids, imgsz=1920,
+                              conf=0.05, device=device, vid_stride=stride,
+                              tracker="bytetrack.yaml", verbose=False)
+
     feed = StallSkippingFeed(results, resume_factory=_resume_from,
-                             stride=stride,
+                             stride=stride, start_pos=pos0,
                              first_timeout_s=STALL_FIRST_S,
                              skip_timeout_s=STALL_SKIP_S,
                              max_skips=STALL_MAX_SKIPS,
@@ -603,7 +628,9 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         if stop_check is not None and stop_check():
             print(f"leállítás-kérés: a detektálás megáll ({kept} kocka kész)")
             break
-        if fi * stride < start:  # a bevezető rész átugrása (kép-index alapján)
+        # A kocka videó-indexe (a kezdő olvasó a pos0-tól indul).
+        vi = pos0 + fi * stride
+        if vi < start:  # a bevezető rész átugrása (kép-index alapján)
             continue
         if kept >= max_frames:
             break
@@ -633,7 +660,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             # visszamérés. A kalibráció kocka-indexe nem feltétlenül esik
             # a ritkítás rácsára: az első ELÉRT feldolgozott kocka lesz az.
             kalibralt = False
-            while horgony_var and fi * stride >= horgony_var[0]:
+            while horgony_var and vi >= horgony_var[0]:
                 horgony_var.pop(0)
                 kalibralt = True
             panH = pan_tracker.update(gray, exclude=mozgo,
@@ -697,7 +724,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         # Ha a teljes képen nem lett meg a labda, célzott újrakeresés a
         # várható helye körüli kivágásban (a kivágásban nagyobbnak látszik).
         if ball_xy is None and reacquirer is not None:
-            roi = reacquirer.roi_for(fi * stride, img.shape[1], img.shape[0])
+            roi = reacquirer.roi_for(vi, img.shape[1], img.shape[0])
             if roi is not None:
                 crop = img[roi[1]:roi[3], roi[0]:roi[2]]
                 # Saját modell-példány + időkorlát: a közös modellt a
@@ -728,7 +755,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                 if best is not None:
                     ball_xy = reacquirer.map_back(roi, best[1], best[2])
         if reacquirer is not None:
-            reacquirer.note(fi * stride, ball_xy)
+            reacquirer.note(vi, ball_xy)
         raw.append((persons, ball_xy, panH))
     if skipped_dark:
         print(f"sötét bevezető képkocka kihagyva: {skipped_dark}")

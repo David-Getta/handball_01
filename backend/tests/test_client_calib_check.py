@@ -412,7 +412,7 @@ def test_a_munka_figyelese_kitart_egy_megbicsaklo_lekerdezesnel():
     # véget: az (és a folytatás) jogosan zár le / indít újra — egy 404-re
     # hívódik, nem az általános hibaágból.
     hurok = src.split("Future<void> _pollJob()")[1].split(
-        "Future<void> _onJobLost()")[0]
+        "Future<void> _onJobLost(")[0]
     assert "_pollFails" in hurok and "_connNote" in hurok
     # Az ÁLTALÁNOS hibaágban (lassú / nem felelő motor) NINCS se végzetes
     # állapot, se a figyelés leállítása. (A 404-es "munka elveszett" ág

@@ -145,3 +145,61 @@ def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):
         conf=0.2, raw_out=raw, colors_out=colors)
     assert stalled is False  # átugrás után tisztán zárt, nem adta fel
     assert len(raw) == 3  # a beragadás előtti kockák megvannak
+
+
+def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
+    """start > 0: a kezdőkocka ELŐTTI kockákon nem fut detektálás (eddig a
+    folyam-olvasó a videó elejétől minden ritkított kockát detektált, csak
+    hogy utána eldobja — a Folytatás a kész részt újradetektálta). A
+    kezdő olvasó a kezdőkockára teker, a KÖZÖS modellel; a felület a
+    modell betöltése után szól."""
+    import sys
+    import types
+
+    import cv2
+
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 8 * k, dtype=np.uint8))
+    vw.release()
+
+    hivasok = {"folyam": 0, "kockak": [], "peldany": 0}
+
+    class _Res:
+        def __init__(self, img):
+            self.orig_img = img
+            self.boxes = None
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            hivasok["peldany"] += 1
+
+        def track(self, source=None, **_kw):
+            if isinstance(source, str):
+                hivasok["folyam"] += 1
+                return iter(())
+            hivasok["kockak"].append(float(source.mean()))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+
+    raw, jegyzet = [], []
+    pv._process_yolo(str(v), str(w), stride=2, max_frames=100, imgsz=640,
+                     conf=0.2, start=20, skip_dark=False, raw_out=raw,
+                     colors_out=[], on_note=jegyzet.append, ball_recover=False)
+    assert hivasok["folyam"] == 0           # a folyam-olvasó nem indult
+    assert hivasok["peldany"] == 1          # a közös modellel ment
+    assert len(hivasok["kockak"]) == 5 == len(raw)   # 20, 22, …, 28
+    assert abs(hivasok["kockak"][0] - 160) < 6       # a 20. kocka az első
+    assert jegyzet and jegyzet[0].startswith("a detektáló modell betöltve")

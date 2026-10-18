@@ -20,6 +20,7 @@ import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "anim.dart";
 import "calibration_screen.dart";
+import "diagnostics_button.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
@@ -381,12 +382,9 @@ class _UploadScreenState extends State<UploadScreen> {
     final szabad = (_preflight["free_gb"] as num?)?.toDouble();
     // PROFIL-JAVASLAT rövid szakaszra: a "Pontos" egy teljes meccsen
     // órákat kérne, egy klipen perceket — és pont a labda
-    // felismerésén javít, amire a birtoklás, a passz, az eladás és a
-    // lövés is épül. A felhasználó ezt magától nem tudhatja: a
-    // választó három nevet kínál, és nem mondja meg, mikor melyik éri
-    // meg.
-    final javaslat = _preflight["profile_hint"] as String?;
-    if (hely == null && becsles == null && javaslat == null) {
+    // (A profil-javaslat a KÜLÖN kártyán ül: becslés nélkül ez a kártya
+    // hallgat — korábban "kb. null lesz"-t írt.)
+    if (hely == null && becsles == null) {
       return const SizedBox.shrink();
     }
     final baj = hely != null;
@@ -973,6 +971,12 @@ class _UploadScreenState extends State<UploadScreen> {
       if (_status == "done" || _status == "error" || _status == "cancelled") {
         _poll?.cancel();
       }
+      // Összeomlott munka: az újrainduló motor visszaadta, hol és MIÉRT
+      // állt le — a folytatást ugyanúgy felajánljuk, mint az
+      // elveszett munkánál.
+      if (j["crashed"] == true && !_jobLost) {
+        await _onJobLost(ok: j["error"] as String?);
+      }
       // A done pillanatában EGYSZER automatikusan megnyitjuk az eredményt.
       if (_status == "done" && !_navigated) {
         _navigated = true;
@@ -1017,8 +1021,9 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   /// A motor nem ismeri a munkát (újraindult): a figyelés leáll, és ha
-  /// a meccs ellenőrző-mentése megvan, a folytatást ajánljuk fel.
-  Future<void> _onJobLost() async {
+  /// a meccs ellenőrző-mentése megvan, a folytatást ajánljuk fel. `ok`:
+  /// a motor saját magyarázata (összeomlott munka), ha van.
+  Future<void> _onJobLost({String? ok}) async {
     _poll?.cancel();
     var resumable = false;
     final mid = _matchId;
@@ -1035,7 +1040,12 @@ class _UploadScreenState extends State<UploadScreen> {
       _resumable = resumable;
       _connNote = null;
       _status = "error";
-      _error = resumable
+      _error = (ok != null && ok.isNotEmpty)
+          ? (resumable
+              ? "$ok Az utolsó ellenőrző-mentésig kész rész megvan: a "
+                  "\"Folytatás\" gomb onnan viszi tovább."
+              : ok)
+          : resumable
           ? "a motor feldolgozás közben újraindult, a futó munka "
               "elveszett — az utolsó ellenőrző-mentésig kész rész viszont "
               "megvan: a \"Folytatás\" gomb onnan viszi tovább."
@@ -2022,6 +2032,12 @@ class _UploadScreenState extends State<UploadScreen> {
                         icon: const Icon(Icons.play_arrow, size: 18),
                         label: const Text("Folytatás az utolsó mentéstől"),
                       ),
+                    ],
+                    // Hibánál a naplók egy kattintással a vágólapra — a
+                    // motor-összeomlás okát ebből lehet megfejteni.
+                    if (_status == "error") ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      const DiagnosticsButton(),
                     ],
                     // A motor az apppal együtt áll le — hosszú feldolgozásnál
                     // ez sok elveszett munka lenne, ezért kiírjuk.
