@@ -191,6 +191,18 @@ jobs:
           Set-Content -Path (Join-Path $env:RUNNER_TEMP "diag-check.txt") `
             -Value $diag -Encoding utf8
 
+      - name: Feldolgozási füstteszt (valódi detektálás a becsomagolt motorral)
+        # A fenti füstteszt csak az indulást és a fiók-utat nézi — VALÓDI
+        # feldolgozást nem. A csomagba minden kiadásnál a legfrissebb
+        # torch / ultralytics / OpenCV kerül; ha ezek valamelyike a
+        # csomagban a detektálásnál összeomlik, az eddig csak a
+        # felhasználónál derült ki ("a motor újraindult", 2%-nál). Itt a
+        # kliens kérésével egy rövid videó végig feldolgozódik
+        # (packaging/smoke_process.py), hibánál a motor naplója és a natív
+        # összeomlás nyoma a build-naplóba kerül.
+        shell: pwsh
+        run: python packaging/smoke_process.py "$PWD\dist\handball_backend\handball_backend.exe" "${{ runner.temp }}\smoke-process"
+
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2
         with:
@@ -378,6 +390,17 @@ jobs:
           echo "feltételek=$t állapot=$s regisztráció=$reg elfogadás-nélkül=$nope belépés=$log"
           [ "$t" = "1" ] && [ "$s" = "1" ] && [ "$reg" = "200" ] \
             && [ "$nope" = "400" ] && [ "$log" = "200" ]
+
+      - name: Feldolgozási füstteszt (valódi detektálás a becsomagolt motorral)
+        # A fenti füstteszt csak az indulást és a fiók-utat nézi — VALÓDI
+        # feldolgozást nem. A csomagba minden kiadásnál a legfrissebb
+        # torch / ultralytics / OpenCV kerül; ha ezek valamelyike a
+        # csomagban a detektálásnál összeomlik, az eddig csak a
+        # felhasználónál derült ki ("a motor újraindult", 2%-nál). Itt a
+        # kliens kérésével egy rövid videó végig feldolgozódik
+        # (packaging/smoke_process.py), hibánál a motor naplója és a natív
+        # összeomlás nyoma a build-naplóba kerül.
+        run: python packaging/smoke_process.py "$PWD/dist/handball_backend/handball_backend" "${{ runner.temp }}/smoke-process"
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2

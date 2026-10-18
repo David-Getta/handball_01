@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.176 óta)
+
+- **Feldolgozási füstteszt a kiadás-buildben** (csomagolás): a
+  becsomagolt motor füsttesztje eddig csak az indulást és a fiók-utat
+  nézte — valódi feldolgozást sosem futtatott, így ha a csomagba került
+  (mindig a legfrissebb) torch / ultralytics / OpenCV a detektálásnál
+  összeomlott, az csak a felhasználónál derült ki ("a motor
+  újraindult", 2%-nál). Most a build mindkét platformon egy rövid videót
+  végig feldolgoztat a kliens kérésével (yolov8n, két
+  térfél-kalibráció, kezdőkocka, mezszám-felismerés); hibánál a motor
+  naplója és a natív összeomlás nyoma a build-naplóba kerül, és a
+  kiadás nem megy ki.
+
 ## v0.1.176 — kiadva (2026-10-18)
 
 > Kiadás-jegyzet: a meccs-időablak (és az utólagos vágás) egy óránál

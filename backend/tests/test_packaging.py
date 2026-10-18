@@ -100,3 +100,21 @@ def test_a_fustteszt_izolalt_adatmappaban_dolgozik():
     src = _workflow()
     assert src.count("HANDBALL_DATA_DIR") >= 2, (
         "a füstteszt nem izolált adatmappában dolgozik")
+
+
+def test_a_becsomagolt_motor_valodi_feldolgozast_is_futtat():
+    """ŐR: a kiadás-build mindkét platformon VALÓDI feldolgozást is
+    lefuttat a becsomagolt motorral (packaging/smoke_process.py) — a régi
+    füstteszt csak az indulást és a fiók-utat nézte, így a csomagban a
+    detektálásnál összeomló motor ("a motor újraindult", 2%-nál) csak a
+    felhasználónál derült ki. A füstteszt a kliens kérésével dolgozik:
+    yolov8n, két térfél-kalibráció, kezdőkocka, mezszám-felismerés."""
+    src = _workflow()
+    assert src.count("python packaging/smoke_process.py") >= 2, (
+        "a feldolgozási füstteszt nem fut mindkét platformon")
+    smoke = (_ROOT / "packaging" / "smoke_process.py").read_text(
+        encoding="utf-8")
+    for kell in ('"weights": "yolov8n.pt"', '"jersey_ocr": True',
+                 '"calibs"', '"start": 30', "/matches/process",
+                 "engine-crash.log"):
+        assert kell in smoke, f"a füstteszt nem a kliens kérésével fut: {kell}"
