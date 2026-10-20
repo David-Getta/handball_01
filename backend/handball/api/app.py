@@ -1627,6 +1627,25 @@ def create_app():
         if hely_hiba:
             raise HTTPException(status_code=400, detail=hely_hiba)
 
+        # Az Apple-GPU-t (MPS) egyszerre csak EGY szál használhatja (lásd
+        # _process_yolo): ha a finomhangolás vagy a tanítóadat-gyűjtés épp
+        # a GPU-n dolgozik, a feldolgozás nem indulhat — a Metal mindkettőt
+        # leállítaná, és a tanítás órái is elvesznének.
+        if _gpu_kizarolagos():
+            if _train_state.get("running"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="a finomhangolás épp a gép grafikus gyorsítóját "
+                           "használja — várd meg a tanítás végét (Tanítás "
+                           "képernyő), utána indítsd a feldolgozást")
+            if _dataset_state.get("running"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="a tanítóadat-gyűjtés épp a gép grafikus "
+                           "gyorsítóját használja — várd meg a gyűjtés "
+                           "végét (Tanítás képernyő), utána indítsd a "
+                           "feldolgozást")
+
         # Kalibráció-épség: elfajzott (apró/önmetsző) négyszöggel a teljes
         # feldolgozás rossz koordinátákat adna — inkább itt utasítjuk el.
         def _calib_error(corners) -> str | None:
@@ -2831,6 +2850,32 @@ def create_app():
     # kliens "Tanítóadat gyűjtése" gombja mögött áll: a könyvtár
     # meccseinek videóiból előcímkézett YOLO-adathalmazt épít.
     _dataset_state: dict = {"running": False, "done": False}
+    # (a tesztek és a diagnosztika innen látják)
+    app.state.dataset_state = _dataset_state
+
+    def _gpu_kizarolagos() -> bool:
+        """Igaz, ha az inferencia-eszköz az Apple-GPU (MPS): azt egyszerre
+        csak egy szál használhatja — a tanítás, a gyűjtés és a feldolgozás
+        kizárja egymást. CUDA-n és CPU-n hamis."""
+        import sys as _sys
+        backend_dir = str(Path(__file__).resolve().parents[2])
+        if backend_dir not in _sys.path:
+            _sys.path.insert(0, backend_dir)
+        try:
+            from scripts.process_video import _pick_device
+            return _pick_device() == "mps"
+        except Exception:
+            return False
+
+    def _gpu_feldolgozas_fut() -> str | None:
+        """Apple-GPU-n a futó feldolgozás foglalja a GPU-t: a tanítás és a
+        gyűjtés mellette leállítaná a motort — a 409 mondata, vagy None."""
+        if _gpu_kizarolagos() and any(j.get("status") == "running"
+                                      for j in _jobs.values()):
+            return ("épp feldolgozás fut, és az a gép grafikus gyorsítóját "
+                    "használja — várd meg a feldolgozás végét (vagy szakítsd "
+                    "meg a Feldolgozások képernyőn)")
+        return None
 
     @app.post("/dataset/collect")
     def dataset_collect(body: dict):
@@ -2843,6 +2888,9 @@ def create_app():
         if _dataset_state.get("running"):
             raise HTTPException(status_code=409,
                                 detail="már fut egy gyűjtés — várd meg")
+        if _gpu_feldolgozas_fut():
+            raise HTTPException(status_code=409,
+                                detail=_gpu_feldolgozas_fut())
         try:
             samples = int(body.get("samples") or 200)
         except (TypeError, ValueError):
@@ -2918,6 +2966,8 @@ def create_app():
     # kerül (a régi .bak mentésével), és a KÖVETKEZŐ feldolgozás már
     # ezzel fut.
     _train_state: dict = {"running": False, "done": False}
+    # (a tesztek és a diagnosztika innen látják)
+    app.state.train_state = _train_state
 
     @app.post("/dataset/train")
     def dataset_train(body: dict):
@@ -2928,6 +2978,11 @@ def create_app():
         if _train_state.get("running") or _dataset_state.get("running"):
             raise HTTPException(status_code=409,
                                 detail="már fut tanítás vagy gyűjtés")
+        # Apple-GPU: a futó feldolgozás használja a GPU-t — a tanítás
+        # mellette leállítaná a motort (az MPS nem szál-biztos).
+        if _gpu_feldolgozas_fut():
+            raise HTTPException(status_code=409,
+                                detail=_gpu_feldolgozas_fut())
         yaml_ut = data_root() / "dataset" / "dataset.yaml"
         if not yaml_ut.exists():
             raise HTTPException(

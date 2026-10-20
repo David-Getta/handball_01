@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.177 óta)
 
+- **Macen a tanítás / gyűjtés és a feldolgozás nem futhat egyszerre**
+  (motor): a gép grafikus gyorsítóját egyszerre csak egy munka
+  használhatja (lásd v0.1.177) — a finomhangolás vagy a
+  tanítóadat-gyűjtés és a feldolgozás egymás mellett leállította volna
+  a motort, és mindkettő elveszett volna. Most a másodikként indított
+  munka érthető üzenettel vár, amíg az első befejeződik.
+
 - **A kiadás függőségei rögzítve** (csomagolás): a build eddig minden
   kiadásnál a legfrissebb torch / ultralytics / OpenCV verziót húzta be,
   így egy új upstream kiadás bármikor eltörhette a becsomagolt motort.
