@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.177 óta)
+## v0.1.178 — kiadva (2026-10-20)
+
+> Kiadás-jegyzet: a kalibrációnál a képen messze kívül eső sarok is a
+> helyére tehető (a kép 10%-ig kicsinyíthető, a vászon szélén ragadt
+> sarkot a képernyő megjelöli); elakadás után a folytatás Macen sem omlik
+> össze (a processzoron fut); Macen a tanítás / gyűjtés és a feldolgozás
+> nem futhat egyszerre (a második érthető üzenettel vár); a kiadás a
+> füstteszten átment, rögzített függőség-készlettel épül.
 
 - **Javítások (kód-áttekintés)**: a detektálás-próba Macen a tanítás /
   gyűjtés mellett is a processzoron fut (nem vinné el a tanítás óráit);
