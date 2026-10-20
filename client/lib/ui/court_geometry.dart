@@ -578,6 +578,25 @@ Map<String, String> savedPlayQuery(Map<String, dynamic> play) {
   };
 }
 
+/// A kalibráló kép legkisebb mérete (a vászon arányában). A pálya sarka
+/// a képen kívül is lehet — a felezővonal közeli vége egy térfél-
+/// kalibrációnál akár másfél képmagassággal a kép alatt: 25%-nál a vászon
+/// alja épp ennyi, a sarok a szélén ragadt.
+const double calibMinScale = 0.10;
+
+/// A kalibráló kép következő mérete a kicsinyítés / nagyítás gombra:
+/// 25% fölött 12 százalékpontos, alatta 5 százalékpontos lépés,
+/// [calibMinScale]..1 között.
+double calibScaleStep(double s, {required bool shrink}) {
+  final lepes = shrink ? (s > 0.3 ? 0.12 : 0.05) : (s < 0.25 ? 0.05 : 0.12);
+  return (shrink ? s - lepes : s + lepes).clamp(calibMinScale, 1.0);
+}
+
+/// A vászon szélére szorult sarok (a vászon arányában): a húzás a vászon
+/// szélén megáll, a valódi sarok lehet, hogy még kijjebb van.
+bool calibCornerAtEdge(Offset p) =>
+    p.dx <= 0.002 || p.dx >= 0.998 || p.dy <= 0.002 || p.dy >= 0.998;
+
 /// A kezdőlap "FIGURÁK" kártyája ennyi (a legutóbb listázott) figurát mutat.
 const int dashboardPlays = 6;
 

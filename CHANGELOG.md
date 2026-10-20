@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.177 óta)
 
+- **Kalibráció: a képen messze kívüli sarok is a helyére tehető** (app):
+  a térfél-kalibrációnál a felezővonal közeli vége gyakran jóval a kép
+  alatt van; a kép kicsinyítése 25%-nál megállt, és a sarok szó nélkül
+  a vászon szélén ragadt (a kalibráció így torz lehetett). Most a kép
+  10%-ig kicsinyíthető (25% alatt finomabb lépésekben), és a vászon
+  szélén álló sarkot a sarok-lista megjelöli, alatta a teendővel.
+
 - **Elakadás után Macen sem omlik össze a folytatás** (motor): ha egy
   kocka beragad, a feldolgozás egy új olvasóval megy tovább — eddig az
   is az Apple-GPU-n számolt, miközben a beragadt szál még fogta a GPU-t,

@@ -580,8 +580,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           // a képet — annyi hely lesz körülötte, amennyi kell.
           Row(children: [
             IconButton(
-              onPressed: _imgScale > 0.26
-                  ? () => _setScale((_imgScale - 0.12).clamp(0.25, 1.0))
+              onPressed: _imgScale > calibMinScale + 0.005
+                  ? () => _setScale(calibScaleStep(_imgScale, shrink: true))
                   : null,
               icon: const Icon(Icons.zoom_out, size: 20, color: AppColors.textSecondary),
               tooltip: "Kép kicsinyítése (több hely a sarkoknak)",
@@ -595,7 +595,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ),
             IconButton(
               onPressed: _imgScale < 0.99
-                  ? () => _setScale((_imgScale + 0.12).clamp(0.25, 1.0))
+                  ? () => _setScale(calibScaleStep(_imgScale, shrink: false))
                   : null,
               icon: const Icon(Icons.zoom_in, size: 20, color: AppColors.textSecondary),
               tooltip: "Kép nagyítása",
@@ -645,6 +645,18 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             _cornerRow("Távoli-jobb", 1),
             _cornerRow("Közeli-jobb", 2),
             _cornerRow("Közeli-bal", 3),
+            // A vászon szélére szorult sarok: a húzás ott megáll, a valódi
+            // helye lehet, hogy még kijjebb van — szólunk, mit tegyen.
+            if ([for (var i = 0; i < 4; i++) _activePts[i]]
+                .any(calibCornerAtEdge)) ...[
+              const SizedBox(height: 4),
+              Text(
+                  "Egy sarok a vászon szélén áll — a valódi helye lehet, hogy "
+                  "még kijjebb van. Kicsinyítsd a képet (KÉP MÉRETE), és húzd "
+                  "tovább, amíg a rajzolt vonal ráül a pálya vonalára.",
+                  style: AppText.label
+                      .copyWith(fontSize: 11, color: AppColors.gold)),
+            ],
             const SizedBox(height: 6),
             Text(
                 "Finomítás: fogd meg a sarkot, majd a NYILAKKAL told "
@@ -1448,8 +1460,15 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             const SizedBox(width: 8),
             Text(name, style: AppText.label.copyWith(color: AppColors.textPrimary)),
           ]),
-          Text("${(_activePts[i].dx * 100).round()}, ${(_activePts[i].dy * 100).round()}",
-              style: AppText.label.copyWith(fontSize: 11)),
+          Text(
+              calibCornerAtEdge(_activePts[i])
+                  ? "⚠ a vászon szélén"
+                  : "${(_activePts[i].dx * 100).round()}, ${(_activePts[i].dy * 100).round()}",
+              style: AppText.label.copyWith(
+                  fontSize: 11,
+                  color: calibCornerAtEdge(_activePts[i])
+                      ? AppColors.gold
+                      : null)),
         ]),
       );
 }

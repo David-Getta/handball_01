@@ -3477,3 +3477,20 @@ def test_a_kezdolap_meccs_kartyaja_a_videozando_jelenetekre_visz():
         assert kell in kezdolap, kell
     api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "/matches/$matchId/key-scenes" in api
+
+
+def test_a_kalibracio_a_kepen_kivuli_sarkot_is_engedi():
+    """Terepen: a térfél-kalibráció felezővonal-sarka másfél képmagassággal
+    a kép alatt volt, a kicsinyítés 25%-nál megállt, és a sarok a vászon
+    szélén ragadt — szó nélkül. A kép 10%-ig kicsinyíthető, és a vászon
+    szélén álló sarkot a képernyő megjelöli."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "ui" / "calibration_screen.dart").read_text(encoding="utf-8")
+    geo = (lib / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    assert "const double calibMinScale = 0.10;" in geo
+    assert "clamp(0.25, 1.0)" not in src
+    assert "calibScaleStep(_imgScale, shrink: true)" in src
+    assert ".any(calibCornerAtEdge)" in src and "a vászon szélén" in src

@@ -158,6 +158,24 @@ void main() {
       "http://10.0.0.5:8000/kovet?szem=h1",
       "http://10.0.0.5:8000/kovet?szem=h2"
     ]);
+    // A kalibráló kép mérete: 25% fölött 12, alatta 5 százalékpontos
+    // lépés, 10%-ig; a térfél-kalibráció felezővonal-sarka (a kép alatt
+    // ~1,45 képmagassággal) 25%-nál épp a vászon alján lenne.
+    var s = 0.76;
+    final lepcsok = <int>[];
+    while (s > calibMinScale + 0.005) {
+      s = calibScaleStep(s, shrink: true);
+      lepcsok.add((s * 100).round());
+    }
+    expect(lepcsok, [64, 52, 40, 28, 23, 18, 13, 10]);
+    expect((calibScaleStep(0.10, shrink: false) * 100).round(), 15);
+    expect(calibScaleStep(0.95, shrink: false), 1.0);
+    expect(calibCornerAtEdge(const Offset(0.5, 1.0)), isTrue);
+    expect(calibCornerAtEdge(const Offset(0.0, 0.4)), isTrue);
+    expect(calibCornerAtEdge(const Offset(0.5, 0.97)), isFalse);
+    // 10%-on a 2646. képsor (1080 magas kép) a vásznon belül van.
+    const m = (1 - calibMinScale) / 2;
+    expect(m + 2646 / 1080 * (1 - 2 * m) < 0.998, isTrue);
     // A mentett figura linkje (a motor figura_link_kod-jának alakja; a
     // tizedre kerekítés a Dart-é — a fél esetén felfelé).
     expect(
