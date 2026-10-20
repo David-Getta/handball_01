@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.177 óta)
+
+- **Elakadás után Macen sem omlik össze a folytatás** (motor): ha egy
+  kocka beragad, a feldolgozás egy új olvasóval megy tovább — eddig az
+  is az Apple-GPU-n számolt, miközben a beragadt szál még fogta a GPU-t,
+  ami ugyanazt a leállást okozhatta, amit a v0.1.177 javított. Most
+  elakadás után a folytatás a processzoron fut (lassabb, de
+  biztonságos), és a felület ki is írja.
+
 ## v0.1.177 — kiadva (2026-10-18)
 
 > Kiadás-jegyzet: Apple Silicon Macen a feldolgozás nem áll le 2%-nál.

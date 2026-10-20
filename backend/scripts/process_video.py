@@ -544,6 +544,24 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         árván maradt száltól. A követési id-k emiatt újraindulnak, de
         egy elakadás után a folytonosság úgyis megszakadt.
         """
+        # Elakadás utáni folytatás az Apple-GPU-n: az elakadt szál a
+        # natív hívásban bent ragadt, és fogja a GPU-t — egy MÁSODIK
+        # GPU-s szál a Metal-assertionnel leállítaná a motort (az MPS
+        # nem szál-biztos, lásd fent). A folytató olvasó ezért a CPU-n
+        # számol: lassabb, de nem omlik össze. A kezdő olvasó (mdl0, a
+        # közös modellel) az EGYETLEN GPU-szál — az marad a GPU-n.
+        dev = device
+        if mdl0 is None and device == "mps":
+            dev = "cpu"
+            print("FIGYELEM: elakadás után a folytatás a processzoron fut "
+                  "(az Apple-GPU-t az elakadt szál foglalja).")
+            if on_note is not None:
+                try:
+                    on_note("elakadás után a folytatás a processzoron fut "
+                            "(lassabb, de biztonságos)")
+                except Exception:
+                    pass
+
         def _iter():
             if mdl0 is not None:
                 mdl = mdl0
@@ -568,7 +586,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                             rr = mdl.track(
                                 img, persist=True,
                                 classes=person_ids + ball_ids,
-                                imgsz=1920, conf=0.05, device=device,
+                                imgsz=1920, conf=0.05, device=dev,
                                 tracker="bytetrack.yaml",
                                 verbose=False)
                             if rr:

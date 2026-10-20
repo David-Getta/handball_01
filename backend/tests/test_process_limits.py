@@ -224,3 +224,78 @@ def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
     assert len(hivasok["kockak"]) == 5 == len(raw)   # 20, 22, …, 28
     assert abs(hivasok["kockak"][0] - 160) < 6       # a 20. kocka az első
     assert jegyzet and jegyzet[0].startswith("a detektáló modell betöltve")
+
+
+def test_elakadas_utan_mps_en_a_folytatas_a_processzoron_fut(tmp_path,
+                                                              monkeypatch):
+    """Az Apple-GPU nem szál-biztos: elakadás után a folytató olvasó
+    (ÚJ termelő szál, saját modell) a CPU-n számol, mert az elakadt szál
+    még fogja a GPU-t; a felület is megtudja. A kezdő olvasó (start > 0,
+    a közös modellel) a GPU-n marad."""
+    import sys
+    import threading
+    import types
+
+    import cv2
+
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 120, dtype=np.uint8))
+    vw.release()
+    eszkozok = []
+
+    class _Res:
+        def __init__(self, img):
+            self.orig_img = img
+            self.boxes = None
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            pass
+
+        def track(self, source=None, **kw):
+            if isinstance(source, str):     # a folyam-olvasó: 2 kocka, majd beragad
+                def gen():
+                    for _ in range(2):
+                        yield _Res(np.full((64, 96, 3), 120, np.uint8))
+                    threading.Event().wait(9999)
+                return gen()
+            eszkozok.append(kw.get("device"))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+    monkeypatch.setattr(pv, "_pick_device", lambda: "mps")
+
+    import queue as queue_mod
+    real_queue = queue_mod.Queue
+
+    class _FastQueue(real_queue):
+        def get(self, block=True, timeout=None):
+            if timeout is not None and timeout > 1:
+                timeout = 0.5
+            return super().get(block=block, timeout=timeout)
+
+    monkeypatch.setattr(queue_mod, "Queue", _FastQueue)
+    jegyzet = []
+    pv._process_yolo(str(v), str(w), stride=1, max_frames=100, imgsz=640,
+                     conf=0.2, raw_out=[], colors_out=[], skip_dark=False,
+                     on_note=jegyzet.append, ball_recover=False)
+    assert eszkozok and set(eszkozok) == {"cpu"}, eszkozok
+    assert any("a folytatás a processzoron fut" in j for j in jegyzet)
+    # A kezdő olvasó (start > 0, a közös modellel) a GPU-n marad.
+    eszkozok.clear()
+    pv._process_yolo(str(v), str(w), stride=2, max_frames=100, imgsz=640,
+                     conf=0.2, start=10, raw_out=[], colors_out=[],
+                     skip_dark=False, ball_recover=False)
+    assert eszkozok and set(eszkozok) == {"mps"}, eszkozok
