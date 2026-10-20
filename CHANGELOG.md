@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.177 óta)
 
+- **A rámutatott meccs-kártya kerete oldalt is látszik** (app): a
+  kezdőlapon a kártyára mutatva a cián keret csak fent és lent látszott,
+  oldalt lelógott — a rámutatás a kártyát kicsit nagyobbra skálázta, és
+  a lista a szélén levágta. Most a kártya nem nő, hanem 2 képponttal
+  megemelkedik; a keret és az árnyék a helyén.
+
 - **Macen a tanítás / gyűjtés és a feldolgozás nem futhat egyszerre**
   (motor): a gép grafikus gyorsítóját egyszerre csak egy munka
   használhatja (lásd v0.1.177) — a finomhangolás vagy a

@@ -101,9 +101,18 @@ class CountUp extends StatelessWidget {
 }
 
 /// Asztali hover-emelés: rámutatásra az elem finoman megemelkedik
-/// (1,0 → 1,012 skála), a kerete akcentus-színt kap, és puha árnyékot vet.
-/// A tartalom változatlan — csak a "megfogható" érzet jön hozzá.
+/// ([liftPx] képponttal feljebb csúszik), a kerete akcentus-színt kap, és
+/// puha árnyékot vet. A tartalom és a MÉRET változatlan — csak a
+/// "megfogható" érzet jön hozzá.
+///
+/// Szándékosan eltolás, nem skálázás: a listában a kártya a teljes
+/// szélességet kitölti, és a görgető a szélén levág — a skálázott kártya
+/// két oldalsó szegélye a levágott sávba került (a cián keret csak fent
+/// és lent látszott). A függőleges eltolás a kártyák közti közben marad.
 class HoverLift extends StatefulWidget {
+  /// Ennyi képponttal emelkedik meg a rámutatott elem.
+  static const double liftPx = 2.0;
+
   final Widget child;
   final BorderRadius borderRadius;
 
@@ -126,15 +135,13 @@ class _HoverLiftState extends State<HoverLift> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: AnimatedScale(
-        // Csökkentett mozgásnál a keret és az árnyék marad (az a
-        // "kattintható" jel), csak a skálázás áll le.
-        scale: _hover && !still ? 1.012 : 1.0,
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
+      child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
+          // Csökkentett mozgásnál a keret és az árnyék marad (az a
+          // "kattintható" jel), csak az emelés áll le.
+          transform: Matrix4.translationValues(
+              0, _hover && !still ? -HoverLift.liftPx : 0, 0),
           decoration: BoxDecoration(
             borderRadius: widget.borderRadius,
             border: Border.all(
@@ -157,7 +164,6 @@ class _HoverLiftState extends State<HoverLift> {
                 : const [],
           ),
           child: widget.child,
-        ),
       ),
     );
   }
