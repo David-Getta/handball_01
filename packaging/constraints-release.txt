@@ -1,0 +1,18 @@
+# A kiadás-build RÖGZÍTETT függőségei (pip install -c ... a release.yml-ben).
+#
+# Miért: a backend[ml] csak alsó korlátot ad (ultralytics>=8.1 stb.), így a
+# build eddig mindig a legfrissebb torch / ultralytics / OpenCV verziót
+# húzta be — egy új upstream kiadás bármikor eltörhette a becsomagolt
+# motort, és ez csak a felhasználónál derült ki. Ez a készlet az, amelyen a
+# feldolgozási füstteszt (packaging/smoke_process.py) a v0.1.177-ben
+# mindkét platformon végigfutott (macOS: Apple-GPU / MPS, Windows: CPU).
+#
+# Frissítés: írd át a verziót, indíts egy próba-buildet (Actions → release
+# → üres version, platforms: all) — a füstteszt dönt; csak zöld build után
+# menjen kiadás.
+torch==2.14.1
+torchvision==0.29.1
+ultralytics==8.4.182
+opencv-python==5.0.0.93
+numpy==2.4.6
+pyinstaller==6.22.3

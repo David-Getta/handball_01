@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.177 óta)
 
+- **A kiadás függőségei rögzítve** (csomagolás): a build eddig minden
+  kiadásnál a legfrissebb torch / ultralytics / OpenCV verziót húzta be,
+  így egy új upstream kiadás bármikor eltörhette a becsomagolt motort.
+  Most a kiadás azzal a rögzített készlettel épül
+  (packaging/constraints-release.txt), amelyen a feldolgozási füstteszt
+  mindkét platformon végigfutott; frissítés csak zöld próba-build után.
+
 - **Kalibráció: a képen messze kívüli sarok is a helyére tehető** (app):
   a térfél-kalibrációnál a felezővonal közeli vége gyakran jóval a kép
   alatt van; a kép kicsinyítése 25%-nál megállt, és a sarok szó nélkül

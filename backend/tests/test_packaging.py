@@ -118,3 +118,21 @@ def test_a_becsomagolt_motor_valodi_feldolgozast_is_futtat():
                  '"calibs"', '"start": 30', "/matches/process",
                  "engine-crash.log"):
         assert kell in smoke, f"a füstteszt nem a kliens kérésével fut: {kell}"
+
+
+def test_a_kiadas_fuggosegei_rogzitve_vannak():
+    """ŐR: a kiadás-build a packaging/constraints-release.txt-vel telepít —
+    a backend[ml] csak alsó korlátot ad, így a build eddig mindig a
+    legfrissebb torch / ultralytics / OpenCV verziót húzta be, és egy új
+    upstream kiadás bármikor eltörhette a becsomagolt motort. A rögzített
+    készlet az, amelyen a feldolgozási füstteszt mindkét platformon
+    végigfutott; frissíteni próba-builddel lehet."""
+    src = _workflow()
+    assert src.count("-c packaging/constraints-release.txt") >= 2, (
+        "a kiadás-build nem a rögzített függőségekkel telepít")
+    sorok = (_ROOT / "packaging" / "constraints-release.txt").read_text(
+        encoding="utf-8").splitlines()
+    rogzitett = {s.split("==")[0] for s in sorok if "==" in s}
+    for kell in ("torch", "torchvision", "ultralytics", "opencv-python",
+                 "numpy", "pyinstaller"):
+        assert kell in rogzitett, f"nincs rögzítve: {kell}"
