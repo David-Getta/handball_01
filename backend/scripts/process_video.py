@@ -69,6 +69,9 @@ class StallSkippingFeed:
         self._resume_factory = resume_factory
         self._stride = max(1, int(stride))
         self._next_pos = start_pos   # a következő várt kocka kép-indexe
+        # Az utoljára KIADOTT kocka videó-indexe: átugrás után a fogyasztó
+        # sorszámozása (enumerate) elmaradna a valóditól.
+        self.pos = start_pos
         self._first_timeout_s = first_timeout_s
         self._skip_timeout_s = skip_timeout_s
         self._max_skips = max_skips
@@ -167,6 +170,7 @@ class StallSkippingFeed:
                 return
             timeout = self._skip_timeout_s
             self._dry = 0            # jött kocka: az ugrás-táv visszaáll
+            self.pos = self._next_pos
             self._next_pos += self._stride
             yield item
 
@@ -575,7 +579,23 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             from handball.video_io import open_capture
             cap = open_capture(video_path)
             try:
+                # A tekerés nem minden fájlon kocka-pontos (B-kockás /
+                # változó képfrekvenciájú MP4): ha a dekóder máshova állt,
+                # az eltérést lépegetéssel pótoljuk — előrébb lépkedünk,
+                # túlszaladásnál az elejéről olvasunk odáig. A kalibrált
+                # kocka (horgony) csak így az, amit a felhasználó bejelölt.
+                # (0-t jelentő dekódernél a tekerést elfogadjuk.)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                got = int(cap.get(cv2.CAP_PROP_POS_FRAMES) or 0)
+                if got > start_frame:
+                    cap.release()
+                    cap = open_capture(video_path)
+                    got = 0
+                    while got < start_frame and cap.grab():
+                        got += 1
+                elif 0 < got < start_frame:
+                    while got < start_frame and cap.grab():
+                        got += 1
                 pos = start_frame
                 while True:
                     if not cap.grab():
@@ -654,17 +674,18 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
 
     kept = 0
     skipped_dark = 0
-    for fi, r in enumerate(feed.frames()):
+    for r in feed.frames():
         # Szelíd leállítás: a hívó (pl. a Megszakítás gomb) jelzésére a
         # detektálás megáll, de az ADDIG feldolgozott kockák megmaradnak —
         # az utómunka lefut rájuk, és az eredmény elmentődik.
         if stop_check is not None and stop_check():
             print(f"leállítás-kérés: a detektálás megáll ({kept} kocka kész)")
             break
-        # A kocka videó-indexe (a kezdő olvasó a pos0-tól indul).
-        vi = pos0 + fi * stride
-        if vi < start:  # a bevezető rész átugrása (kép-index alapján)
-            continue
+        # A kocka videó-indexe az ADAGOLÓTÓL: átugrás után a sorszámból
+        # számolt index elmaradna a valóditól, és a horgonyok meg a
+        # labda-ROI a rossz kockára esnének. (A kezdő olvasó a pos0-tól
+        # indul — a start előtti kockák nem érkeznek.)
+        vi = feed.pos
         if kept >= max_frames:
             break
         img = r.orig_img

@@ -75,12 +75,15 @@ def _rovid(fajl: str) -> str:
 
 
 def _hol(fajl: str) -> str:
-    """Emberi hely a hívás-lánc legfelső sorából."""
-    f = fajl.replace("\\", "/").lower()
-    if "cv2" in f or "loaders.py" in f or "video" in f:
+    """Emberi hely a hívás-lánc legfelső sorából — az út TAGJAI alapján:
+    a telepítési mappa neve (pl. "VideoElemzes") nem téveszthet meg, és a
+    saját process_video.py sem "videó-olvasás"."""
+    if _sajat(fajl):
+        return "a feldolgozás közben"
+    tagok = [t.lower() for t in re.split(r"[\\/]", fajl) if t]
+    if "cv2" in tagok or tagok[-1:] == ["loaders.py"]:
         return "a videó olvasása (dekódolása) közben"
-    if any(k in f for k in ("torch", "ultralytics/nn", "predictor",
-                            "ultralytics/engine", "trackers")):
+    if "torch" in tagok or "ultralytics" in tagok:
         return "a detektáló modell futtatása közben"
     return "a feldolgozás közben"
 

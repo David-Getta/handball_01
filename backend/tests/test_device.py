@@ -97,4 +97,6 @@ def test_az_apple_gpu_csak_a_termelo_szalon_fut():
     assert "yield _cpu(rr[0])" in src
     assert "device=reacq_device" in src
     app = (gyoker / "handball" / "api" / "app.py").read_text(encoding="utf-8")
-    assert 'if eszkoz == "mps" and any(j.get("status") == "running"' in app
+    # A próba a tanítás / gyűjtés és a sorban álló munka mellett is CPU-n.
+    assert 'if eszkoz == "mps" and _gpu_foglalt():' in app
+    assert "def _gpu_foglalt() -> bool:" in app

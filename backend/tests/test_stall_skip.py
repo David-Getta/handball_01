@@ -49,6 +49,27 @@ def test_elakadt_kocka_atugrasa_es_folytatas():
     assert feed.stalled is False
 
 
+def test_atugras_utan_a_kocka_indexe_a_valodi():
+    """Az adagoló `pos`-a a KIADOTT kocka videó-indexe: átugrás után a
+    fogyasztó sorszámozása (enumerate) elmaradna a valóditól, és a
+    horgonyok meg a labda-ROI a rossz kockára esnének."""
+    import threading
+
+    def _termelo():
+        yield "a"
+        yield "b"
+        threading.Event().wait(9999)   # beragad a 2. kocka után
+
+    def _folytato(start):
+        return iter([f"f{start}", f"f{start + 1}"])
+
+    feed = StallSkippingFeed(_termelo(), resume_factory=_folytato, stride=1,
+                             first_timeout_s=0.3, skip_timeout_s=0.3)
+    latott = [(feed.pos, it) for it in feed.frames()]
+    # 0, 1, majd az elakadt 2. átugrása (ugrás: 1) → a folytató 3-tól.
+    assert latott == [(0, "a"), (1, "b"), (3, "f3"), (4, "f4")]
+
+
 def test_folytato_nelkul_felad():
     """Folytató-olvasó nélkül a régi viselkedés él: részleges mentés."""
     feed = StallSkippingFeed(_blokkolo(), resume_factory=None,

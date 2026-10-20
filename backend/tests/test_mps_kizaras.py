@@ -123,3 +123,54 @@ def test_mps_en_a_tanitas_es_a_gyujtes_megvarja_a_feldolgozast(
     while c.app.state.train_state["running"]:
         assert time.time() < hatarido
         time.sleep(0.05)
+
+
+def test_mps_en_a_sorban_allo_munka_is_megvarja_a_tanitast(tmp_path,
+                                                            monkeypatch):
+    """A munkás MPS-en a sorban álló munkát sem indítja, amíg tanítás /
+    gyűjtés fut — különben a GPU-n indulna mellettük. (A rés: az első
+    munka végén a munkás 2 mp-et alszik; ha ekkor indul a tanítás, a
+    sorban álló második munka nélküle a GPU-ra ment.) A tanítás a sorban
+    állót is feldolgozásnak veszi."""
+    import scripts.process_video as pv
+
+    c = _app(tmp_path, monkeypatch)
+    v = tmp_path / "m.mp4"
+    _video(v)
+    kapu = threading.Event()
+
+    def kapus_process(*_a, **_k):
+        kapu.wait(30.0)
+        raise RuntimeError("a teszt elengedte")
+
+    monkeypatch.setattr(pv, "process", kapus_process)
+    monkeypatch.setattr(pv, "_pick_device", lambda: "mps")
+    (tmp_path / "dataset").mkdir()
+    (tmp_path / "dataset" / "dataset.yaml").write_text("path: x\n",
+                                                        encoding="utf-8")
+    ja = c.post("/matches/process", json={"path": str(v)}).json()["job_id"]
+    jb = c.post("/matches/process",
+                json={"path": str(v), "queue_behind": True}).json()["job_id"]
+    hatarido = time.time() + 10
+    while c.get(f"/jobs/{ja}").json()["status"] != "running":
+        assert time.time() < hatarido
+        time.sleep(0.05)
+    assert c.get(f"/jobs/{jb}").json()["status"] == "queued"
+    # A sorban álló is feldolgozás: a tanítás 409.
+    r = c.post("/dataset/train", json={"epochs": 5})
+    assert r.status_code == 409 and "sorban" in r.json()["detail"]
+    # A rés: a tanítás már fut, mire az első munka véget ér — a sorban
+    # álló NEM indulhat, amíg a tanítás tart.
+    c.app.state.train_state["running"] = True
+    kapu.set()
+    hatarido = time.time() + 10
+    while c.get(f"/jobs/{ja}").json()["status"] == "running":
+        assert time.time() < hatarido
+        time.sleep(0.05)
+    time.sleep(3.0)
+    assert c.get(f"/jobs/{jb}").json()["status"] == "queued"
+    c.app.state.train_state["running"] = False
+    hatarido = time.time() + 15
+    while c.get(f"/jobs/{jb}").json()["status"] == "queued":
+        assert time.time() < hatarido
+        time.sleep(0.1)

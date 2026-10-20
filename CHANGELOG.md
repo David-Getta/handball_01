@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.177 óta)
 
+- **Javítások (kód-áttekintés)**: a detektálás-próba Macen a tanítás /
+  gyűjtés mellett is a processzoron fut (nem vinné el a tanítás óráit);
+  a sorban álló feldolgozás sem indul a tanítás alatt; elakadás és
+  átugrás után a kockák videó-indexe a valódi (a kalibrált horgony és a
+  labda-keresés a jó kockára esik); a kezdőkockára tekerés kocka-pontos
+  (pontatlan dekódernél lépegetéssel pótolva); a feldolgozások listája
+  nem hibázik egy helyreállított munkától; az összeomlás helye az út
+  tagjaiból ítélve (a mappa neve nem téveszti meg); a tíz percnél
+  régebbi futó-munka jel újraindítás után is helyreáll.
+
 - **A rámutatott meccs-kártya kerete oldalt is látszik** (app): a
   kezdőlapon a kártyára mutatva a cián keret csak fent és lent látszott,
   oldalt lelógott — a rámutatás a kártyát kicsit nagyobbra skálázta, és

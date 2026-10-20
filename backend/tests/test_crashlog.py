@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -75,6 +76,21 @@ def test_az_osszefoglalo_az_offset_utani_nyomot_mondja(tmp_path, monkeypatch):
                               "torch/nn/modules/conv.py\", line 7 in forward"))
     m2 = crash_summary(offset)
     assert "a detektáló modell futtatása közben" in m2 and "forward" in m2
+
+
+def test_a_hely_az_ut_tagjai_alapjan():
+    """A hely-besorolás az út TAGJAIBÓL jön: a "VideoElemzes" telepítési
+    mappa nem "videó-olvasás", a saját process_video.py sem — csak a cv2
+    (és az ultralytics olvasója) az; a torch / ultralytics a modell."""
+    from handball.crashlog import _hol
+    assert _hol("/app/_internal/scripts/process_video.py") == "a feldolgozás közben"
+    assert _hol("D:\\VideoElemzes\\_internal\\torch\\nn\\conv.py") == (
+        "a detektáló modell futtatása közben")
+    assert _hol("D:\\VideoElemzes\\_internal\\cv2\\__init__.py") == (
+        "a videó olvasása (dekódolása) közben")
+    assert _hol("/x/ultralytics/data/loaders.py") == (
+        "a videó olvasása (dekódolása) közben")
+    assert _hol("/x/numpy/core/_methods.py") == "a feldolgozás közben"
 
 
 def test_valodi_nativ_osszeomlas_nyoma(tmp_path):
@@ -161,7 +177,14 @@ def test_nyom_nelkuli_leallas_es_elo_masik_motor(tmp_path, monkeypatch):
     try:
         (mappa / "masikmotor1.json").write_text(json.dumps({
             "job_id": "masikmotor1", "stage": "B", "progress": 0.4,
-            "boot": "masik", "pid": elo.pid}), encoding="utf-8")
+            "boot": "masik", "pid": elo.pid, "updated": time.time()}),
+            encoding="utf-8")
+        # Élő pid, de ELAVULT jel (10 percnél régebbi): újraindítás / pid-
+        # újrahasznosítás után a pid idegen folyamaté — a munka helyreáll.
+        (mappa / "elavultjel1.json").write_text(json.dumps({
+            "job_id": "elavultjel1", "stage": "B", "progress": 0.6,
+            "boot": "masik", "pid": elo.pid,
+            "updated": time.time() - 3600}), encoding="utf-8")
         (mappa / "serult.json").write_text("{nem json", encoding="utf-8")
         c = _app(tmp_path, monkeypatch)
         j = c.get("/jobs/nyomnelkul1").json()
@@ -169,7 +192,15 @@ def test_nyom_nelkuli_leallas_es_elo_masik_motor(tmp_path, monkeypatch):
         assert "(Kalibráció [A], 2%: „kalibráció”)" in j["error"]
         assert c.get("/jobs/masikmotor1").status_code == 404
         assert (mappa / "masikmotor1.json").exists()
+        assert c.get("/jobs/elavultjel1").json()["crashed"] is True
+        assert not (mappa / "elavultjel1.json").exists()
         assert not (mappa / "serult.json").exists()
+        # A lista rendezése "created" nélküli (jelből helyreállt) munkával
+        # sem bukik el — 500 helyett a helyreállt munkák elöl.
+        lista = c.get("/jobs")
+        assert lista.status_code == 200
+        assert {j["job_id"] for j in lista.json()["jobs"]} >= {
+            "nyomnelkul1", "elavultjel1"}
     finally:
         elo.kill()
         elo.wait()

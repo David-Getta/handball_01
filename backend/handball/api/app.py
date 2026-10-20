@@ -1437,17 +1437,13 @@ def create_app():
             raise HTTPException(status_code=404, detail="frame not read")
 
         # A nehéz feldolgozó segédei (súly-feloldás, osztályok, mezszín).
-        import sys
-        from pathlib import Path
-        backend_dir = str(Path(__file__).resolve().parents[2])
-        if backend_dir not in sys.path:
-            sys.path.insert(0, backend_dir)
         try:
             from ultralytics import YOLO
-            from scripts.process_video import (
-                _class_ids, _is_referee, _pick_device, _resolve_weights,
-                _torso_color,
-            )
+            _pv = _process_video_modul()
+            _class_ids, _is_referee, _pick_device = (
+                _pv._class_ids, _pv._is_referee, _pv._pick_device)
+            _resolve_weights, _torso_color = (_pv._resolve_weights,
+                                              _pv._torso_color)
             model = YOLO(_resolve_weights("yolov8n.pt"))
         except Exception as e:
             raise HTTPException(
@@ -1459,8 +1455,7 @@ def create_app():
         # termelő szála használja — egy MÁSIK szálból indított GPU-munka a
         # Metal-assertionnel leállítaná a motort (lásd _process_yolo).
         eszkoz = _pick_device()
-        if eszkoz == "mps" and any(j.get("status") == "running"
-                                   for j in _jobs.values()):
+        if eszkoz == "mps" and _gpu_foglalt():
             eszkoz = "cpu"
         res = model.predict(frame, imgsz=imgsz, conf=0.2, verbose=False,
                             device=eszkoz)[0].cpu()
@@ -1798,8 +1793,12 @@ def create_app():
                 continue  # időközben megszakították
             # Ha épp fut egy munka (pl. előzéssel, saját szálon indított),
             # a sorban álló megvárja — ez a "megvárja az előzőt" ígérete.
-            while any(j.get("status") == "running"
-                      for j in _jobs.values()):
+            # Apple-GPU-n a tanítást / gyűjtést is megvárja: a sorban
+            # álló munka különben a GPU-n indulna mellettük (az MPS nem
+            # szál-biztos — a Metal mindkettőt leállítaná).
+            while (any(j.get("status") == "running"
+                       for j in _jobs.values())
+                   or _gpu_tanitas_fut()):
                 _t.sleep(2.0)
             if job["status"] != "queued":
                 continue  # várakozás közben szakították meg
@@ -1911,6 +1910,11 @@ def create_app():
     _boot_id = _uuid_mod.uuid4().hex
     # A jel lemezre írása legfeljebb ennyi mp-enként (lépésváltáskor azonnal).
     FUTO_JEL_S = 5.0
+    # Egy MÁSIK élő motor-példány jelét csak ennyi ideig hisszük el:
+    # újraindítás / pid-újrahasznosítás után a pid idegen folyamaté lehet.
+    # (A futó munka jele legalább 3 percenként frissül — az
+    # elakadás-átugró jelzései is írják.)
+    FUTO_JEL_ELO_S = 600.0
     _futo_allapot: dict = {}   # job_id -> utolsó írás, lépés, napló-offset
     _LEPES_NEVEK = {"A": "Kalibráció", "B": "Detektálás",
                     "C": "Követés", "D": "Csapatszín / kapus / bíró",
@@ -1966,6 +1970,7 @@ def create_app():
         ugyanúgy él). Egy MÁSIK, még élő motor-példány munkájához nem
         nyúlunk."""
         import os as _o
+        import time as _t
         from ..crashlog import crash_summary, pid_alive
         try:
             jelek = sorted(_futo_mappa.glob("*.json"))
@@ -1985,8 +1990,13 @@ def create_app():
             if rec.get("boot") == _boot_id:
                 continue
             pid = rec.get("pid")
-            if pid != _o.getpid() and pid_alive(pid):
-                continue
+            try:
+                kor = _t.time() - float(rec.get("updated") or 0)
+            except (TypeError, ValueError):
+                kor = float("inf")
+            if (pid != _o.getpid() and pid_alive(pid)
+                    and kor < FUTO_JEL_ELO_S):
+                continue  # egy másik, élő motor friss munkája
             jid = str(rec.get("job_id") or p.stem)
             stage = str(rec.get("stage") or "A")
             try:
@@ -2013,7 +2023,9 @@ def create_app():
                 "stride", "imgsz")}
             job.update(job_id=jid, status="error", stage=stage,
                        progress=round(prog, 3), error=msg,
-                       message=f"hiba: {msg}", crashed=True)
+                       message=f"hiba: {msg}", crashed=True,
+                       created=(rec.get("created") or rec.get("updated")
+                                or _t.time()))
             if jid not in _jobs:
                 _jobs[jid] = job
                 _log_job(job)
@@ -2040,12 +2052,7 @@ def create_app():
         try:  # (behúzás-megőrző blokk a korábbi törzsnek)
             # A nehéz feldolgozó a scripts.process_video-ban van; a backend/ mappát
             # biztosítjuk a sys.path-en, hogy a szerver bárhonnan indítva megtalálja.
-            import sys
-            from pathlib import Path
-            backend_dir = str(Path(__file__).resolve().parents[2])
-            if backend_dir not in sys.path:
-                sys.path.insert(0, backend_dir)
-            from scripts.process_video import process
+            process = _process_video_modul().process
 
             # Megszakítás: SZELÍD leállítás. A detektáló ciklus a stop_check
             # jelzésére megáll, de az addig feldolgozott kockákra az utómunka
@@ -2343,7 +2350,8 @@ def create_app():
     def list_jobs():
         """A feldolgozási munkák listája (legújabb elöl) — a kezdőképernyő
         "folyamatban" kártyája ebből épül. A belső mezőket nem adjuk ki."""
-        jobs = sorted(_jobs.values(), key=lambda j: j.get("created", 0), reverse=True)
+        jobs = sorted(_jobs.values(), key=lambda j: j.get("created") or 0,
+                      reverse=True)
         return {"jobs": [_with_eta(j) for j in jobs[:20]]}
 
     @app.get("/jobs/{job_id}")
@@ -2853,28 +2861,51 @@ def create_app():
     # (a tesztek és a diagnosztika innen látják)
     app.state.dataset_state = _dataset_state
 
-    def _gpu_kizarolagos() -> bool:
-        """Igaz, ha az inferencia-eszköz az Apple-GPU (MPS): azt egyszerre
-        csak egy szál használhatja — a tanítás, a gyűjtés és a feldolgozás
-        kizárja egymást. CUDA-n és CPU-n hamis."""
+    def _process_video_modul():
+        """A nehéz feldolgozó modul (scripts.process_video): a backend/
+        mappát a sys.path-re tesszük, hogy a szerver bárhonnan indítva
+        megtalálja. Egy helyen — a feldolgozás, a detektálás-próba és a
+        GPU-kizárás is innen veszi."""
+        import importlib
         import sys as _sys
         backend_dir = str(Path(__file__).resolve().parents[2])
         if backend_dir not in _sys.path:
             _sys.path.insert(0, backend_dir)
+        return importlib.import_module("scripts.process_video")
+
+    def _gpu_kizarolagos() -> bool:
+        """Igaz, ha az inferencia-eszköz az Apple-GPU (MPS): azt egyszerre
+        csak egy szál használhatja — a tanítás, a gyűjtés és a feldolgozás
+        kizárja egymást. CUDA-n és CPU-n hamis."""
         try:
-            from scripts.process_video import _pick_device
-            return _pick_device() == "mps"
+            return _process_video_modul()._pick_device() == "mps"
         except Exception:
             return False
 
+    def _gpu_tanitas_fut() -> bool:
+        """Apple-GPU-n a tanítás vagy a gyűjtés foglalja a GPU-t."""
+        return _gpu_kizarolagos() and bool(_train_state.get("running")
+                                           or _dataset_state.get("running"))
+
+    def _gpu_foglalt() -> bool:
+        """Apple-GPU-n használja-e MÁS munka a GPU-t (futó vagy sorban álló
+        feldolgozás, tanítás, gyűjtés) — a detektálás-próba ilyenkor a
+        CPU-n fut."""
+        return _gpu_kizarolagos() and (
+            any(j.get("status") in ("running", "queued")
+                for j in _jobs.values())
+            or bool(_train_state.get("running"))
+            or bool(_dataset_state.get("running")))
+
     def _gpu_feldolgozas_fut() -> str | None:
-        """Apple-GPU-n a futó feldolgozás foglalja a GPU-t: a tanítás és a
-        gyűjtés mellette leállítaná a motort — a 409 mondata, vagy None."""
-        if _gpu_kizarolagos() and any(j.get("status") == "running"
+        """Apple-GPU-n a futó (vagy sorban álló — a munkás pillanatokon
+        belül indítja) feldolgozás foglalja a GPU-t: a tanítás és a gyűjtés
+        mellette leállítaná a motort — a 409 mondata, vagy None."""
+        if _gpu_kizarolagos() and any(j.get("status") in ("running", "queued")
                                       for j in _jobs.values()):
-            return ("épp feldolgozás fut, és az a gép grafikus gyorsítóját "
-                    "használja — várd meg a feldolgozás végét (vagy szakítsd "
-                    "meg a Feldolgozások képernyőn)")
+            return ("épp feldolgozás fut (vagy áll sorban), és az a gép "
+                    "grafikus gyorsítóját használja — várd meg a feldolgozás "
+                    "végét (vagy szakítsd meg a Feldolgozások képernyőn)")
         return None
 
     @app.post("/dataset/collect")
@@ -2888,9 +2919,9 @@ def create_app():
         if _dataset_state.get("running"):
             raise HTTPException(status_code=409,
                                 detail="már fut egy gyűjtés — várd meg")
-        if _gpu_feldolgozas_fut():
-            raise HTTPException(status_code=409,
-                                detail=_gpu_feldolgozas_fut())
+        gpu_foglalt = _gpu_feldolgozas_fut()
+        if gpu_foglalt:
+            raise HTTPException(status_code=409, detail=gpu_foglalt)
         try:
             samples = int(body.get("samples") or 200)
         except (TypeError, ValueError):
@@ -2980,9 +3011,9 @@ def create_app():
                                 detail="már fut tanítás vagy gyűjtés")
         # Apple-GPU: a futó feldolgozás használja a GPU-t — a tanítás
         # mellette leállítaná a motort (az MPS nem szál-biztos).
-        if _gpu_feldolgozas_fut():
-            raise HTTPException(status_code=409,
-                                detail=_gpu_feldolgozas_fut())
+        gpu_foglalt = _gpu_feldolgozas_fut()
+        if gpu_foglalt:
+            raise HTTPException(status_code=409, detail=gpu_foglalt)
         yaml_ut = data_root() / "dataset" / "dataset.yaml"
         if not yaml_ut.exists():
             raise HTTPException(

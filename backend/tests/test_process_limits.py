@@ -226,6 +226,81 @@ def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
     assert jegyzet and jegyzet[0].startswith("a detektáló modell betöltve")
 
 
+def test_a_pontatlan_tekerest_a_kezdo_olvaso_potolja(tmp_path, monkeypatch):
+    """A tekerés (CAP_PROP_POS_FRAMES) nem minden fájlon kocka-pontos:
+    ha a dekóder a kért kocka ELÉ állt, lépegetéssel pótoljuk; ha MÖGÉ
+    szaladt, az elejéről olvasunk odáig — az első feldolgozott kocka
+    mindkét esetben a kért (a kalibrált horgony az, amit bejelöltek)."""
+    import sys
+    import types
+
+    import cv2
+
+    import handball.video_io as vio
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 8 * k, dtype=np.uint8))
+    vw.release()
+
+    class _Res:
+        def __init__(self, img):
+            self.orig_img = img
+            self.boxes = None
+
+    # Futásonként SAJÁT lista: az elengedett termelő szál a régi
+    # modell-példányba ír még egy-két kockát, nem a következő futáséba.
+    futasok = []
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            self._lista = futasok[-1]
+
+        def track(self, source=None, **_kw):
+            self._lista.append(float(source.mean()))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+    eredeti = vio.open_capture
+
+    class _PontatlanCap:
+        """A tekerés `elteres` kockával máshova áll, és a dekóder ezt
+        jelenti is (mint a B-kockás MP4-eknél)."""
+
+        def __init__(self, cap, elteres):
+            self._c, self._e = cap, elteres
+
+        def set(self, prop, v):
+            return self._c.set(prop, v + self._e)
+
+        def __getattr__(self, nev):
+            return getattr(self._c, nev)
+
+    for elteres in (-2, +2):
+        futasok.append([])
+        kockak = futasok[-1]
+        monkeypatch.setattr(
+            vio, "open_capture",
+            lambda p, _e=elteres: _PontatlanCap(eredeti(p), _e))
+        pv._process_yolo(str(v), str(w), stride=2, max_frames=3, imgsz=640,
+                         conf=0.2, start=20, skip_dark=False, raw_out=[],
+                         colors_out=[], ball_recover=False)
+        # (a termelő szál előreszalad a sor pufferéig — legalább 3)
+        assert len(kockak) >= 3, (elteres, kockak)
+        assert abs(kockak[0] - 160) < 6, (elteres, kockak)   # a 20. kocka
+        assert abs(kockak[1] - 176) < 6, (elteres, kockak)   # a 22.
+
+
 def test_elakadas_utan_mps_en_a_folytatas_a_processzoron_fut(tmp_path,
                                                               monkeypatch):
     """Az Apple-GPU nem szál-biztos: elakadás után a folytató olvasó
