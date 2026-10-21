@@ -240,3 +240,34 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   (nyers `append` tilalma), a felderítés-mezők két őre (néma mező,
   elgépelt mezőnév), és a meccs-csomag `_hibas_retegek` listája, ami
   megnevezi, ha valami mégis elhasalt.
+
+- **A nem látott gól — RÉSZBEN MEGOLDVA.** Terepen a kezdőlap mind a
+  négy valódi meccse (19–29 perc) "0 : 0"-val állt. A gól-felismerés a
+  gólvonalat átlépő labdát kereste — de a gól pillanatában a labda a
+  leggyorsabb és a leginkább takart (elmosódott röppálya, kapus, háló),
+  tehát széles, ritkított felvételen épp ezt a kockát nem látjuk.
+
+  Három lépés, ebben a sorrendben. (1) **Őszinteség**: tíz perc fölött
+  gól nélkül a felület "? : ?"-t mutat, nem egy magabiztos "0 : 0"-t.
+  (2) **Diagnózis**: a minőség-jelentés szétválasztja a három okot — a
+  lövést látta, a gólt nem; a labdát a kapuk előtt sosem látta (a
+  felvétel vagy a kalibráció a gond); a kapu előtt látta, de lövést
+  nem mért (a gyors labdát hagyja ki). (3) **Második, független jel**:
+  minden gólt KÖZÉPKEZDÉS követ — a labda a felezővonal közepén áll,
+  és mindkét csapat a saját térfelén van. Ez a pillanat jól látszik
+  (álló, éles labda), ezért a gól utólag is kikövetkeztethető
+  (`throw_off_goals`).
+
+  A tanulság a teszt-fixture-ökből jött: sok szintetikus "aktív
+  játék" pontosan egy középkezdés képe volt (a két csapat a saját
+  térfelén, a labda középen áll), és az első változat hat meglévő
+  teszt védéseit gólra írta át. A felállás önmagában tehát nem elég.
+  Ami a valódi középkezdést elválasztja: UTÁNA a gólt kapó csapat
+  támad, a labda tizenöt másodpercen belül átér a gólt szerző
+  térfelére. A félidő és a felvétel-darab határán át nem
+  következtetünk (a második félidő kezdése nem az első utolsó
+  támadásának gólja).
+
+  Nyitott: a nem gólra végződő lövés (védés, mellé) ugyanígy
+  elveszhet, ha a röppályát nem látjuk — a következő jelölt jel a
+  kapus-kidobás (a labda a kapuelőtérben, a kapusnál áll meg).
