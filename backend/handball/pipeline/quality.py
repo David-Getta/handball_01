@@ -73,6 +73,20 @@ TURNOVER_RATE_MAX_PER_MIN = 4.0
 GOALS_PER_MIN_LOW = 0.30
 GOALS_RATE_MIN_MINUTES = 10.0
 
+# Gól-diagnózis: MIÉRT kevés a gól. Kézilabdában a két csapat együtt
+# percenként másfél lövés körül próbálkozik (csapatonként 45–55 lövés
+# hatvan perc alatt); ennek a negyede alatt nem a gól-döntés hibázik,
+# hanem maguk a LÖVÉSEK hiányoznak — akkor az "Ez GÓL volt" javításnak
+# nincs mire ülnie.
+SHOTS_PER_MIN_LOW = 0.40
+# A "kapu előtti" sáv a gólvonaltól (m) — a 9 m-es vonalig tart, ott
+# zajlik a támadás és onnan jön a lövések zöme.
+GOAL_ZONE_M = 9.0
+# A LÁTOTT labda-kockák ekkora hányada alatt mondjuk ki, hogy a labdát
+# a kapuk előtt szinte sosem látta (élesben a támadások ideje ennek a
+# sokszorosa) — lövést így nem is mérhet.
+GOAL_ZONE_BALL_LOW_PCT = 5.0
+
 # Aránytalan eredmény: ennyi összes gól fölött nézzük, és ekkora
 # szorzó fölött szólunk. Kézilabdában a nagy különbség is jellemzően
 # kétszeres arány körül van (35-20); ötszörös arány (25-5) inkább azt
@@ -186,6 +200,18 @@ NEXT_ACTION_ORDER: tuple = (
      "Ellenőrizd az EREDMÉNYT: ha a második félidő góljai fordítva "
      "vannak, a könyvtárban a meccs sorának ⇄ gombjával fordítsd meg "
      "a gyanús szakaszt — az elemzés újraszámol."),
+    # A gól-diagnózis két ága, amelyben nincs mit gólra javítani: a
+    # konkrétabb teendő a generikus "Gyanúsan kevés gól" ELŐTT álljon.
+    ("a kapuk előtt szinte sosem látta",
+     "Ellenőrizd, hogy a felvételen látszik-e mindkét kapu, és hogy a "
+     "kalibráció a kapukig ér-e (a rajzolt 6 m-es vonalnak a valódin kell "
+     "ülnie) — a labdát a kapuk előtt nem látta, így lövést sem mérhetett. "
+     "A valódi eredményt addig a Kezdőlapon a kártya ✎ gombjával add meg."),
+    ("lövést is alig mért",
+     "Futtasd újra a \"Pontos\" minőségi profillal (sűrűbb kockák, "
+     "nagyobb felbontás — a gyors lövés-labdát így ritkábban hagyja ki); "
+     "addig a hiányzó gólokat a meccs-nézet Javítások menüjében "
+     "(Hiányzó gól) veheted fel."),
     ("Gyanúsan kevés gól",
      "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
@@ -654,23 +680,57 @@ def compute_quality_report(match: Match) -> dict:
     # — akkor sem, ha egyébként pontos. Mostantól javítható is, ezért a
     # figyelmeztetés nem zsákutca: megmondjuk, hol.
     goals = 0
+    attempts = 0
     try:
         from .event_detection import EventType as _ET, detect_shots as _ds
-        goals = sum(1 for e in _ds(match) if e.type is _ET.GOAL)
+        _lovesek = _ds(match)
+        goals = sum(1 for e in _lovesek if e.type is _ET.GOAL)
+        attempts = sum(1 for e in _lovesek
+                       if e.type in (_ET.GOAL, _ET.SHOT))
     except Exception:
         pass
+    # A LÁTOTT labda (a pótolt nem) a kapuk előtti sávban — a
+    # gól-diagnózis ebből mondja meg, hogy a lövések azért hiányoznak-e,
+    # mert a labdát ott sosem látta.
+    from .calibration import COURT_LENGTH_M as _HOSSZ
+    _kapu_elott = sum(
+        1 for f in match.frames
+        if f.ball is not None and f.ball.confidence > _INTERP
+        and (f.ball.x <= GOAL_ZONE_M or f.ball.x >= _HOSSZ - GOAL_ZONE_M))
+    near_goal_pct = (100.0 * _kapu_elott / ball_frames
+                     if ball_frames else 0.0)
     if duration_s / 60.0 >= GOALS_RATE_MIN_MINUTES:
-        gol_perc = goals / (duration_s / 60.0)
+        _perc = duration_s / 60.0
+        gol_perc = goals / _perc
         if gol_perc < GOALS_PER_MIN_LOW:
-            warnings.append(
-                f"Gyanúsan kevés gól ({goals} db {duration_s / 60:.0f} "
-                f"perc alatt = {gol_perc:.2f} gól/perc) — kézilabdában a "
-                "két csapat együtt percenként nagyjából egy gólt szerez, "
-                "tehát a felismerés valószínűleg KIHAGYOTT gólokat "
-                "(gyakran lövésként jelöli őket). Az Események listán a "
-                "sorok ⋮ menüjében javítható: \"Ez GÓL volt\" — a "
-                "javítás az egész elemzésen átüt (eredmény, xG, "
-                "lövő-listák).")
+            fej = (f"Gyanúsan kevés gól ({goals} db {_perc:.0f} "
+                   f"perc alatt = {gol_perc:.2f} gól/perc) — kézilabdában "
+                   "a két csapat együtt percenként nagyjából egy gólt "
+                   "szerez, tehát a felismerés valószínűleg KIHAGYOTT "
+                   "gólokat. ")
+            if attempts / _perc >= SHOTS_PER_MIN_LOW:
+                # A lövéseket látta — a gól-döntés hibázik.
+                ok = (f"A lövéseket látta ({attempts} db), a gólt ritkán: "
+                      "a gólokat gyakran lövésként jelöli. Az Események "
+                      "listán a sorok ⋮ menüjében javítható: \"Ez GÓL "
+                      "volt\" — a javítás az egész elemzésen átüt "
+                      "(eredmény, xG, lövő-listák).")
+            elif near_goal_pct < GOAL_ZONE_BALL_LOW_PCT:
+                # (A "kapuk előtt szinte sosem látta" részlet egyben
+                # maradjon — a teendő-lista ezt keresi.)
+                ok = (f"Az ok: a labdát a kapuk előtt szinte sosem látta "
+                      f"(a gólvonaltól {GOAL_ZONE_M:.0f} m-en belül a "
+                      f"látott labda {near_goal_pct:.0f}%-a) — lövést így "
+                      "nem is mérhetett. Ellenőrizd, hogy a felvételen "
+                      "látszik-e mindkét kapu, és hogy a kalibráció a "
+                      "kapukig ér-e.")
+            else:
+                ok = (f"Az ok: lövést is alig mért ({attempts} db) — a "
+                      "labdát a kapuk előtt látta, de a lövés gyors, "
+                      "elmosódott labdáját ritkán. A \"Pontos\" minőségi "
+                      "profil segít; addig a hiányzó gólokat a meccs-nézet "
+                      "Javítások menüjében (Hiányzó gól) veheted fel.")
+            warnings.append(fej + ok)
 
     # --- Aránytalan-e az eredmény? ---
     # A két kapu felismerése külön-külön romolhat el (rossz kalibráció
@@ -805,6 +865,12 @@ def compute_quality_report(match: Match) -> dict:
         "good_player_frames_pct": round(good_pct, 1),
         "estimated_ratio_pct": round(est_ratio, 1),
         "ball_coverage_pct": round(ball_pct, 1),
+        # Gól-diagnózis: a felismert lövés-kísérletek (gól + lövés), a
+        # gólok, és a LÁTOTT labda hányada a kapuk előtti sávban — a
+        # "miért nincs gól" kérdés három száma.
+        "shot_attempts": attempts,
+        "goals_detected": goals,
+        "ball_near_goal_pct": round(near_goal_pct, 1),
         # Amit nem láttunk, csak PÓTOLTUNK (rövid hézagok lineáris
         # kitöltése) — külön szám, hogy a lefedettség ne tűnjön jobbnak.
         "ball_filled_pct": round(100.0 * ball_filled / n, 1),

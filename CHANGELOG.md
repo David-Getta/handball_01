@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **Gól-diagnózis: miért nincs gól** (minőség-jelentés + app): a
+  "Gyanúsan kevés gól" figyelmeztetés eddig mindig azt tanácsolta, hogy
+  a lövésként jelölt gólokat javítsd gólra — de gól nélküli meccsen
+  jellemzően lövés sincs, tehát nincs mit javítani. Most a jelentés
+  szétválasztja a három okot: a lövéseket látta, a gólt nem (a régi
+  tanács); a labdát a kapuk előtt (9 m-en belül) szinte sosem látta (a
+  felvétel vagy a kalibráció a gond: látszik-e a kapu, ér-e a
+  kalibráció a kapukig); vagy a kapu előtt látta, de lövést alig mért
+  (a gyors lövés-labdát hagyja ki: "Pontos" profil, addig kézi
+  "Hiányzó gól"). A meccs-nézet minőség-ablaka a három számot is
+  mutatja (lövés-kísérlet, gól, labda a kapuk előtt).
+
 - **Javítások (kód-áttekintés)**: a feldolgozás végén a még futó
   háttér-mentést nem várjuk meg (a végső utómunka azonnal indul, a
   haladás nem áll), és egy késő vagy hiba utáni részeredmény sem írhat a

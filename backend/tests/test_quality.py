@@ -426,9 +426,88 @@ def test_gyanusan_keves_gol_figyelmeztetes_es_teendo():
     r = compute_quality_report(Match(_meta(fps), frames))
     kevés = [w for w in r["warnings"] if "kevés gól" in w]
     assert kevés, r["warnings"]
-    assert "GÓL volt" in kevés[0], "a figyelmeztetés nem mondja meg, hol javítható"
+    # A labda végig a félpályán állt: a kapuk előtt sosem látta — az ok
+    # ez, nem a gól-döntés (nincs mit "Ez GÓL volt"-ra javítani).
+    assert "a kapuk előtt szinte sosem látta" in kevés[0]
+    assert "GÓL volt" not in kevés[0]
     # A teendő-lista is ismeri (különben a rangsorolás átugorná).
     assert next_action(kevés) is not None
+    assert "kapu" in next_action(kevés)
+    assert r["shot_attempts"] == 0 and r["goals_detected"] == 0
+    assert r["ball_near_goal_pct"] == 0.0
+
+
+def _lovos_match(lovesek: int, percek: float, fps: float = 25.0,
+                 kapu_elott_s: float = 0.0):
+    """Szintetikus meccs gól NÉLKÜL: a labda a félpályán áll, de
+    `lovesek`-szer gyorsan a kapu felé tart és a kapus mellett elmegy
+    (a kapufákon kívül), illetve `kapu_elott_s` másodpercig lassan
+    a kapu előtt (9 m-en belül) mozog."""
+    from handball.pipeline.calibration import COURT_WIDTH_M
+
+    frames = []
+    t = 0
+    for _ in range(lovesek):
+        # Lövés: 6 kocka alatt a 10 m-ről a 0,5 m-re (~40 m/s), a
+        # kapufákon kívül (y = 2 m) — nem gól.
+        for k in range(6):
+            frames.append(Frame(t=t, players=[_pl(i) for i in range(14)],
+                                ball=Ball(x=10.0 - 1.6 * k, y=2.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * fps)):
+            frames.append(Frame(t=t, players=[_pl(i) for i in range(14)],
+                                ball=Ball(x=20.0, y=COURT_WIDTH_M / 2,
+                                          confidence=1.0)))
+            t += 1
+    for k in range(int(kapu_elott_s * fps)):
+        frames.append(Frame(t=t, players=[_pl(i) for i in range(14)],
+                            ball=Ball(x=7.0 + (k % 10) * 0.01, y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    while t < int(percek * 60 * fps):
+        frames.append(Frame(t=t, players=[_pl(i) for i in range(14)],
+                            ball=Ball(x=20.0, y=COURT_WIDTH_M / 2,
+                                      confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_gol_diagnozis_lovest_latott_golt_nem():
+    """Ha a lövéseket látta, a gólt nem: a gól-döntés hibázik — a régi,
+    "Ez GÓL volt" tanács a helyes."""
+    from handball.pipeline.quality import (GOALS_RATE_MIN_MINUTES,
+                                           SHOTS_PER_MIN_LOW, next_action)
+
+    percek = GOALS_RATE_MIN_MINUTES + 2
+    lov = int(SHOTS_PER_MIN_LOW * percek) + 4
+    r = compute_quality_report(_lovos_match(lov, percek))
+    kevés = [w for w in r["warnings"] if "kevés gól" in w]
+    assert kevés, r["warnings"]
+    assert r["shot_attempts"] >= int(SHOTS_PER_MIN_LOW * percek)
+    assert r["goals_detected"] == 0
+    assert "A lövéseket látta" in kevés[0] and "GÓL volt" in kevés[0]
+    assert "lövésként jelölt gólokat" in next_action(kevés)
+
+
+def test_gol_diagnozis_kapu_elott_latta_de_lovest_nem():
+    """A labdát a kapu előtt látta, de lövést alig mért: a gyors
+    lövés-labdát hagyja ki — a "Pontos" profil és a kézi "Hiányzó gól"
+    a teendő, nem az "Ez GÓL volt" (nincs mit javítani)."""
+    from handball.pipeline.quality import (GOAL_ZONE_BALL_LOW_PCT,
+                                           GOALS_RATE_MIN_MINUTES,
+                                           next_action)
+
+    percek = GOALS_RATE_MIN_MINUTES + 2
+    # A meccsidő ~20%-a a kapu előtt — bőven a küszöb fölött.
+    m = _lovos_match(0, percek, kapu_elott_s=percek * 60 * 0.2)
+    r = compute_quality_report(m)
+    assert r["ball_near_goal_pct"] > GOAL_ZONE_BALL_LOW_PCT
+    kevés = [w for w in r["warnings"] if "kevés gól" in w]
+    assert kevés and "lövést is alig mért" in kevés[0]
+    assert "GÓL volt" not in kevés[0]
+    assert "Pontos" in next_action(kevés)
+    assert "Hiányzó gól" in next_action(kevés)
 
 
 def test_rovid_felvetelre_nem_szol_a_gol_arany():

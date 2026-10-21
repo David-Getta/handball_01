@@ -1049,7 +1049,8 @@ class _MatchScreenState extends State<MatchScreen> {
                   ? "demó adat"
                   : nincsGol
                   ? "a felismerés ezen a felvételen nem talált gólt — ez nem "
-                      "a valódi eredmény; add meg a Kezdőlapon a kártya ✎ "
+                      "a valódi eredmény (az okot a minőség-jelentés "
+                      "mondja meg); add meg a Kezdőlapon a kártya ✎ "
                       "gombjával"
                   : _overrides.isEmpty
                       ? "a felismerés szerint — ha nem stimmel, a "
@@ -2831,6 +2832,15 @@ class _MatchScreenState extends State<MatchScreen> {
                 "${q["ball_filled_pct"] != null
                     ? " (+${q["ball_filled_pct"]}% pótolt)" : ""}",
                 style: AppText.label),
+            // Gól-diagnózis (a motor quality.py-jával azonos mezők): a
+            // "miért nincs gól" három száma — lövés-kísérlet, gól, és a
+            // látott labda hányada a kapuk előtt (9 m-en belül).
+            if (q["shot_attempts"] != null)
+              Text(
+                  "Lövés-kísérlet: ${q["shot_attempts"]} "
+                  "(ebből gól: ${q["goals_detected"] ?? 0}) · labda a "
+                  "kapuk előtt: ${q["ball_near_goal_pct"] ?? 0}%",
+                  style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
             Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
             // A pályán kívülre vetülő mérések aránya: ez az elcsúszott

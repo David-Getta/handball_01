@@ -3518,3 +3518,23 @@ def test_a_gol_nelkuli_hosszu_felvetel_nem_0_0():
     assert "? : ? (a felismerés nem talált gólt)" in kezdo
     assert kezdo.count('m["real_goals_away"] == null))') >= 1
     assert "_eventsOk &&" in meccs and "eventsOk = true;" in meccs
+
+
+def test_a_minoseg_ablak_mutatja_a_gol_diagnozist():
+    """A gól nélküli meccsnél a "miért" három száma (lövés-kísérlet, gól,
+    labda a kapuk előtt) a meccs-nézet minőség-ablakában is látszik — a
+    motor mezőneveivel (egy elgépelt név némán üres sort adna)."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    import inspect
+
+    from handball.pipeline import quality
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    src = inspect.getsource(quality.compute_quality_report)
+    for mezo in ("shot_attempts", "goals_detected", "ball_near_goal_pct"):
+        assert f'q["{mezo}"]' in meccs
+        assert f'"{mezo}"' in src
+    assert "minőség-jelentés" in meccs
