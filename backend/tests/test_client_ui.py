@@ -3556,3 +3556,17 @@ def test_a_kozepkezdesbol_kovetkeztetett_gol_jelolve_van():
     assert '?["goal_source"]) == "középkezdés"' in meccs
     src = inspect.getsource(ed.throw_off_goals)
     assert '"goal_source"' in src and '"középkezdés"' in src
+
+
+def test_a_kezdolap_jelzi_a_kovetkeztetett_eredmenyt():
+    """A meccs-kártya jelzi, ha az eredmény részben a középkezdésből
+    következtetett — a motor library-kivonatának mezőnevével."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert 'sum["goals_inferred"]' in kezdo
+    app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+               / "app.py").read_text(encoding="utf-8")
+    assert '"goals_inferred": goals_inferred' in app_src

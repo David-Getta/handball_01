@@ -7789,9 +7789,15 @@ def create_app():
         from ..pipeline.event_detection import EventType, detect_shots
         fps = m.meta.fps if m.meta.fps > 0 else 25.0
         goals_home = goals_away = shots = saves = 0
+        # A gól utáni középkezdésből KÖVETKEZTETETT gólok (nem a
+        # gólvonalon látottak) — a kártya jelzi, ha az eredmény részben
+        # ilyen.
+        goals_inferred = 0
         try:
             for e in detect_shots(m):
                 if e.type == EventType.GOAL:
+                    if (e.detail or {}).get("goal_source") == "középkezdés":
+                        goals_inferred += 1
                     if e.team == Team.HOME:
                         goals_home += 1
                     else:
@@ -7960,6 +7966,7 @@ def create_app():
             "duration_s": round(len(m.frames) / fps, 1),
             "goals_home": goals_home,
             "goals_away": goals_away,
+            "goals_inferred": goals_inferred,
             "shots": shots,
             "saves": saves,
             "distance_m": round(distance_m, 1),

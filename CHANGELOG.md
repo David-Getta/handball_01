@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.180 óta)
+
+- **A kezdőlap jelzi a részben következtetett eredményt** (app): a
+  középkezdésből következtetett gól eddig csak a meccs-nézetben volt
+  jelölve — a kezdőlap kártyáján, ahol az edző az eredményt először
+  látja, semmi nem mutatta. Most a kártya eredménye mellett egy halvány
+  ↻ jelzi, hány gól következtetett (a gólvonalat nem láttuk), és hogy a
+  valódi eredmény a ✎ gombbal adható meg.
+
 ## v0.1.180 — kiadva (2026-10-21)
 
 > Kiadás-jegyzet: a középkezdésből következtetett gól, ha magát a

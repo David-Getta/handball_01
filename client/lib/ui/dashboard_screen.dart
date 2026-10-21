@@ -3871,6 +3871,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text("${sum["goals_home"]} : ${sum["goals_away"]}",
                             style: AppText.value.copyWith(
                                 fontSize: 15, color: AppColors.gold)),
+                      // A középkezdésből következtetett gólok (motor:
+                      // library-kivonat goals_inferred): az eredmény egy
+                      // része nem a gólvonalon látott gól — jelezzük.
+                      if (((sum["goals_inferred"] as num?) ?? 0) > 0 &&
+                          !goalsLookMissing(sum["goals_home"] as num?,
+                              sum["goals_away"] as num?, durS))
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Tooltip(
+                            message: "${sum["goals_inferred"]} gól a gól "
+                                "utáni középkezdésből következtetve (a "
+                                "gólvonalat nem láttuk). Ha a valódi "
+                                "eredményt ismered, add meg a ✎ gombbal.",
+                            child: Icon(Icons.restart_alt,
+                                size: 14, color: AppColors.textFaint),
+                          ),
+                        ),
                       ..._resultBadge(sum),
                       ..._realScoreLabel(m, sum),
                     ],

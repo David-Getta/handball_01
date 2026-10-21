@@ -49,6 +49,29 @@ def _client_with_matches(n: int = 2, duration_s: float = 3):
     return TestClient(create_app()), ids
 
 
+def test_a_kivonat_szamolja_a_kovetkeztetett_golokat():
+    """A könyvtár-kivonat meccs-sora a középkezdésből következtetett
+    gólok számát is adja (a kezdőlap kártyája ebből jelez)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_kk_fixture", Path(__file__).with_name("test_kozepkezdes.py"))
+    kk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kk)
+    _meccs = kk._meccs
+
+    client, _ids = _client_with_matches(0)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    m = _meccs()
+    m.meta.match_id = "kozepkezdes-1"
+    (matches_dir / "kozepkezdes-1.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    client = TestClient(create_app())
+    s = client.get("/library/summary").json()
+    sor = next(d for d in s["per_match"] if d["match_id"] == "kozepkezdes-1")
+    assert sor["goals_home"] == 1 and sor["goals_inferred"] == 1
+
+
 def test_summary_counts_and_per_match():
     client, ids = _client_with_matches(2)
     r = client.get("/library/summary")
