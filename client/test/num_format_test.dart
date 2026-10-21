@@ -30,6 +30,18 @@ void main() {
     }
   });
 
+  test("a 0:0 hosszú felvételen nem eredmény", () {
+    // 19 perc gól nélkül (a terepen látott kártya): nem eredmény.
+    expect(goalsLookMissing(0, 0, 19 * 60), isTrue);
+    expect(goalsLookMissing(null, null, 1760), isTrue);
+    // Rövid próba-feldolgozás: a 0:0 lehet valódi.
+    expect(goalsLookMissing(0, 0, 120), isFalse);
+    expect(goalsLookMissing(0, 0, goalsMissingMinS - 1), isFalse);
+    // Ha van gól, az eredmény (akár hibás is) a felismerésé.
+    expect(goalsLookMissing(1, 0, 3000), isFalse);
+    expect(goalsLookMissing(0, 0, null), isFalse);
+  });
+
   test("a figura befejezései a motor sorrendjében", () {
     expect(playbookOutcomeText(null), "");
     expect(playbookOutcomeText({}), "");

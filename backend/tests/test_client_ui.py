@@ -3494,3 +3494,22 @@ def test_a_kalibracio_a_kepen_kivuli_sarkot_is_engedi():
     assert "clamp(0.25, 1.0)" not in src
     assert "calibScaleStep(_imgScale, shrink: true)" in src
     assert ".any(calibCornerAtEdge)" in src and "a vászon szélén" in src
+
+
+def test_a_gol_nelkuli_hosszu_felvetel_nem_0_0():
+    """Terepen: mind a négy 19–29 perces meccs "0 : 0"-val állt a
+    kezdőlapon — a felismerés nem talált gólt, de a felület magabiztos
+    eredményként mutatta. 10 perc felett gól (és valódi eredmény)
+    nélkül a kártya és a meccs-nézet "? : ?"-t mutat, magyarázattal."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    nf = (lib / "ui" / "num_format.dart").read_text(encoding="utf-8")
+    assert "const double goalsMissingMinS = 600;" in nf
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "goalsLookMissing(" in kezdo and '"? : ?"' in kezdo
+    assert "goalsLookMissing(" in meccs and '"? – ?"' in meccs
+    # (a forrásban a mondat több sztring-darabban áll)
+    assert "talált gólt" in kezdo and "talált gólt" in meccs

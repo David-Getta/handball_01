@@ -3838,9 +3838,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(away, style: AppText.value.copyWith(fontSize: 17, color: AppColors.away)),
                     if (sum != null) ...[
                       const SizedBox(width: AppSpacing.md),
-                      Text("${sum["goals_home"]} : ${sum["goals_away"]}",
-                          style: AppText.value.copyWith(
-                              fontSize: 15, color: AppColors.gold)),
+                      // Hosszú felvételen gól nélkül a "0 : 0" nem eredmény
+                      // (num_format.goalsLookMissing) — kimondjuk, és
+                      // megmondjuk a teendőt.
+                      if (goalsLookMissing(sum["goals_home"] as num?,
+                              sum["goals_away"] as num?, durS) &&
+                          m["real_goals_home"] == null)
+                        Tooltip(
+                          message: "A felismerés ezen a felvételen nem "
+                              "talált gólt — ez nem a valódi eredmény "
+                              "(${totalS ~/ 60} perc alatt gól nélkül "
+                              "nem lehet). Add meg a valódi eredményt a ✎ "
+                              "gombbal: a jelentés és a trend azzal számol.",
+                          child: Text("? : ?",
+                              style: AppText.value.copyWith(
+                                  fontSize: 15, color: AppColors.textFaint)),
+                        )
+                      else
+                        Text("${sum["goals_home"]} : ${sum["goals_away"]}",
+                            style: AppText.value.copyWith(
+                                fontSize: 15, color: AppColors.gold)),
                       ..._resultBadge(sum),
                       ..._realScoreLabel(m, sum),
                     ],

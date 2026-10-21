@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **A 0:0 nem eredmény** (app): a kezdőlapon a 19–29 perces valódi
+  meccsek "0 : 0"-val álltak — a felismerés ezeken a felvételeken nem
+  talált gólt, de a felület magabiztos eredményként mutatta (egy
+  kézilabdameccsen percenként nagyjából egy gól esik). Most 10 perc
+  fölött, gól és megadott valódi eredmény nélkül a kártya és a
+  meccs-nézet eredmény-sávja "? : ?"-t mutat, a magyarázattal és a
+  teendővel (a valódi eredmény a kártya ✎ gombjával adható meg).
+
 - **Gyorsabb kiadás-build** (csomagolás): a kiadás tesztlépése
   párhuzamosan fut (4 munkás) — sorban ~20 perc volt, és a telepítők
   csak utána készültek.

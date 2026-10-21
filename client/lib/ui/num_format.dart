@@ -59,6 +59,17 @@ String formatClock(double s) {
   return ora > 0 ? "$ora:${perc.toString().padLeft(2, "0")}:$mp" : "$perc:$mp";
 }
 
+/// Ennél hosszabb (mp) felvételen a gól nélküli felismerés nem eredmény:
+/// egy kézilabdameccsen percenként nagyjából egy gól esik, 10 perc
+/// felett a 0:0 gyakorlatilag lehetetlen.
+const double goalsMissingMinS = 600;
+
+/// Igaz, ha a felismerés a felvételen nem talált gólt, pedig a hossza
+/// alapján kellett volna — ilyenkor a felület ne "0 : 0"-t mutasson.
+bool goalsLookMissing(num? goalsHome, num? goalsAway, num? durationS) =>
+    (goalsHome ?? 0) + (goalsAway ?? 0) == 0 &&
+    (durationS ?? 0) >= goalsMissingMinS;
+
 /// [v] [digits] tizedesre kerekítve, tizedesvesszővel.
 String huNum(num v, [int digits = 1]) =>
     v.toStringAsFixed(digits).replaceAll(".", ",");

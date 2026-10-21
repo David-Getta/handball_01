@@ -983,6 +983,12 @@ class _MatchScreenState extends State<MatchScreen> {
       }
     }
     final demo = _sourceLabel == "demó";
+    // Hosszú felvételen gól nélkül a "0 – 0" nem eredmény: a felismerés
+    // nem találta meg a gólokat (num_format.goalsLookMissing).
+    final nincsGol = !demo &&
+        match.meta.realGoalsHome == null &&
+        goalsLookMissing(hazai, vendeg,
+            match.meta.fps > 0 ? match.frames.length / match.meta.fps : 0);
     return Container(
       margin: const EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
@@ -1000,7 +1006,10 @@ class _MatchScreenState extends State<MatchScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text("$hazai – $vendeg", style: AppText.statBig),
+            Text(nincsGol ? "? – ?" : "$hazai – $vendeg",
+                style: nincsGol
+                    ? AppText.statBig.copyWith(color: AppColors.textFaint)
+                    : AppText.statBig),
             // A VALÓDI (jegyzőkönyvi) eredmény a felismert alatt — ha
             // az edző megadta a könyvtár ceruza-párbeszédében. Nagy
             // eltérésnél arany: a minőség-jelentés mondja a teendőt.
@@ -1030,15 +1039,19 @@ class _MatchScreenState extends State<MatchScreen> {
           child: Text(
               demo
                   ? "demó adat"
+                  : nincsGol
+                  ? "a felismerés ezen a felvételen nem talált gólt — ez nem "
+                      "a valódi eredmény; add meg a Kezdőlapon a kártya ✎ "
+                      "gombjával"
                   : _overrides.isEmpty
                       ? "a felismerés szerint — ha nem stimmel, a "
                           "sorok ⋮ menüjében javítható"
                       : "${_overrides.length} kézi javítással",
               style: AppText.label.copyWith(
                   fontSize: 11.5,
-                  color: _overrides.isEmpty
-                      ? AppColors.textFaint
-                      : AppColors.gold)),
+                  color: nincsGol || _overrides.isNotEmpty
+                      ? AppColors.gold
+                      : AppColors.textFaint)),
         ),
       ]),
     );
