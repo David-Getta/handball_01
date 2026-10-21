@@ -57,10 +57,12 @@ jobs:
       - name: Teszt-függőségek
         # A fastapi+httpx nélkül az API-őrök (fiókok, réteg-regisztry,
         # könyvtár, csomag) modul-szinten, NÉMÁN kimaradnának.
-        run: pip install pytest numpy opencv-python-headless fastapi httpx
+        run: pip install pytest pytest-xdist numpy opencv-python-headless fastapi httpx
       - name: Backend tesztek
+        # Párhuzamosan (4 munkás — a futtatónak ennyi magja van): sorban
+        # ~20 perc volt, és a csomagoló jobok csak utána indulnak.
         working-directory: backend
-        run: python -m pytest -q
+        run: python -m pytest -q -n 4
 
   # A teljes Windows-telepítő legyártása.
   windows-installer:

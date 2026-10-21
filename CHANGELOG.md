@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **Gyorsabb kiadás-build** (csomagolás): a kiadás tesztlépése
+  párhuzamosan fut (4 munkás) — sorban ~20 perc volt, és a telepítők
+  csak utána készültek.
+
 - **Az ellenőrző-mentés a háttérben fut** (motor): az időszakos
   ellenőrző-mentés a teljes utómunkát futtatja az addig feldolgozott
   kockákra — egy teljes meccs vége felé ez percekig tart, és eddig a

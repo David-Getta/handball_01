@@ -120,6 +120,14 @@ def test_a_becsomagolt_motor_valodi_feldolgozast_is_futtat():
         assert kell in smoke, f"a füstteszt nem a kliens kérésével fut: {kell}"
 
 
+def test_a_kiadas_tesztlepese_parhuzamosan_fut():
+    """ŐR: a kiadás-build tesztlépése pytest-xdisttel, 4 munkással fut —
+    sorban ~20 perc volt, és a csomagoló jobok csak utána indulnak."""
+    src = _workflow()
+    assert "pip install pytest pytest-xdist" in src
+    assert "run: python -m pytest -q -n 4" in src
+
+
 def test_a_kiadas_fuggosegei_rogzitve_vannak():
     """ŐR: a kiadás-build a packaging/constraints-release.txt-vel telepít —
     a backend[ml] csak alsó korlátot ad, így a build eddig mindig a
