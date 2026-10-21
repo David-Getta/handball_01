@@ -138,6 +138,38 @@ def test_a_checkpoint_a_hatterben_fut_es_nem_allitja_a_haladast(tmp_path):
     assert max(b - a for a, b in zip(b_idok, b_idok[1:])) < 0.4
 
 
+def test_a_hatter_mentes_a_szavazo_pillanatkepevel_dolgozik(tmp_path,
+                                                            monkeypatch):
+    """A háttér-mentés a mezszám-szavazó MÁSOLATÁVAL számol (az élőt a
+    detektálás szála közben is írja — a szótár bejárása elbukhatna); a
+    végső utómunka az élő szavazót használja."""
+    import threading
+
+    from handball.pipeline import jersey_ocr
+
+    video = tmp_path / "mini8.mp4"
+    _tiny_video(video, frames=30)
+    hivasok: list[tuple[int, str]] = []
+    eredeti = jersey_ocr.JerseyVoter.decisions
+
+    def figyelt(self):
+        hivasok.append((id(self), threading.current_thread().name))
+        return eredeti(self)
+
+    monkeypatch.setattr(jersey_ocr.JerseyVoter, "decisions", figyelt)
+    saved: list[Match] = []
+    m = process(str(video), None, weights=None, stride=1, max_frames=100,
+                jersey_ocr=True, checkpoint_save=saved.append,
+                checkpoint_every_s=0.0)
+    assert len(m.frames) == 30 and saved
+    fo = threading.current_thread().name
+    hatter = {v for v, sz in hivasok if sz != fo}
+    elo = {v for v, sz in hivasok if sz == fo}
+    assert hatter and elo
+    # A háttérben mindig másolat — sosem az élő szavazó.
+    assert not (hatter & elo)
+
+
 def test_no_checkpoint_by_default(tmp_path):
     """checkpoint_save nélkül (alapértelmezés) nincs időszakos mentés."""
     video = tmp_path / "mini6.mp4"

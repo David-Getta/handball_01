@@ -984,7 +984,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     raw: list = []
     all_colors: list = []
 
-    def _finalize(raw, all_colors, quiet=False, partial=False):
+    def _finalize(raw, all_colors, quiet=False, partial=False, voter=None):
         """A detektálás utáni TELJES utómunka: csapatszín, kalibráció,
         összefűzés, félidő, kapus, simítás, becslés → kész Match.
 
@@ -995,6 +995,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         def say(msg):
             if not quiet:
                 print(msg)
+
+        # A mezszám-szavazó: a háttér-mentés a PILLANATKÉPÉT adja (`voter`)
+        # — az élőt a detektálás szála közben is írja; a végső utómunka az
+        # élőt használja.
+        szavazo = jersey_voter if voter is None else voter
 
         def rep(stage, prog, msg):
             if not quiet:
@@ -1168,8 +1173,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         _stitch_rename: dict = {}
         stitched = stitch_tracks(
             match, colors_by_track=_colors_by_track,
-            jerseys_by_track=(jersey_voter.decisions()
-                              if jersey_voter is not None else None),
+            jerseys_by_track=(szavazo.decisions()
+                              if szavazo is not None else None),
             rename_out=_stitch_rename)
         if stitched:
             say(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
@@ -1245,17 +1250,17 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 for tid, share in gks.items()))
 
         # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
-        if jersey_voter is not None:
+        if szavazo is not None:
             from handball.pipeline.jersey_ocr import apply_jersey_decisions
             # Az összefűzésnél beolvadt trackek OCR-döntéseit a megmaradó
             # azonosítóra visszük át — eddig ezek elvesztek.
             decisions = {}
-            for tid, num in jersey_voter.decisions().items():
+            for tid, num in szavazo.decisions().items():
                 decisions[_stitch_rename.get(tid, tid)] = num
             n_ocr = apply_jersey_decisions(match, decisions)
             if n_ocr:
                 say(f"mezszám-OCR: {n_ocr} track kapott számot "
-                      f"({jersey_voter.decisions()})")
+                      f"({szavazo.decisions()})")
 
         # Kispad- és néző-szűrés: a pálya-régió tűréssávjában ÜL a
         # cserepad és a nézők első sora — az egy helyben ülő, végig a
@@ -1315,11 +1320,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # a következő legkorábban CHECKPOINT_GAP_FACTOR × az előző hossza után.
     _cp = {"last": _time.time(), "thread": None, "dur": 0.0}
 
-    def _checkpoint_hatter(raw_snap, colors_snap, kept):
+    def _checkpoint_hatter(raw_snap, colors_snap, kept, voter_snap):
         t0 = _time.time()
         try:
             checkpoint_save(_finalize(raw_snap, colors_snap, quiet=True,
-                                      partial=True))
+                                      partial=True, voter=voter_snap))
             print(f"checkpoint: részeredmény mentve ({kept} kocka, "
                   f"{_time.time() - t0:.0f} mp)")
         except Exception as e:  # a mentés hibája nem állíthatja le a futást
@@ -1367,11 +1372,15 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 and (th is None or not th.is_alive())
                 and _time.time() - _cp["last"] >= max(
                     checkpoint_every_s, CHECKPOINT_GAP_FACTOR * _cp["dur"])):
+            import copy as _copy
             import threading as _threading
             _cp["last"] = _time.time()
+            # A mezszám-szavazó pillanatképe IT, a detektálás szálán készül:
+            # a háttér-mentés alatt az élőt a detektálás tovább írja.
             th = _threading.Thread(
                 target=_checkpoint_hatter,
-                args=(list(raw), list(all_colors), kept), daemon=True)
+                args=(list(raw), list(all_colors), kept,
+                      _copy.deepcopy(jersey_voter)), daemon=True)
             _cp["thread"] = th
             th.start()
 

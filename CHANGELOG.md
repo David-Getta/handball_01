@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **Háttér-mentés a mezszám-szavazó pillanatképével** (motor): a
+  háttérben futó ellenőrző-mentés a mezszám-szavazót közösen olvasta a
+  detektálással, amely közben írja — bekapcsolt mezszám-felismerésnél a
+  mentés így időnként elbukhatott volna. Most a mentés indításakor a
+  szavazóról másolat készül, és a háttér-mentés azzal számol.
+
 - **A 0:0 nem eredmény** (app): a kezdőlapon a 19–29 perces valódi
   meccsek "0 : 0"-val álltak — a felismerés ezeken a felvételeken nem
   talált gólt, de a felület magabiztos eredményként mutatta (egy
