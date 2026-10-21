@@ -3513,3 +3513,8 @@ def test_a_gol_nelkuli_hosszu_felvetel_nem_0_0():
     assert "goalsLookMissing(" in meccs and '"? – ?"' in meccs
     # (a forrásban a mondat több sztring-darabban áll)
     assert "talált gólt" in kezdo and "talált gólt" in meccs
+    # Az összevetésben is; mindkét valódi gól kell; betöltési hibánál
+    # (üres esemény-lista) a meccs-nézet nem ítél.
+    assert "? : ? (a felismerés nem talált gólt)" in kezdo
+    assert kezdo.count('m["real_goals_away"] == null))') >= 1
+    assert "_eventsOk &&" in meccs and "eventsOk = true;" in meccs

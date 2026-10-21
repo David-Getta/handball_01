@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **Javítások (kód-áttekintés)**: a feldolgozás végén a még futó
+  háttér-mentést nem várjuk meg (a végső utómunka azonnal indul, a
+  haladás nem áll), és egy késő vagy hiba utáni részeredmény sem írhat a
+  végeredmény fölé; a mentések közti köz legfeljebb 10 perc; a "? : ?" a
+  meccs-összevetésben is; a meccs-nézet csak betöltött eseményekből
+  mondja, hogy nem volt gól; a kiadás-build tesztlépése a futtató
+  magszámával fut.
+
 - **Háttér-mentés a mezszám-szavazó pillanatképével** (motor): a
   háttérben futó ellenőrző-mentés a mezszám-szavazót közösen olvasta a
   detektálással, amely közben írja — bekapcsolt mezszám-felismerésnél a

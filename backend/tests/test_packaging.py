@@ -121,11 +121,12 @@ def test_a_becsomagolt_motor_valodi_feldolgozast_is_futtat():
 
 
 def test_a_kiadas_tesztlepese_parhuzamosan_fut():
-    """ŐR: a kiadás-build tesztlépése pytest-xdisttel, 4 munkással fut —
-    sorban ~20 perc volt, és a csomagoló jobok csak utána indulnak."""
+    """ŐR: a kiadás-build tesztlépése pytest-xdisttel, a futtató
+    magszámának megfelelő munkással fut — sorban ~20 perc volt, és a
+    csomagoló jobok csak utána indulnak."""
     src = _workflow()
     assert "pip install pytest pytest-xdist" in src
-    assert "run: python -m pytest -q -n 4" in src
+    assert "run: python -m pytest -q -n auto" in src
 
 
 def test_a_kiadas_fuggosegei_rogzitve_vannak():

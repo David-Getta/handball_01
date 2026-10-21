@@ -1188,11 +1188,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final d = (v as num).toDouble();
       return d > 0 ? "−${d.toStringAsFixed(0)}%" : "+${(-d).toStringAsFixed(0)}%";
     }
-    List<List<String>> rows(Map<String, dynamic> m) => [
+    // A meccs hossza a könyvtár-sorból (az összevetés-kivonatban nincs):
+    // gól nélküli hosszú felvételen a "0 : 0" nem eredmény.
+    double hossz(String? mid) =>
+        ((_matches.firstWhere((x) => x["match_id"] == mid,
+                    orElse: () => const {})["duration_s"] as num?) ??
+                0)
+            .toDouble();
+    List<List<String>> rows(Map<String, dynamic> m, String? mid) => [
           [
             "Eredmény",
-            "${m["goals_home"]} : ${m["goals_away"]}"
-                "${m["real_goals_home"] != null && m["real_goals_away"] != null ? " (valódi ${m["real_goals_home"]} : ${m["real_goals_away"]})" : ""}"
+            (goalsLookMissing(m["goals_home"] as num?,
+                        m["goals_away"] as num?, hossz(mid)) &&
+                    (m["real_goals_home"] == null ||
+                        m["real_goals_away"] == null))
+                ? "? : ? (a felismerés nem talált gólt)"
+                : "${m["goals_home"]} : ${m["goals_away"]}"
+                    "${m["real_goals_home"] != null && m["real_goals_away"] != null ? " (valódi ${m["real_goals_home"]} : ${m["real_goals_away"]})" : ""}"
           ],
           ["További lövések", fmt(m["shots"])],
           ["Védések", fmt(m["saves"])],
@@ -1289,8 +1301,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "${huNum(((m["duration_s"] as num?) ?? 0) / 60)} perc"
           ],
         ];
-    final ra = rows(a);
-    final rb = rows(b);
+    final ra = rows(a, aId);
+    final rb = rows(b, bId);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -3843,7 +3855,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       // megmondjuk a teendőt.
                       if (goalsLookMissing(sum["goals_home"] as num?,
                               sum["goals_away"] as num?, durS) &&
-                          m["real_goals_home"] == null)
+                          (m["real_goals_home"] == null ||
+                              m["real_goals_away"] == null))
                         Tooltip(
                           message: "A felismerés ezen a felvételen nem "
                               "talált gólt — ez nem a valódi eredmény "

@@ -72,6 +72,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
   // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
   List<Map<String, dynamic>> _events = [];
+  // Betöltődtek-e az események (betöltési hibánál az üres lista nem azt
+  // jelenti, hogy nem volt gól — az eredmény-sáv ilyenkor nem ítél).
+  bool _eventsOk = false;
   // KÉZI esemény-javítások: amit az edző a felismerésen kijavít. A
   // felismerés téved (gólt lövésnek lát, lövést nem vesz észre), az edző
   // pedig egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi el.
@@ -195,6 +198,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Match match;
     String label;
     List<Map<String, dynamic>> events = [];
+    var eventsOk = false;
     Map<String, dynamic>? quality;
     Map<String, dynamic>? keyPlayers;
     List<dynamic> keyMoments = const [];
@@ -261,6 +265,7 @@ class _MatchScreenState extends State<MatchScreen> {
         if (_mid != "sim-0") unawaited(SessionStore.setLastMatchId(_mid));
         try {
           events = await _api.fetchEvents(_mid);
+          eventsOk = true;
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
         }
@@ -389,6 +394,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _intensity = computeIntensityTimeline(match);
       _formations = computeFormationTimeline(match);
       _events = events;
+      _eventsOk = eventsOk;
       _overrides = overrides;
       _shots = _computeShotMarkers(match, events, xgByT, freeByT);
       _xgByT = xgByT;
@@ -986,7 +992,9 @@ class _MatchScreenState extends State<MatchScreen> {
     // Hosszú felvételen gól nélkül a "0 – 0" nem eredmény: a felismerés
     // nem találta meg a gólokat (num_format.goalsLookMissing).
     final nincsGol = !demo &&
-        match.meta.realGoalsHome == null &&
+        _eventsOk &&
+        (match.meta.realGoalsHome == null ||
+            match.meta.realGoalsAway == null) &&
         goalsLookMissing(hazai, vendeg,
             match.meta.fps > 0 ? match.frames.length / match.meta.fps : 0);
     return Container(

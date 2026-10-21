@@ -184,6 +184,10 @@ ENRICH_MAX_TIMEOUTS = 3
 # az előző mentés hossza után indul — a meccs vége felé a mentés percekig
 # tart, és nem eheti meg a gépet a detektálás elől.
 CHECKPOINT_GAP_FACTOR = 3.0
+# A két mentés közti köz felső korlátja (mp): a GIL-versenyben nyúló
+# mentés nem tolhatja ki a következőt — egy összeomlás legfeljebb ennyi
+# munkát vigyen el (plusz egy mentésnyit).
+CHECKPOINT_MAX_GAP_S = 600.0
 
 
 class TimeboxedEnricher:
@@ -984,7 +988,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     raw: list = []
     all_colors: list = []
 
-    def _finalize(raw, all_colors, quiet=False, partial=False, voter=None):
+    def _finalize(raw, all_colors, quiet=False, partial=False,
+                  dontesek=None):
         """A detektálás utáni TELJES utómunka: csapatszín, kalibráció,
         összefűzés, félidő, kapus, simítás, becslés → kész Match.
 
@@ -996,10 +1001,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             if not quiet:
                 print(msg)
 
-        # A mezszám-szavazó: a háttér-mentés a PILLANATKÉPÉT adja (`voter`)
-        # — az élőt a detektálás szála közben is írja; a végső utómunka az
-        # élőt használja.
-        szavazo = jersey_voter if voter is None else voter
+        # A mezszám-döntések: a háttér-mentés a detektálás szálán SZÁMOLT
+        # döntéseket adja (`dontesek`) — a szavazót a detektálás közben is
+        # írja; a végső utómunka az élő szavazóból számol.
+        if dontesek is None and jersey_voter is not None:
+            dontesek = jersey_voter.decisions()
 
         def rep(stage, prog, msg):
             if not quiet:
@@ -1173,8 +1179,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         _stitch_rename: dict = {}
         stitched = stitch_tracks(
             match, colors_by_track=_colors_by_track,
-            jerseys_by_track=(szavazo.decisions()
-                              if szavazo is not None else None),
+            jerseys_by_track=dontesek,
             rename_out=_stitch_rename)
         if stitched:
             say(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
@@ -1250,17 +1255,17 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 for tid, share in gks.items()))
 
         # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
-        if szavazo is not None:
+        if dontesek is not None:
             from handball.pipeline.jersey_ocr import apply_jersey_decisions
             # Az összefűzésnél beolvadt trackek OCR-döntéseit a megmaradó
             # azonosítóra visszük át — eddig ezek elvesztek.
             decisions = {}
-            for tid, num in szavazo.decisions().items():
+            for tid, num in dontesek.items():
                 decisions[_stitch_rename.get(tid, tid)] = num
             n_ocr = apply_jersey_decisions(match, decisions)
             if n_ocr:
                 say(f"mezszám-OCR: {n_ocr} track kapott számot "
-                      f"({szavazo.decisions()})")
+                      f"({dontesek})")
 
         # Kispad- és néző-szűrés: a pálya-régió tűréssávjában ÜL a
         # cserepad és a nézők első sora — az egy helyben ülő, végig a
@@ -1318,13 +1323,23 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # A mentés külön szálon, a nyers listák PILLANATKÉPÉN fut (a kockák
     # tuple-jei elkészültük után nem változnak); amíg tart, nem indul új;
     # a következő legkorábban CHECKPOINT_GAP_FACTOR × az előző hossza után.
-    _cp = {"last": _time.time(), "thread": None, "dur": 0.0}
+    # `elavult`: a detektálás véget ért (vagy elbukott) — a még futó
+    # mentés eredménye már nem kell. A zár alatt dől el, hogy a mentés
+    # kiírja-e a részeredményt: így egy késő részeredmény sem kerülhet a
+    # végeredmény fölé, és hiba után sem ír a lezárt munkára.
+    import threading as _threading
+    _cp = {"last": _time.time(), "thread": None, "dur": 0.0,
+           "elavult": False, "zar": _threading.Lock()}
 
-    def _checkpoint_hatter(raw_snap, colors_snap, kept, voter_snap):
+    def _checkpoint_hatter(raw_snap, colors_snap, kept, dontesek_snap):
         t0 = _time.time()
         try:
-            checkpoint_save(_finalize(raw_snap, colors_snap, quiet=True,
-                                      partial=True, voter=voter_snap))
+            m_ = _finalize(raw_snap, colors_snap, quiet=True, partial=True,
+                           dontesek=dontesek_snap)
+            with _cp["zar"]:
+                if _cp["elavult"]:
+                    return  # a detektálás közben véget ért — nem kell
+                checkpoint_save(m_)
             print(f"checkpoint: részeredmény mentve ({kept} kocka, "
                   f"{_time.time() - t0:.0f} mp)")
         except Exception as e:  # a mentés hibája nem állíthatja le a futást
@@ -1371,16 +1386,18 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         if (checkpoint_save is not None and kept >= 10
                 and (th is None or not th.is_alive())
                 and _time.time() - _cp["last"] >= max(
-                    checkpoint_every_s, CHECKPOINT_GAP_FACTOR * _cp["dur"])):
-            import copy as _copy
-            import threading as _threading
+                    checkpoint_every_s,
+                    min(CHECKPOINT_GAP_FACTOR * _cp["dur"],
+                        CHECKPOINT_MAX_GAP_S))):
             _cp["last"] = _time.time()
-            # A mezszám-szavazó pillanatképe IT, a detektálás szálán készül:
-            # a háttér-mentés alatt az élőt a detektálás tovább írja.
+            # A mezszám-döntések IT, a detektálás szálán készülnek: a
+            # háttér-mentés alatt a szavazót a detektálás tovább írja.
             th = _threading.Thread(
                 target=_checkpoint_hatter,
                 args=(list(raw), list(all_colors), kept,
-                      _copy.deepcopy(jersey_voter)), daemon=True)
+                      (jersey_voter.decisions()
+                       if jersey_voter is not None else None)),
+                daemon=True)
             _cp["thread"] = th
             th.start()
 
@@ -1416,21 +1433,31 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             _fit_region = str(_c0.get("region") or "full")
         except Exception:
             _fit_h0 = None  # mérés nélkül is fut a feldolgozás
-    if weights:
-        # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
-        stalled = bool(_process_yolo(
-            video_path, weights, stride, max_frames, imgsz, conf,
-            court_poly, start=start, skip_dark=skip_dark,
-            on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
-            jersey_voter=jersey_voter, stop_check=stop_check,
-            raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
-            anchor_frames={int(c.get("frame", start)) for c in calib_list},
-            fit_h0=_fit_h0, fit_every=_fit_every,
-            fit_region=_fit_region))
-    else:
-        _process_hog(video_path, stride, max_frames, stop_check=stop_check,
-                     raw_out=raw, colors_out=all_colors, on_frame=on_frame,
-                     start=start)
+    try:
+        if weights:
+            # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz
+            # igazítunk).
+            stalled = bool(_process_yolo(
+                video_path, weights, stride, max_frames, imgsz, conf,
+                court_poly, start=start, skip_dark=skip_dark,
+                on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
+                jersey_voter=jersey_voter, stop_check=stop_check,
+                raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
+                anchor_frames={int(c.get("frame", start)) for c in calib_list},
+                fit_h0=_fit_h0, fit_every=_fit_every,
+                fit_region=_fit_region))
+        else:
+            _process_hog(video_path, stride, max_frames,
+                         stop_check=stop_check, raw_out=raw,
+                         colors_out=all_colors, on_frame=on_frame,
+                         start=start)
+    finally:
+        # A detektálás véget ért (vagy elbukott): a még futó háttér-mentés
+        # eredménye már nem kell — nem várjuk meg (a végső utómunka
+        # azonnal indul, a szívverés nem áll), és hiba után sem írhat a
+        # lezárt munkára. A zár csak egy épp zajló KIÍRÁST vár meg.
+        with _cp["zar"]:
+            _cp["elavult"] = True
     stopped = bool(stop_check is not None and stop_check())
     if stalled:
         # A beragadt olvasás megszakítva — a job-üzenet is mondja el, hogy
@@ -1439,11 +1466,6 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                f"a videó-olvasás elakadt {len(raw)} kocka után — az addigi "
                "rész feldolgozva, a meccs befejezetlenként mentve "
                "(a könyvtárból folytatható)")
-    # Egy még futó háttér-mentést megvárunk: a végeredmény mentése nem
-    # kerülhet egy KÉSŐ részeredmény alá.
-    _th = _cp.get("thread")
-    if _th is not None and _th.is_alive():
-        _th.join()
     match = _finalize(raw, all_colors, partial=stopped or stalled)
     # A horgonyzás-arány a meta-ba: a minőség-jelentés ebből mondja ki, ha
     # a svenkelés alatt a kalibrált képhez ritkán sikerült visszamérni.
