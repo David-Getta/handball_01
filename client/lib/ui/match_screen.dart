@@ -1448,6 +1448,20 @@ class _MatchScreenState extends State<MatchScreen> {
                   : "$team · gólpassz: ${_playerShort(match, assistId)}",
               style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
+          // A középkezdésből KÖVETKEZTETETT gól (motor: event_detection.
+          // throw_off_goals — a gólvonalat nem láttuk, a gól utáni
+          // középkezdést igen): az edző lássa, és ha téves, javítsa.
+          if (((e["detail"] as Map?)?["goal_source"]) == "középkezdés")
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tooltip(
+                message: "a gól utáni középkezdésből következtetve (a "
+                    "gólvonalat nem láttuk) — ha téves, a ⋮ menüben "
+                    "javítsd",
+                child: Icon(Icons.restart_alt,
+                    size: 13, color: AppColors.textFaint),
+              ),
+            ),
           // Kézi eredet jelölése: az edző lássa, mit írt felül ő maga.
           if (((e["detail"] as Map?)?["manual"]) == true)
             Padding(

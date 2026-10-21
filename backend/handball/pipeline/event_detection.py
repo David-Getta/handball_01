@@ -375,6 +375,268 @@ def goal_crossing_y(match: Match, idx: int, goal_x: float):
     return None
 
 
+# --- Gól a középkezdésből ---
+# Minden gólt középkezdés követ: a labda a felezővonal közepén ÁLL, és
+# mindkét csapat a saját térfelén van. A gól pillanatát (a gyors, takart
+# labdát a vonalon) ritkított, széles felvételen gyakran nem látjuk — a
+# középkezdést (álló, éles labda) igen. IDŐTARTAMOK másodpercben (a
+# termék ritkít), távolságok méterben.
+THROWOFF_STILL_S = 1.0       # ennyi ideig áll a labda a középen
+THROWOFF_ZONE_X_M = 2.5      # a felezővonaltól (x) ekkora sávban
+THROWOFF_ZONE_Y_M = 3.0      # a pálya hossztengelyétől (y) ekkora sávban
+THROWOFF_STILL_M = 1.5       # az ablakban a látott labda legfeljebb ennyit mozdul
+# Az ablak kockáinak legalább ekkora hányadán LÁTTUK (nem pótoltuk) a
+# labdát a középen — a kézben tartott labda néha takarásban van.
+THROWOFF_SEEN_PCT = 60.0
+THROWOFF_LOOKBACK_S = 45.0   # a kapu előtti labda és a középkezdés közti max idő
+THROWOFF_GOAL_ZONE_M = 9.0   # "kapu előtt": a gólvonaltól ennyin belül
+THROWOFF_MIN_PLAYERS = 4     # csapatonként legalább ennyi mért játékos kell
+THROWOFF_OWN_HALF_PCT = 70.0  # a csapat mért játékosainak ennyi %-a a saját térfelén
+THROWOFF_HALF_TOL_M = 1.0    # a felezővonalon álló játékos ennyi tűréssel "saját térfél"
+# A két csapat középpontja (medián x) legalább ennyire váljon el, a
+# helyes irányban: a középkezdésnél a gólt kapó csapat a saját
+# térfelén, a gólt szerző a saját kapuja előtt áll — az egy pontba
+# tömörülő (vagy összekeveredett) játékosok nem középkezdés.
+THROWOFF_TEAM_GAP_M = 4.0
+# A már felismert gól ennyivel a kapu előtti utolsó labda ELŐTT is
+# ugyanannak számít (a gól-esemény a kapu-megközelítés kockáján ül).
+THROWOFF_DEDUP_S = 3.0
+# A középkezdés után a gólt KAPÓ csapat támad: a labda ennyi időn belül
+# átér a gólt szerző térfelére (a felezővonalon ennyivel túl), MIELŐTT
+# újra a gól kapuja elé érne. Ez választja el a középkezdést a középen
+# megálló labdától (pl. ugyanaz a csapat újra ugyanarra a kapura megy).
+THROWOFF_FOLLOW_S = 15.0
+THROWOFF_FOLLOW_M = 3.0
+
+
+def _median(xs: list) -> float:
+    s = sorted(xs)
+    m = len(s) // 2
+    return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2.0
+
+
+def _throw_off_low_team(frame) -> Optional[Team]:
+    """A középkezdés felállása: melyik csapat áll az ALACSONY x
+    térfélen (a 0-s kapu térfelén), ha a két csapat a saját térfelén
+    áll — különben None.
+
+    Feltétel: csapatonként legalább THROWOFF_MIN_PLAYERS mért játékos,
+    a két medián x a felezővonal két oldalán, legalább
+    THROWOFF_TEAM_GAP_M-re egymástól, és mindkét csapat mért
+    játékosainak legalább THROWOFF_OWN_HALF_PCT százaléka a saját
+    térfelén (THROWOFF_HALF_TOL_M tűréssel)."""
+    from ..models.tracking import PositionSource
+
+    half = COURT_LENGTH_M / 2.0
+    xs = {Team.HOME: [], Team.AWAY: []}
+    for p in frame.players:
+        if p.source == PositionSource.MEASURED and p.team in xs:
+            xs[p.team].append(p.x)
+    if any(len(v) < THROWOFF_MIN_PLAYERS for v in xs.values()):
+        return None
+    lows = [t for t in (Team.HOME, Team.AWAY) if _median(xs[t]) < half]
+    if len(lows) != 1:
+        return None
+    low_team = lows[0]
+    high_team = Team.AWAY if low_team is Team.HOME else Team.HOME
+    if _median(xs[high_team]) - _median(xs[low_team]) < THROWOFF_TEAM_GAP_M:
+        return None
+    low_ok = (100.0 * sum(1 for x in xs[low_team]
+                          if x <= half + THROWOFF_HALF_TOL_M)
+              / len(xs[low_team]))
+    high_ok = (100.0 * sum(1 for x in xs[high_team]
+                           if x >= half - THROWOFF_HALF_TOL_M)
+               / len(xs[high_team]))
+    if low_ok < THROWOFF_OWN_HALF_PCT or high_ok < THROWOFF_OWN_HALF_PCT:
+        return None
+    return low_team
+
+
+def _throw_off_followed(frames, start: int, goal_x: float,
+                        follow_t: float) -> bool:
+    """A középkezdés UTÁN (a `start` indextől) a labda follow_t időn
+    belül átér-e a gólt szerző térfelére (THROWOFF_FOLLOW_M-rel a
+    felezővonalon túl), mielőtt a gól kapuja elé (THROWOFF_GOAL_ZONE_M)
+    érne. A gólt kapó csapat a középkezdés után támad — az ő
+    támadásuk a gólt szerző kapuja felé tart."""
+    half = COURT_LENGTH_M / 2.0
+    if start >= len(frames):
+        return False
+    t_end = frames[start].t + follow_t
+    for f in frames[start:]:
+        if f.t > t_end:
+            return False
+        b = f.ball
+        if b is None:
+            continue
+        if abs(b.x - goal_x) <= THROWOFF_GOAL_ZONE_M:
+            return False
+        if goal_x == COURT_LENGTH_M and b.x <= half - THROWOFF_FOLLOW_M:
+            return True
+        if goal_x == 0.0 and b.x >= half + THROWOFF_FOLLOW_M:
+            return True
+    return False
+
+
+def _in_center(b) -> bool:
+    return (abs(b.x - COURT_LENGTH_M / 2.0) <= THROWOFF_ZONE_X_M
+            and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
+
+
+def throw_off_goals(match: Match, events: list,
+                    config: Optional[TacticsConfig] = None) -> list:
+    """Gólok a középkezdésből: a lövés/gól lista kiegészítése.
+
+    Minden gólt középkezdés követ: a labda a felezővonal közepén áll
+    (legalább THROWOFF_STILL_S másodpercig, a látott labda alig
+    mozdul), és a két csapat a saját térfelén van. Ha ezt megelőzően,
+    THROWOFF_LOOKBACK_S másodpercen belül a labda az egyik kapu előtt
+    (THROWOFF_GOAL_ZONE_M) járt, ott gól esett — annak a kapunak a
+    támadója szerezte, és a középkezdést a gólt KAPÓ csapat végzi a
+    saját térfeléről (ez a felállás-ellenőrzés iránya).
+
+    Edzői olvasat: a gól pillanatát a széles, ritkított felvétel
+    gyakran nem mutatja (a labda gyors, a kapus és a háló takar) — a
+    gól nélküli "0 : 0" a jelentés minden számát hiteltelenné teszi. A
+    középkezdés jól látszik, ezért ez a gól második, független jele.
+
+    Visszaad: az új eseménylistát (időrendben). Az ablakban látott
+    lövést (nem gólt) gólra javítja, a már felismert gólt nem számolja
+    kétszer, különben új gólt vesz fel a kapu előtti utolsó labda
+    kockájára. A javított és az új esemény részletében
+    `goal_source: "középkezdés"` áll.
+    """
+    config = config or TacticsConfig()
+    frames = match.frames
+    n = len(frames)
+    if n == 0:
+        return events
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    from .ball_filter import INTERPOLATED_CONFIDENCE as _INTERP
+
+    still_n = max(2, int(round(THROWOFF_STILL_S * fps)))
+    look_t = THROWOFF_LOOKBACK_S * fps
+    # A félidő és a felvétel-darabok határa: a második félidő (vagy egy
+    # új darab) középkezdése nem az előző félidő utolsó támadásának a
+    # gólja — a kapu előtti labdának és a középkezdésnek UGYANABBAN a
+    # félidőben és darabban kell lennie.
+    hatarok: list = []
+    try:
+        from .halftime import detect_halftime
+        ht = detect_halftime(match)
+        if ht is not None:
+            hatarok.append(ht)
+    except Exception:
+        pass
+    for sz in (getattr(match.meta, "source_segments", None) or [])[1:]:
+        try:
+            hatarok.append(int(sz.get("t_from")))
+        except (TypeError, ValueError, AttributeError):
+            continue
+    dedup_t = THROWOFF_DEDUP_S * fps
+    out = list(events)
+    # A kapu előtti UTOLSÓ labda kapunként (kocka-index), és az utolsó
+    # felhasznált (egy kapu előtti szakaszból legfeljebb egy gól).
+    last_near: dict = {0.0: None, COURT_LENGTH_M: None}
+    used_near: set = set()
+    # A középkezdés egy álló szakasz: a labdának el kell hagynia a
+    # közepet, mielőtt újabb középkezdést keresünk.
+    var_kilepesre = False
+    i = 0
+    while i < n:
+        b = frames[i].ball
+        if b is not None:
+            if b.x <= THROWOFF_GOAL_ZONE_M:
+                last_near[0.0] = i
+            elif b.x >= COURT_LENGTH_M - THROWOFF_GOAL_ZONE_M:
+                last_near[COURT_LENGTH_M] = i
+            if var_kilepesre and not _in_center(b):
+                var_kilepesre = False
+        if (var_kilepesre or b is None or b.confidence <= _INTERP
+                or not _in_center(b) or i + still_n > n):
+            i += 1
+            continue
+        ablak = frames[i:i + still_n]
+        # Az ablakban a labda sehol sincs a közepen KÍVÜL, többnyire
+        # látjuk, és alig mozdul.
+        if any(f.ball is not None and not _in_center(f.ball) for f in ablak):
+            i += 1
+            continue
+        latott = [f.ball for f in ablak
+                  if f.ball is not None and f.ball.confidence > _INTERP]
+        if 100.0 * len(latott) / len(ablak) < THROWOFF_SEEN_PCT:
+            i += 1
+            continue
+        if (max(p.x for p in latott) - min(p.x for p in latott)
+                > THROWOFF_STILL_M
+                or max(p.y for p in latott) - min(p.y for p in latott)
+                > THROWOFF_STILL_M):
+            i += 1
+            continue
+        # Melyik kapu előtt járt utoljára a labda?
+        jeloltek = [(j, gx) for gx, j in last_near.items() if j is not None]
+        if not jeloltek:
+            i += 1
+            continue
+        j, goal_x = max(jeloltek)
+        t0 = frames[i].t
+        if j in used_near or t0 - frames[j].t > look_t:
+            i += 1
+            continue
+        if any(frames[j].t < h <= t0 for h in hatarok):
+            i += 1
+            continue
+        # A felállás: a gólt KAPÓ csapat a gól kapujának térfelén (a 0-s
+        # kapunál az alacsony x térfélen), a szerző a másikon.
+        low_team = _throw_off_low_team(frames[i + still_n // 2])
+        if low_team is None:
+            i += 1
+            continue
+        scorer = _attacking_team_for_goal(goal_x, config)
+        conceding = Team.AWAY if scorer is Team.HOME else Team.HOME
+        if (low_team is conceding) != (goal_x == 0.0):
+            i += 1
+            continue
+        if not _throw_off_followed(frames, i + still_n, goal_x,
+                                   THROWOFF_FOLLOW_S * fps):
+            i += 1
+            continue
+        used_near.add(j)
+        var_kilepesre = True
+        tj = frames[j].t
+        if any(e.type is EventType.GOAL and e.team is scorer
+               and tj - dedup_t <= e.t <= t0 for e in out):
+            i += still_n
+            continue
+        lovesek = [k for k, e in enumerate(out)
+                   if e.type is EventType.SHOT and e.team is scorer
+                   and t0 - look_t <= e.t <= t0]
+        if lovesek:
+            k = lovesek[-1]
+            regi = out[k]
+            reszlet = dict(regi.detail or {})
+            reszlet["outcome"] = "goal"
+            reszlet["goal_source"] = "középkezdés"
+            reszlet.pop("goalkeeper_id", None)
+            out[k] = MatchEvent(t=regi.t, type=EventType.GOAL,
+                                team=regi.team, player_id=regi.player_id,
+                                detail=reszlet)
+        else:
+            try:
+                shooter, release_t = _shooter_release_before(
+                    match, j, scorer, config, fps)
+            except Exception:
+                shooter, release_t = None, None
+            reszlet = {"outcome": "goal", "goal_source": "középkezdés"}
+            if release_t is not None:
+                reszlet["release_t"] = release_t
+            out.append(MatchEvent(t=tj, type=EventType.GOAL, team=scorer,
+                                  player_id=shooter, detail=reszlet))
+        i += still_n
+    out.sort(key=lambda e: e.t)
+    return out
+
+
 # Kézi esemény-javítás: ekkora IDŐ-ablakon belül tekintünk egy javítást
 # és egy felismert eseményt ugyanannak a pillanatnak. Másodpercben, mert
 # a kockaszám a minőségi profiltól függ (a ritkítás miatt a termékben
@@ -545,6 +807,12 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
             if dxg > APPROACH_X_M + 1.0:
                 in_zone[goal_x] = False
         prev = (b.x, b.y)
+    # A gól második, független jele: a gól utáni középkezdés. (Egy hiba
+    # itt nem viheti el a kinematikai felismerést.)
+    try:
+        events = throw_off_goals(match, events, config)
+    except Exception:
+        pass
     # A félidei szünet-sávba eső "lövés/gól" nem meccs-esemény (szünetben
     # nincs játék — az ilyen jel bemelegítés vagy labdaszedő), kimarad.
     # Csak HIHETŐ szünetnél (a felvétel többi része aktív) — a ritkás

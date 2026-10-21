@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.178 óta)
 
+- **Gól a középkezdésből** (motor + app): a gól-felismerés a gólvonalat
+  átlépő labdát kereste — de a gól pillanatában a labda a leggyorsabb
+  és a leginkább takart, ezért széles, ritkított felvételen épp ezt a
+  kockát nem látjuk (terepen négy valódi meccs állt gól nélkül).
+  Kézilabdában viszont minden gólt középkezdés követ: a labda a
+  felezővonal közepén áll, és mindkét csapat a saját térfelén van —
+  ez jól látszik. Most ha a labda legalább egy másodpercig áll a
+  középen, a csapatok a középkezdés felállásában vannak, és előtte
+  (45 mp-en belül) a labda az egyik kapu előtt járt, ott gól esett: a
+  látott lövést gólra javítja, a már felismert gólt nem számolja
+  kétszer, különben új gólt vesz fel. Félidőn és felvétel-darabon át
+  nem következtet. Az esemény-listán a következtetett gól jelölve van
+  (↻), és a ⋮ menüben javítható.
+
 - **Gól-diagnózis: miért nincs gól** (minőség-jelentés + app): a
   "Gyanúsan kevés gól" figyelmeztetés eddig mindig azt tanácsolta, hogy
   a lövésként jelölt gólokat javítsd gólra — de gól nélküli meccsen

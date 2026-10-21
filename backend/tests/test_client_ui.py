@@ -3538,3 +3538,20 @@ def test_a_minoseg_ablak_mutatja_a_gol_diagnozist():
         assert f'q["{mezo}"]' in meccs
         assert f'"{mezo}"' in src
     assert "minőség-jelentés" in meccs
+
+
+def test_a_kozepkezdesbol_kovetkeztetett_gol_jelolve_van():
+    """A középkezdésből következtetett gól (a gólvonalat nem láttuk) az
+    esemény-listában jelölve van — a motor mezőnevével és értékével."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    import inspect
+
+    from handball.pipeline import event_detection as ed
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert '?["goal_source"]) == "középkezdés"' in meccs
+    src = inspect.getsource(ed.throw_off_goals)
+    assert '"goal_source"' in src and '"középkezdés"' in src
