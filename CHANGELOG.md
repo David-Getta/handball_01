@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.179 óta)
+
+- **Hány gól jött a középkezdésből** (app): a minőség-jelentés
+  gól-diagnózisa azt is számolja, és a meccs-nézet minőség-ablaka
+  kiírja, hány gólt következtetett a felismerés a gól utáni
+  középkezdésből (a gólvonal helyett) — az edző így tudja, az eredmény
+  mekkora része következtetés, és hol érdemes ellenőrizni.
+
 ## v0.1.179 — kiadva (2026-10-21)
 
 > Kiadás-jegyzet: a gól-felismerés a gól utáni KÖZÉPKEZDÉSBŐL is

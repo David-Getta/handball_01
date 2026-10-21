@@ -179,6 +179,18 @@ def test_darab_hataron_atnyulo_kozepkezdes_nem_gol():
     assert _golok(m) == []
 
 
+def test_a_minoseg_jelentes_szamolja_a_kovetkeztetett_golokat():
+    """A minőség-jelentés gól-diagnózisa megmondja, hány gól jött a
+    középkezdésből (az eredmény mekkora része következtetés)."""
+    from handball.pipeline.quality import compute_quality_report
+
+    q = compute_quality_report(_meccs())
+    assert q["goals_detected"] == 1
+    assert q["goals_from_throw_off"] == 1
+    q2 = compute_quality_report(_meccs(loves="gól"))
+    assert q2["goals_detected"] == 1 and q2["goals_from_throw_off"] == 0
+
+
 def test_egy_kapu_elotti_szakaszbol_egy_gol():
     """Két egymás utáni középkezdés-szerű állás ugyanazon kapu előtti
     szakasz után: csak egy gól."""

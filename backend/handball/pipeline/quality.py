@@ -681,10 +681,17 @@ def compute_quality_report(match: Match) -> dict:
     # figyelmeztetés nem zsákutca: megmondjuk, hol.
     goals = 0
     attempts = 0
+    goals_throw_off = 0
     try:
         from .event_detection import EventType as _ET, detect_shots as _ds
         _lovesek = _ds(match)
         goals = sum(1 for e in _lovesek if e.type is _ET.GOAL)
+        # A gólvonal helyett a gól utáni középkezdésből következtetett
+        # gólok (event_detection.throw_off_goals) — az edző lássa, az
+        # eredmény mekkora része következtetés.
+        goals_throw_off = sum(
+            1 for e in _lovesek if e.type is _ET.GOAL
+            and (e.detail or {}).get("goal_source") == "középkezdés")
         attempts = sum(1 for e in _lovesek
                        if e.type in (_ET.GOAL, _ET.SHOT))
     except Exception:
@@ -870,6 +877,7 @@ def compute_quality_report(match: Match) -> dict:
         # "miért nincs gól" kérdés három száma.
         "shot_attempts": attempts,
         "goals_detected": goals,
+        "goals_from_throw_off": goals_throw_off,
         "ball_near_goal_pct": round(near_goal_pct, 1),
         # Amit nem láttunk, csak PÓTOLTUNK (rövid hézagok lineáris
         # kitöltése) — külön szám, hogy a lefedettség ne tűnjön jobbnak.

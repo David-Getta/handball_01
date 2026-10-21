@@ -2852,7 +2852,11 @@ class _MatchScreenState extends State<MatchScreen> {
             if (q["shot_attempts"] != null)
               Text(
                   "Lövés-kísérlet: ${q["shot_attempts"]} "
-                  "(ebből gól: ${q["goals_detected"] ?? 0}) · labda a "
+                  "(ebből gól: ${q["goals_detected"] ?? 0}"
+                  "${((q["goals_from_throw_off"] ?? 0) as num) > 0
+                      ? ", ebből a középkezdésből következtetve: "
+                          "${q["goals_from_throw_off"]}"
+                      : ""}) · labda a "
                   "kapuk előtt: ${q["ball_near_goal_pct"] ?? 0}%",
                   style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
