@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.178 óta)
+## v0.1.179 — kiadva (2026-10-21)
+
+> Kiadás-jegyzet: a gól-felismerés a gól utáni KÖZÉPKEZDÉSBŐL is
+> következtet (a széles felvételen a gólvonalat átlépő labdát gyakran
+> nem látjuk, a középen álló labdát és a csapatok felállását igen) — a
+> már feldolgozott meccsek is újraszámolódnak, újrafeldolgozás nélkül;
+> a hosszú meccs vége felé sem áll a haladás (az
+> ellenőrző-mentés a háttérben fut, és egy késő részeredmény sem írhat a
+> végeredmény fölé); a gól nélküli hosszú felvételen a kártya, a
+> meccs-összevetés és a meccs-nézet "? : ?"-t mutat a hihetetlen "0 : 0"
+> helyett, a teendővel (valódi eredmény a ✎ gombbal), a minőség-jelentés
+> pedig megmondja, MIÉRT nincs gól (nem látta a labdát a kapuk előtt,
+> nem mért lövést, vagy a lövést nem ítélte gólnak); gyorsabb
+> kiadás-build.
 
 - **Gól a középkezdésből** (motor + app): a gól-felismerés a gólvonalat
   átlépő labdát kereste — de a gól pillanatában a labda a leggyorsabb
