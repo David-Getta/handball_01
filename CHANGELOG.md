@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.179 óta)
 
+- **A nem látott lövés gólja nem rontja a kapus védés-arányát**
+  (motor): a középkezdésből következtetett gól, ha magát a lövést nem
+  láttuk, a kapus-mérlegben féloldalas lett volna — a hasonlóan nem
+  látott VÉDÉSEKNEK nincs középkezdésük, így a következtetett gólokkal
+  szemben csak a látott védések álltak volna (egy jó kapus is
+  gyengének látszott volna). Az ilyen gól az eredményben, a
+  gól-listákban és az állás-alapú elemzésekben számít, a védés-arány
+  és az xG viszont csak a látott lövésekből mér. A látott, de tévesen
+  védésnek ítélt lövés gólra javítása a kapusnál is kapott gól marad.
+
 - **Hány gól jött a középkezdésből** (app): a minőség-jelentés
   gól-diagnózisa azt is számolja, és a meccs-nézet minőség-ablaka
   kiírja, hány gólt következtetett a felismerés a gól utáni

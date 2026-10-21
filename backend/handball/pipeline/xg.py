@@ -62,7 +62,7 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
      "shooters": [{"player_id", "team", "shots", "goals", "xg", "diff"}]}
     — diff = gól − várható gól (pozitív: a helyzetei FELETT teljesít,
     negatív: kihagyott nagy helyzetek). A shooters xG szerint csökkenő."""
-    from .event_detection import EventType, detect_shots
+    from .event_detection import EventType, detect_shots, unseen_goal
 
     config = config or TacticsConfig()
     by_t = {f.t: f for f in match.frames}
@@ -72,6 +72,11 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
 
     for e in detect_shots(match, config):
         if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        # A középkezdésből következtetett, NEM LÁTOTT lövés gólja: a
+        # lövés helyét és minőségét nem ismerjük — az xG (és a rá épülő
+        # kapus-mérlegek) csak a látott lövésekből mér.
+        if unseen_goal(e):
             continue
         f = by_t.get(e.t)
         if f is None:

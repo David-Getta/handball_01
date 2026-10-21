@@ -154,7 +154,10 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
                            "zone_save_pct": {},
                            "seven_faced": 0, "seven_saved": 0}
 
+    from .event_detection import unseen_goal
     for e in detect_shots(match, config):
+        if unseen_goal(e):
+            continue  # a nem látott lövés gólja nem a védés-arány része
         defending = Team.AWAY if e.team == Team.HOME else Team.HOME
         rec = out.get(defending.value)
         if rec is None:
@@ -230,7 +233,7 @@ def goalkeeper_timeline(match: Match, config=None) -> dict:
     a helyzetek nehézségén át is összemérhető.
     """
     from ..models.tracking import Team
-    from .event_detection import EventType, detect_shots
+    from .event_detection import EventType, detect_shots, unseen_goal
     from .tactics import TacticsConfig
     from .xg import match_xg
 
@@ -296,6 +299,8 @@ def goalkeeper_timeline(match: Match, config=None) -> dict:
             for e in detect_shots(match, config):
                 if e.team == defending:
                     continue  # a saját lövésük nem a kapusuk dolga
+                if unseen_goal(e):
+                    continue  # nem látott lövés: nem a védés-arány része
                 outcome = (e.detail or {}).get("outcome")
                 if outcome not in ("goal", "save"):
                     continue
@@ -568,12 +573,14 @@ def gk_save_streaks(match: Match, config=None) -> dict:
     kapusuk" (GKS_MIN_STREAKS sorozattól vagy GKS_LONG_STREAK-es
     szériától), kevés kapura lövésnél None.
     """
-    from .event_detection import EventType, detect_shots
+    from .event_detection import EventType, detect_shots, unseen_goal
     from .tactics import TacticsConfig
 
     config = config or TacticsConfig()
     seqs: dict = {"home": [], "away": []}
     for e in detect_shots(match, config):
+        if unseen_goal(e):
+            continue  # nem látott lövés: a védés-sorozatnak nem része
         shooter = getattr(e.team, "value", e.team)
         defender = "away" if shooter == "home" else "home"
         if e.type == EventType.GOAL:
@@ -1541,7 +1548,7 @@ def gk_free_shot_saves(match: Match, config=None) -> dict:
 
     from ..models.tracking import Team
     from .defense import FREE_DEF_RADIUS_M
-    from .event_detection import detect_shots
+    from .event_detection import detect_shots, unseen_goal
     from .tactics import TacticsConfig
 
     config = config or TacticsConfig()
@@ -1551,6 +1558,8 @@ def gk_free_shot_saves(match: Match, config=None) -> dict:
                   "covered_shots": 0, "covered_saves": 0}
               for s in ("home", "away")}
     for e in detect_shots(match, config):
+        if unseen_goal(e):
+            continue  # nem látott lövés: nincs fedezettség, nincs arány
         outcome = (e.detail or {}).get("outcome")
         if outcome not in ("goal", "save"):
             continue  # a mellé menő lövésből nem mérünk kapus-formát
@@ -2255,7 +2264,7 @@ def gk_after_goal(match: Match, config=None) -> dict:
     "rest_pct", "gap_pp", "verdict"} — a pct/gap/verdict None, ha
     valamelyik sávban kevés (GKA_MIN_SHOTS alatti) a lövés.
     """
-    from .event_detection import EventType, detect_shots
+    from .event_detection import EventType, detect_shots, unseen_goal
     from .tactics import TacticsConfig
 
     config = config or TacticsConfig()
@@ -2271,6 +2280,8 @@ def gk_after_goal(match: Match, config=None) -> dict:
     for e in sorted(detect_shots(match, config), key=lambda ev: ev.t):
         if e.type not in (EventType.SHOT, EventType.GOAL):
             continue
+        if unseen_goal(e):
+            continue  # nem látott lövés: a kapus-mérlegnek nem része
         outcome = (e.detail or {}).get("outcome")
         if outcome not in ("goal", "save"):
             continue  # a mellé menő lövés nem a kapus munkája

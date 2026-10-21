@@ -483,6 +483,21 @@ def _in_center(b) -> bool:
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
 
 
+def unseen_goal(e) -> bool:
+    """Igaz, ha a gólt a középkezdésből következtettük, és magát a
+    LÖVÉST nem láttuk (throw_off_goals új eseménye, nem egy látott lövés
+    javítása).
+
+    Az eredményben, a gól-listákban és az állás-alapú rétegekben
+    számít. Az ARÁNY-mérők viszont kihagyják: a kapus védés-aránya
+    (a hasonlóan nem látott védéseknek nincs középkezdésük, tehát a
+    következtetett gólokkal szemben csak a látott védések állnának) és
+    az xG (a lövés helyét nem ismerjük)."""
+    d = getattr(e, "detail", None) or {}
+    return (d.get("goal_source") == "középkezdés"
+            and d.get("shot_seen") is False)
+
+
 def throw_off_goals(match: Match, events: list,
                     config: Optional[TacticsConfig] = None) -> list:
     """Gólok a középkezdésből: a lövés/gól lista kiegészítése.
@@ -627,7 +642,10 @@ def throw_off_goals(match: Match, events: list,
                     match, j, scorer, config, fps)
             except Exception:
                 shooter, release_t = None, None
-            reszlet = {"outcome": "goal", "goal_source": "középkezdés"}
+            # A lövést magát nem láttuk: az arány-mérők (kapus-
+            # hatékonyság, xG) ezt kihagyják — lásd unseen_goal.
+            reszlet = {"outcome": "goal", "goal_source": "középkezdés",
+                       "shot_seen": False}
             if release_t is not None:
                 reszlet["release_t"] = release_t
             out.append(MatchEvent(t=tj, type=EventType.GOAL, team=scorer,

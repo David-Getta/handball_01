@@ -191,6 +191,47 @@ def test_a_minoseg_jelentes_szamolja_a_kovetkeztetett_golokat():
     assert q2["goals_detected"] == 1 and q2["goals_from_throw_off"] == 0
 
 
+def _kapussal(m):
+    """A vendég kapusa a +x kapuban (a hazai erre támad)."""
+    for f in m.frames:
+        f.players.append(PlayerPosition(track_id=99, team=Team.AWAY,
+                                        x=39.0, y=10.0,
+                                        source=PositionSource.MEASURED,
+                                        confidence=1.0, role="kapus"))
+    return m
+
+
+def test_a_nem_latott_loves_golja_nem_rontja_a_vedes_aranyt():
+    """A lövés nélküli következtetett gól az eredményben számít, a
+    kapus védés-arányában és az xG-ben nem (a hasonlóan nem látott
+    védéseknek nincs középkezdésük — a mérleg féloldalas lenne)."""
+    from handball.pipeline.event_detection import unseen_goal
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+    from handball.pipeline.xg import match_xg
+
+    m = _kapussal(_meccs())
+    golok = _golok(m)
+    assert len(golok) == 1 and unseen_goal(golok[0])
+    assert golok[0].detail["shot_seen"] is False
+    gk = goalkeeper_stats(m)["away"]
+    assert gk["on_target"] == 0 and gk["conceded"] == 0
+    assert match_xg(m)["teams"]["home"]["goals"] == 0
+
+
+def test_a_latott_loves_javitott_golja_a_kapusnak_is_gol():
+    """A LÁTOTT lövés, amit a felismerés tévesen nem gólnak ítélt: a
+    középkezdés gólra javítja, és a kapus-mérlegben is kapott gól."""
+    from handball.pipeline.event_detection import unseen_goal
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+
+    m = _kapussal(_meccs(loves="mellé"))
+    lov = detect_shots(m)
+    assert len(lov) == 1 and lov[0].type is EventType.GOAL
+    assert not unseen_goal(lov[0])
+    gk = goalkeeper_stats(m)["away"]
+    assert gk["on_target"] == 1 and gk["conceded"] == 1
+
+
 def test_egy_kapu_elotti_szakaszbol_egy_gol():
     """Két egymás utáni középkezdés-szerű állás ugyanazon kapu előtti
     szakasz után: csak egy gól."""
