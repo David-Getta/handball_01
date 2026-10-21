@@ -105,6 +105,39 @@ def test_checkpoint_save_error_does_not_kill_run(tmp_path):
     assert len(m.frames) == 20  # a hibás mentés ellenére végigfutott
 
 
+def test_a_checkpoint_a_hatterben_fut_es_nem_allitja_a_haladast(tmp_path):
+    """A lassú (fél másodperces) mentés nem tartja fel a detektálást: a
+    mentés külön szálon fut, a haladás-jelzés (és vele a szívverés) megy
+    tovább — a "B" lépés jelzései közt nincs fél másodperces szünet. A
+    végén a futó mentést megvárjuk: a végeredmény teljes, és a mentés
+    lezárult, mire a process visszatér."""
+    import threading
+    import time
+
+    video = tmp_path / "mini7.mp4"
+    _tiny_video(video, frames=40)
+    saved: list[Match] = []
+    szalak: list[str] = []
+    jelzesek: list[tuple[str, float]] = []
+
+    def lassu(m):
+        szalak.append(threading.current_thread().name)
+        time.sleep(0.5)
+        saved.append(m)
+
+    m = process(str(video), None, weights=None, stride=1, max_frames=100,
+                checkpoint_save=lassu, checkpoint_every_s=0.0,
+                progress_cb=lambda s, p, msg: jelzesek.append((s, time.time())))
+    assert len(m.frames) == 40
+    assert saved and all(0 < len(cp.frames) <= 40 for cp in saved)
+    # Nem a detektálás szálán mentett.
+    assert szalak and threading.current_thread().name not in szalak
+    # A detektálás ("B") jelzései közt nincs mentésnyi szünet.
+    b_idok = [t for s, t in jelzesek if s == "B"]
+    assert len(b_idok) >= 30
+    assert max(b - a for a, b in zip(b_idok, b_idok[1:])) < 0.4
+
+
 def test_no_checkpoint_by_default(tmp_path):
     """checkpoint_save nélkül (alapértelmezés) nincs időszakos mentés."""
     video = tmp_path / "mini6.mp4"

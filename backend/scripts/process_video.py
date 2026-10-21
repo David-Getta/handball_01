@@ -180,6 +180,11 @@ class StallSkippingFeed:
 ENRICH_TIMEOUT_S = 10.0
 ENRICH_MAX_TIMEOUTS = 3
 
+# Az ellenőrző-mentés a háttérben fut; a következő legkorábban ennyiszer
+# az előző mentés hossza után indul — a meccs vége felé a mentés percekig
+# tart, és nem eheti meg a gépet a detektálás elől.
+CHECKPOINT_GAP_FACTOR = 3.0
+
 
 class TimeboxedEnricher:
     """Időkorlátos dúsító-hívás: a fő detektálást SOSEM állíthatja meg.
@@ -1301,7 +1306,27 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # a felhasználónak látnia kell, mire számítson).
     import time as _time
     _t0 = _time.time()
-    _cp = {"last": _time.time()}
+    # ELLENŐRZŐ-MENTÉS A HÁTTÉRBEN. Az utómunka (csapatszín, összefűzés,
+    # simítás, becslés, minőség) a meccs vége felé percekig tart: a
+    # detektálás szálán futtatva addig állt a haladás és a szívverés (a
+    # felület "nincs előrelépés"-t írt), és a feldolgozás ennyivel lassult.
+    # A mentés külön szálon, a nyers listák PILLANATKÉPÉN fut (a kockák
+    # tuple-jei elkészültük után nem változnak); amíg tart, nem indul új;
+    # a következő legkorábban CHECKPOINT_GAP_FACTOR × az előző hossza után.
+    _cp = {"last": _time.time(), "thread": None, "dur": 0.0}
+
+    def _checkpoint_hatter(raw_snap, colors_snap, kept):
+        t0 = _time.time()
+        try:
+            checkpoint_save(_finalize(raw_snap, colors_snap, quiet=True,
+                                      partial=True))
+            print(f"checkpoint: részeredmény mentve ({kept} kocka, "
+                  f"{_time.time() - t0:.0f} mp)")
+        except Exception as e:  # a mentés hibája nem állíthatja le a futást
+            print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
+        finally:
+            _cp["dur"] = _time.time() - t0
+            _cp["last"] = _time.time()
 
     _last = {"kept": 0, "show": 0}
 
@@ -1336,14 +1361,19 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # IDŐSZAKOS CHECKPOINT: pár percenként lefut az utómunka az addig
         # feldolgozott kockákra, és a részeredmény ELMENTŐDIK — a motor
         # összeomlása / áramszünet így legfeljebb pár percnyi munkát visz el.
+        # A HÁTTÉRBEN (lásd _checkpoint_hatter): a detektálás megy tovább.
+        th = _cp["thread"]
         if (checkpoint_save is not None and kept >= 10
-                and _time.time() - _cp["last"] >= checkpoint_every_s):
+                and (th is None or not th.is_alive())
+                and _time.time() - _cp["last"] >= max(
+                    checkpoint_every_s, CHECKPOINT_GAP_FACTOR * _cp["dur"])):
+            import threading as _threading
             _cp["last"] = _time.time()
-            try:
-                checkpoint_save(_finalize(raw, all_colors, quiet=True, partial=True))
-                print(f"checkpoint: részeredmény mentve ({kept} kocka)")
-            except Exception as e:  # a mentés hibája nem állíthatja le a futást
-                print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
+            th = _threading.Thread(
+                target=_checkpoint_hatter,
+                args=(list(raw), list(all_colors), kept), daemon=True)
+            _cp["thread"] = th
+            th.start()
 
     stalled = False
     pan_stats: dict = {}
@@ -1400,6 +1430,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                f"a videó-olvasás elakadt {len(raw)} kocka után — az addigi "
                "rész feldolgozva, a meccs befejezetlenként mentve "
                "(a könyvtárból folytatható)")
+    # Egy még futó háttér-mentést megvárunk: a végeredmény mentése nem
+    # kerülhet egy KÉSŐ részeredmény alá.
+    _th = _cp.get("thread")
+    if _th is not None and _th.is_alive():
+        _th.join()
     match = _finalize(raw, all_colors, partial=stopped or stalled)
     # A horgonyzás-arány a meta-ba: a minőség-jelentés ebből mondja ki, ha
     # a svenkelés alatt a kalibrált képhez ritkán sikerült visszamérni.

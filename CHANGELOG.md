@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.178 óta)
+
+- **Az ellenőrző-mentés a háttérben fut** (motor): az időszakos
+  ellenőrző-mentés a teljes utómunkát futtatja az addig feldolgozott
+  kockákra — egy teljes meccs vége felé ez percekig tart, és eddig a
+  detektálás szálán futott: addig állt a haladás (a felület "X perce
+  nincs előrelépés"-t írt, pedig a motor dolgozott), és a feldolgozás a
+  mentések idejével lassult. Most a mentés külön szálon, pillanatképen
+  fut; amíg tart, nem indul új; a végeredmény mentése előtt a futó
+  mentést megvárjuk.
+
 ## v0.1.178 — kiadva (2026-10-20)
 
 > Kiadás-jegyzet: a kalibrációnál a képen messze kívül eső sarok is a
