@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.179 óta)
+## v0.1.180 — kiadva (2026-10-21)
+
+> Kiadás-jegyzet: a középkezdésből következtetett gól, ha magát a
+> lövést nem láttuk, nem rontja a kapus védés-arányát és az xG-t (a
+> nem látott védéseknek nincs középkezdésük, a mérleg féloldalas
+> lenne) — az eredményben és a gól-listákban továbbra is számít; egy
+> régebbi, védett lövést a középkezdés már nem ír át gólra (csak a
+> gólhoz közelit); a meccs-nézet minőség-ablaka kiírja, hány gól jött a
+> középkezdésből.
 
 - **A középkezdés csak a gólhoz közeli lövést javítja gólra** (motor):
   egy támadásban több lövés is lehet — ha az elsőt a kapus védte, a
