@@ -33,7 +33,7 @@ def _kozepkezdes_hazai_gol_utan():
 
 
 def _meccs(fps=25.0, *, loves=None, kozep_jatekosok=None, kozep_mp=2.0,
-           szunet_mp=6.0, mozgo_kozep=False):
+           szunet_mp=6.0, mozgo_kozep=False, utana_tamadas_mp=0.0):
     """Támadás a +x kapu előtt → (lövés) → szünet labda nélkül →
     a labda a középen áll."""
     frames = []
@@ -56,6 +56,10 @@ def _meccs(fps=25.0, *, loves=None, kozep_jatekosok=None, kozep_mp=2.0,
         for k in range(8):
             add(_tamadas(), Ball(x=min(40.0, 33.0 + 1.0 * k * 25.0 / fps),
                                  y=10.0, confidence=1.0))
+    # A lövés után a támadás folytatódik (lepattanó, újabb helyzet): a
+    # labda lassan mozog a kapu előtt.
+    for k in range(int(utana_tamadas_mp * fps)):
+        add(_tamadas(), Ball(x=31.0 + (k % 20) * 0.1, y=10.0, confidence=1.0))
     # Labda nélkül (háló, kapus, labda vissza a középre).
     for _ in range(int(szunet_mp * fps)):
         add(kozep_jatekosok or _kozepkezdes_hazai_gol_utan(), None)
@@ -91,6 +95,20 @@ def test_a_latott_lovest_golra_javitja():
     assert lov[0].type is EventType.GOAL
     assert lov[0].detail["goal_source"] == "középkezdés"
     assert "goalkeeper_id" not in lov[0].detail
+
+
+def test_a_regi_vedest_nem_irja_at_golra():
+    """Ha a látott lövés után a támadás még sokáig folytatódott, a gól
+    egy későbbi (nem látott) lövésből esett: a régi lövés marad, ami
+    volt, és a gól új, lövés nélküli esemény."""
+    from handball.pipeline.event_detection import (THROWOFF_UPGRADE_S,
+                                                   unseen_goal)
+
+    m = _meccs(loves="mellé", utana_tamadas_mp=THROWOFF_UPGRADE_S + 5)
+    lov = detect_shots(m)
+    assert [e.type for e in lov] == [EventType.SHOT, EventType.GOAL]
+    assert "goal_source" not in (lov[0].detail or {})
+    assert unseen_goal(lov[1])
 
 
 def test_a_mar_felismert_golt_nem_szamolja_ketszer():

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.179 óta)
 
+- **A középkezdés csak a gólhoz közeli lövést javítja gólra** (motor):
+  egy támadásban több lövés is lehet — ha az elsőt a kapus védte, a
+  támadás folytatódott, és a gól egy nem látott későbbi lövésből esett,
+  eddig a VÉDÉST írtuk át gólra (a kapusnál egy valódi védés kapott
+  góllá vált, a lövő-listában rossz ember szerzett gólt). Most csak a
+  labda utolsó kapu előtti pillanata előtti 10 mp-ben látott lövés
+  javítható; a régebbi védés védés marad, a gól új esemény.
+
 - **A nem látott lövés gólja nem rontja a kapus védés-arányát**
   (motor): a középkezdésből következtetett gól, ha magát a lövést nem
   láttuk, a kapus-mérlegben féloldalas lett volna — a hasonlóan nem

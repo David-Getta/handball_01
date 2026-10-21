@@ -401,6 +401,12 @@ THROWOFF_TEAM_GAP_M = 4.0
 # A már felismert gól ennyivel a kapu előtti utolsó labda ELŐTT is
 # ugyanannak számít (a gól-esemény a kapu-megközelítés kockáján ül).
 THROWOFF_DEDUP_S = 3.0
+# A látott lövés csak akkor javítható gólra, ha legfeljebb ennyivel a
+# labda utolsó kapu előtti pillanata ELŐTT esett: a gól után a labda a
+# hálóban / a kapusnál még a kapu előtt van, de egy ennél régebbi lövés
+# után a támadás folytatódott (lepattanó, újabb helyzet) — azt a
+# védést nem írjuk át gólra.
+THROWOFF_UPGRADE_S = 10.0
 # A középkezdés után a gólt KAPÓ csapat támad: a labda ennyi időn belül
 # átér a gólt szerző térfelére (a felezővonalon ennyivel túl), MIELŐTT
 # újra a gól kapuja elé érne. Ez választja el a középkezdést a középen
@@ -549,6 +555,7 @@ def throw_off_goals(match: Match, events: list,
         except (TypeError, ValueError, AttributeError):
             continue
     dedup_t = THROWOFF_DEDUP_S * fps
+    upgrade_t = THROWOFF_UPGRADE_S * fps
     out = list(events)
     # A kapu előtti UTOLSÓ labda kapunként (kocka-index), és az utolsó
     # felhasznált (egy kapu előtti szakaszból legfeljebb egy gól).
@@ -625,7 +632,7 @@ def throw_off_goals(match: Match, events: list,
             continue
         lovesek = [k for k, e in enumerate(out)
                    if e.type is EventType.SHOT and e.team is scorer
-                   and t0 - look_t <= e.t <= t0]
+                   and max(t0 - look_t, tj - upgrade_t) <= e.t <= t0]
         if lovesek:
             k = lovesek[-1]
             regi = out[k]
