@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.180 óta)
+## v0.1.181 — kiadva (2026-10-22)
+
+> Kiadás-jegyzet: "Lehetséges gólok" a meccs-nézetben — ahol a labda
+> középkezdés-szerűen a középen állt, de gólt nem találtunk, egy
+> kattintással felveheted; a következtetett gól a gól pillanatára kerül
+> (a klip és a 3D jelenet a gólt mutatja, nem a labda kiszedését), és
+> nem kap találgatott lövőt; a kezdőlap kártyája, a nyomtatható
+> jelentés és az edzői összefoglaló is jelzi, ha az eredmény részben
+> következtetett (a hatékonyság a látott kísérletekből számol), és a
+> hiányzó gól magyarázatai a "Lehetséges gólok" kártyára mutatnak.
 
 - **A hiányzó gól magyarázatai a "Lehetséges gólok" kártyára mutatnak**
   (app): a kezdőlap "? : ?" magyarázata, a meccs-nézet gól nélküli
