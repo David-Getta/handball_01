@@ -72,6 +72,33 @@ def test_a_kivonat_szamolja_a_kovetkeztetett_golokat():
     assert sor["goals_home"] == 1 and sor["goals_inferred"] == 1
 
 
+def test_a_kivonat_szamolja_a_lehetseges_golokat():
+    """A könyvtár-kivonat meccs-sora a lehetséges gólok számát is adja:
+    összekeveredett felállásnál a jel hallgat, a jelölt megvan."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_kk_fixture2", Path(__file__).with_name("test_kozepkezdes.py"))
+    kk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kk)
+    from handball.models.tracking import Team
+
+    kevert = ([kk._pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [kk._pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    client, _ids = _client_with_matches(0)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    m = kk._meccs(kozep_jatekosok=kevert)
+    m.meta.match_id = "lehetseges-1"
+    (matches_dir / "lehetseges-1.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    client = TestClient(create_app())
+    s = client.get("/library/summary").json()
+    sor = next(d for d in s["per_match"] if d["match_id"] == "lehetseges-1")
+    assert sor["goal_candidates"] == 1
+    assert sor["goals_home"] == 0 and sor["goals_away"] == 0
+
+
 def test_summary_counts_and_per_match():
     client, ids = _client_with_matches(2)
     r = client.get("/library/summary")

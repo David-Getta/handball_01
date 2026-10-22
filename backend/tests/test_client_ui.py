@@ -3607,3 +3607,17 @@ def test_a_hianyzo_gol_magyarazatai_a_lehetseges_golokra_mutatnak():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     assert 'Lehetséges gólok\\" kártya van' in kezdo
     assert "nincsGol && _goalCands.isNotEmpty" in meccs
+
+
+def test_a_kezdolap_jelzi_a_lehetseges_golokat():
+    """A meccs-kártya a lehetséges gólok számát is mutatja — a motor
+    library-kivonatának mezőnevével."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert 'sum["goal_candidates"]' in kezdo
+    app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+               / "app.py").read_text(encoding="utf-8")
+    assert '"goal_candidates": goal_candidates' in app_src

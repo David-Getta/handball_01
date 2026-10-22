@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.181 óta)
+
+- **A kezdőlap jelzi a lehetséges gólokat** (app): a "Lehetséges
+  gólok" kártya a meccs-nézetben van — a kezdőlap kártyája nem
+  mutatta, hogy ott egy kattintással felvehető gólok várnak. Most a
+  kártya eredménye mellett egy arany "N lehetséges gól" címke áll,
+  magyarázattal.
+
 ## v0.1.181 — kiadva (2026-10-22)
 
 > Kiadás-jegyzet: "Lehetséges gólok" a meccs-nézetben — ahol a labda

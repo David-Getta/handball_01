@@ -7808,6 +7808,15 @@ def create_app():
                         saves += 1
         except Exception:
             pass  # sérült/üres meccsnél a többi mutató még érték
+        # Lehetséges gólok (a labda középkezdés-szerűen a középen állt,
+        # előtte a kapu előtt járt, közöttük nincs gól): a kártya jelzi,
+        # hogy a meccs-nézetben egy kattintással felvehetők.
+        goal_candidates = 0
+        try:
+            from ..pipeline.event_detection import throw_off_candidates
+            goal_candidates = len(throw_off_candidates(m))
+        except Exception:
+            pass
         distance_m = 0.0
         sprints = 0
         try:
@@ -7967,6 +7976,7 @@ def create_app():
             "goals_home": goals_home,
             "goals_away": goals_away,
             "goals_inferred": goals_inferred,
+            "goal_candidates": goal_candidates,
             "shots": shots,
             "saves": saves,
             "distance_m": round(distance_m, 1),

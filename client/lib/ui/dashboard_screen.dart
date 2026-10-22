@@ -3891,6 +3891,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 size: 14, color: AppColors.textFaint),
                           ),
                         ),
+                      // Lehetséges gólok (motor: library-kivonat
+                      // goal_candidates): a meccs-nézetben egy
+                      // kattintással felvehetők — a kártya jelzi.
+                      if (((sum["goal_candidates"] as num?) ?? 0) > 0)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(left: AppSpacing.sm),
+                          child: Tooltip(
+                            message: "A labda középkezdés-szerűen a "
+                                "középen állt, előtte a kapu előtt járt — "
+                                "de gólt nem találtunk. Nyisd meg a meccset: "
+                                "a \"Lehetséges gólok\" kártyán egy "
+                                "kattintással felveheted őket.",
+                            child: Text(
+                                "${sum["goal_candidates"]} lehetséges gól",
+                                style: AppText.label.copyWith(
+                                    fontSize: 12, color: AppColors.gold)),
+                          ),
+                        ),
                       ..._resultBadge(sum),
                       ..._realScoreLabel(m, sum),
                     ],
