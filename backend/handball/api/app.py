@@ -6452,6 +6452,18 @@ def create_app():
                                                    r_["tipus"])})
             except Exception:
                 pass
+        if "goal_candidate" in types:
+            # Lehetséges gólok (event_detection.throw_off_candidates): a
+            # becsült gól-pillanat — a gól nélküli meccs gyanús
+            # középkezdései videón gyorsabban ellenőrizhetők, mint a
+            # lejátszóban egyenként.
+            try:
+                from ..pipeline.event_detection import throw_off_candidates
+                ev += [{"t": c_["goal_t"], "type": "goal_candidate",
+                        "team": c_["team"]}
+                       for c_ in throw_off_candidates(match)]
+            except Exception:
+                pass
         if "key_moment" in types:
             # A meccs gerince videóban: a key_moments réteg
             # pillanataiból egy-egy klip, a címkével a

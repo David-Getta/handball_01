@@ -404,3 +404,29 @@ def test_a_dontes_hiba_csomag_a_3d_dontes_pillanataibol_jon(tmp_path,
     assert n > 0, "a szimuláción van döntés-pillanat"
     assert r["totals"].get("bad_decision") == n
     assert sum(p["counts"].get("bad_decision", 0) for p in r["players"]) == n
+
+
+
+def test_a_lehetseges_golok_klip_csomagja(tmp_path, monkeypatch):
+    """A "Lehetséges gólok" csomag a jelölt-lista becsült
+    gól-pillanataiból jön — a klip-számláló is látja."""
+    import importlib.util
+    from pathlib import Path
+
+    from handball.api.app import create_app
+    from handball.models.tracking import Team
+
+    spec = importlib.util.spec_from_file_location(
+        "_kk_fixture3", Path(__file__).with_name("test_kozepkezdes.py"))
+    kk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kk)
+    kevert = ([kk._pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [kk._pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = kk._meccs(kozep_jatekosok=kevert)
+    m.meta.match_id = "klip-lehetseges"
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app).get("/matches/klip-lehetseges/clip-players").json()
+    assert r["totals"].get("goal_candidate") == 1

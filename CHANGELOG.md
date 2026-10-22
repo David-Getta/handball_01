@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **Klip-csomag a lehetséges gólokból** (motor + app): egy gól nélküli
+  meccsen akár tucatnyi lehetséges gól is lehet — videón gyorsabb
+  végignézni őket, mint a lejátszóban egyenként odaugrani, és a stáb is
+  megnézheti. Most a "Lehetséges gólok" kártya "Klipek" gombja és a
+  Klipek lap "Egyéb" csoportja a becsült gól-pillanatokból klip-csomagot
+  vág.
+
 - **A kezdőlap jelzi a lehetséges gólokat** (app): a "Lehetséges
   gólok" kártya a meccs-nézetben van — a kezdőlap kártyája nem
   mutatta, hogy ott egy kattintással felvehető gólok várnak. Most a

@@ -3621,3 +3621,18 @@ def test_a_kezdolap_jelzi_a_lehetseges_golokat():
     app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
                / "app.py").read_text(encoding="utf-8")
     assert '"goal_candidates": goal_candidates' in app_src
+
+
+def test_a_lehetseges_golok_klipjei_kerhetok():
+    """A "Lehetséges gólok" kártya és a Klipek lap is kéri a
+    goal_candidate csomagot — a motor típus-nevével."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert 'typesOverride: const ["goal_candidate"]' in meccs
+    assert '("goal_candidate", "Lehetséges gólok",' in klip
+    from handball.pipeline.clips import _TYPE_HU
+    assert _TYPE_HU["goal_candidate"] == "lehetseges-gol"

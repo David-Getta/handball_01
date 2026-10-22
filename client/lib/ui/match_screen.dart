@@ -1609,9 +1609,23 @@ class _MatchScreenState extends State<MatchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Lehetséges gólok (${_goalCands.length})",
-              style: AppText.value.copyWith(
-                  fontSize: 13, color: AppColors.gold)),
+          Row(children: [
+            Expanded(
+              child: Text("Lehetséges gólok (${_goalCands.length})",
+                  style: AppText.value.copyWith(
+                      fontSize: 13, color: AppColors.gold)),
+            ),
+            // Videón gyorsabb végignézni őket (és a stáb is láthatja):
+            // a becsült gól-pillanatok klip-csomagként.
+            TextButton.icon(
+              onPressed: _exportingClips
+                  ? null
+                  : () => _exportClips(match,
+                      typesOverride: const ["goal_candidate"]),
+              icon: const Icon(Icons.movie_outlined, size: 16),
+              label: const Text("Klipek"),
+            ),
+          ]),
           const SizedBox(height: 2),
           Text(
               "A labda a középen állt, mint egy középkezdésnél, és előtte "

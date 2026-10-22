@@ -63,7 +63,7 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "costly_turnover": "draga-eladas", "bad_decision": "dontes-hiba",
             "fast_break": "lerohanas",
             "conceded_fast_break": "kapott-lerohanas",
-            "key_scene": "videozando"}
+            "key_scene": "videozando", "goal_candidate": "lehetseges-gol"}
 
 
 @dataclass
