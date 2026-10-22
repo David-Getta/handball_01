@@ -55,9 +55,19 @@ def _player_label(track_id: int, team_of: dict, jersey_of: dict,
 
 
 def _events_section(match: Match, home: str, away: str) -> dict | None:
+    from .event_detection import unseen_goal
     goals_h = goals_a = shots = saves = 0
+    # A középkezdésből következtetett, NEM LÁTOTT lövés gólja: az
+    # eredményben számít, a hatékonyság-arányban nem (a hozzá tartozó,
+    # nem látott kihagyott lövéseket nem ismerjük).
+    nem_latott = 0
+    kovetkeztetett = 0
     for e in detect_shots(match):
         if e.type == EventType.GOAL:
+            if (e.detail or {}).get("goal_source") == "középkezdés":
+                kovetkeztetett += 1
+            if unseen_goal(e):
+                nem_latott += 1
             if e.team == Team.HOME:
                 goals_h += 1
             else:
@@ -71,6 +81,10 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
         return None
     body = (f"A rendszer {goals_h + goals_a} gól-eseményt és {shots} további "
             f"kapura tartó lövést ismert fel ({home} {goals_h} : {goals_a} {away}).")
+    if kovetkeztetett:
+        body += (f" Ebből {kovetkeztetett} gólt a gól utáni középkezdésből "
+                 "következtetett a rendszer (a gólvonalat nem látta) — a "
+                 "meccs-nézetben ellenőrizhetők.")
     if saves:
         body += f" Ebből {saves} lövést a kapusok hárítottak."
     # Félidei állás (csak ha a szünet ténylegesen felismerhető).
@@ -81,9 +95,16 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
             body += f" Félidőben {hs['home']} – {hs['away']} volt az állás."
     except Exception:
         pass
-    if attempts >= 5:
-        eff = 100.0 * (goals_h + goals_a) / attempts
-        body += f" A felismert kísérletek {eff:.0f}%-a végződött gólban."
+    # A hatékonyság a LÁTOTT kísérletekből: a nem látott lövés gólja
+    # mellől a nem látott kihagyott lövések hiányoznak — felfelé torzítana.
+    latott = attempts - nem_latott
+    if latott >= 5:
+        eff = 100.0 * (goals_h + goals_a - nem_latott) / latott
+        if nem_latott:
+            body += (f" A látott kísérletek {eff:.0f}%-a végződött gólban "
+                     "(a csak középkezdésből ismert gólok nélkül).")
+        else:
+            body += f" A felismert kísérletek {eff:.0f}%-a végződött gólban."
     # Gólpasszok: a detect_events a gólokhoz assist_id-t rendel (ha van) —
     # a legtöbb gólpasszt adó játékos külön említést kap.
     try:

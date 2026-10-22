@@ -371,3 +371,18 @@ def test_egy_kapu_elotti_szakaszbol_egy_gol():
                               ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
     assert len(_golok(m)) == 1
+
+
+def test_a_jelentes_es_az_osszefoglalo_kimondja_a_kovetkeztetett_golt():
+    """A nyomtatható jelentés gól-idővonala és az edzői összefoglaló is
+    megnevezi a középkezdésből következtetett gólt."""
+    from handball.pipeline.coach_summary import _events_section
+    from handball.pipeline.event_detection import detect_events
+    from handball.pipeline.report_html import match_report_html
+
+    m = _meccs()
+    html = match_report_html(m, {}, detect_events(m), None)
+    assert "· középkezdésből" in html
+    assert "1 gólt a gól utáni középkezdésből következtetett" in html
+    s = _events_section(m, "A", "B")
+    assert s is not None and "középkezdésből" in s["body"]

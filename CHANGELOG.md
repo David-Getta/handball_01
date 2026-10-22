@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.180 óta)
 
+- **A jelentés és az összefoglaló kimondja a következtetett gólt**
+  (motor): a nyomtatható meccsjelentés gól-idővonala és az edzői
+  összefoglaló a középkezdésből következtetett gólt úgy sorolta, mint a
+  látottat — a továbbadott jelentésből nem derült ki, melyik
+  következtetés, és a "kísérletek X%-a végződött gólban" mondat felfelé
+  torzított. Most a gól-sor "· középkezdésből" jelölést kap, a jelentés
+  és az összefoglaló kimondja, hány gól következtetett, és a
+  hatékonyság a látott kísérletekből számol.
+
 - **Lehetséges gólok: az edző egy kattintással megerősíti** (motor +
   app): a középkezdés-jel szigorú (a csapatok felállását és a
   középkezdés utáni támadás-irányt is megköveteli), ezért gyenge

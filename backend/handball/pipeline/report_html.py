@@ -1418,6 +1418,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     goal_rows = []
     ht_marked = False
     run_h = run_a = 0
+    kovetkeztetett = 0     # a gól utáni középkezdésből következtetett gólok
     for e in events:
         typ = getattr(e.type, "value", e.type)
         if typ != "goal":
@@ -1438,15 +1439,29 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             pid = e.get("player_id")
         if pid is not None:
             scorer = f" · {pid}. játékos"
+        # A középkezdésből KÖVETKEZTETETT gól (event_detection.
+        # throw_off_goals): a továbbadott jelentésben is látszódjon.
+        det = getattr(e, "detail", None)
+        if det is None and isinstance(e, dict):
+            det = e.get("detail")
+        forras = ""
+        if (det or {}).get("goal_source") == "középkezdés":
+            kovetkeztetett += 1
+            forras = " · középkezdésből"
         goal_rows.append(
             f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}"
-            f"{scorer}</li>")
+            f"{scorer}{forras}</li>")
     if ht_t is not None and goal_rows and not ht_marked:
         # Minden gól az első félidőben esett — a jelölő a lista végére.
         goal_rows.append(
             f"<li><b>— FÉLIDŐ ({run_h} – {run_a}) —</b></li>")
     goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
         '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
+    if kovetkeztetett:
+        goals_html += (
+            f'<p class="empty">{kovetkeztetett} gólt a gól utáni '
+            "középkezdésből következtetett a rendszer (a gólvonalat nem "
+            "látta) — ezeket a meccs-nézetben ellenőrizheted.</p>")
     # Szakaszonkénti gól-eloszlás (mikor esnek a gólok) — sáv-táblaként.
     try:
         from .momentum import scoring_timeline
