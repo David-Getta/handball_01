@@ -407,6 +407,14 @@ THROWOFF_DEDUP_S = 3.0
 # után a támadás folytatódott (lepattanó, újabb helyzet) — azt a
 # védést nem írjuk át gólra.
 THROWOFF_UPGRADE_S = 10.0
+# A lövés nélküli következtetett gól IDEJE: a labda utolsó kapu előtti
+# pillanata gyakran már a gól UTÁNI (a kapus kiszedi a labdát a hálóból).
+# Ennyit nézünk vissza a gól pillanatáért; a kapu felé tartó gyors labda
+# ekkora távolságon belül számít lövésnek; és legalább ekkora hézag a
+# labda követésében a kapu előtt = a gyors, elmosódott lövés-labda.
+THROWOFF_GOALTIME_BACK_S = 15.0
+THROWOFF_GOALTIME_RANGE_M = 12.0
+THROWOFF_GOALTIME_GAP_S = 0.4
 # A középkezdés után a gólt KAPÓ csapat támad: a labda ennyi időn belül
 # átér a gólt szerző térfelére (a felezővonalon ennyivel túl), MIELŐTT
 # újra a gól kapuja elé érne. Ez választja el a középkezdést a középen
@@ -482,6 +490,48 @@ def _throw_off_followed(frames, start: int, goal_x: float,
         if goal_x == 0.0 and b.x >= half + THROWOFF_FOLLOW_M:
             return True
     return False
+
+
+def _inferred_goal_index(frames, j: int, goal_x: float,
+                         fps: float, interp_conf: float) -> int:
+    """A lövés nélküli következtetett gól pillanatának kocka-indexe.
+
+    A `j` a labda utolsó kapu előtti kockája — gyakran már a gól utáni
+    pillanat. Visszafelé THROWOFF_GOALTIME_BACK_S másodpercen belül:
+    (1) az utolsó LÁTOTT, a kapu felé tartó, lövés-sebességű labda
+    (a kaputól THROWOFF_GOALTIME_RANGE_M méteren belül) — a lövés
+    pillanata; (2) ha ilyen nincs, az utolsó olyan látott labda a kapu
+    előtt, amely után legalább THROWOFF_GOALTIME_GAP_S hézag jön (a
+    gyors, elmosódott labda eltűnése); (3) különben `j`."""
+    if not frames:
+        return j
+    t_min = frames[j].t - THROWOFF_GOALTIME_BACK_S * fps
+    gap_t = THROWOFF_GOALTIME_GAP_S * fps
+    latott = []          # (index, labda) a látott labdákból, időrendben
+    k = j
+    while k >= 0 and frames[k].t >= t_min:
+        b = frames[k].ball
+        if b is not None and b.confidence > interp_conf:
+            latott.append((k, b))
+        k -= 1
+    latott.reverse()
+    # (1) a kapu felé tartó gyors labda: két egymást követő látott minta.
+    for (k0, b0), (k1, b1) in reversed(list(zip(latott, latott[1:]))):
+        dt = (frames[k1].t - frames[k0].t) / fps
+        if dt <= 0 or dt > 0.5:
+            continue
+        dx = b1.x - b0.x
+        seb = math.hypot(dx, b1.y - b0.y) / dt
+        fele_tart = dx > 0 if goal_x > 0 else dx < 0
+        if (fele_tart and seb >= SHOT_SPEED_MS
+                and abs(b0.x - goal_x) <= THROWOFF_GOALTIME_RANGE_M):
+            return k0
+    # (2) a labda eltűnése a kapu előtt (a következő látott minta messze).
+    for (k0, b0), (k1, _b1) in reversed(list(zip(latott, latott[1:]))):
+        if (frames[k1].t - frames[k0].t >= gap_t
+                and abs(b0.x - goal_x) <= THROWOFF_GOALTIME_RANGE_M):
+            return k0
+    return j
 
 
 def _in_center(b) -> bool:
@@ -653,8 +703,15 @@ def throw_off_goals(match: Match, events: list,
             # tudjuk" jobb, mint a magabiztosan rossz név.
             reszlet = {"outcome": "goal", "goal_source": "középkezdés",
                        "shot_seen": False}
-            out.append(MatchEvent(t=tj, type=EventType.GOAL, team=scorer,
-                                  player_id=None, detail=reszlet))
+            # A gól PILLANATA (a klip, a 3D jelenet és az idővonal ehhez
+            # igazodik), nem a labda utolsó kapu előtti kockája.
+            try:
+                kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
+            except Exception:
+                kg = j
+            out.append(MatchEvent(t=frames[kg].t, type=EventType.GOAL,
+                                  team=scorer, player_id=None,
+                                  detail=reszlet))
         i += still_n
     out.sort(key=lambda e: e.t)
     return out

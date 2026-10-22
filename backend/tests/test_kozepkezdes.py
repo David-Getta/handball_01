@@ -101,6 +101,71 @@ def test_a_latott_lovest_golra_javitja():
     assert "goalkeeper_id" not in lov[0].detail
 
 
+def _kiszedeses_meccs(gyors: bool):
+    """Támadás a +x kapu előtt → (gyors labda a kapu felé) → a labda
+    eltűnik → a kapus 5 mp-ig áll vele a kapuban (a labda kiszedése) →
+    középkezdés. Visszaad: (meccs, a lövés kezdő t-je, az eltűnés előtti
+    utolsó látott t)."""
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def add(players, ball):
+        nonlocal t
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    for k in range(int(4 * fps)):
+        add(_tamadas(), Ball(x=31.0 + (k % 20) * 0.1, y=10.0, confidence=1.0))
+    loves_t = t
+    if gyors:
+        # Gyors labda a kapu felé (25 m/s), 35 m-ig látszik — a kapu-sávba
+        # (4 m) nem ér, tehát a lövés-felismerés nem látja lövésnek.
+        for k in range(4):
+            add(_tamadas(), Ball(x=32.0 + k, y=10.0, confidence=1.0))
+    eltunes_t = t - 1
+    for _ in range(int(1 * fps)):          # eltűnik (háló, takarás)
+        add(_tamadas(), None)
+    for _ in range(int(5 * fps)):          # a kapus kiszedi, áll vele
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=39.0, y=10.0, confidence=1.0))
+    for _ in range(int(4 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), None)
+    for _ in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), Ball(x=20.0, y=10.0,
+                                                 confidence=1.0))
+    for k in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=17.0 - 2.0 * k / (2 * fps), y=10.0, confidence=1.0))
+    return Match(_meta(fps), frames), loves_t, eltunes_t
+
+
+def test_a_kovetkeztetett_gol_ideje_a_loves_nem_a_labda_kiszedese():
+    """A labda utolsó kapu előtti pillanata a gól UTÁN van (a kapus
+    kiszedi a hálóból): a gól ideje a kapu felé tartó gyors labda, hogy
+    a klip és a 3D jelenet a gólt mutassa."""
+    m, loves_t, _ = _kiszedeses_meccs(gyors=True)
+    golok = _golok(m)
+    assert len(golok) == 1
+    assert loves_t <= golok[0].t <= loves_t + 4, golok[0].t
+
+
+def test_a_kovetkeztetett_gol_ideje_a_labda_eltunese_ha_gyors_labda_nincs():
+    """Ha a gyors labdát sem láttuk, a gól ideje a labda eltűnése a kapu
+    előtt — nem a labda kiszedése."""
+    m, _, eltunes_t = _kiszedeses_meccs(gyors=False)
+    golok = _golok(m)
+    assert len(golok) == 1 and golok[0].t == eltunes_t
+
+
+def test_eltunes_es_gyors_labda_nelkul_a_labda_utolso_kapu_elotti_pillanata():
+    m = _meccs()
+    golok = _golok(m)
+    utolso = max(f.t for f in m.frames
+                 if f.ball is not None and f.ball.x >= 31.0)
+    assert golok[0].t == utolso
+
+
 def test_a_regi_vedest_nem_irja_at_golra():
     """Ha a látott lövés után a támadás még sokáig folytatódott, a gól
     egy későbbi (nem látott) lövésből esett: a régi lövés marad, ami

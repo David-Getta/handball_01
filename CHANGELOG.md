@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.180 óta)
 
+- **A következtetett gól a gól pillanatára kerül** (motor): a lövés
+  nélküli, középkezdésből következtetett gól eddig a labda utolsó kapu
+  előtti pillanatára került — ez gyakran már a gól utáni kép (a kapus
+  kiszedi a labdát a hálóból), így a gól-klip és a 3D gól-jelenet a
+  labda kiszedését mutatta. Most a gól ideje a kapu felé tartó utolsó
+  gyors labda (a lövés), ennek híján a labda eltűnése a kapu előtt.
+
 - **A nem látott lövés gólja nem kap találgatott lövőt** (motor): a
   középkezdésből következtetett, lövés nélküli gól lövőjét eddig a
   meglévő lövő-kereséssel adtuk meg — de az a labda utolsó kapu előtti
