@@ -268,6 +268,28 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   következtetünk (a második félidő kezdése nem az első utolsó
   támadásának gólja).
 
+  A következtetett gól HATÁRAI külön döntések voltak. (a) Ha a lövést
+  magát nem láttuk, a kapus védés-arányába és az xG-be NEM számít: a
+  hasonlóan nem látott védéseknek nincs középkezdésük, a mérleg
+  féloldalas lenne — egy jó kapus is gyengének látszana, ítélettel
+  együtt (`unseen_goal`). Az eredményben, a gól-listákban és az
+  állás-alapú rétegekben viszont számít. (b) A lövője ismeretlen: a
+  lövő-keresés a gól UTÁNI pillanattól keresne vissza, és a kapu előtt
+  álló bármelyik támadót megtehetné szerzőnek — "a nem tudjuk jobb,
+  mint a magabiztosan rossz név". (c) Az ideje a gól pillanata (a kapu
+  felé tartó utolsó gyors labda, vagy a labda eltűnése), nem a labda
+  kiszedése a hálóból — különben a klip és a 3D jelenet a gól utáni
+  képet mutatná. (d) Egy régebbi, védett lövést nem ír át gólra (csak
+  a gólhoz közeli, 10 mp-en belüli lövést).
+
+  A szigorú jel mellé az EDZŐ DÖNTÉSE került: ahol a labda a középen
+  állt, de a felállás vagy a támadás-irány nem igazolta a gólt, a
+  pillanat "Lehetséges gól"-ként jelenik meg (meccs-nézet kártya,
+  kezdőlap-címke, klip-csomag), és egy kattintás kézi javításként
+  felveszi. A gép így nem találgat gólt — de a gyanút sem nyeli el.
+
   Nyitott: a nem gólra végződő lövés (védés, mellé) ugyanígy
   elveszhet, ha a röppályát nem látjuk — a következő jelölt jel a
-  kapus-kidobás (a labda a kapuelőtérben, a kapusnál áll meg).
+  kapus-kidobás (a labda a kapuelőtérben, a kapusnál áll meg). Ez
+  nehezebb: a kidobás védés UTÁN és mellé lövés után is jön, tehát a
+  kapus-mérlegnek nem ad kapura tartó lövést, csak kísérletet.
