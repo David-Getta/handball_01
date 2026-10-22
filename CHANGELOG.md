@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **Lehetséges gól: "Nem gól"** (app): a kártyán eddig csak
+  megerősíteni lehetett — ha egy jelölt nem gól volt (időkérés után a
+  középen tartott labda, megállt játék), örökre a listán maradt, és a
+  kezdőlap címkéje is számolta. Most minden sorban "Nem gól" gomb van:
+  a jelölt eltűnik a listáról és a kezdőlap számából; a döntés a kézi
+  javítások közé kerül, és a "Minden javítás visszavonása" visszahozza.
+
 - **Klip-csomag a lehetséges gólokból** (motor + app): egy gól nélküli
   meccsen akár tucatnyi lehetséges gól is lehet — videón gyorsabb
   végignézni őket, mint a lejátszóban egyenként odaugrani, és a stáb is

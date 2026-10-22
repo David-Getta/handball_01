@@ -360,6 +360,23 @@ def test_a_kezzel_felvett_gol_utan_eltunik_a_jelolt():
     assert throw_off_candidates(m) == []
 
 
+def test_az_elvetett_lehetseges_gol_eltunik():
+    """"Nem gól": az edző elveti a jelöltet (dismiss a középkezdés
+    idejével) — a lista kihagyja, a gólok nem változnak."""
+    from handball.pipeline.event_detection import throw_off_candidates
+
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    m = _meccs(kozep_jatekosok=kevert)
+    jel = throw_off_candidates(m)
+    assert len(jel) == 1
+    m.meta.event_overrides = [{"op": "dismiss", "t": jel[0]["t"],
+                               "type": "goal"}]
+    assert throw_off_candidates(m) == []
+    assert _golok(m) == []
+
+
 def test_egy_kapu_elotti_szakaszbol_egy_gol():
     """Két egymás utáni középkezdés-szerű állás ugyanazon kapu előtti
     szakasz után: csak egy gól."""

@@ -765,6 +765,16 @@ def throw_off_candidates(match: Match,
     hatarok = _half_boundaries(match)
     golok = [e.t for e in detect_shots(match, config)
              if e.type is EventType.GOAL]
+    # Az edző által ELVETETT jelöltek ("Nem gól"): a kézi javítások
+    # "dismiss" tételei, a középkezdés idejével.
+    elvetett = []
+    for o in (getattr(match.meta, "event_overrides", None) or []):
+        try:
+            if str(o.get("op")) == "dismiss":
+                elvetett.append(int(o.get("t") or 0))
+        except (TypeError, ValueError, AttributeError):
+            continue
+    elvet_ablak = OVERRIDE_MATCH_S * fps
     last_near: dict = {0.0: None, COURT_LENGTH_M: None}
     used_near: set = set()
     out: list = []
@@ -791,7 +801,9 @@ def throw_off_candidates(match: Match,
             tj = frames[j].t
             if (j not in used_near and t0 - tj <= look_t
                     and not any(tj < h <= t0 for h in hatarok)
-                    and not any(tj - back_t <= g <= t0 for g in golok)):
+                    and not any(tj - back_t <= g <= t0 for g in golok)
+                    and not any(abs(d - t0) <= elvet_ablak
+                                for d in elvetett)):
                 used_near.add(j)
                 try:
                     kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
@@ -856,6 +868,8 @@ def _apply_event_overrides(match: Match,
     for j in ov:
         try:
             op = str(j.get("op") or "")
+            if op == "dismiss":
+                continue  # lehetséges gól elvetése — a jelölt-listáé
             t = int(j.get("t") or 0)
             tipus = str(j.get("type") or "goal")
             if tipus not in ("goal", "shot"):

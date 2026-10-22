@@ -1663,6 +1663,16 @@ class _MatchScreenState extends State<MatchScreen> {
                         team: c["team"] as String? ?? "home"),
                 child: Text("Gól volt"),
               ),
+              // "Nem gól": az edző lezárja a kérdést — a jelölt eltűnik
+              // (a kézi javítások közé kerül, visszavonható).
+              TextButton(
+                onPressed: _correcting
+                    ? null
+                    : () => _correct(
+                        "dismiss", (c["t"] as num).toInt(), "goal"),
+                child: Text("Nem gól",
+                    style: AppText.label.copyWith(fontSize: 12)),
+              ),
               PopupMenuButton<String>(
                 tooltip: "Gól a másik csapatnak",
                 enabled: !_correcting,

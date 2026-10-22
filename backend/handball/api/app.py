@@ -5561,8 +5561,10 @@ def create_app():
     def set_event_overrides(match_id: str, body: dict):
         """A kézi esemény-javítások mentése (a TELJES lista cseréje).
 
-        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type",
+        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type"|"dismiss",
         "t": kocka, "type": "goal"|"shot", "team": "home"|"away"}]}.
+        A "dismiss" egy LEHETSÉGES GÓL elvetése (a középkezdés ideje):
+        az edző döntése, hogy ott nem volt gól.
 
         Miért kell: a felismerés téved — gólt lövésnek lát, lövést nem
         vesz észre. Az edző egy rossz eredményű jelentésnek EGYETLEN
@@ -5582,7 +5584,7 @@ def create_app():
             if not isinstance(j, dict):
                 continue
             op = str(j.get("op") or "")
-            if op not in ("add", "remove", "set_type"):
+            if op not in ("add", "remove", "set_type", "dismiss"):
                 continue
             tipus = str(j.get("type") or "goal")
             if tipus not in ("goal", "shot"):

@@ -3623,6 +3623,20 @@ def test_a_kezdolap_jelzi_a_lehetseges_golokat():
     assert '"goal_candidates": goal_candidates' in app_src
 
 
+def test_a_lehetseges_gol_elvetheto():
+    """A kártya "Nem gól" gombja "dismiss" javítást küld a középkezdés
+    idejével — a motor ezt a műveletet elfogadja és a listából kihagyja."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert '"dismiss", (c["t"] as num).toInt(), "goal"' in meccs
+    app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+               / "app.py").read_text(encoding="utf-8")
+    assert '("add", "remove", "set_type", "dismiss")' in app_src
+
+
 def test_a_lehetseges_golok_klipjei_kerhetok():
     """A "Lehetséges gólok" kártya és a Klipek lap is kéri a
     goal_candidate csomagot — a motor típus-nevével."""
