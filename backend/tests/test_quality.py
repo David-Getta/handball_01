@@ -508,6 +508,7 @@ def test_gol_diagnozis_kapu_elott_latta_de_lovest_nem():
     assert "GÓL volt" not in kevés[0]
     assert "Pontos" in next_action(kevés)
     assert "Hiányzó gól" in next_action(kevés)
+    assert "Lehetséges gólok" in next_action(kevés)
 
 
 def test_rovid_felvetelre_nem_szol_a_gol_arany():

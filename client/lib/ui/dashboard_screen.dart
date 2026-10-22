@@ -3861,8 +3861,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           message: "A felismerés ezen a felvételen nem "
                               "talált gólt — ez nem a valódi eredmény "
                               "(${totalS ~/ 60} perc alatt gól nélkül "
-                              "nem lehet). Add meg a valódi eredményt a ✎ "
-                              "gombbal: a jelentés és a trend azzal számol.",
+                              "nem lehet). Nyisd meg a meccset: ha ott "
+                              "\"Lehetséges gólok\" kártya van, egy "
+                              "kattintással felveheted a gólokat. Vagy add "
+                              "meg a valódi eredményt a ✎ gombbal: a "
+                              "jelentés és a trend azzal számol.",
                           child: Text("? : ?",
                               style: AppText.value.copyWith(
                                   fontSize: 15, color: AppColors.textFaint)),

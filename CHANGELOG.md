@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.180 óta)
 
+- **A hiányzó gól magyarázatai a "Lehetséges gólok" kártyára mutatnak**
+  (app): a kezdőlap "? : ?" magyarázata, a meccs-nézet gól nélküli
+  eredmény-sávja és a minőség-jelentés teendője eddig csak a ✎ gombot
+  és a Javítások menüt ismerte — most a gyorsabb utat, a "Lehetséges
+  gólok" kártyát is megnevezik.
+
 - **A jelentés és az összefoglaló kimondja a következtetett gólt**
   (motor): a nyomtatható meccsjelentés gól-idővonala és az edzői
   összefoglaló a középkezdésből következtetett gólt úgy sorolta, mint a

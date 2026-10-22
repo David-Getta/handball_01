@@ -3593,3 +3593,17 @@ def test_a_meccs_nezet_felkinalja_a_lehetseges_golokat():
     src = inspect.getsource(ed.throw_off_candidates)
     for kulcs in ('"t"', '"goal_t"', '"team"', '"goal_x"'):
         assert kulcs in src
+
+
+def test_a_hianyzo_gol_magyarazatai_a_lehetseges_golokra_mutatnak():
+    """A kezdőlap "? : ?" magyarázata és a meccs-nézet gól nélküli
+    eredmény-sávja a "Lehetséges gólok" kártyára is mutat (a gyorsabb
+    út), nem csak a ✎ gombra."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert 'Lehetséges gólok\\" kártya van' in kezdo
+    assert "nincsGol && _goalCands.isNotEmpty" in meccs

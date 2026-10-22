@@ -210,8 +210,9 @@ NEXT_ACTION_ORDER: tuple = (
     ("lövést is alig mért",
      "Futtasd újra a \"Pontos\" minőségi profillal (sűrűbb kockák, "
      "nagyobb felbontás — a gyors lövés-labdát így ritkábban hagyja ki); "
-     "addig a hiányzó gólokat a meccs-nézet Javítások menüjében "
-     "(Hiányzó gól) veheted fel."),
+     "addig a hiányzó gólokat a meccs-nézet \"Lehetséges gólok\" "
+     "kártyáján egy kattintással, vagy a Javítások menüjében (Hiányzó "
+     "gól) veheted fel."),
     ("Gyanúsan kevés gól",
      "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "

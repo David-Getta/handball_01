@@ -1060,6 +1060,9 @@ class _MatchScreenState extends State<MatchScreen> {
           child: Text(
               demo
                   ? "demó adat"
+                  : nincsGol && _goalCands.isNotEmpty
+                  ? "a felismerés nem talált gólt — a lenti \"Lehetséges "
+                      "gólok\" kártyán egy kattintással felveheted őket"
                   : nincsGol
                   ? "a felismerés ezen a felvételen nem talált gólt — ez nem "
                       "a valódi eredmény (az okot a minőség-jelentés "
