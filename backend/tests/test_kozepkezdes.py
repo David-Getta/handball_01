@@ -86,6 +86,10 @@ def test_kozepkezdes_utan_gol_akkor_is_ha_a_golt_nem_lattuk():
     assert g.team is Team.HOME
     assert g.detail["goal_source"] == "középkezdés"
     assert g.detail["outcome"] == "goal"
+    # A lövő nem ismert (a lövő-keresés a gól UTÁNI pillanattól keresne
+    # vissza, a kapu előtt álló bármelyik támadót megtehetné szerzőnek).
+    assert g.player_id is None
+    assert "release_t" not in g.detail
 
 
 def test_a_latott_lovest_golra_javitja():

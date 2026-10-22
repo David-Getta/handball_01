@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.180 óta)
 
+- **A nem látott lövés gólja nem kap találgatott lövőt** (motor): a
+  középkezdésből következtetett, lövés nélküli gól lövőjét eddig a
+  meglévő lövő-kereséssel adtuk meg — de az a labda utolsó kapu előtti
+  pillanatától keres vissza, ami ilyenkor másodpercekkel a gól UTÁN
+  lehet, így a kapu előtt álló bármelyik támadót megtehette szerzőnek
+  (rossz név a góllövő-listában, a gólpasszban, a játékos-trendben).
+  Most az ilyen gól lövője ismeretlen: az eredményben és a csapat-szintű
+  elemzésekben számít, a játékos-listák nem kapnak hamis gólt.
+
 - **A kezdőlap jelzi a részben következtetett eredményt** (app): a
   középkezdésből következtetett gól eddig csak a meccs-nézetben volt
   jelölve — a kezdőlap kártyáján, ahol az edző az eredményt először

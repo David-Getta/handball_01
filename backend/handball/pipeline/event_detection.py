@@ -644,19 +644,17 @@ def throw_off_goals(match: Match, events: list,
                                 team=regi.team, player_id=regi.player_id,
                                 detail=reszlet)
         else:
-            try:
-                shooter, release_t = _shooter_release_before(
-                    match, j, scorer, config, fps)
-            except Exception:
-                shooter, release_t = None, None
             # A lövést magát nem láttuk: az arány-mérők (kapus-
-            # hatékonyság, xG) ezt kihagyják — lásd unseen_goal.
+            # hatékonyság, xG) ezt kihagyják — lásd unseen_goal. A LÖVŐ
+            # sem ismert: a lövő-keresés a labda utolsó kapu előtti
+            # pillanatától keresne vissza, ami ilyenkor másodpercekkel a
+            # gól UTÁN lehet (a labda a hálóban, a kapusnál) — a kapu
+            # előtt álló bármelyik támadót megtehetné szerzőnek. A "nem
+            # tudjuk" jobb, mint a magabiztosan rossz név.
             reszlet = {"outcome": "goal", "goal_source": "középkezdés",
                        "shot_seen": False}
-            if release_t is not None:
-                reszlet["release_t"] = release_t
             out.append(MatchEvent(t=tj, type=EventType.GOAL, team=scorer,
-                                  player_id=shooter, detail=reszlet))
+                                  player_id=None, detail=reszlet))
         i += still_n
     out.sort(key=lambda e: e.t)
     return out
