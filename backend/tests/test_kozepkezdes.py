@@ -401,6 +401,30 @@ def test_a_minoseg_jelentes_megnevezi_a_lehetseges_golokat():
     assert keves and "1 lehetséges gólt is találtunk" in keves[0]
 
 
+def test_az_elvetett_jelolt_nem_ter_vissza_ujabb_kozepen_allassal():
+    """Elvetés után a labda röviden kimozdul, majd újra megáll a
+    középen: ugyanabból a kapu előtti szakaszból nem lesz új jelölt."""
+    from handball.pipeline.event_detection import throw_off_candidates
+
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    m = _meccs(kozep_jatekosok=kevert)
+    jel = throw_off_candidates(m)
+    assert len(jel) == 1
+    m.meta.event_overrides = [{"op": "dismiss", "t": jel[0]["t"],
+                               "type": "goal"}]
+    fps = m.meta.fps
+    t = m.frames[-1].t + 1
+    # A labda (a vendég támadás-indítása után) visszakerül a középre, és
+    # újra megáll — közben nem jár kapu előtt.
+    for _ in range(int(2 * fps)):
+        m.frames.append(Frame(t=t, players=kevert,
+                              ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    assert throw_off_candidates(m) == []
+
+
 def test_egy_kapu_elotti_szakaszbol_egy_gol():
     """Két egymás utáni középkezdés-szerű állás ugyanazon kapu előtti
     szakasz után: csak egy gól."""

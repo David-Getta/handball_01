@@ -801,10 +801,15 @@ def throw_off_candidates(match: Match,
             tj = frames[j].t
             if (j not in used_near and t0 - tj <= look_t
                     and not any(tj < h <= t0 for h in hatarok)
-                    and not any(tj - back_t <= g <= t0 for g in golok)
-                    and not any(abs(d - t0) <= elvet_ablak
-                                for d in elvetett)):
+                    and not any(tj - back_t <= g <= t0 for g in golok)):
+                # A kapu előtti szakaszt az ELVETETT jelölt is felhasználja
+                # — különben a labda következő középen állása ugyanebből
+                # a szakaszból új jelöltet adna, és az edző visszakapná a
+                # frissen elvetett kérdést.
                 used_near.add(j)
+                if any(abs(d - t0) <= elvet_ablak for d in elvetett):
+                    i += still_n
+                    continue
                 try:
                     kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
                 except Exception:
