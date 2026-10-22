@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **Lehetséges gól: a kijelölt játékos lesz a lövő** (app): a "Gól
+  volt" gomb a megerősített gólt eddig lövő nélkül vette fel, így az a
+  góllövő-listákból kimaradt. Most — mint a "Hiányzó gól" tételnél — a
+  pályán kijelölt játékos lesz a lövő, és a gomb felirata meg is mutatja.
+
 - **A "Gyanúsan kevés gól" megnevezi a lehetséges gólokat** (minőség-
   jelentés): ha a felismerés kevés gólt talált, de a meccsen lehetséges
   gólok vannak, a leggyorsabb javítás azok megerősítése — a

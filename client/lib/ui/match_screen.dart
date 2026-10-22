@@ -1630,7 +1630,8 @@ class _MatchScreenState extends State<MatchScreen> {
           Text(
               "A labda a középen állt, mint egy középkezdésnél, és előtte "
               "a kapu előtt járt — de gólt nem találtunk. Nézd meg, és ha "
-              "gól volt, egy kattintással felveheted.",
+              "gól volt, egy kattintással felveheted (ha a pályán "
+              "kijelölöd a lövőt, a gól hozzá kerül).",
               style: AppText.label.copyWith(fontSize: 11.5)),
           const SizedBox(height: AppSpacing.xs),
           for (final c in _goalCands.take(8))
@@ -1653,6 +1654,9 @@ class _MatchScreenState extends State<MatchScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: AppText.label.copyWith(fontSize: 12)),
               ),
+              // A kijelölt játékos lesz a lövő (mint a Javítások menü
+              // "Hiányzó gól" tételénél) — enélkül a gól kimaradna a
+              // góllövő-listákból.
               TextButton(
                 onPressed: _correcting
                     ? null
@@ -1660,8 +1664,11 @@ class _MatchScreenState extends State<MatchScreen> {
                         "add",
                         (c["goal_t"] as num? ?? c["t"] as num).toInt(),
                         "goal",
-                        team: c["team"] as String? ?? "home"),
-                child: Text("Gól volt"),
+                        team: c["team"] as String? ?? "home",
+                        playerId: _selectedTrack),
+                child: Text(_selectedTrack == null
+                    ? "Gól volt"
+                    : "Gól volt · ${_playerShort(match, _selectedTrack!)}"),
               ),
               // "Nem gól": az edző lezárja a kérdést — a jelölt eltűnik
               // (a kézi javítások közé kerül, visszavonható).
@@ -1684,7 +1691,8 @@ class _MatchScreenState extends State<MatchScreen> {
                     "add",
                     (c["goal_t"] as num? ?? c["t"] as num).toInt(),
                     "goal",
-                    team: side),
+                    team: side,
+                    playerId: _selectedTrack),
                 itemBuilder: (_) => [
                   for (final side in const ["home", "away"])
                     if (side != c["team"])

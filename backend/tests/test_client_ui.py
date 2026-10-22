@@ -3623,6 +3623,19 @@ def test_a_kezdolap_jelzi_a_lehetseges_golokat():
     assert '"goal_candidates": goal_candidates' in app_src
 
 
+def test_a_lehetseges_gol_a_kijelolt_lovohoz_kerul():
+    """A "Gól volt" a kijelölt játékost adja lövőnek — mint a Javítások
+    menü "Hiányzó gól" tétele (a motor player_id-t fogad)."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    kartya = meccs[meccs.index("Widget _goalCandidatesCard"):]
+    kartya = kartya[:kartya.index("\n  }\n")]
+    assert kartya.count("playerId: _selectedTrack") == 2
+
+
 def test_a_lehetseges_gol_elvetheto():
     """A kártya "Nem gól" gombja "dismiss" javítást küld a középkezdés
     idejével — a motor ezt a műveletet elfogadja és a listából kihagyja."""
