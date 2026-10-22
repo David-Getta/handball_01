@@ -133,6 +133,40 @@ felderítés is a javított listából számol; a meccs-nézet a kilépéskor
 A motor oldalán: `GET /matches/{id}/annotations/compare`,
 `POST /matches/{id}/annotations/apply` (`?dry_run=true`: csak a terv).
 
+## Lehetséges gólok (napló nélkül)
+
+Széles, távoli felvételen a gól pillanatát (a gyors, takart labdát a
+gólvonalon) a gép gyakran nem látja. Minden gólt viszont középkezdés
+követ: a labda a felezővonal közepén áll. A gép ebből két dolgot csinál:
+
+- **Magától gólt számol**, ha a középkezdés egyértelmű (a két csapat a
+  saját térfelén, utána a gólt kapó csapat támad). Ezeket az
+  esemény-lista ↻ jellel jelöli, a minőség-ablak megszámolja, és a
+  kezdőlap kártyája is jelzi. Ha téves, a sor ⋮ menüjében ("Nem volt
+  ilyen esemény") törölhető.
+- **Lehetséges gólként felkínálja**, ha a labda a középen állt, előtte a
+  kapu előtt járt, de a felállás vagy a támadás-irány nem igazolta a
+  gólt (pl. gyenge csapat-besorolásnál). Ezek a meccs-nézet
+  esemény-listájának tetején, a "Lehetséges gólok" kártyán vannak; a
+  kezdőlap kártyáján "N lehetséges gól" címke jelzi őket.
+
+A kártya soraiban:
+
+- **▶** — a lejátszó a becsült gól-pillanatra ugrik.
+- **Gól volt** — kézi javításként felveszi a gólt a valószínű csapatnak
+  (a ⋮ menüből a másiknak). Ha előtte a pályán kijelölöd a lövőt, a gól
+  hozzá kerül (a gomb felirata mutatja: "Gól volt · #7").
+- **Nem gól** — elveti a jelöltet (pl. időkérés után a középen tartott
+  labda); többet nem kérdez rá.
+- **Klipek** (a kártya fejlécében) — a jelöltekből klip-csomagot vág;
+  videón gyorsabb végignézni őket, és a stáb is láthatja.
+
+Minden döntés a kézi javítások közé kerül: az eredmény, az xG, a
+lövő-listák és a jelentés azonnal ebből számol, és a "Minden javítás
+visszavonása" mindet visszahozza. A lövés nélkül kikövetkeztetett gól a
+kapus védés-arányába és az xG-be nem számít bele (a hasonlóan nem
+látott védéseket nem ismerjük), csak az eredménybe és a gól-listákba.
+
 ## Technika
 
 - Backend: `handball/annotations.py` (normalizálás, korlátok, CSV),
