@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **A látott gólt nem számolja kétszer, ha a kapus sokáig tartja**
+  (motor, javítás): a középkezdés-jel a már felismert gólt csak a labda
+  utolsó kapu előtti pillanata előtti 3 mp-ben kereste — de a gól után a
+  kapus gyakran sokáig a kapu előtt tartja a labdát (kiszedi a hálóból,
+  odasétál), így a labda utolsó kapu előtti pillanata 5–15 mp-cel a gól
+  után van. Ilyenkor a középkezdés egy MÁSODIK gólt adott hozzá, és a jól
+  felismert meccseken az eredmény felfelé torzult. Most a meglévő gólt a
+  kapu előtti teljes utolsó szakaszban keresi; a lehetséges gólok
+  listája is.
+
 - **A "Lehetséges gólok" kártya kimondja, ha nem fér el** (app): a
   kártya legfeljebb 8 sort mutat — ha több jelölt volt, a többi szó
   nélkül elmaradt. Most egy sor kimondja, hány vár még; az elsők

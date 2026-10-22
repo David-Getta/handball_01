@@ -534,6 +534,26 @@ def _inferred_goal_index(frames, j: int, goal_x: float,
     return j
 
 
+def _near_goal_stretch_start(frames, j: int, goal_x: float) -> int:
+    """A kapu előtti UTOLSÓ szakasz elejének indexe: a `j`-től (a labda
+    utolsó kapu előtti kockája) visszafelé, amíg a LÁTOTT labda a kapu
+    előtti sávban (THROWOFF_GOAL_ZONE_M) van — a labda-hézag nem szakítja
+    meg. A gól után a kapus gyakran sokáig a kapu előtt tartja a labdát:
+    a már felismert gól ebben a szakaszban van, nem csak a `j` előtti
+    pár másodpercben."""
+    s = j
+    k = j
+    while k >= 0:
+        b = frames[k].ball
+        if b is not None:
+            if abs(b.x - goal_x) <= THROWOFF_GOAL_ZONE_M:
+                s = k
+            else:
+                break
+        k -= 1
+    return s
+
+
 def _in_center(b) -> bool:
     return (abs(b.x - COURT_LENGTH_M / 2.0) <= THROWOFF_ZONE_X_M
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
@@ -689,8 +709,12 @@ def throw_off_goals(match: Match, events: list,
         used_near.add(j)
         var_kilepesre = True
         tj = frames[j].t
+        # A már felismert gól a kapu előtti UTOLSÓ szakaszban (a kapus a
+        # gól után sokáig a kapu előtt tarthatja a labdát — a j előtti 3
+        # mp nem elég), és legalább THROWOFF_DEDUP_S-sel a j előtt.
+        ts = frames[_near_goal_stretch_start(frames, j, goal_x)].t
         if any(e.type is EventType.GOAL and e.team is scorer
-               and tj - dedup_t <= e.t <= t0 for e in out):
+               and min(ts, tj) - dedup_t <= e.t <= t0 for e in out):
             i += still_n
             continue
         lovesek = [k for k, e in enumerate(out)
@@ -799,9 +823,13 @@ def throw_off_candidates(match: Match,
             j, goal_x = max(jeloltek)
             t0 = frames[i].t
             tj = frames[j].t
+            # A meglévő gól a kapu előtti utolsó szakaszban (lásd
+            # _near_goal_stretch_start), vagy a becsült gól-pillanat óta.
+            ts = frames[_near_goal_stretch_start(frames, j, goal_x)].t
+            lo = min(ts - THROWOFF_DEDUP_S * fps, tj - back_t)
             if (j not in used_near and t0 - tj <= look_t
                     and not any(tj < h <= t0 for h in hatarok)
-                    and not any(tj - back_t <= g <= t0 for g in golok)):
+                    and not any(lo <= g <= t0 for g in golok)):
                 # A kapu előtti szakaszt az ELVETETT jelölt is felhasználja
                 # — különben a labda következő középen állása ugyanebből
                 # a szakaszból új jelöltet adna, és az edző visszakapná a

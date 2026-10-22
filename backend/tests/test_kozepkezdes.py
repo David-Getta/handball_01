@@ -319,6 +319,44 @@ def test_a_latott_loves_javitott_golja_a_kapusnak_is_gol():
     assert gk["on_target"] == 1 and gk["conceded"] == 1
 
 
+def test_a_latott_golt_nem_szamolja_ketszer_ha_a_kapus_sokaig_tartja():
+    """Látott gól, utána a kapus 8 mp-ig a kapu előtt tartja a labdát,
+    majd középkezdés: EGY gól (a labda utolsó kapu előtti pillanata a gól
+    után van — a meglévő gólt a kapu előtti szakaszban kell keresni), és
+    lehetséges gólt sem kínál fel."""
+    from handball.pipeline.event_detection import throw_off_candidates
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def add(players, ball):
+        nonlocal t
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    for k in range(int(4 * fps)):
+        add(_tamadas(), Ball(x=31.0 + (k % 20) * 0.1, y=10.0, confidence=1.0))
+    for k in range(8):   # LÁTOTT gól: a labda a kapufák között a vonalra
+        add(_tamadas(), Ball(x=min(40.0, 33.0 + k), y=10.0, confidence=1.0))
+    for _ in range(int(8 * fps)):   # a kapus 8 mp-ig a kapuban tartja
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=39.0, y=10.0, confidence=1.0))
+    for _ in range(int(3 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), None)
+    for _ in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), Ball(x=20.0, y=10.0,
+                                                 confidence=1.0))
+    for k in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=17.0 - 2.0 * k / (2 * fps), y=10.0, confidence=1.0))
+    m = Match(_meta(fps), frames)
+    golok = _golok(m)
+    assert len(golok) == 1, [(g.t, g.detail) for g in golok]
+    assert "goal_source" not in (golok[0].detail or {})
+    assert throw_off_candidates(m) == []
+
+
 def test_lehetseges_gol_ha_a_felallas_nem_merheto():
     """Összekeveredett felállásnál a jel hallgat — a jelölt-lista
     viszont felkínálja a pillanatot az edzőnek, a becsült
