@@ -3570,3 +3570,26 @@ def test_a_kezdolap_jelzi_a_kovetkeztetett_eredmenyt():
     app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
                / "app.py").read_text(encoding="utf-8")
     assert '"goals_inferred": goals_inferred' in app_src
+
+
+def test_a_meccs_nezet_felkinalja_a_lehetseges_golokat():
+    """A "Lehetséges gólok" kártya a motor végpontjából és mezőneveiből
+    dolgozik, és a megerősítés kézi javításként (add/goal) megy."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "/goal-candidates" in api and 'json["candidates"]' in api
+    for mezo in ('c["goal_t"]', 'c["team"]', 'c["t"]'):
+        assert mezo in meccs
+    assert '_correct(\n' in meccs or '"add",' in meccs
+    app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+               / "app.py").read_text(encoding="utf-8")
+    assert '"/matches/{match_id}/goal-candidates"' in app_src
+    from handball.pipeline import event_detection as ed
+    import inspect
+    src = inspect.getsource(ed.throw_off_candidates)
+    for kulcs in ('"t"', '"goal_t"', '"team"', '"goal_x"'):
+        assert kulcs in src

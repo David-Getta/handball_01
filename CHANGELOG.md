@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.180 óta)
 
+- **Lehetséges gólok: az edző egy kattintással megerősíti** (motor +
+  app): a középkezdés-jel szigorú (a csapatok felállását és a
+  középkezdés utáni támadás-irányt is megköveteli), ezért gyenge
+  csapat-besorolásnál vagy azonnali labdavesztésnél hallgat — pedig a
+  középen álló labda ott van. Ezek a pillanatok most "Lehetséges
+  gólok" kártyán jelennek meg a meccs-nézet esemény-listáján: a ▶ a
+  becsült gól-pillanatra ugrik, a "Gól volt" kézi javításként felveszi
+  a gólt (a ⋮ menüből a másik csapatnak is). A megerősített jelölt
+  eltűnik a listáról.
+
 - **A következtetett gól a gól pillanatára kerül** (motor): a lövés
   nélküli, középkezdésből következtetett gól eddig a labda utolsó kapu
   előtti pillanatára került — ez gyakran már a gól utáni kép (a kapus

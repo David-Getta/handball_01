@@ -709,6 +709,21 @@ class ApiClient {
     return (json["events"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Lehetséges gólok (GET /matches/{id}/goal-candidates): a labda a
+  /// középen állt, előtte a kapu előtt járt, és közöttük nincs gól. Üres
+  /// lista, ha a motor régebbi vagy a lekérés nem sikerül — a nézet
+  /// nélküle is teljes.
+  Future<List<Map<String, dynamic>>> fetchGoalCandidates(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/goal-candidates"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) return const [];
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((json["candidates"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+  }
+
   /// Játékos-fáradás (GET /matches/{id}/team-stats → "player_fatigue"):
   /// track_id → 2. félidei tempó-esés (%). Üres, ha nem mérhető.
   Future<Map<int, double>> fetchPlayerFatigue(String matchId) async {

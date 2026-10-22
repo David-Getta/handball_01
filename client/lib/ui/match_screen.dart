@@ -75,6 +75,10 @@ class _MatchScreenState extends State<MatchScreen> {
   // Betöltődtek-e az események (betöltési hibánál az üres lista nem azt
   // jelenti, hogy nem volt gól — az eredmény-sáv ilyenkor nem ítél).
   bool _eventsOk = false;
+  // Lehetséges gólok (motor: event_detection.throw_off_candidates): a
+  // labda a középen állt, előtte a kapu előtt járt, és közöttük nincs
+  // gól — az edző egy kattintással felveheti.
+  List<Map<String, dynamic>> _goalCands = const [];
   // KÉZI esemény-javítások: amit az edző a felismerésen kijavít. A
   // felismerés téved (gólt lövésnek lát, lövést nem vesz észre), az edző
   // pedig egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi el.
@@ -206,6 +210,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? setplayShapes;
     List<Map<String, dynamic>> notes = [];
     List<Map<String, dynamic>> overrides = [];
+    List<Map<String, dynamic>> goalCands = const [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
     Map<String, dynamic> attackEff = {};
@@ -273,6 +278,11 @@ class _MatchScreenState extends State<MatchScreen> {
           overrides = await _api.fetchEventOverrides(_mid);
         } catch (_) {
           overrides = []; // javítás nélkül is működik a nézet
+        }
+        try {
+          goalCands = await _api.fetchGoalCandidates(_mid);
+        } catch (_) {
+          goalCands = const []; // jelöltek nélkül is teljes a nézet
         }
         try {
           shotSpeeds = await _api.fetchShotSpeeds(_mid);
@@ -395,6 +405,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _formations = computeFormationTimeline(match);
       _events = events;
       _eventsOk = eventsOk;
+      _goalCands = goalCands;
       _overrides = overrides;
       _shots = _computeShotMarkers(match, events, xgByT, freeByT);
       _xgByT = xgByT;
@@ -731,6 +742,8 @@ class _MatchScreenState extends State<MatchScreen> {
         : _filteredEvents();
     return Column(children: [
       _scoreBar(match),
+      if (_goalCands.isNotEmpty && _sourceLabel != "demó")
+        _goalCandidatesCard(match),
       // Típus-szűrő: az edző pl. csak a gólokat nézi végig, gólról gólra.
       // A támadás-címkék (atk:) a szakasz-listára váltanak.
       Padding(
@@ -1574,6 +1587,89 @@ class _MatchScreenState extends State<MatchScreen> {
     } finally {
       if (mounted) setState(() => _correcting = false);
     }
+  }
+
+  /// "Lehetséges gólok": a labda a középen állt (középkezdés-szerűen),
+  /// előtte a kapu előtt járt, és közöttük nincs gól. A gép nem merte
+  /// gólnak mondani (pl. a csapatok felállása nem volt mérhető) — az
+  /// edző dönt: ▶ a becsült gól-pillanatra ugrik, a "Gól" gomb kézi
+  /// javításként felveszi (a valószínű csapatnak, vagy a másiknak).
+  Widget _goalCandidatesCard(Match match) {
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    String nev(String side) =>
+        side == "home" ? match.meta.homeTeam : match.meta.awayTeam;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: AppTheme.card(borderColor: AppColors.gold),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Lehetséges gólok (${_goalCands.length})",
+              style: AppText.value.copyWith(
+                  fontSize: 13, color: AppColors.gold)),
+          const SizedBox(height: 2),
+          Text(
+              "A labda a középen állt, mint egy középkezdésnél, és előtte "
+              "a kapu előtt járt — de gólt nem találtunk. Nézd meg, és ha "
+              "gól volt, egy kattintással felveheted.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+          const SizedBox(height: AppSpacing.xs),
+          for (final c in _goalCands.take(8))
+            Row(children: [
+              IconButton(
+                tooltip: "Ugrás a becsült gól-pillanatra",
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _seekToFrame(
+                    match, (c["goal_t"] as num? ?? c["t"] as num).toInt()),
+                icon: const Icon(Icons.play_arrow, color: AppColors.accent),
+              ),
+              Text(formatClock(
+                      ((c["goal_t"] as num? ?? c["t"] as num) / fps)
+                          .toDouble()),
+                  style: AppText.label.copyWith(fontSize: 12)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text("valószínű: ${nev(c["team"] as String? ?? "home")}",
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.label.copyWith(fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: _correcting
+                    ? null
+                    : () => _correct(
+                        "add",
+                        (c["goal_t"] as num? ?? c["t"] as num).toInt(),
+                        "goal",
+                        team: c["team"] as String? ?? "home"),
+                child: Text("Gól volt"),
+              ),
+              PopupMenuButton<String>(
+                tooltip: "Gól a másik csapatnak",
+                enabled: !_correcting,
+                iconSize: 16,
+                icon: const Icon(Icons.more_vert,
+                    color: AppColors.textFaint),
+                color: AppColors.surface,
+                onSelected: (side) => _correct(
+                    "add",
+                    (c["goal_t"] as num? ?? c["t"] as num).toInt(),
+                    "goal",
+                    team: side),
+                itemBuilder: (_) => [
+                  for (final side in const ["home", "away"])
+                    if (side != c["team"])
+                      PopupMenuItem(
+                          value: side,
+                          child: Text("Gól: ${nev(side)}")),
+                ],
+              ),
+            ]),
+        ],
+      ),
+    );
   }
 
   /// Az ÖSSZES kézi javítás visszavonása (a felismerés eredeti képe).

@@ -13345,6 +13345,21 @@ def create_app():
             ],
         }
 
+    @app.get("/matches/{match_id}/goal-candidates")
+    def get_goal_candidates(match_id: str):
+        """Lehetséges gólok (event_detection.throw_off_candidates): a labda
+        a középen állt, előtte a kapu előtt járt, és közöttük nincs gól.
+        Az edző a meccs-nézetben egy kattintással felveheti őket (kézi
+        javítás). Eredmény-gyorsítótárral — a kézi javítás a kulcs része,
+        tehát egy megerősítés után a lista frissül."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.event_detection import throw_off_candidates
+        return _cached_result(
+            match_id, "goal-candidates",
+            lambda: {"candidates": throw_off_candidates(match)})
+
     @app.get("/matches/{match_id}/players/{player_id}/decisions")
     def get_player_decisions(match_id: str, player_id: int):
         """Egy játékos passz-döntései: kihez passzol és mennyire optimálisan."""

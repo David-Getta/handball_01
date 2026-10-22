@@ -539,6 +539,51 @@ def _in_center(b) -> bool:
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
 
 
+def _still_at_center(frames, i: int, still_n: int, interp_conf: float) -> bool:
+    """A labda az `i` kockától `still_n` kockán át a pálya közepén ÁLL-e:
+    az `i`-n LÁTOTT labda a közepen, az ablakban sehol sincs a közepen
+    kívül, az ablak THROWOFF_SEEN_PCT százalékán láttuk, és a látott
+    labda legfeljebb THROWOFF_STILL_M métert mozdul. (A középkezdés-jel
+    és a lehetséges gólok listája ugyanezt az ablakot nézi.)"""
+    if i + still_n > len(frames):
+        return False
+    b = frames[i].ball
+    if b is None or b.confidence <= interp_conf or not _in_center(b):
+        return False
+    ablak = frames[i:i + still_n]
+    if any(f.ball is not None and not _in_center(f.ball) for f in ablak):
+        return False
+    latott = [f.ball for f in ablak
+              if f.ball is not None and f.ball.confidence > interp_conf]
+    if 100.0 * len(latott) / len(ablak) < THROWOFF_SEEN_PCT:
+        return False
+    return (max(p.x for p in latott) - min(p.x for p in latott)
+            <= THROWOFF_STILL_M
+            and max(p.y for p in latott) - min(p.y for p in latott)
+            <= THROWOFF_STILL_M)
+
+
+def _half_boundaries(match: Match) -> list:
+    """A félidő és a felvétel-darabok határai (frame-idő): a második
+    félidő (vagy egy új darab) középkezdése nem az előző félidő utolsó
+    támadásának a gólja — a kapu előtti labdának és a középkezdésnek
+    UGYANABBAN a félidőben és darabban kell lennie."""
+    hatarok: list = []
+    try:
+        from .halftime import detect_halftime
+        ht = detect_halftime(match)
+        if ht is not None:
+            hatarok.append(ht)
+    except Exception:
+        pass
+    for sz in (getattr(match.meta, "source_segments", None) or [])[1:]:
+        try:
+            hatarok.append(int(sz.get("t_from")))
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return hatarok
+
+
 def unseen_goal(e) -> bool:
     """Igaz, ha a gólt a középkezdésből következtettük, és magát a
     LÖVÉST nem láttuk (throw_off_goals új eseménye, nem egy látott lövés
@@ -587,23 +632,8 @@ def throw_off_goals(match: Match, events: list,
 
     still_n = max(2, int(round(THROWOFF_STILL_S * fps)))
     look_t = THROWOFF_LOOKBACK_S * fps
-    # A félidő és a felvétel-darabok határa: a második félidő (vagy egy
-    # új darab) középkezdése nem az előző félidő utolsó támadásának a
-    # gólja — a kapu előtti labdának és a középkezdésnek UGYANABBAN a
-    # félidőben és darabban kell lennie.
-    hatarok: list = []
-    try:
-        from .halftime import detect_halftime
-        ht = detect_halftime(match)
-        if ht is not None:
-            hatarok.append(ht)
-    except Exception:
-        pass
-    for sz in (getattr(match.meta, "source_segments", None) or [])[1:]:
-        try:
-            hatarok.append(int(sz.get("t_from")))
-        except (TypeError, ValueError, AttributeError):
-            continue
+    # A félidő és a felvétel-darabok határa (lásd _half_boundaries).
+    hatarok = _half_boundaries(match)
     dedup_t = THROWOFF_DEDUP_S * fps
     upgrade_t = THROWOFF_UPGRADE_S * fps
     out = list(events)
@@ -624,25 +654,8 @@ def throw_off_goals(match: Match, events: list,
                 last_near[COURT_LENGTH_M] = i
             if var_kilepesre and not _in_center(b):
                 var_kilepesre = False
-        if (var_kilepesre or b is None or b.confidence <= _INTERP
-                or not _in_center(b) or i + still_n > n):
-            i += 1
-            continue
-        ablak = frames[i:i + still_n]
-        # Az ablakban a labda sehol sincs a közepen KÍVÜL, többnyire
-        # látjuk, és alig mozdul.
-        if any(f.ball is not None and not _in_center(f.ball) for f in ablak):
-            i += 1
-            continue
-        latott = [f.ball for f in ablak
-                  if f.ball is not None and f.ball.confidence > _INTERP]
-        if 100.0 * len(latott) / len(ablak) < THROWOFF_SEEN_PCT:
-            i += 1
-            continue
-        if (max(p.x for p in latott) - min(p.x for p in latott)
-                > THROWOFF_STILL_M
-                or max(p.y for p in latott) - min(p.y for p in latott)
-                > THROWOFF_STILL_M):
+        # A labda a közepen áll (lásd _still_at_center).
+        if var_kilepesre or not _still_at_center(frames, i, still_n, _INTERP):
             i += 1
             continue
         # Melyik kapu előtt járt utoljára a labda?
@@ -714,6 +727,81 @@ def throw_off_goals(match: Match, events: list,
                                   detail=reszlet))
         i += still_n
     out.sort(key=lambda e: e.t)
+    return out
+
+
+def throw_off_candidates(match: Match,
+                         config: Optional[TacticsConfig] = None) -> list:
+    """Lehetséges gólok: középkezdés-szerű pillanatok gól nélkül.
+
+    A középkezdés-jel (throw_off_goals) szigorú — a felállást és a
+    középkezdés utáni támadás-irányt is megköveteli, tehát gyenge
+    csapat-besorolásnál vagy azonnali labdavesztésnél hallgat. Ez a
+    lista az edzőnek adja oda a döntést: minden pillanat, ahol a labda
+    legalább THROWOFF_STILL_S másodpercig a középen állt
+    (_still_at_center), előtte THROWOFF_LOOKBACK_S másodpercen belül az
+    egyik kapu előtt járt (ugyanabban a félidőben és felvétel-darabban),
+    és közöttük — a gól becsült pillanatától a középkezdésig — NINCS gól
+    (sem felismert, sem következtetett, sem kézzel felvett).
+
+    Edzői olvasat: gyanú, nem állítás — a lejátszó a becsült
+    gól-pillanatra ugrik, és egy kattintás kézi javításként veszi fel.
+
+    Visszaad: [{"t": a középkezdés ideje, "goal_t": a becsült
+    gól-pillanat, "team": a kaput támadó csapat ("home"/"away"),
+    "goal_x": a kapu x-e}], időrendben.
+    """
+    config = config or TacticsConfig()
+    frames = match.frames
+    n = len(frames)
+    if n == 0:
+        return []
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    from .ball_filter import INTERPOLATED_CONFIDENCE as _INTERP
+
+    still_n = max(2, int(round(THROWOFF_STILL_S * fps)))
+    look_t = THROWOFF_LOOKBACK_S * fps
+    back_t = THROWOFF_GOALTIME_BACK_S * fps
+    hatarok = _half_boundaries(match)
+    golok = [e.t for e in detect_shots(match, config)
+             if e.type is EventType.GOAL]
+    last_near: dict = {0.0: None, COURT_LENGTH_M: None}
+    used_near: set = set()
+    out: list = []
+    kozepen = False
+    i = 0
+    while i < n:
+        b = frames[i].ball
+        if b is not None:
+            if b.x <= THROWOFF_GOAL_ZONE_M:
+                last_near[0.0] = i
+            elif b.x >= COURT_LENGTH_M - THROWOFF_GOAL_ZONE_M:
+                last_near[COURT_LENGTH_M] = i
+            if kozepen and not _in_center(b):
+                kozepen = False
+        if kozepen or not _still_at_center(frames, i, still_n, _INTERP):
+            i += 1
+            continue
+        # Egy középen állásból legfeljebb egy jelölt.
+        kozepen = True
+        jeloltek = [(j, gx) for gx, j in last_near.items() if j is not None]
+        if jeloltek:
+            j, goal_x = max(jeloltek)
+            t0 = frames[i].t
+            tj = frames[j].t
+            if (j not in used_near and t0 - tj <= look_t
+                    and not any(tj < h <= t0 for h in hatarok)
+                    and not any(tj - back_t <= g <= t0 for g in golok)):
+                used_near.add(j)
+                try:
+                    kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
+                except Exception:
+                    kg = j
+                out.append({
+                    "t": t0, "goal_t": frames[kg].t,
+                    "team": _attacking_team_for_goal(goal_x, config).value,
+                    "goal_x": goal_x})
+        i += still_n
     return out
 
 
