@@ -377,6 +377,30 @@ def test_az_elvetett_lehetseges_gol_eltunik():
     assert _golok(m) == []
 
 
+def test_a_minoseg_jelentes_megnevezi_a_lehetseges_golokat():
+    """Kevés gól mellett a "Gyanúsan kevés gól" figyelmeztetés kimondja,
+    hány lehetséges gól vár, és hol vehető fel."""
+    from handball.pipeline.quality import (GOALS_RATE_MIN_MINUTES,
+                                           compute_quality_report)
+
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    m = _meccs(kozep_jatekosok=kevert)
+    # A meccs hosszát a gól-arány küszöbe fölé nyújtjuk (a végén álló,
+    # a közepen kívüli labdával).
+    fps = m.meta.fps
+    t = m.frames[-1].t + 1
+    while t < int((GOALS_RATE_MIN_MINUTES + 1) * 60 * fps):
+        m.frames.append(Frame(t=t, players=_kozepkezdes_hazai_gol_utan(),
+                              ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+        t += 1
+    q = compute_quality_report(m)
+    assert q["goal_candidates"] == 1
+    keves = [w for w in q["warnings"] if "kevés gól" in w]
+    assert keves and "1 lehetséges gólt is találtunk" in keves[0]
+
+
 def test_egy_kapu_elotti_szakaszbol_egy_gol():
     """Két egymás utáni középkezdés-szerű állás ugyanazon kapu előtti
     szakasz után: csak egy gól."""

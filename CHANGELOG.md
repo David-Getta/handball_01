@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **A "Gyanúsan kevés gól" megnevezi a lehetséges gólokat** (minőség-
+  jelentés): ha a felismerés kevés gólt talált, de a meccsen lehetséges
+  gólok vannak, a leggyorsabb javítás azok megerősítése — a
+  figyelmeztetés most kimondja, hány vár, és hogy a meccs-nézet
+  kártyáján egy kattintással felvehetők.
+
 - **Lehetséges gól: "Nem gól"** (app): a kártyán eddig csak
   megerősíteni lehetett — ha egy jelölt nem gól volt (időkérés után a
   középen tartott labda, megállt játék), örökre a listán maradt, és a

@@ -683,6 +683,14 @@ def compute_quality_report(match: Match) -> dict:
     goals = 0
     attempts = 0
     goals_throw_off = 0
+    # A LEHETSÉGES gólok száma (event_detection.throw_off_candidates) —
+    # a "Gyanúsan kevés gól" teendője és a jelentés mezője.
+    goal_candidates = 0
+    try:
+        from .event_detection import throw_off_candidates as _toc
+        goal_candidates = len(_toc(match))
+    except Exception:
+        pass
     try:
         from .event_detection import EventType as _ET, detect_shots as _ds
         _lovesek = _ds(match)
@@ -738,6 +746,14 @@ def compute_quality_report(match: Match) -> dict:
                       "elmosódott labdáját ritkán. A \"Pontos\" minőségi "
                       "profil segít; addig a hiányzó gólokat a meccs-nézet "
                       "Javítások menüjében (Hiányzó gól) veheted fel.")
+            # A leggyorsabb javítás: a LEHETSÉGES GÓLOK megerősítése (a
+            # labda középkezdés-szerűen a középen állt, előtte a kapu
+            # előtt járt) — ha vannak, kimondjuk, hány és hol.
+            if goal_candidates:
+                ok += (f" {goal_candidates} lehetséges gólt is találtunk "
+                       "(a labda középkezdés-szerűen a középen állt): a "
+                       "meccs-nézet \"Lehetséges gólok\" kártyáján egy "
+                       "kattintással felveheted őket.")
             warnings.append(fej + ok)
 
     # --- Aránytalan-e az eredmény? ---
@@ -879,6 +895,7 @@ def compute_quality_report(match: Match) -> dict:
         "shot_attempts": attempts,
         "goals_detected": goals,
         "goals_from_throw_off": goals_throw_off,
+        "goal_candidates": goal_candidates,
         "ball_near_goal_pct": round(near_goal_pct, 1),
         # Amit nem láttunk, csak PÓTOLTUNK (rövid hézagok lineáris
         # kitöltése) — külön szám, hogy a lefedettség ne tűnjön jobbnak.
