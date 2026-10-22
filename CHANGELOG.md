@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.181 óta)
 
+- **A "Lehetséges gólok" kártya kimondja, ha nem fér el** (app): a
+  kártya legfeljebb 8 sort mutat — ha több jelölt volt, a többi szó
+  nélkül elmaradt. Most egy sor kimondja, hány vár még; az elsők
+  megerősítése vagy elvetése után feljönnek.
+
 - **Lehetséges gól: a kijelölt játékos lesz a lövő** (app): a "Gól
   volt" gomb a megerősített gólt eddig lövő nélkül vette fel, így az a
   góllövő-listákból kimaradt. Most — mint a "Hiányzó gól" tételnél — a

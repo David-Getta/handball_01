@@ -430,3 +430,37 @@ def test_a_lehetseges_golok_klip_csomagja(tmp_path, monkeypatch):
     app.state.put_match(m)
     r = TestClient(app).get("/matches/klip-lehetseges/clip-players").json()
     assert r["totals"].get("goal_candidate") == 1
+
+
+
+def test_a_lehetseges_golok_vegpontja_es_az_elvetes(tmp_path, monkeypatch):
+    """A /goal-candidates végpont a jelöltet adja; a "Nem gól" (dismiss)
+    kézi javítás mentése után üres — végponttól végpontig."""
+    import importlib.util
+    from pathlib import Path
+
+    from handball.api.app import create_app
+    from handball.models.tracking import Team
+
+    spec = importlib.util.spec_from_file_location(
+        "_kk_fixture4", Path(__file__).with_name("test_kozepkezdes.py"))
+    kk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kk)
+    kevert = ([kk._pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [kk._pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = kk._meccs(kozep_jatekosok=kevert)
+    m.meta.match_id = "jelolt-api"
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    jel = c.get("/matches/jelolt-api/goal-candidates").json()["candidates"]
+    assert len(jel) == 1 and jel[0]["team"] == "home"
+    r = c.post("/matches/jelolt-api/event-overrides",
+               json={"overrides": [{"op": "dismiss", "t": jel[0]["t"],
+                                    "type": "goal"}]})
+    assert r.status_code == 200
+    assert r.json()["overrides"][0]["op"] == "dismiss"
+    assert c.get("/matches/jelolt-api/goal-candidates").json()[
+        "candidates"] == []

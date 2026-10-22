@@ -1634,6 +1634,11 @@ class _MatchScreenState extends State<MatchScreen> {
               "kijelölöd a lövőt, a gól hozzá kerül).",
               style: AppText.label.copyWith(fontSize: 11.5)),
           const SizedBox(height: AppSpacing.xs),
+          if (_goalCands.length > 8)
+            Text(
+                "… és még ${_goalCands.length - 8} — az elsők megerősítése "
+                "vagy elvetése után feljönnek.",
+                style: AppText.label.copyWith(fontSize: 11)),
           for (final c in _goalCands.take(8))
             Row(children: [
               IconButton(
