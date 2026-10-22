@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.181 óta)
+## v0.1.182 — kiadva (2026-10-22)
+
+> Kiadás-jegyzet: JAVÍTÁS — ha a kapus a látott gól után sokáig a kapu
+> előtt tartotta a labdát, a középkezdés egy második gólt is hozzáadott
+> (v0.1.179 óta; most egyszer számol). Emellett: a lehetséges gólok a
+> kezdőlapon is látszanak ("N
+> lehetséges gól"), klip-csomagként videón is végignézhetők, és a "Nem
+> gól" gombbal el is vethetők; a "Gól volt" a pályán kijelölt játékost
+> adja lövőnek; a "Gyanúsan kevés gól" figyelmeztetés megnevezi őket.
 
 - **A látott gólt nem számolja kétszer, ha a kapus sokáig tartja**
   (motor, javítás): a középkezdés-jel a már felismert gólt csak a labda
