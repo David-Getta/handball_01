@@ -314,6 +314,22 @@ def test_a_minoseg_jelentes_szamolja_a_kovetkeztetett_golokat():
     assert q2["goals_detected"] == 1 and q2["goals_from_throw_off"] == 0
 
 
+def test_a_minoseg_jelentes_szamolja_a_lovo_nelkuli_golokat():
+    """A lövő nélküli gól kimarad a góllövő-listákból: a minőség-jelentés
+    megszámolja, és azt is, hol tippel a gép; a lövő megadása után 0."""
+    from handball.pipeline.quality import compute_quality_report
+
+    m, _, _ = _kiszedeses_meccs(gyors=True)
+    q = compute_quality_report(m)
+    assert q["goals_without_shooter"] == 1 and q["shooter_hints"] == 1
+    g = _golok(m)[0]
+    m.meta.event_overrides = [{"op": "set_player", "t": g.t,
+                               "type": "goal",
+                               "player_id": g.detail["shooter_hint"]}]
+    q2 = compute_quality_report(m)
+    assert q2["goals_without_shooter"] == 0 and q2["shooter_hints"] == 0
+
+
 def _kapussal(m):
     """A vendég kapusa a +x kapuban (a hazai erre támad)."""
     for f in m.frames:

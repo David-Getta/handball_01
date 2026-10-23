@@ -3535,7 +3535,8 @@ def test_a_minoseg_ablak_mutatja_a_gol_diagnozist():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     src = inspect.getsource(quality.compute_quality_report)
     for mezo in ("shot_attempts", "goals_detected", "ball_near_goal_pct",
-                 "goals_from_throw_off"):
+                 "goals_from_throw_off", "goals_without_shooter",
+                 "shooter_hints"):
         assert f'q["{mezo}"]' in meccs
         assert f'"{mezo}"' in src
     assert "minőség-jelentés" in meccs

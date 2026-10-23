@@ -3097,6 +3097,17 @@ class _MatchScreenState extends State<MatchScreen> {
                       : ""}) · labda a "
                   "kapuk előtt: ${q["ball_near_goal_pct"] ?? 0}%",
                   style: AppText.label),
+            // A lövő nélküli gólok kimaradnak a góllövő-listákból — az
+            // edző lássa, és tudja, hol pótolhatja (motor: quality.py
+            // goals_without_shooter / shooter_hints).
+            if (((q["goals_without_shooter"] ?? 0) as num) > 0)
+              Text(
+                  "Lövő nélküli gól: ${q["goals_without_shooter"]}"
+                  "${((q["shooter_hints"] ?? 0) as num) > 0
+                      ? " (${q["shooter_hints"]}-nél a gép tippel)"
+                      : ""} — a góllövő-listákból kimarad; az "
+                  "Események listán a sor ⋮ menüjében megadható.",
+                  style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
             Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
             // A pályán kívülre vetülő mérések aránya: ez az elcsúszott

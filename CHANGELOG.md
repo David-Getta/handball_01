@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.182 óta)
 
+- **Lövő nélküli gólok a minőség-ablakban** (motor + kliens): a
+  középkezdésből következtetett (és a lövő nélkül kézzel felvett) gól a
+  góllövő-listákból kimarad — az edző eddig nem látta, hogy a lista
+  hiányos. A minőség-jelentés megszámolja ("goals_without_shooter"), és
+  azt is, hány helyen tippel a gép ("shooter_hints"); a meccs-nézet
+  minőség-ablakában külön sor mondja meg, hol pótolható.
+
 - **Valószínű lövő a középkezdésből következtetett gólnál** (motor +
   kliens): a ↻ gól lövője szándékosan ismeretlen (a gól utáni képből
   bárkit megtehetne szerzőnek). Ha viszont a gép a kapu felé tartó gyors

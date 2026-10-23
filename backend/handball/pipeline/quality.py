@@ -683,6 +683,10 @@ def compute_quality_report(match: Match) -> dict:
     goals = 0
     attempts = 0
     goals_throw_off = 0
+    # A LÖVŐ NÉLKÜLI gólok (a góllövő-listákból kimaradnak), és ebből
+    # ahol a gép valószínű lövőt kínál (event_detection._shooter_hint).
+    goals_no_shooter = 0
+    shooter_hints = 0
     # A LEHETSÉGES gólok száma (event_detection.throw_off_candidates) —
     # a "Gyanúsan kevés gól" teendője és a jelentés mezője.
     goal_candidates = 0
@@ -703,6 +707,12 @@ def compute_quality_report(match: Match) -> dict:
             and (e.detail or {}).get("goal_source") == "középkezdés")
         attempts = sum(1 for e in _lovesek
                        if e.type in (_ET.GOAL, _ET.SHOT))
+        _lovo_nelkul = [e for e in _lovesek
+                        if e.type is _ET.GOAL and e.player_id is None]
+        goals_no_shooter = len(_lovo_nelkul)
+        shooter_hints = sum(
+            1 for e in _lovo_nelkul
+            if (e.detail or {}).get("shooter_hint") is not None)
     except Exception:
         pass
     # A LÁTOTT labda (a pótolt nem) a kapuk előtti sávban — a
@@ -896,6 +906,10 @@ def compute_quality_report(match: Match) -> dict:
         "goals_detected": goals,
         "goals_from_throw_off": goals_throw_off,
         "goal_candidates": goal_candidates,
+        # A lövő nélküli gólok (a góllövő-listák hiánya), és ebből ahol a
+        # gép valószínű lövőt kínál — a meccs-nézetben pótolható.
+        "goals_without_shooter": goals_no_shooter,
+        "shooter_hints": shooter_hints,
         "ball_near_goal_pct": round(near_goal_pct, 1),
         # Amit nem láttunk, csak PÓTOLTUNK (rövid hézagok lineáris
         # kitöltése) — külön szám, hogy a lefedettség ne tűnjön jobbnak.
