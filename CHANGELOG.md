@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.183 óta)
+## v0.1.184 — kiadva (2026-10-23)
+
+> Kiadás-jegyzet: JAVÍTÁS — a meccs-nézet Események füle alacsony
+> panelen (kis ablak, laptop) is görgethető, és az eredmény-sáv
+> magyarázata az eredmény alá került. Emellett: a középkezdésből akkor
+> is számol gólt, ha a labdát a kapu előtt nem látta (a gól kapuját a
+> játékosok utolsó felállt támadása adja).
 
 - **Az Események fül alacsony panelen is görgethető** (kliens, javítás):
   kis ablakban / laptopon a meccs-nézet jobb oldali paneljén a fejléc
