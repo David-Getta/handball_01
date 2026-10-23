@@ -1234,9 +1234,7 @@ def create_app():
                 cap = open_capture(path)
             except VideoOpenError as e:
                 raise HTTPException(status_code=400, detail=str(e))
-            from ..pipeline.broadcast_lines import (
-                detect_court_lines_color, line_intersections,
-                suggest_calibration_quad)
+            from ..pipeline.broadcast_lines import detect_court_quad
 
             fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 25.0
             hossz = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -1261,15 +1259,17 @@ def create_app():
                 if not ok or img is None:
                     return None
                 h_, w_ = img.shape[:2]
-                found = detect_court_lines_color(img[:, :, ::-1], line_color)
-                lines = found["lines"]
-                corners = line_intersections(lines, w_, h_)
+                # "auto"-nál a négyszög a cél: ha a legtöbb pixelt adó
+                # szín vonalaiból nem áll össze, a többi színt és a
+                # festett mezők szélét is kipróbálja (detect_court_quad).
+                found = detect_court_quad(img[:, :, ::-1], line_color)
                 return {"frame": int(t), "width": w_, "height": h_,
                         "line_color": found["color"],
                         "line_pixels": found["pixels"],
-                        "lines": lines, "corners": corners,
-                        "suggested_quad": suggest_calibration_quad(
-                            corners, w_, h_)}
+                        "colors_tried": found["tried"],
+                        "lines": found["lines"],
+                        "corners": found["corners"],
+                        "suggested_quad": found["suggested_quad"]}
 
             elso, legjobb = None, None
             nezett = 0

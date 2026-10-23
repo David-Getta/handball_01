@@ -128,6 +128,81 @@ def color_line_mask(rgb, color: str = "piros",
     return _thin_line_mask(score, delta) & (score >= dominance)
 
 
+# FESTETT MEZŐK SZÉLE. Több csarnokban a kézilabda-pálya legjobban látszó
+# eleme nem vonal, hanem FESTETT FELÜLET: tömör sárga (kék, narancs)
+# kapuelőtér, színes játékfelület. A szélük a pálya vonala (gólvonal,
+# 6 m-es vonal, oldalvonal) — a vékony-vonal-maszk viszont épp ezt dobja
+# el (a kétoldali próba csak a vékony vonalat tartja meg). Ez a maszk a
+# telített, nagy foltok HATÁRÁT adja: a parketta (kevésbé telített) és a
+# vékony festett vonal (a nyitás kiszedi) nem folt.
+FIELD_MIN_SAT = 0.55       # a festett felület telítettsége (0..1)
+FIELD_MIN_VAL = 80         # ...és világossága (0..255)
+FIELD_DOMINANCE = 40       # a szín-csatorna ennyivel erősebb a többinél
+# A nyitás sugara a kép rövidebb oldalához mérve: az ennél vékonyabb
+# festett vonal nem folt (1080p-n ~4 px sugár → ~9 px-ig kiesik).
+FIELD_OPEN_FRAC = 1.0 / 250.0
+
+
+def _erode(m, r: int):
+    """Bináris erózió (2r+1)×(2r+1)-es négyzettel, szétválasztva (sor,
+    majd oszlop). A képen kívül IGAZ — a képszélig érő folt széle így nem
+    lesz "él" (különben a kép kerete vonalnak látszana)."""
+    import numpy as np
+
+    out = m.copy()
+    for d in range(1, r + 1):
+        out[:, d:] &= m[:, :-d]
+        out[:, :-d] &= m[:, d:]
+    sor = out.copy()
+    for d in range(1, r + 1):
+        out[d:, :] &= sor[:-d, :]
+        out[:-d, :] &= sor[d:, :]
+    return np.asarray(out, dtype=bool)
+
+
+def _dilate(m, r: int):
+    """Bináris tágítás (2r+1)×(2r+1)-es négyzettel, szétválasztva."""
+    import numpy as np
+
+    out = m.copy()
+    for d in range(1, r + 1):
+        out[:, d:] |= m[:, :-d]
+        out[:, :-d] |= m[:, d:]
+    sor = out.copy()
+    for d in range(1, r + 1):
+        out[d:, :] |= sor[:-d, :]
+        out[:-d, :] |= sor[d:, :]
+    return np.asarray(out, dtype=bool)
+
+
+def field_edge_mask(rgb):
+    """A FESTETT mezők (kapuelőtér, színes játékfelület) határának maszkja.
+
+    Színenként (LINE_COLORS) a telített, domináns színű pixelek foltja;
+    a morfológiai nyitás kiszedi a vékony festett vonalakat; a határ a
+    folt 1 px-es tágítása és szűkítése közti sáv. A két szomszédos
+    festett mező (sárga kapuelőtér a zöld felületen) határa mindkét
+    színnél él."""
+    import numpy as np
+
+    a = np.asarray(rgb).astype(np.int16)
+    mx = a.max(axis=2)
+    mn = a.min(axis=2)
+    telitett = ((mx - mn) >= FIELD_MIN_SAT * np.maximum(mx, 1)) \
+        & (mx >= FIELD_MIN_VAL)
+    r = max(2, int(round(min(a.shape[:2]) * FIELD_OPEN_FRAC)))
+    out = np.zeros(a.shape[:2], dtype=bool)
+    for pos, neg in LINE_COLORS.values():
+        pos_v = np.min(np.stack([a[:, :, i] for i in pos], axis=0), axis=0)
+        neg_v = np.max(np.stack([a[:, :, i] for i in neg], axis=0), axis=0)
+        folt = telitett & ((pos_v - neg_v) >= FIELD_DOMINANCE)
+        if not folt.any():
+            continue
+        folt = _dilate(_erode(folt, r), r)          # nyitás
+        out |= _dilate(folt, 1) & ~_erode(folt, 1)  # a határ
+    return out
+
+
 def hough_lines(mask, max_lines: int = HOUGH_MAX_LINES):
     """Domináns egyenesek a maszk pontjaiból: [(theta_deg, rho, votes)].
 
@@ -247,9 +322,12 @@ def detect_court_lines_color(rgb, color: str = "auto",
     futnak. A `color`:
       - "feher": a régi, fényesség-alapú maszk,
       - "piros"/"kek"/"zold"/"sarga": az adott szín vonalai,
+      - "mezo": a festett mezők (kapuelőtér, színes felület) széle
+        (field_edge_mask),
       - "auto": mindet kipróbáljuk, és a LEGTÖBB vonal-pixelt adó
         maszk nyer — a fehér csak akkor veszít, ha egy szín érdemben
-        (COLOR_WIN_RATIO-szor) több pixelt hoz.
+        (COLOR_WIN_RATIO-szor) több pixelt hoz. (A négyszög-javaslat
+        ennél tovább próbálkozik: detect_court_quad.)
 
     `rgb`: (magasság, szélesség, 3) R,G,B tömb.
 
@@ -267,11 +345,13 @@ def detect_court_lines_color(rgb, color: str = "auto",
     pixels = {k: int(m.sum()) for k, m in masks.items()}
 
     if color == "auto":
-        best_color = max(LINE_COLORS, key=lambda c: pixels[c])
-        chosen = (best_color
-                  if pixels[best_color] >= COLOR_WIN_RATIO * max(
-                      1, pixels["feher"])
-                  else "feher")
+        chosen = _auto_color(pixels)
+    elif color == FIELD_EDGE_COLOR:
+        # A festett mezők széle (field_edge_mask) — csak kérésre (vagy
+        # a detect_court_quad tartalék-sorában), az "auto" nem választja.
+        masks[color] = field_edge_mask(a)
+        pixels[color] = int(masks[color].sum())
+        chosen = color
     else:
         if color not in masks:
             raise ValueError(f"ismeretlen vonalszín: {color}")
@@ -279,6 +359,74 @@ def detect_court_lines_color(rgb, color: str = "auto",
 
     lines = detect_court_lines(gray, max_lines, mask=masks[chosen])
     return {"color": chosen, "lines": lines, "pixels": pixels}
+
+
+# A festett mezők szélének "színe" a vonalszín-választásban.
+FIELD_EDGE_COLOR = "mezo"
+# A tartalék-sorba csak az a szín kerül, amelyik legalább ennyi
+# vonal-pixelt ad a kép területéhez képest (a pár pixeles zaj nem pálya).
+COLOR_MIN_PIXEL_FRAC = 0.0005
+
+
+def _auto_color(pixels: dict) -> str:
+    """Az "auto" mód első választása: a legtöbb vonal-pixelt adó szín, ha
+    COLOR_WIN_RATIO-szor többet hoz a fehérnél — különben a fehér."""
+    best_color = max(LINE_COLORS, key=lambda c: pixels[c])
+    return (best_color
+            if pixels[best_color] >= COLOR_WIN_RATIO * max(1, pixels["feher"])
+            else "feher")
+
+
+def detect_court_quad(rgb, color: str = "auto",
+                      max_lines: int = HOUGH_MAX_LINES) -> dict:
+    """Vonalak + sarok-jelöltek + kalibrációs négyszög-javaslat egy képből.
+
+    Konkrét `color`-nál az adott szín vonalaiból. "auto"-nál a több sportot
+    kiszolgáló csarnok miatt NEM egyetlen tippből: a legtöbb pixel nem
+    jelenti a kézilabda-pályát (a kosár- és röplabda-vonalak együtt
+    gyakran többen vannak). Sorban próbálja: az első választás
+    (_auto_color), aztán a többi szín a vonal-pixelek száma szerint
+    csökkenő sorrendben (a zaj-szintűek kimaradnak), végül a festett
+    mezők széle — és az ELSŐ, amelyikből négyszög áll össze, nyer. Ha
+    egyikből sem, az első választás vonalait adja (a kliens kirajzolja,
+    mit látott a gép).
+
+    Visszatérés: {"color", "lines", "pixels", "corners",
+    "suggested_quad", "tried": [kipróbált színek]}."""
+    import numpy as np
+
+    a = np.asarray(rgb)
+    h, w = a.shape[:2]
+
+    def _egy(szin: str) -> dict:
+        found = detect_court_lines_color(a, szin, max_lines)
+        corners = line_intersections(found["lines"], w, h)
+        found["corners"] = corners
+        found["suggested_quad"] = suggest_calibration_quad(corners, w, h)
+        return found
+
+    if color != "auto":
+        r = _egy(color)
+        r["tried"] = [r["color"]]
+        return r
+    elso = _egy("auto")
+    probalt = [elso["color"]]
+    if elso["suggested_quad"]:
+        elso["tried"] = probalt
+        return elso
+    pixels = elso["pixels"]
+    minimum = COLOR_MIN_PIXEL_FRAC * w * h
+    sor = sorted((c for c in ["feher", *LINE_COLORS]
+                  if c != elso["color"] and pixels.get(c, 0) >= minimum),
+                 key=lambda c: (-pixels[c], c))
+    for szin in [*sor, FIELD_EDGE_COLOR]:
+        r = _egy(szin)
+        probalt.append(szin)
+        if r["suggested_quad"]:
+            r["tried"] = probalt
+            return r
+    elso["tried"] = probalt
+    return elso
 
 
 # Metszéspont-számításnál ennél párhuzamosabb vonalpárt nem metszünk.

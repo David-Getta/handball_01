@@ -584,6 +584,27 @@ Map<String, String> savedPlayQuery(Map<String, dynamic> play) {
 /// alja épp ennyi, a sarok a szélén ragadt.
 const double calibMinScale = 0.10;
 
+/// A kalibráló képernyő vonalszín-választója: (a motor kulcsa, felirat) —
+/// a motor broadcast_lines.LINE_COLORS + "feher" + "mezo" (a festett
+/// mezők széle) + "auto".
+const calibLineColors = [
+  ("auto", "automatikus"),
+  ("feher", "fehér"),
+  ("piros", "piros"),
+  ("kek", "kék"),
+  ("zold", "zöld"),
+  ("sarga", "sárga"),
+  ("mezo", "festett mezők széle"),
+];
+
+/// A motor vonalszín-kulcsának magyar neve (ismeretlennél a kulcs).
+String calibLineColorHu(String? c) {
+  for (final (v, l) in calibLineColors) {
+    if (v == c) return l;
+  }
+  return c ?? "?";
+}
+
 /// A kalibráló kép következő mérete a kicsinyítés / nagyítás gombra:
 /// 25% fölött 12 százalékpontos, alatta 5 százalékpontos lépés,
 /// [calibMinScale]..1 között.

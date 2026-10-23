@@ -152,6 +152,21 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   bool _suggesting = false;
   String? _suggestNote;
 
+  // A vonal-felismerés KÖVETENDŐ színe ("auto": a motor dönt — a több
+  // sportot kiszolgáló csarnokban sorban próbálja a színeket, végül a
+  // festett mezők szélét). Ha a gép rossz vonalakat lát (pl. a kosárlabda
+  // kék vonalait), itt felülbírálható.
+  String _lineColor = "auto";
+  // AMIT A GÉP LÁTOTT: a felismert vonalak (kép-pixelben), a kép mérete és
+  // a kocka, amelyiken — a rajz csak ezen a kockán érvényes. Enélkül a
+  // "nem találtam elég vonalat" fekete doboz: az edző nem látja, hogy a
+  // gép a kosárpálya vonalait nézte.
+  List<List<Offset>> _seenLines = const [];
+  Size? _seenSize;
+  int? _seenFrame;
+  String? _seenColor;
+  bool _showSeen = true;
+
   // ILLESZKEDÉS-MÉRÉS: a motor megméri, mennyire ül a rajzolt pálya-modell
   // a valódi pályavonalakon EZEN a kockán (ugyanaz a mérés, amit a
   // feldolgozás is végez menet közben) — a szem a néhány képpontos
@@ -324,6 +339,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           final size = Size(c.maxWidth, c.maxHeight);
           _canvasSize = size;
           final pts = [for (final f in _activePts) Offset(f.dx * size.width, f.dy * size.height)];
+          final seen = _seenOnCanvas(size);
           return Focus(
             autofocus: true,
             onKeyEvent: _nudgeKey,
@@ -376,7 +392,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                       margin: _margin,
                       fine: _fineTune,
                       active: _lastCorner,
-                      drawBackground: _frameBytes == null),
+                      drawBackground: _frameBytes == null,
+                      seenLines: seen),
                   size: size,
                 ),
               ],
@@ -754,6 +771,45 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             // négyszöget. Nulláról jelölni sokkal nehezebb, a rosszul
             // jelölt sarok pedig az egész elemzést elviszi.
             if (widget.videoPath != null) ...[
+              Row(children: [
+                Text("Vonalszín:",
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: _lineColor,
+                    isDense: true,
+                    isExpanded: true,
+                    dropdownColor: AppColors.surface,
+                    style: AppText.label.copyWith(
+                        fontSize: 12, color: AppColors.textPrimary),
+                    items: [
+                      for (final (v, l) in calibLineColors)
+                        DropdownMenuItem(value: v, child: Text(l)),
+                    ],
+                    onChanged: _suggesting
+                        ? null
+                        : (v) => setState(() => _lineColor = v ?? "auto"),
+                  ),
+                ),
+              ]),
+              if (_seenLines.isNotEmpty)
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                        "A gép által látott vonalak "
+                        "(${_seenLines.length} db, "
+                        "${calibLineColorHu(_seenColor)}) — rózsaszínnel "
+                        "a képen",
+                        style: AppText.label.copyWith(fontSize: 11)),
+                  ),
+                  Switch(
+                    value: _showSeen,
+                    activeThumbColor: AppColors.accent,
+                    onChanged: (v) => setState(() => _showSeen = v),
+                  ),
+                ]),
+              const SizedBox(height: 4),
               OutlinedButton.icon(
                 onPressed: _suggesting ? null : _suggestCorners,
                 style: OutlinedButton.styleFrom(
@@ -858,7 +914,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       // össze a négyszög, a motor a környező húsz másodpercben keres
       // tisztább kockát (tömeg, felirat, rossz pillanat miatt gyakori).
       final r = await api.fetchBroadcastLines(path, frame: _frameIdx,
-          searchSeconds: 20);
+          searchSeconds: 20, lineColor: _lineColor);
+      if (!mounted) return;
+      _storeSeen(r);
       final quad = r["suggested_quad"] as List?;
       final w = (r["width"] as num?)?.toDouble() ??
           _frameSize?.width ?? 1920.0;
@@ -869,9 +927,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         if (!mounted) return;
         setState(() => _suggestNote =
             "Nem találtam elég pályavonalat a javaslathoz — $nezett "
-            "képkockát néztem meg a környéken. Léptess olyan részre, ahol "
-            "a pálya vonalai tisztán látszanak (nincs rajta tömeg, "
-            "felirat), vagy jelöld be kézzel a 4 sarkot.");
+            "képkockát néztem meg a környéken. A gép által látott "
+            "vonalakat rózsaszínnel a képre rajzoltam: ha nem a "
+            "kézilabda-pálya vonalai, válassz másik VONALSZÍNT (pl. "
+            "piros, vagy a festett mezők széle). Léptethetsz olyan "
+            "részre is, ahol a pálya vonalai tisztán látszanak, vagy "
+            "jelöld be kézzel a 4 sarkot.");
         return;
       }
       // A motor MÁSIK kockán találta meg: oda léptetünk, különben a
@@ -894,7 +955,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         _frameIdx = talalt;
         _saved = false;
         _suggestNote =
-            "Javaslat betöltve ($nLines felismert vonalból"
+            "Javaslat betöltve ($nLines felismert vonalból, vonalszín: "
+            "${calibLineColorHu(r["line_color"] as String?)}"
+            "${((r["colors_tried"] as List?)?.length ?? 1) > 1 ? " — a többségi színből nem állt össze pálya" : ""}"
             "${masikKocka ? ", a $talalt. képkockáról — oda léptettem" : ""}"
             "). ELLENŐRIZD: a négyszög a JÁTÉKTÉR négy sarkán álljon — "
             "húzd a pontokat a helyükre, mielőtt mentesz.";
@@ -909,6 +972,44 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     } finally {
       if (mounted) setState(() => _suggesting = false);
     }
+  }
+
+  /// A motor által LÁTOTT vonalak megjegyzése (a kép-pixeles végpontok,
+  /// a kép mérete, a kocka és a szín) — a vásznon kirajzoljuk.
+  void _storeSeen(Map<String, dynamic> r) {
+    final w = (r["width"] as num?)?.toDouble();
+    final h = (r["height"] as num?)?.toDouble();
+    if (w == null || h == null || w <= 0 || h <= 0) return;
+    Offset pont(Object? p) {
+      final l = p as List;
+      return Offset((l[0] as num).toDouble(), (l[1] as num).toDouble());
+    }
+    final vonalak = <List<Offset>>[];
+    for (final l in (r["lines"] as List? ?? const [])) {
+      if (l is Map && l["p1"] is List && l["p2"] is List) {
+        vonalak.add([pont(l["p1"]), pont(l["p2"])]);
+      }
+    }
+    setState(() {
+      _seenLines = vonalak;
+      _seenSize = Size(w, h);
+      _seenFrame = ((r["frame"] as num?) ?? _frameIdx).toInt();
+      _seenColor = r["line_color"] as String?;
+      _showSeen = true;
+    });
+  }
+
+  /// A látott vonalak vászon-koordinátában — csak azon a kockán, amelyiken
+  /// a gép látta őket (másik kockán a rajz félrevezető volna).
+  List<List<Offset>> _seenOnCanvas(Size size) {
+    final s = _seenSize;
+    if (!_showSeen || _fineTune || s == null || _seenFrame != _frameIdx) {
+      return const [];
+    }
+    Offset v(Offset p) => Offset(
+        (_margin + p.dx / s.width * (1 - 2 * _margin)) * size.width,
+        (_margin + p.dy / s.height * (1 - 2 * _margin)) * size.height);
+    return [for (final l in _seenLines) [for (final p in l) v(p)]];
   }
 
   /// A jelenlegi rajz azonosítója — ehhez tartozik az utolsó mérés.
@@ -1482,9 +1583,12 @@ class _CalibPainter extends CustomPainter {
   final bool fine; // összenézet: 6 pont (4 sarok + felezővonal két vége)
   final int? active; // az utoljára fogott sarok — a nyilak ezt tolják
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
+  // A motor által LÁTOTT vonalak (vászon-pixelben) — a rajz alatt.
+  final List<List<Offset>> seenLines;
   _CalibPainter(this.corners,
       {this.region = "full", this.rotate = false, this.margin = 0.12,
-       this.fine = false, this.active, this.drawBackground = true});
+       this.fine = false, this.active, this.drawBackground = true,
+       this.seenLines = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1502,6 +1606,17 @@ class _CalibPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
+
+    // Amit a gép látott: rózsaszín, áttetsző vonalak a pálya-rajz alatt.
+    if (seenLines.isNotEmpty) {
+      final latott = Paint()
+        ..color = const Color(0xCCFF4FD8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      for (final l in seenLines) {
+        if (l.length == 2) canvas.drawLine(l[0], l[1], latott);
+      }
+    }
 
     // ÖSSZENÉZET: 6 pontból a KÉT térfél homográfiája — mindkét fél
     // modellje élőben illeszkedik, a felezővonal a két fél közös éle.
@@ -1650,5 +1765,6 @@ class _CalibPainter extends CustomPainter {
       old.rotate != rotate ||
       old.margin != margin ||
       old.fine != fine ||
-      old.drawBackground != drawBackground;
+      old.drawBackground != drawBackground ||
+      old.seenLines != seenLines;
 }

@@ -1174,6 +1174,7 @@ class _UploadScreenState extends State<UploadScreen> {
             "zold" => "zöld",
             "sarga" => "sárga",
             "feher" => "fehér",
+            "mezo" => "festett mezők széle",
             _ => null,
           };
           lineInfo = "Vonal-felismerés az első totálképen: $nLines vonal, "

@@ -181,3 +181,69 @@ def test_explicit_color_overrides_auto():
     img[:, 120:123] = (40, 70, 210)
     assert detect_court_lines_color(img, "kek")["color"] == "kek"
     assert detect_court_lines_color(img, "feher")["color"] == "feher"
+
+
+# --- Festett mezők széle és a színek tartalék-sora ------------------------
+# A grazi csarnokban (THW Kiel vs BT Füchse) a felhasználó szerint a gép
+# "nem nagyon látja a pálya vonalait": a padlón a kosár- és röplabda-
+# vonalak (kék) együtt több pixelt adnak, mint a kézilabda piros vonalai,
+# és a legjobban látszó pálya-elem a FESTETT sárga kapuelőtér és a zöld
+# felület — a vékony-vonal-maszk ezek szélét eldobja.
+
+def test_a_festett_mezo_szele_vonal_a_vekony_vonal_es_a_belseje_nem():
+    from handball.pipeline.broadcast_lines import field_edge_mask
+
+    img = _hall()
+    img[40:120, 60:180] = (225, 215, 45)   # sárga festett mező
+    img[:, 20:23] = (40, 70, 210)          # vékony kék vonal
+    mask = field_edge_mask(img)
+    assert mask[38:43, 120].any(), "a mező felső széle nem él"
+    assert mask[80, 58:63].any(), "a mező bal széle nem él"
+    assert not mask[80, 120], "a mező belseje nem lehet él"
+    assert not mask[80, 15:28].any(), "a vékony vonal nem festett mező"
+    # A parketta (kevésbé telített) nem festett mező.
+    assert not field_edge_mask(_hall()).any()
+
+
+def test_a_festett_mezo_szelebol_is_all_ossze_palya():
+    """"mezo": a festett játékfelület széléből négyszög-javaslat."""
+    from handball.pipeline.broadcast_lines import detect_court_quad
+
+    img = _hall(h=200, w=300)
+    img[40:170, 30:270] = (40, 170, 90)    # zöld játékfelület
+    r = detect_court_quad(img, "mezo")
+    assert r["color"] == "mezo" and r["suggested_quad"], r["lines"]
+    vart = [(30, 40), (269, 40), (269, 169), (30, 169)]
+    for (x, y), (vx, vy) in zip(r["suggested_quad"], vart):
+        assert abs(x - vx) <= 5 and abs(y - vy) <= 5, r["suggested_quad"]
+
+
+def test_auto_tovabbprobal_ha_a_legtobb_pixelbol_nem_all_ossze_palya():
+    """A sok kék (más sport) vonal párhuzamos, négyszöget nem ad — az auto
+    a következő színnel (piros) próbálkozik, és abból összeáll a pálya."""
+    from handball.pipeline.broadcast_lines import detect_court_quad
+
+    img = _hall(h=200, w=300)
+    for x in range(10, 300, 20):           # sok párhuzamos kék vonal
+        img[:, x:x + 3] = (40, 70, 210)
+    for y in (40, 170):                    # piros oldalvonalak
+        img[y:y + 3, :] = (215, 45, 40)
+    for x in (40, 260):                    # piros alapvonalak
+        img[:, x:x + 3] = (215, 45, 40)
+    r = detect_court_quad(img, "auto")
+    assert r["pixels"]["kek"] > r["pixels"]["piros"]
+    assert r["tried"][0] == "kek" and r["color"] == "piros", r["tried"]
+    assert r["suggested_quad"]
+
+
+def test_kert_szinnel_nincs_tartalek():
+    """A felhasználó választotta a színt: ha abból nincs pálya, nem
+    cseréljük ki a háta mögött."""
+    from handball.pipeline.broadcast_lines import detect_court_quad
+
+    img = _hall(h=200, w=300)
+    for x in range(10, 300, 20):
+        img[:, x:x + 3] = (40, 70, 210)
+    r = detect_court_quad(img, "kek")
+    assert r["color"] == "kek" and r["tried"] == ["kek"]
+    assert r["suggested_quad"] is None

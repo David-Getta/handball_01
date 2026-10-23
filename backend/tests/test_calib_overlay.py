@@ -713,6 +713,9 @@ def test_a_sarok_javaslat_kockat_keres_ha_kell(tmp_path):
     assert keres["searched"] > 1, "nem nézett meg több kockát"
     assert keres["requested_frame"] == 100
     assert keres["suggested_quad"] is None    # üres képen nincs mit ajánlani
+    # Az "auto" a négyszögért több színt is kipróbál — a válasz megmondja,
+    # melyeket (a festett mezők széle a sor vége).
+    assert keres["colors_tried"][-1] == "mezo", keres["colors_tried"]
     # Keresés nélkül EGY kocka: a régi viselkedés megmarad.
     egy = c.get("/broadcast/lines",
                 params={"path": str(video), "frame": 100,
@@ -740,3 +743,26 @@ def test_a_kliens_a_talalt_kockara_leptet():
     api = (gyoker / "client" / "lib" / "services"
            / "api_client.dart").read_text(encoding="utf-8")
     assert '"search_s"' in api
+
+
+def test_a_kalibralo_kepernyo_vonalszine_a_motor_kulcsai():
+    """A kalibráló képernyő vonalszín-választója a motor kulcsait küldi
+    (egy elgépelt kulcs a motorban hibát adna), a választott színnel kér
+    javaslatot, és kirajzolja, amit a gép látott."""
+    from pathlib import Path as _P
+    import re
+
+    from handball.pipeline.broadcast_lines import (FIELD_EDGE_COLOR,
+                                                   LINE_COLORS)
+
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    geo = (gyoker / "client" / "lib" / "ui"
+           / "court_geometry.dart").read_text(encoding="utf-8")
+    blokk = geo.split("const calibLineColors = [")[1].split("];")[0]
+    kulcsok = set(re.findall(r'\("([a-z]+)",', blokk))
+    assert kulcsok == {"auto", "feher", FIELD_EDGE_COLOR, *LINE_COLORS}, kulcsok
+    src = (gyoker / "client" / "lib" / "ui"
+           / "calibration_screen.dart").read_text(encoding="utf-8")
+    assert "lineColor: _lineColor" in src
+    assert "_storeSeen(r);" in src
+    assert "seenLines: seen" in src

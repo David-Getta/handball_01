@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.182 óta)
 
+- **Pályavonalak a több sportot kiszolgáló padlón** (motor + kliens):
+  a grazi felvételnél a gép alig látta a pálya vonalait — az "auto"
+  vonalszín a legtöbb pixelt adó színt (a kosár/röplabda kék vonalait)
+  választotta, és ha abból nem állt össze pálya, feladta; a festett
+  kapuelőtér és játékfelület szélét pedig nem is nézte. Most az "auto"
+  sorban próbálja a színeket, végül a festett mezők szélét, amíg
+  négyszög nem áll össze; a kalibráló képernyőn a vonalszín választható
+  (köztük "festett mezők széle"), és a gép által látott vonalak
+  rózsaszínnel a képen vannak — látszik, ha rossz vonalakat követ.
+
 - **Lövő nélküli gólok a minőség-ablakban** (motor + kliens): a
   középkezdésből következtetett (és a lövő nélkül kézzel felvett) gól a
   góllövő-listákból kimarad — az edző eddig nem látta, hogy a lista

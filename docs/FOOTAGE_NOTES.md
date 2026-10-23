@@ -58,6 +58,18 @@
 3. **ROI** finomhangolás: az előtéri kosárállvány kizárási zónája + a kispad
    tűréssáv hangolása.
 4. **Sárga 6 m-es zóna** mint orientációs/kalibrációs támpont (későbbi automatika).
+   - KÉSZ: a festett mezők (sárga kapuelőtér, színes játékfelület) SZÉLE
+     vonalként is számít (`broadcast_lines.field_edge_mask`, vonalszín
+     "festett mezők széle"); az "auto" a négyszögért sorban próbálja a
+     színeket, végül ezt (`detect_court_quad`). A kalibráló képernyőn a
+     vonalszín választható, és a gép által látott vonalak rózsaszínnel a
+     képen vannak.
+   - KÍSÉRLET, ELVETVE: a fél pálya kalibrálása a kapuelőtér ALAKJÁBÓL
+     (a D-alak illesztése a sárga foltra). A gólvonal két vége ~3 px-re
+     pontos, de a 6 m mély D a pálya mélységi irányát rosszul köti: a
+     felezővonal két vége szintetikus képen 200–600 px-re csúszott.
+     Két látható kapuelőtérrel (teljes pálya) a feladat jól kondicionált
+     — ha a felvétel ilyen, ez a következő lépés.
 
 ## Bevezető (fade-in) képkockák — futási megfigyelés
 - A felvétel **eleje sötét** (Filmora-átúszás, csak a vízjel látszik). A 0–14.
