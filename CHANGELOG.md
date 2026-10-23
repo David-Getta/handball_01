@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.182 óta)
 
+- **A lövő az esemény-sorban, és javítható** (kliens + motor): a gól- és
+  lövés-sor eddig csak a csapatot mutatta, a lövőt nem — az edző nem
+  látta, kit nevezett meg a gép, és ha rosszat, nem tudta javítani; a
+  középkezdésből következtetett gólnál (↻) csak törölni és újra felvenni
+  lehetett. Most a sor a lövőt is mutatja ("· #7", a ↻ gólnál "· lövő
+  ismeretlen"), és a ⋮ menü "A lövő: #N" tétele a pályán kijelölt
+  játékost adja meg lövőnek (új "set_player" kézi javítás: csak a lövő
+  változik, visszavonható). A másik csapat játékosa nem lehet a lövő.
+
 - **A látott lövés akkor is gólra javul, ha a kapus sokáig tartja a
   labdát** (motor, javítás): a középkezdés a tévesen védésnek ítélt
   látott lövést csak akkor írta át gólra, ha legfeljebb 10 mp-cel a

@@ -5561,10 +5561,12 @@ def create_app():
     def set_event_overrides(match_id: str, body: dict):
         """A kézi esemény-javítások mentése (a TELJES lista cseréje).
 
-        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type"|"dismiss",
-        "t": kocka, "type": "goal"|"shot", "team": "home"|"away"}]}.
+        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type"|"dismiss"
+        |"set_player", "t": kocka, "type": "goal"|"shot",
+        "team": "home"|"away", "player_id": track}]}.
         A "dismiss" egy LEHETSÉGES GÓL elvetése (a középkezdés ideje):
-        az edző döntése, hogy ott nem volt gól.
+        az edző döntése, hogy ott nem volt gól. A "set_player" a lövő
+        javítása (a player_id kötelező).
 
         Miért kell: a felismerés téved — gólt lövésnek lát, lövést nem
         vesz észre. Az edző egy rossz eredményű jelentésnek EGYETLEN
@@ -5584,7 +5586,8 @@ def create_app():
             if not isinstance(j, dict):
                 continue
             op = str(j.get("op") or "")
-            if op not in ("add", "remove", "set_type", "dismiss"):
+            if op not in ("add", "remove", "set_type", "dismiss",
+                          "set_player"):
                 continue
             tipus = str(j.get("type") or "goal")
             if tipus not in ("goal", "shot"):
@@ -5594,6 +5597,12 @@ def create_app():
             except (TypeError, ValueError):
                 continue
             rec = {"op": op, "t": t, "type": tipus}
+            if op == "set_player":
+                # Lövő nélkül a lövő-javítás értelmetlen — nem tároljuk.
+                try:
+                    rec["player_id"] = int(j["player_id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
             if op == "add":
                 rec["team"] = ("home" if str(j.get("team")) == "home"
                                else "away")

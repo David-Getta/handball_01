@@ -912,11 +912,15 @@ def _apply_event_overrides(match: Match,
     lehetett javítani — az edző pedig egy rossz eredményű jelentésnek
     egyetlen számát sem hiszi el, akkor sem, ha a többi jó.
 
-    Három művelet (a `match.meta.event_overrides` listából):
+    Négy művelet (a `match.meta.event_overrides` listából):
       - "set_type": a pillanathoz legközelebbi lövés TÍPUSA lesz a
         megadott (a leggyakoribb eset: a gól lövésként jött ki),
       - "remove":   a pillanathoz legközelebbi lövés/gól törlése,
-      - "add":      új lövés/gól felvétele a megadott pillanatra.
+      - "add":      új lövés/gól felvétele a megadott pillanatra,
+      - "set_player": a legközelebbi lövés/gól LÖVŐJE a megadott játékos
+        (a felismerés rosszat nevezett meg, vagy a középkezdésből
+        következtetett gólnál senkit) — ha ugyanannak a csapatnak a
+        játékosa; a típus, a kimenetel és az eredet marad.
 
     A "legközelebbi" OVERRIDE_MATCH_S másodpercen belül keres; ha nincs
     ott semmi, a javítás csendben elmarad (a felismerés közben
@@ -934,6 +938,14 @@ def _apply_event_overrides(match: Match,
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     ablak = max(1, int(round(OVERRIDE_MATCH_S * fps)))
     out = list(events)
+
+    def _csapata(tid: int) -> Optional[Team]:
+        """A track csapata: az első előfordulása (mint a kliensben)."""
+        for f in match.frames:
+            for p in f.players:
+                if p.track_id == tid:
+                    return p.team
+        return None
 
     def _kozelebbi(t: int) -> Optional[int]:
         """A t-hez legközelebbi lövés/gól INDEXE az out listában."""
@@ -992,6 +1004,18 @@ def _apply_event_overrides(match: Match,
                 out[i] = MatchEvent(t=regi.t, type=uj_tipus,
                                     team=regi.team,
                                     player_id=regi.player_id,
+                                    detail=reszlet)
+            elif op == "set_player":
+                regi = out[i]
+                pid = int(j["player_id"])
+                # A másik csapat játékosa nem lehet a lövő (a gól a
+                # csapaté marad, a lövő-listák szét is esnének).
+                if _csapata(pid) not in (None, regi.team):
+                    continue
+                reszlet = dict(regi.detail or {})
+                reszlet["manual"] = True
+                out[i] = MatchEvent(t=regi.t, type=regi.type,
+                                    team=regi.team, player_id=pid,
                                     detail=reszlet)
         except Exception:
             continue  # egy hibás javítás ne vigye el a többit

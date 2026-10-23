@@ -184,6 +184,13 @@ class _MatchScreenState extends State<MatchScreen> {
   // Kijelölt játékos a pályán (kattintással) — nyomvonal + egyéni adatok.
   int? _selectedTrack;
 
+  // A _playerShort / _trackTeam gyorsítótára: a keresés a teljes
+  // felvételt bejárja, az esemény-sorok pedig lejátszás közben újra
+  // épülnek. Új meccs-objektumnál (újratöltés) üríteni kell.
+  Match? _infoMatch;
+  final Map<int, String> _shortCache = {};
+  final Map<int, Team?> _teamCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -1433,6 +1440,21 @@ class _MatchScreenState extends State<MatchScreen> {
     final outcome = ((e["detail"] as Map?)?["outcome"] as String?) ?? "";
     // Gólpassz (assist): a backend a gól detail-jébe teszi a passzoló id-ját.
     final assistId = ((e["detail"] as Map?)?["assist_id"] as num?)?.toInt();
+    // A LÖVŐ (gól/lövés soron): az edző lássa, kit nevezett meg a gép —
+    // és ha rosszat (vagy a középkezdésből következtetett gólnál senkit),
+    // a ⋮ menüben javítsa ("set_player").
+    final pid = (e["player_id"] as num?)?.toInt();
+    final lovesSor = type == "goal" || type == "shot";
+    final lovo = !lovesSor
+        ? ""
+        : pid != null
+            ? " · ${_playerShort(match, pid)}"
+            : ((e["detail"] as Map?)?["shot_seen"]) == false
+                ? " · lövő ismeretlen"
+                : "";
+    // A kijelölt játékos lehet-e a lövő (ugyanannak a csapatnak a tagja).
+    final sel = _selectedTrack;
+    final selSajat = sel != null && _trackTeam(match, sel)?.name == e["team"];
     final (label, icon, color) = switch (type) {
       "goal" => ("GÓL", Icons.sports_score, AppColors.gold),
       "shot" when outcome == "save" =>
@@ -1460,8 +1482,8 @@ class _MatchScreenState extends State<MatchScreen> {
           const SizedBox(width: 8),
           Expanded(child: Text(
               assistId == null
-                  ? team
-                  : "$team · gólpassz: ${_playerShort(match, assistId)}",
+                  ? "$team$lovo"
+                  : "$team$lovo · gólpassz: ${_playerShort(match, assistId)}",
               style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
           // A középkezdésből KÖVETKEZTETETT gól (motor: event_detection.
@@ -1506,6 +1528,8 @@ class _MatchScreenState extends State<MatchScreen> {
                 _correct("set_type", t, v);
               } else if (v == "remove") {
                 _correct("remove", t, type);
+              } else if (v == "player") {
+                _correct("set_player", t, type, playerId: _selectedTrack);
               } else if (v == "3d") {
                 Navigator.of(context).pushReplacement(MaterialPageRoute(
                     builder: (_) => Court3DScreen(
@@ -1544,6 +1568,25 @@ class _MatchScreenState extends State<MatchScreen> {
                     child: ListTile(
                         leading: Icon(Icons.delete_outline, size: 17),
                         title: Text("Nem volt ilyen esemény"),
+                        dense: true)),
+              // A lövő javítása: a pályán kijelölt játékos lesz a lövő.
+              if (lovesSor && sel != null && selSajat && sel != pid)
+                PopupMenuItem(
+                    value: "player",
+                    child: ListTile(
+                        leading: const Icon(Icons.person_pin, size: 17),
+                        title: Text("A lövő: ${_playerShort(match, sel)}"),
+                        subtitle: const Text("a pályán kijelölt játékos"),
+                        dense: true)),
+              if (lovesSor && (sel == null || !selSajat))
+                PopupMenuItem(
+                    enabled: false,
+                    child: ListTile(
+                        leading: const Icon(Icons.person_pin, size: 17),
+                        title: const Text("Más volt a lövő?"),
+                        subtitle: Text(sel == null
+                            ? "Jelöld ki a pályán, és itt add meg."
+                            : "A kijelölt játékos a másik csapatban van."),
                         dense: true)),
             ],
           ),
@@ -1732,14 +1775,38 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Rövid játékos-címke az eseménysorhoz: mezszám, ha ismert ("#7"),
   /// különben a track sorszáma ("12. játékos").
   String _playerShort(Match match, int trackId) {
-    for (final f in match.frames) {
-      for (final p in f.players) {
-        if (p.trackId == trackId && p.jerseyNumber != null) {
-          return "#${p.jerseyNumber}";
+    _infoFor(match);
+    return _shortCache.putIfAbsent(trackId, () {
+      for (final f in match.frames) {
+        for (final p in f.players) {
+          if (p.trackId == trackId && p.jerseyNumber != null) {
+            return "#${p.jerseyNumber}";
+          }
         }
       }
-    }
-    return "$trackId. játékos";
+      return "$trackId. játékos";
+    });
+  }
+
+  /// A track csapata: az első előfordulása (mint a motor "set_player"
+  /// ellenőrzése) — a másik csapat játékosa nem lehet a lövő.
+  Team? _trackTeam(Match match, int trackId) {
+    _infoFor(match);
+    return _teamCache.putIfAbsent(trackId, () {
+      for (final f in match.frames) {
+        for (final p in f.players) {
+          if (p.trackId == trackId) return p.team;
+        }
+      }
+      return null;
+    });
+  }
+
+  void _infoFor(Match match) {
+    if (identical(_infoMatch, match)) return;
+    _infoMatch = match;
+    _shortCache.clear();
+    _teamCache.clear();
   }
 
   /// Edzői jegyzetek: a lejátszó aktuális idejéhez fűzhető megjegyzés.

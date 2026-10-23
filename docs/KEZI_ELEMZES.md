@@ -143,7 +143,10 @@ követ: a labda a felezővonal közepén áll. A gép ebből két dolgot csinál
   saját térfelén, utána a gólt kapó csapat támad). Ezeket az
   esemény-lista ↻ jellel jelöli, a minőség-ablak megszámolja, és a
   kezdőlap kártyája is jelzi. Ha téves, a sor ⋮ menüjében ("Nem volt
-  ilyen esemény") törölhető.
+  ilyen esemény") törölhető. A lövője ismeretlen (a sorban: "lövő
+  ismeretlen"): jelöld ki a pályán a lövőt, és a sor ⋮ menüjében "A
+  lövő: #7" hozzá adja a gólt. Ugyanígy javítható bármelyik gól vagy
+  lövés rosszul megnevezett lövője.
 - **Lehetséges gólként felkínálja**, ha a labda a középen állt, előtte a
   kapu előtt járt, de a felállás vagy a támadás-irány nem igazolta a
   gólt (pl. gyenge csapat-besorolásnál). Ezek a meccs-nézet

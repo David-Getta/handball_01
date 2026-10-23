@@ -202,6 +202,51 @@ def test_a_kezi_gol_lovoje_is_megadhato():
     assert "player_id" not in r2.json()["overrides"][0]
 
 
+def test_a_lovo_javithato():
+    """A felismerés rossz lövőt nevezett meg: a "set_player" csak a lövőt
+    cseréli — a típus és a kimenetel marad, a kézi eredet jelölve."""
+    m = _shot_match()
+    alap = detect_shots(m)
+    m.meta.event_overrides = [{"op": "set_player", "t": alap[0].t,
+                               "type": "shot", "player_id": 7}]
+    ki = detect_shots(m)
+    assert [e.type for e in ki] == [EventType.SHOT]
+    assert ki[0].player_id == 7
+    assert ki[0].detail["outcome"] == alap[0].detail["outcome"]
+    assert ki[0].detail["manual"] is True
+
+
+def test_a_masik_csapat_jatekosa_nem_lehet_a_lovo():
+    """A hazai lövés lövője nem lehet vendég játékos: a javítás elmarad."""
+    from handball.models.tracking import PlayerPosition, PositionSource
+
+    m = _shot_match()
+    for f in m.frames:
+        f.players.append(PlayerPosition(
+            track_id=21, team=Team.AWAY, x=30.0, y=5.0,
+            source=PositionSource.MEASURED, confidence=1.0))
+    alap = detect_shots(m)
+    assert alap[0].team is Team.HOME
+    m.meta.event_overrides = [{"op": "set_player", "t": alap[0].t,
+                               "type": "shot", "player_id": 21}]
+    assert detect_shots(m)[0].player_id == alap[0].player_id
+
+
+def test_a_vegpont_a_lovo_javitast_lovovel_tarolja():
+    """A "set_player" a lövővel együtt kerül a fájlba; lövő nélkül
+    értelmetlen, nem tároljuk. Az esemény-lista a javított lövőt adja."""
+    client, mid = _client()
+    r = client.post(f"/matches/{mid}/event-overrides", json={"overrides": [
+        {"op": "set_player", "t": 2, "type": "shot", "player_id": "12"},
+        {"op": "set_player", "t": 2, "type": "shot"},
+    ]})
+    assert r.json()["overrides"] == [
+        {"op": "set_player", "t": 2, "type": "shot", "player_id": 12}]
+    lov = [e for e in client.get(f"/matches/{mid}/events").json()["events"]
+           if e["type"] == "shot"]
+    assert lov and lov[0]["player_id"] == 12
+
+
 def test_a_vegpont_kiszuri_a_szemetet():
     """Ismeretlen művelet és típus nem kerül a tárolt listába — egy
     elgépelt kulcs némán semmit sem csinálna, de ott ülne a fájlban."""

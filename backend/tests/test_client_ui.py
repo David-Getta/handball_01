@@ -3647,7 +3647,27 @@ def test_a_lehetseges_gol_elvetheto():
     assert '"dismiss", (c["t"] as num).toInt(), "goal"' in meccs
     app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
                / "app.py").read_text(encoding="utf-8")
-    assert '("add", "remove", "set_type", "dismiss")' in app_src
+    assert '("add", "remove", "set_type", "dismiss",' in app_src
+
+
+def test_a_lovo_a_sorban_latszik_es_javithato():
+    """A gól/lövés sor a lövőt is mutatja (a középkezdésből következtetett
+    gólnál "lövő ismeretlen"), és a ⋮ menü a kijelölt játékost lövőnek
+    adja meg — a motor "set_player" műveletével, ugyanannak a csapatnak."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "lövő ismeretlen" in meccs
+    assert '_correct("set_player", t, type, playerId: _selectedTrack)' in meccs
+    assert "_trackTeam(match, sel)?.name == e[\"team\"]" in meccs
+    # A mezszám-keresés gyorsítótárból: a sorok lejátszás közben újra
+    # épülnek, a keresés a teljes felvételt bejárja.
+    assert "_shortCache.putIfAbsent" in meccs
+    app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+               / "app.py").read_text(encoding="utf-8")
+    assert '"set_player"):' in app_src
 
 
 def test_a_lehetseges_golok_klipjei_kerhetok():

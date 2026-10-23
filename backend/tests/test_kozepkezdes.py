@@ -427,6 +427,22 @@ def test_a_lepattano_utani_golnal_a_latott_vedes_marad():
     assert unseen_goal(lov[1])
 
 
+def test_a_kovetkeztetett_gol_lovoje_kezzel_megadhato():
+    """A középkezdésből következtetett gól lövője ismeretlen — az edző
+    megadhatja ("set_player"). A lövést továbbra sem láttuk: az arány-
+    mérők (xG, kapus) ugyanúgy kihagyják."""
+    from handball.pipeline.event_detection import unseen_goal
+
+    m = _meccs()
+    g = _golok(m)[0]
+    assert g.player_id is None
+    m.meta.event_overrides = [{"op": "set_player", "t": g.t,
+                               "type": "goal", "player_id": 3}]
+    ki = _golok(m)
+    assert len(ki) == 1 and ki[0].player_id == 3
+    assert unseen_goal(ki[0])
+
+
 def test_lehetseges_gol_ha_a_felallas_nem_merheto():
     """Összekeveredett felállásnál a jel hallgat — a jelölt-lista
     viszont felkínálja a pillanatot az edzőnek, a becsült
