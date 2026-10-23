@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.182 óta)
+## v0.1.183 — kiadva (2026-10-23)
+
+> Kiadás-jegyzet: KALIBRÁCIÓ — a több sportot kiszolgáló padlón (pl.
+> kék kosár/röplabda-vonalak, festett sárga kapuelőtér és zöld felület)
+> a gép most a vonalszíneket sorban próbálja, a festett mezők szélét is
+> vonalnak veszi, a kalibráló képernyőn a vonalszín választható, és a
+> gép által látott vonalak rózsaszínnel a képen vannak. JAVÍTÁS — ha a
+> gép egy gólt látott lövésként, de védésnek ítélte, és a kapus sokáig
+> tartotta a labdát, egy külön gól került mellé (a kapus mérlegében
+> védésként); most a lövés javul gólra, és a "Lehetséges gólok" "Gól
+> volt" gombja is ezt teszi. Emellett: az esemény-listában a lövő is
+> látszik és javítható; a középkezdésből számolt gólnál a gép valószínű
+> lövőt kínál.
 
 - **Pályavonalak a több sportot kiszolgáló padlón** (motor + kliens):
   a grazi felvételnél a gép alig látta a pálya vonalait — az "auto"
