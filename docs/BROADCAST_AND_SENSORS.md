@@ -58,7 +58,10 @@ legközelebb — de a közvetítés négy saját nehézséget hoz:
    *(első fele kész: `pipeline/broadcast_lines.py` — vonal-jelöltek
    felismerése tiszta numpy Hough-transzformációval, szintetikus képen
    tesztelve; a hátralévő fele a vonalak megfeleltetése a pálya-modellnek
-   → homográfia, ehhez már valódi közvetítés-felvétel kell)*
+   → homográfia, ehhez már valódi közvetítés-felvétel kell. Több sportot
+   kiszolgáló csarnokra: színes vonalak, a festett mezők széle, és az
+   "auto" színenként próbálkozik, amíg négyszög nem áll össze —
+   `detect_court_quad`)*
 4. **Eredményjelző-OCR** — az állás és a játékóra leolvasva: hitelesített
    eredmény + időszinkron (a felismert gólok validálása, pontos
    félidő-határ).

@@ -22,6 +22,8 @@ import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
+import "zoomable.dart";
+import "num_format.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -90,7 +92,7 @@ class _LiveScreenState extends State<LiveScreen> {
       if (selected != null) {
         try {
           match = await _api.fetchMatch(selected);
-          label = "backend · $selected";
+          label = "motor · $selected";
         } catch (_) {
           match = buildDemoMatch();
           label = "demó";
@@ -139,6 +141,16 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "taktika",
                 "7 a 6! $team lehozta a kapust — labdaszerzésnél azonnali "
                 "hosszú indítás az üres kapura!")));
+      }
+    } catch (_) {}
+    // Ismert figura: a csapat meccsről meccsre visszatérő figurája
+    // indul — a védekező oldalnak szól (kettőzés a súlypontnál). A
+    // könyvtár több elemzett meccsből épül; egy meccsnél a lista üres.
+    try {
+      for (final a in await _api.fetchFigureAlerts(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "figura", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     try {
@@ -210,7 +222,7 @@ class _LiveScreenState extends State<LiveScreen> {
               atFrame,
               Suggestion(4, "taktika",
                   "Félidei kép ($team): a(z) $who átlag "
-                  "${dist.toStringAsFixed(1)} m-ről őrizte az emberét — "
+                  "${huNum(dist)} m-ről őrizte az emberét — "
                   "a második félidőre szorosabb tapadást kérj.")));
         }
         // Félidei labdaeladók: ki szórja a labdát — présre őt a másodikra.
@@ -581,7 +593,7 @@ class _LiveScreenState extends State<LiveScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _playing ? AppColors.away.withOpacity(0.15) : AppColors.surfaceAlt,
+            color: _playing ? AppColors.away.withValues(alpha: 0.15) : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: _playing ? AppColors.away : AppColors.border),
           ),
@@ -623,7 +635,7 @@ class _LiveScreenState extends State<LiveScreen> {
         const SizedBox(width: AppSpacing.md),
         _chip(_sourceLabel),
         const Spacer(),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text("${huNum(_frameIndex / fps)} s", style: AppText.value),
         Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
       ],
     );
@@ -648,7 +660,9 @@ class _LiveScreenState extends State<LiveScreen> {
           child: Container(
             decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: CustomPaint(painter: CourtPainter(frame: frame)),
+            // Nagyítható élő pálya: csippentés vagy Ctrl+görgő.
+            child: ZoomPanView(
+                child: CustomPaint(painter: CourtPainter(frame: frame))),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -747,6 +761,14 @@ class _LiveScreenState extends State<LiveScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // A "most" rész alacsony ablakban (600 px) görgethető, nem
+          // csordul túl: a korábbi jelzések listája megtartja a helyét.
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
           Row(children: [
             const Icon(Icons.tips_and_updates_outlined, size: 18, color: AppColors.accent),
             const SizedBox(width: 8),
@@ -771,6 +793,10 @@ class _LiveScreenState extends State<LiveScreen> {
           const Divider(height: AppSpacing.xl, color: AppColors.border),
           Text("KORÁBBI JELZÉSEK", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: _feed.isEmpty
                 ? Text("Indítsd el a lejátszást — a jelzések itt gyűlnek, "
@@ -829,7 +855,11 @@ class _LiveScreenState extends State<LiveScreen> {
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      // IntrinsicHeight: a sor oszlopban és listában ül (végtelen
+      // magasság) — a stretch-igazítás nélküle "végtelen magasságra"
+      // kényszerítene, és a javaslat helyén hibadoboz jelent meg.
+      child: IntrinsicHeight(
+          child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(width: 3, color: color), // prioritás-színcsík
@@ -838,7 +868,7 @@ class _LiveScreenState extends State<LiveScreen> {
             padding: const EdgeInsets.only(top: 12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(color: color.withOpacity(0.16), borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(6)),
               child: Text(s.category.toUpperCase(),
                   style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
             ),
@@ -852,7 +882,7 @@ class _LiveScreenState extends State<LiveScreen> {
           ),
           const SizedBox(width: 12),
         ],
-      ),
+      )),
     );
   }
 

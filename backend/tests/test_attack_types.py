@@ -1104,6 +1104,72 @@ def test_screen_usage_separates_screened_and_isolated_shooters():
     assert few["home"]["style"] is None
 
 
+def _scy_match(screened_goals=5, clean_goals=0, n=5):
+    """Hazai lövés-sorozat: `n` elzárásos és `n` tiszta lövés, a
+    megadott számú góllal (a többi a kapuson akad meg)."""
+    frames = []
+    t = 0
+
+    def _shot(screened, goal):
+        nonlocal t
+        sx, gx = 30.0, 40.0
+        players = [_pl(1, Team.HOME, sx, 10.0),
+                   _pl(20, Team.AWAY, sx + 1.5, 10.0)]
+        if screened:
+            players.append(_pl(2, Team.HOME, sx + 1.5, 11.0))
+        gk = _pl(30, Team.AWAY, 39.5, 10.0)
+        gk.role = "kapus"
+        players = players + [gk]
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=sx, y=10.0, confidence=1.0)))
+            t += 1
+        end = gx if goal else 38.5
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(sx + 0.8 * (i + 1), end), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        if not goal:                      # kipattanó: védés lesz belőle
+            for i in range(10):
+                frames.append(Frame(
+                    t=t, players=players,
+                    ball=Ball(x=38.5 - 0.8 * i, y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for k in range(n):
+        _shot(True, goal=k < screened_goals)
+    for k in range(n):
+        _shot(False, goal=k < clean_goals)
+    return Match(_meta(), frames)
+
+
+def test_screen_yield_shows_when_the_screen_pays():
+    """Ha az elzárásos lövéseik bemennek, a tiszták nem, a
+    váltás-kommunikáció a meccs kulcsa."""
+    from handball.pipeline.attack_types import SCY_GAP_PP, screen_yield
+
+    rec = screen_yield(_scy_match())["home"]
+    assert rec["screened_shots"] >= 4 and rec["clean_shots"] >= 4, rec
+    assert rec["gap_pp"] is not None and rec["gap_pp"] >= SCY_GAP_PP, rec
+    assert rec["verdict"] and "váltás-kommunikáció" in rec["verdict"], rec
+
+
+def test_screen_yield_silent_with_few_shots():
+    """Sávonként kevés lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import screen_yield
+
+    rec = screen_yield(_scy_match(screened_goals=2, n=2))["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
 def test_pass_risk_flags_lost_long_balls():
     """A hazai hosszú passzai zömmel az ellenfélnél kötnek ki, a
     rövidek nem → kockázatos hosszú passz; kevés kísérletnél nincs
@@ -1120,19 +1186,22 @@ def test_pass_risk_flags_lost_long_balls():
         taker = (_pl(20, Team.AWAY, 30.0, 10.0 + dist_y) if lost
                  else _pl(2, Team.HOME, 30.0, 10.0 + dist_y))
         pls = [_pl(1, Team.HOME, 30.0, 10.0), taker]
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott
+        # labda felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert
+        # a kockánként átbillenő birtokos zaj, nem labdaszerzés.
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0 + dist_y,
                                           confidence=1.0)))
             t += 1
         # A labda visszakerül az 1-eshez: a következő kísérlet innen
         # indul (eladás után "visszaszerzés").
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[
                 _pl(1, Team.HOME, 30.0, 10.0)],
                 ball=Ball(x=30.0, y=10.0, confidence=1.0)))
@@ -2139,17 +2208,19 @@ def _risky_passer_match(cases, fps=25.0):
         taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
                  else _pl(2, Team.HOME, 30.0, 22.0))
         pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+        # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=22.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):    # a labda visszakerül a passzolóhoz
+        for _ in range(10):   # a labda visszakerül a passzolóhoz
             frames.append(Frame(
                 t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
                 ball=Ball(x=30.0, y=10.0, confidence=1.0)))
@@ -2775,6 +2846,26 @@ def test_wing_service_needs_enough_receptions():
     assert rec["verdict"] is None
 
 
+def test_wing_runners_names_the_run_fed_wing():
+    """A futó átvételeket egy szélső (2-es) kapja → ő a címzett."""
+    from handball.pipeline.attack_types import wing_runners
+
+    rec = wing_runners(_wsv_match(True))["home"]
+    assert rec["running"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 2
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_wing_runners_needs_enough_running_receptions():
+    """Kevés futó átvételnél (vagy állva kapó szélsőnél) nincs top."""
+    from handball.pipeline.attack_types import wing_runners
+
+    rec = wing_runners(_wsv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["top"] is None
+
+
 # ---- Keresztjáték (mennyit kereszteznek a hátsó sorban) ---------------------
 
 def _crx_match(crossing, n_attacks=8, fps=25.0):
@@ -2827,6 +2918,61 @@ def test_crossing_runs_needs_enough_attacks():
 
     rec = crossing_runs(_crx_match(True, n_attacks=4))["home"]
     assert rec["verdict"] is None
+
+
+def _crp_match(n_attacks=8, fps=25.0):
+    """Három hátsó ember (3, 4, 5); a 3-as jár át a sorok közt
+    (y: 5 → 10 → 15 → 10), a 4-es és 5-ös áll — minden kereszt a
+    3-ason át fut."""
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        n = int(4.0 * fps)
+        for i in range(n):
+            phase = (i // (n // 4)) % 4
+            y3 = (5.0, 10.0, 15.0, 10.0)[phase]
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, y3),
+                _pl(4, Team.HOME, 30.0, 7.0),
+                _pl(5, Team.HOME, 30.0, 13.0),
+                _pl(21, Team.AWAY, 38.0, 10.0)],
+                ball=Ball(x=28.0, y=y3, confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * fps)):            # szünet
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_crossing_runners_names_the_crossing_hub():
+    """A sorok közt járó 3-as minden keresztben benne van → ő a
+    keresztjáték motorja."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crp_match())["home"]
+    assert rec["crosses"] >= 3
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 3
+    assert rec["top"]["share_pct"] >= 60.0
+
+
+def test_crossing_runners_tie_of_two_backs_gives_no_top():
+    """Két hátsó embernél minden kereszt holtverseny → nincs kiemelt
+    keresztjáró."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crx_match(True))["home"]
+    assert rec["crosses"] >= 3
+    assert rec["top"] is None
+
+
+def test_crossing_runners_static_backcourt_gives_no_top():
+    """Kereszt nélkül nincs kiemelt keresztjáró."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crx_match(False))["home"]
+    assert rec["crosses"] == 0
+    assert rec["top"] is None
 
 
 # ---- Beálló-futtatás (mozgásból vagy állva kapja a beálló) ------------------
@@ -2902,6 +3048,26 @@ def test_pivot_service_needs_enough_receptions():
     assert rec["verdict"] is None
 
 
+def test_pivot_runners_names_the_turning_pivot():
+    """A mozgásos átvételeket egy beálló (4-es) hozza → ő a címzett."""
+    from handball.pipeline.attack_types import pivot_runners
+
+    rec = pivot_runners(_psv_match(True))["home"]
+    assert rec["running"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 4
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_pivot_runners_static_pivot_gives_no_top():
+    """Beragadva (állva) átvevő beállónál nincs lefordulós címzett."""
+    from handball.pipeline.attack_types import pivot_runners
+
+    rec = pivot_runners(_psv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["top"] is None
+
+
 # ---- Kontra-hullámok (az első ember vagy a befutó fejezi be) ----------------
 
 def _fbw_match(second_wave, n_breaks=6, fps=25.0):
@@ -2964,6 +3130,47 @@ def test_fast_break_waves_needs_enough_breaks():
 
     rec = fast_break_waves(_fbw_match(True, n_breaks=3))["home"]
     assert rec["verdict"] is None
+
+
+def test_second_wave_roles_names_the_running_post():
+    """Ha a befutós befejezések zöme egy posztról jön, a második hullám
+    posztról olvasható — a visszafutás-parancs posztra szól."""
+    from handball.pipeline.attack_types import second_wave_roles
+
+    rec = second_wave_roles(_fbw_match(True))["home"]
+    assert rec["second"] >= 3, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] == 100.0, rec
+    assert rec["verdict"] and "második hulláma" in rec["verdict"], rec
+
+
+def test_second_wave_roles_silent_with_few_finishes():
+    """Kevés poszthoz kötött befutós befejezésnél nincs ítélet."""
+    from handball.pipeline.attack_types import second_wave_roles
+
+    rec = second_wave_roles(_fbw_match(True, n_breaks=2))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_second_wave_finishers_names_the_runner():
+    """A befutó (2-es) adja le a második hullámos befejezéseket → ő a
+    kontra befutó embere."""
+    from handball.pipeline.attack_types import second_wave_finishers
+
+    rec = second_wave_finishers(_fbw_match(True))["home"]
+    assert rec["second"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 2
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_second_wave_finishers_first_man_gives_no_top():
+    """Ha az első ember fejezi be a kontrákat, nincs befutó ember."""
+    from handball.pipeline.attack_types import second_wave_finishers
+
+    rec = second_wave_finishers(_fbw_match(False))["home"]
+    assert rec["second"] == 0
+    assert rec["top"] is None
 
 
 # ---- Kontra-elszökés (előre szökött ember vagy együtt felfutás) -------------
@@ -3099,11 +3306,14 @@ def _wsd_match(deep, n_shots=6, fps=25.0):
     _emit(34.0, 3.0, 150)           # poszt-minta: a szélsőnél a labda
     for _ in range(n_shots):
         _emit(34.0, 3.0, 10)        # birtoklás a szélső sávban
-        for i in range(5):          # a szélső a lövő-helyre viszi
+        # A szélső a lövő-helyre viszi a labdát — emberi tempóban
+        # (9 m/s alatt), hogy a labda végig birtokoltnak számítson,
+        # és az elengedés helye tényleg a lövő-hely legyen.
+        for i in range(10):
             frames.append(Frame(t=t, players=[
-                _pl(2, Team.HOME, 34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                _pl(2, Team.HOME, 34.0 + (sx - 34.0) * (i + 1) / 10.0,
                     3.0)],
-                ball=Ball(x=34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                ball=Ball(x=34.0 + (sx - 34.0) * (i + 1) / 10.0,
                           y=3.0, confidence=1.0)))
             t += 1
         steps = max(3, int(round(40.5 - sx)))
@@ -3737,3 +3947,1256 @@ def test_kickout_targets_silent_with_few_kickouts():
     assert h["kickouts"] <= 2, h
     assert h["top"] is None and h["top_pct"] is None, h
     assert h["verdict"] is None, h
+
+
+# ---- Lepattanó-poszt (ki lő másodszor) --------------------------------------
+
+def _scr_shot(t0, tid, sx, sy, goal=False):
+    """Egy hazai lövés a +x kapura a `tid` játékostól, (sx, sy)-ból; a
+    2-es fixen a 6 m-nél áll (beálló-minta), az 1-es kint (átlövő)."""
+    def cast():
+        return [_pl(1, Team.HOME, 29.0, 10.0),
+                _pl(2, Team.HOME, 34.0, 10.0)]
+    px, py = (29.0, 10.0) if tid == 1 else (34.0, 10.0)
+    assert (px, py) == (sx, sy)
+    frames = []
+    for i in range(3):
+        frames.append(Frame(t=t0 + i, players=cast(),
+                            ball=Ball(x=sx + 0.2, y=sy, confidence=1.0)))
+    t = t0 + 3
+    for i in range(8):
+        bx = min(sx + 1.5 * (i + 1), 40.0)
+        frames.append(Frame(t=t + i, players=cast(),
+                            ball=Ball(x=bx, y=(10.0 if goal else 5.0),
+                                      confidence=1.0)))
+    return frames
+
+
+def _scr_match(pairs):
+    """`pairs` = (első lövő, második lövő) — az első kimarad, a második
+    az ablakon belül újra lő; a párok közt hosszú szünet."""
+    frames = []
+    t = 0
+    for first, second in pairs:
+        # Birtoklás-bemelegítés: ebből épül a poszt-minta
+        # (ROLE_MIN_SAMPLES) — a labda az 1-esnél áll.
+        for i in range(40):
+            frames.append(Frame(t=t + i, players=[
+                _pl(1, Team.HOME, 29.0, 10.0),
+                _pl(2, Team.HOME, 34.0, 10.0)],
+                ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 40
+        frames += _scr_shot(t, first, 29.0 if first == 1 else 34.0, 10.0)
+        t = frames[-1].t + 1
+        for i in range(12):
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t = frames[-1].t + 1
+        frames += _scr_shot(t, second, 29.0 if second == 1 else 34.0,
+                            10.0, goal=True)
+        t = frames[-1].t + 1
+        for i in range(200):
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t = frames[-1].t + 1
+    return Match(_meta(), frames)
+
+
+def test_second_chance_roles_finds_the_rebound_post():
+    """Ha a második lövéseket rendre ugyanaz a poszt adja le, a zárás
+    után őt kell kivenni a lepattanóból."""
+    from handball.pipeline.attack_types import (SCR_MIN_SHOTS,
+                                                second_chance_roles)
+
+    rec = second_chance_roles(_scr_match([(1, 2)] * 3 + [(2, 1)]))["home"]
+    assert rec["second_shots"] >= SCR_MIN_SHOTS, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "lepattanó" in rec["verdict"], rec
+
+
+def test_second_chance_roles_silent_with_few_shots():
+    """Két második lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import second_chance_roles
+
+    rec = second_chance_roles(_scr_match([(1, 2), (2, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _scs2_match(setters, fps=25.0):
+    """`setters` = elzárásonként az elzárásba álló HAZAI játékos (5:
+    beálló, 7: szélső). Első szakasz: hosszú hazai birtoklás a +x kapu
+    felé (poszt-minta), utána a meglévő elzáró-minta lövésenként."""
+    frames = []
+    t = 0
+    role_pos = {1: (28.0, 10.0), 5: (34.0, 10.0), 7: (35.0, 3.0)}
+    for _ in range(300):             # hazai birtoklás: poszt-minta
+        players = [_pl(pid, Team.HOME, *xy)
+                   for pid, xy in role_pos.items()]
+        players.append(_pl(20, Team.AWAY, 20.0, 16.0))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for setter_id in setters:
+        players = [_pl(1, Team.HOME, 30.0, 10.0),          # a lövő
+                   _pl(20, Team.AWAY, 31.5, 10.0),         # az őrző
+                   _pl(setter_id, Team.HOME, 31.5, 11.0)]  # az elzáró
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(30.0 + 0.8 * (i + 1), 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screen_setter_roles_names_the_screening_post():
+    """Ha az elzárások zöme ugyanarról a posztról jön, az ő oldalán
+    kell a hangos váltás."""
+    from handball.pipeline.attack_types import (SCR2_MIN_SCREENS,
+                                                screen_setter_roles)
+
+    rec = screen_setter_roles(_scs2_match([5, 5, 5, 7]))["home"]
+    assert rec["screens"] >= SCR2_MIN_SCREENS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "váltás" in rec["verdict"], rec
+
+
+def test_screen_setter_roles_silent_with_few_screens():
+    """Néhány poszthoz kötött elzárásból nincs ítélet."""
+    from handball.pipeline.attack_types import screen_setter_roles
+
+    rec = screen_setter_roles(_scs2_match([5, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _pfr_match(feeders, fps=25.0):
+    """Mint a _feeder_match, de a kiszolgálók posztja eltér: a 2-es
+    átlövő (9 m, közép), a 3-as szélső — a poszt-lencse így meg tudja
+    nevezni a bejátszó posztot."""
+    spots = {1: (34.0, 10.0), 2: (30.0, 9.0), 3: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _hold(holder_id, n):
+        nonlocal t, frames
+        for _ in range(n):
+            players = [_pl(tid, Team.HOME, x, y)
+                       for tid, (x, y) in spots.items()]
+            players.append(_pl(21, Team.AWAY, 38.0, 10.0))
+            hx, hy = spots[holder_id]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+
+    _hold(1, 100)
+    _hold(2, 100)
+    _hold(3, 100)
+    for pid in feeders:
+        _hold(pid, 10)     # a kiszolgáló birtokol
+        _hold(1, 10)       # majd a beálló kapja (passz)
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_feeder_roles_names_the_feeding_post():
+    """Ha a beálló-beadások zöme ugyanarról a posztról jön, az ő kezén
+    kell a beálló-vonalba lépni."""
+    from handball.pipeline.attack_types import (PFR_MIN_FEEDS,
+                                                pivot_feeder_roles)
+
+    rec = pivot_feeder_roles(_pfr_match([2] * 5 + [3]))["home"]
+    assert rec["feeds"] >= PFR_MIN_FEEDS, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kettőzés" in rec["verdict"], rec
+
+
+def test_pivot_feeder_roles_silent_with_few_feeds():
+    """Néhány beadásból nincs ítélet."""
+    from handball.pipeline.attack_types import pivot_feeder_roles
+
+    rec = pivot_feeder_roles(_pfr_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _rpr_match(cases, fps=25.0):
+    """Mint a _risky_passer_match, de poszt-mintával: a 4-es átlövő
+    (9 m, közép), a 6-os szélső — a `cases` elemei (passzoló id,
+    elveszett?) párok."""
+    role_pos = {4: (30.0, 9.0), 6: (35.0, 3.0)}
+    frames = []
+    t = 0
+    for _ in range(150):             # hazai birtoklás: poszt-minta
+        players = [_pl(pid, Team.HOME, *xy)
+                   for pid, xy in role_pos.items()]
+        players.append(_pl(20, Team.AWAY, 20.0, 16.0))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.2, y=9.0, confidence=1.0)))
+        t += 1
+    for (pid, lost) in cases:
+        taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
+                 else _pl(2, Team.HOME, 30.0, 22.0))
+        pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
+        # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+        # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+        for _ in range(10):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=22.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_risky_passer_roles_names_the_gambling_post():
+    """Ha az elszórt hosszú labdák zöme ugyanarról a posztról indul,
+    az ő passzsávjába kell beállni."""
+    from handball.pipeline.attack_types import (RPR_MIN_TO,
+                                                risky_passer_roles)
+
+    rec = risky_passer_roles(
+        _rpr_match([(4, True)] * 3 + [(6, True)]))["home"]
+    assert rec["turnovers"] >= RPR_MIN_TO, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávjába" in rec["verdict"], rec
+
+
+def test_risky_passer_roles_silent_with_few_turnovers():
+    """Néhány elszórt hosszú labdából nincs ítélet."""
+    from handball.pipeline.attack_types import risky_passer_roles
+
+    rec = risky_passer_roles(
+        _rpr_match([(4, True), (6, True)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _kor_cycle(t, rid, fps=25.0):
+    """Mint a _kot_cycle, de két lehetséges fogadóval: a 2-es irányító
+    (28, 14), a 3-as szélső (28, 3) — a `rid` kapja a kiosztást."""
+    rpos = {2: (28.0, 14.0), 3: (28.0, 3.0)}
+    frames = []
+
+    def cast():
+        return [_pl(1, Team.HOME, 33.0, 10.0),
+                _pl(2, Team.HOME, *rpos[2]),
+                _pl(3, Team.HOME, *rpos[3]),
+                _pl(20, Team.AWAY, 35.0, 10.0)]
+
+    for _ in range(40):  # betörés
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    rx, ry = rpos[rid]
+    for _ in range(30):  # kiosztás
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=rx, y=ry, confidence=1.0)))
+        t += 1
+    for _ in range(30):  # ellenfél-birtoklás: szakasz-határ
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(20, Team.AWAY, 10.0, 10.0)],
+            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_kickout_target_roles_names_the_target_post():
+    """Ha a betörés utáni labda rendre ugyanarra a posztra jár, annak
+    a védője előre elmozdulhat a passzsávba."""
+    from handball.pipeline.attack_types import (KOR_MIN_KICKOUTS,
+                                                kickout_target_roles)
+
+    frames, t = [], 0
+    for rid in [2, 2, 2, 2, 3]:
+        chunk, t = _kor_cycle(t, rid)
+        frames += chunk
+    rec = kickout_target_roles(Match(_meta(), frames))["home"]
+    assert rec["kickouts"] >= KOR_MIN_KICKOUTS, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávba" in rec["verdict"], rec
+
+
+def test_kickout_target_roles_silent_with_few_kickouts():
+    """Néhány kiosztásból nincs ítélet."""
+    from handball.pipeline.attack_types import kickout_target_roles
+
+    frames, t = [], 0
+    for rid in [2, 3]:
+        chunk, t = _kor_cycle(t, rid)
+        frames += chunk
+    rec = kickout_target_roles(Match(_meta(), frames))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Előkészítő-poszt (melyik posztjuk készíti elő a lövéseket) ------------
+
+
+def _epr_match(feeders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + lövések: a
+    `feeders` szerinti játékos passza után a beálló (7) lő kapura."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for fid in feeders:
+        fx, fy = spos[fid]
+        for _ in range(10):          # az előkészítő passzolónál a labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel a lövőnél (7-es)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=34.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 34.0
+        while x < 40.5:              # lövés a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # semleges szakasz + debounce
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_last_pass_roles_names_the_preparing_post():
+    """Öt lövésből négyet az irányító készít elő → az ő sávját kell
+    zárni."""
+    from handball.pipeline.attack_types import (EPR_MIN_PASSES,
+                                                last_pass_roles)
+
+    rec = last_pass_roles(_epr_match([5, 5, 5, 5, 9]))["home"]
+    assert rec["passes"] >= EPR_MIN_PASSES, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "előkészítetlenné" in rec["verdict"], rec
+
+
+def test_last_passers_names_the_feeder():
+    """Ha a lövés-előkészítés egy kézen fut, őt nevezzük meg — nem a
+    lövőt kell fogni, hanem a kiszolgálót."""
+    from handball.pipeline.attack_types import (EPP_MIN_PASSES,
+                                                last_passers)
+
+    rec = last_passers(_epr_match([5, 5, 5, 5, 9]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 5, rec
+    assert rec["top"]["passes"] >= EPP_MIN_PASSES, rec
+
+
+def test_last_passers_silent_with_few_passes():
+    """Kevés előkészítésből nem nevezünk meg embert."""
+    from handball.pipeline.attack_types import last_passers
+
+    rec = last_passers(_epr_match([5, 9]))["home"]
+    assert rec["top"] is None, rec
+
+
+def test_last_pass_roles_silent_with_few_passes():
+    """Néhány előkészített lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import last_pass_roles
+
+    rec = last_pass_roles(_epr_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hátrapassz-poszt (melyik posztjuknál fordul vissza a játék) -----------
+
+
+def _bpr_match(passers, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + hátra-
+    passzok: a `passers` szerinti játékos a kaputól távolabbi
+    irányítónak (5) adja vissza a labdát."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in passers:
+        px, py = spos[pid]
+        for _ in range(8):           # a labda a passzolónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=px + 0.2, y=py,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel hátul az irányítónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda a passzok közt
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_backward_pass_roles_names_the_turning_post():
+    """Hat hátra-passzból öt a beállóé → a pressz rá jutalmat hoz."""
+    from handball.pipeline.attack_types import (BPR_MIN_PASSES,
+                                                backward_pass_roles)
+
+    rec = backward_pass_roles(
+        _bpr_match([7, 7, 7, 7, 7, 9]))["home"]
+    assert rec["passes"] >= BPR_MIN_PASSES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "feljebb tolható" in rec["verdict"], rec
+
+
+def test_backward_pass_roles_silent_with_few_passes():
+    """Néhány hátra-passzból nincs ítélet."""
+    from handball.pipeline.attack_types import backward_pass_roles
+
+    rec = backward_pass_roles(_bpr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Áttörő-poszt (melyik posztjuk nyitja szét a falat) --------------------
+
+
+def _btr_match(entries, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + betörések: az `entries`
+    szerinti hazai játékos viszi be a labdát a kapu 9 m-es
+    körzetébe."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(mover=None, mx=None, my=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == mover:
+                out.append(_pl(tid, Team.HOME, mx,
+                               my if my is not None else y))
+            else:
+                out.append(_pl(tid, Team.HOME, x, y))
+        return out + [_pl(21, Team.AWAY, 37.0, 17.0)]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in entries:
+        for _ in range(int(2.0 * fps)):    # felállás a 9 m-en kívül
+            frames.append(Frame(
+                t=t, players=cast(mover=tid, mx=28.0, my=8.0),
+                ball=Ball(x=28.2, y=8.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(1.5 * fps)):    # betörés a körzetbe
+            frames.append(Frame(
+                t=t, players=cast(mover=tid, mx=33.5, my=8.0),
+                ball=Ball(x=33.7, y=8.0, confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):    # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t,
+                players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0,
+                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_breakthrough_roles_names_the_opening_post():
+    """Négy betörésből hármat a beálló visz be → az ő védője kap
+    segítőt."""
+    from handball.pipeline.attack_types import (BTR_MIN_ENTRIES,
+                                                breakthrough_roles)
+
+    rec = breakthrough_roles(_btr_match([7, 7, 7, 9]))["home"]
+    assert rec["entries"] >= BTR_MIN_ENTRIES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "testtel kell zárni" in rec["verdict"], rec
+
+
+def test_breakthrough_roles_silent_with_few_entries():
+    """Néhány betörésből nincs ítélet."""
+    from handball.pipeline.attack_types import breakthrough_roles
+
+    rec = breakthrough_roles(_btr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Elzárópáros-poszt (melyik posztpárra jár az elzárás-játék) ------------
+
+
+def _spp_match(setters, fps=25.0):
+    """Poszt-minta (1: átlövő, 5: beálló, 9: szélső) + elzárt
+    lövések: a `setters` szerinti társ zár az 1-es lövőnek."""
+    spos = {1: (30.0, 10.0), 5: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in spos.items()],
+            ball=Ball(x=30.2, y=10.0, confidence=1.0)))
+        t += 1
+    for setter_id in setters:
+        players = [_pl(1, Team.HOME, 30.0, 10.0),          # a lövő
+                   _pl(20, Team.AWAY, 31.5, 10.0),         # az őrző
+                   _pl(setter_id, Team.HOME, 31.5, 11.0)]  # az elzáró
+        players += [_pl(tid, Team.HOME, *spos[tid])
+                    for tid in spos if tid not in (1, setter_id)]
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(30.0 + 0.8 * (i + 1), 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screen_pair_roles_names_the_drilled_pair():
+    """Négy elzárt lövésből három a beálló→átlövő párosé → párban
+    készül a védekezés."""
+    from handball.pipeline.attack_types import (SPP_MIN_SHOTS,
+                                                screen_pair_roles)
+
+    rec = screen_pair_roles(_spp_match([5, 5, 5, 9]))["home"]
+    assert rec["shots"] >= SPP_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló→átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "párban készül" in rec["verdict"], rec
+
+
+def test_screen_pair_roles_silent_with_few_shots():
+    """Néhány elzárt lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import screen_pair_roles
+
+    rec = screen_pair_roles(_spp_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kontrapáros-poszt (melyik tengelyen futnak a kontráik) ----------------
+
+
+def _fbp_match(pairs, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + lerohanások:
+    a `pairs` elemei (indító, befejező) — az indító hátulról hozza a
+    labdát, a befejező lövi; köztük vendég-birtoklás választ el."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def base():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=base(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (starter, finisher) in pairs:
+        for i in range(40):          # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 16.0, 10.0)],
+                ball=Ball(x=16.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 8.0
+        for i in range(30):          # az indító rohan a labdával
+            players = [_pl(starter, Team.HOME, x, 10.0)] + [
+                _pl(tid, Team.HOME, *spos[tid])
+                for tid in spos if tid != starter]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x + 0.2, y=10.0,
+                                          confidence=1.0)))
+            x += 0.5
+            t += 1
+        fx, fy = spos[finisher]
+        for _ in range(6):           # a befejezőnél a labda
+            frames.append(Frame(t=t, players=base(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        xx = fx
+        while xx < 40.5:             # a kontra-lövés a kapura
+            xx += 0.5
+            frames.append(Frame(t=t, players=base(),
+                                ball=Ball(x=min(xx, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_pair_roles_names_the_axis():
+    """Négy lerohanásból három az irányító→szélső tengelyen fut →
+    az indítót kell fékezni."""
+    from handball.pipeline.attack_types import (FBP_MIN_BREAKS,
+                                                fast_break_pair_roles)
+
+    rec = fast_break_pair_roles(
+        _fbp_match([(5, 9), (5, 9), (5, 9), (7, 9)]))["home"]
+    assert rec["breaks"] >= FBP_MIN_BREAKS, rec
+    assert rec["main_role"] == "irányító→szélső", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "labdavesztés pillanatában" \
+        in rec["verdict"], rec
+
+
+def test_fast_break_pair_roles_silent_with_few_breaks():
+    """Néhány lerohanásból nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_pair_roles
+
+    rec = fast_break_pair_roles(_fbp_match([(5, 9), (7, 9)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Lepattanópáros-poszt (melyik lövésre ki érkezik) ----------------------
+
+
+def test_rebound_pair_roles_names_the_rebound_axis():
+    """Ha az irányító lövésére rendre a beálló érkezik, a zárás után
+    az ő útját kell elállni."""
+    from handball.pipeline.attack_types import (RBP_MIN_SHOTS,
+                                                rebound_pair_roles)
+
+    rec = rebound_pair_roles(
+        _scr_match([(1, 2)] * 3 + [(2, 1)]))["home"]
+    assert rec["second_shots"] >= RBP_MIN_SHOTS, rec
+    assert rec["main_role"] == "irányító→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "útját kell elállni" in rec["verdict"], rec
+
+
+def test_rebound_pair_roles_silent_with_few_shots():
+    """Néhány második rohamból nincs ítélet."""
+    from handball.pipeline.attack_types import rebound_pair_roles
+
+    rec = rebound_pair_roles(_scr_match([(1, 2), (2, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Sávváltó-poszt (melyik posztjuk vált sávot a támadásban) --------------
+
+
+def _lsw_match(switchers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + keresztmozgás: a
+    `switchers` szerinti játékos átmegy a pálya másik szélső sávjába
+    (és ott marad 2 mp-ig), majd vissza. Az 5-ös irányítónál marad a
+    labda, hogy a birtoklás a mozgás alatt is mérhető legyen."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(mover=None, my=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == mover:
+                out.append(_pl(tid, Team.HOME, x, my))
+            else:
+                out.append(_pl(tid, Team.HOME, x, y))
+        return out
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in switchers:
+        for my in (17.0, spos[tid][1]):   # átmegy, majd vissza
+            for _ in range(int(2.0 * fps)):
+                frames.append(Frame(
+                    t=t, players=cast(mover=tid, my=my),
+                    ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+                t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_lane_switch_roles_names_the_crossing_post():
+    """A beálló viszi a keresztmozgást → a védője követés/átadás
+    szabályát előre el kell dönteni."""
+    from handball.pipeline.attack_types import (LSW_MIN_SWITCHES,
+                                                lane_switch_roles)
+
+    rec = lane_switch_roles(_lsw_match([7, 7, 7, 9]))["home"]
+    assert rec["switches"] >= LSW_MIN_SWITCHES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "ÁTADJA" in rec["verdict"], rec
+
+
+def test_lane_switch_roles_silent_with_few_switches():
+    """Néhány sávváltásból nincs ítélet."""
+    from handball.pipeline.attack_types import lane_switch_roles
+
+    rec = lane_switch_roles(_lsw_match([7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Vég-birtokos poszt (kinél ér véget a támadás lövés nélkül) ------------
+
+
+def _lst_match(enders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló) + lövés nélkül záruló
+    hazai támadások: az `enders` szerinti játékosnál marad a labda,
+    majd a vendég birtokol (a szakasz lezárul)."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in enders:
+        for _ in range(40):          # hazai támadás: a labda körbejár
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        ex, ey = spos[tid]
+        for _ in range(40):          # a végén a lezáró birtokosnál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=ex + 0.2, y=ey,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(60):          # vendég-birtoklás: a szakasz zárul
+            frames.append(Frame(
+                t=t, players=cast() + [_pl(21, Team.AWAY, 12.0, 10.0)],
+                ball=Ball(x=12.1, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_last_holder_roles_names_the_closing_post():
+    """A terméketlen támadások a beálló kezében halnak el → a
+    támadás második felében rá kell tolni a nyomást."""
+    from handball.pipeline.attack_types import (LST_MIN_ATTACKS,
+                                                last_holder_roles)
+
+    rec = last_holder_roles(_lst_match([7, 7, 7, 7, 5]))["home"]
+    assert rec["attacks"] >= LST_MIN_ATTACKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "nyomást" in rec["verdict"], rec
+
+
+def test_last_holder_roles_silent_with_few_attacks():
+    """Néhány terméketlen támadásból nincs ítélet."""
+    from handball.pipeline.attack_types import last_holder_roles
+
+    rec = last_holder_roles(_lst_match([7, 5]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kapkodás-index (kapott gól után rövidül-e a támadás) ------------------
+
+
+def _rus_frames(t0, seconds, x_from, x_to, fps=25.0):
+    """HAZAI támadás-szakasz (mint az _attack_frames), de a vendég
+    védők a hazai térfélen is látszanak — így a vendég gól után is
+    van kit birtokosnak jelölni."""
+    return _attack_frames(t0, seconds, x_from, x_to, fps=fps)
+
+
+def _rus_gap(t0, seconds, fps=25.0):
+    """Szabad labda: nincs birtokos, a szakasz itt zárul."""
+    return [Frame(t=t0 + i, players=[],
+                  ball=Ball(x=20.0, y=18.0, confidence=1.0))
+            for i in range(int(seconds * fps))]
+
+
+def _rus_away_goal(t0, fps=25.0):
+    """Vendég gól a hazai (-x) kapuba: a 21-es viszi be a labdát."""
+    frames = []
+    i = 0
+    x = 8.0
+    while x > -0.5:
+        players = [_pl(21, Team.AWAY, max(x, 0.5), 10.0),
+                   _pl(22, Team.AWAY, 12.0, 14.0)]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        x -= 0.4
+        i += 1
+    return frames
+
+
+def _rus_match(base_s, after_s, fps=25.0):
+    """`base_s` hosszúságú hazai támadások gól nélkül, majd
+    vendéggólonként egy `after_s` hosszúságú válasz-támadás."""
+    frames = []
+    t = 0
+    for _ in range(4):                    # alap-támadások (gól előtt)
+        frames += _rus_frames(t, base_s, 26.0, 31.0, fps)
+        t += int(base_s * fps)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+    for _ in range(3):                    # vendéggól + válasz-támadás
+        g = _rus_away_goal(t, fps)
+        frames += g
+        t += len(g)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+        frames += _rus_frames(t, after_s, 26.0, 31.0, fps)
+        t += int(after_s * fps)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+    return Match(_meta(fps), frames)
+
+
+def test_post_goal_rush_flags_the_panicking_team():
+    """Ha a kapott gól után 11 másodperccel rövidebb a támadásuk,
+    kapkodnak — a gólunk után vissza kell állni."""
+    from handball.pipeline.attack_types import (RUS_MIN_ATTACKS,
+                                                post_goal_rush)
+
+    rec = post_goal_rush(_rus_match(16.0, 5.0))["home"]
+    assert rec["after"] >= RUS_MIN_ATTACKS, rec
+    assert rec["base"] >= 4, rec
+    assert rec["diff_s"] and rec["diff_s"] < 0, rec
+    assert rec["verdict"] and "kapkodnak" in rec["verdict"], rec
+
+
+def test_post_goal_rush_flags_the_freezing_team():
+    """A fordított eset: kapott gól után hosszabb támadás = befagyás."""
+    from handball.pipeline.attack_types import post_goal_rush
+
+    rec = post_goal_rush(_rus_match(6.0, 16.0))["home"]
+    assert rec["diff_s"] and rec["diff_s"] > 0, rec
+    assert rec["verdict"] and "befagynak" in rec["verdict"], rec
+
+
+def test_post_goal_rush_silent_without_real_change():
+    """Egy másodperces eltérés nem minta — az ítélet None."""
+    from handball.pipeline.attack_types import post_goal_rush
+
+    rec = post_goal_rush(_rus_match(10.0, 9.0))["home"]
+    assert rec["diff_s"] is not None and rec["verdict"] is None, rec
+
+
+# ---- Áttörés-hozam (bejutnak-e, és büntetnek-e onnan) ----------------------
+
+
+def _bty_match(n_entries, n_goals, fps=25.0):
+    """`n_entries` hazai betörés, ezekből az első `n_goals` góllal
+    zárul (a labda a +x kapuba repül)."""
+    frames = []
+    t = 0
+    for i in range(n_entries):
+        for _ in range(int(2.0 * fps)):     # felállás a 9 m-en kívül
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 28.0, 10.0),
+                _pl(8, Team.HOME, 28.0, 5.0),
+                _pl(21, Team.AWAY, 37.0, 14.0)],
+                ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(1.5 * fps)):     # betörés a 33,5 m-ig
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 33.5, 10.0),
+                _pl(8, Team.HOME, 28.0, 5.0),
+                _pl(21, Team.AWAY, 37.0, 14.0)],
+                ball=Ball(x=33.5, y=10.0, confidence=1.0)))
+            t += 1
+        if i < n_goals:                     # a betörésből gól lesz
+            for k in range(10):
+                frames.append(Frame(t=t, players=[
+                    _pl(7, Team.HOME, 33.5, 10.0),
+                    _pl(8, Team.HOME, 28.0, 5.0)],
+                    ball=Ball(x=min(34.5 + k, 40.4), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for k in range(int(2.0 * fps)):     # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * k, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * k, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_breakthrough_yield_flags_the_punishing_penetration():
+    """Ha a betöréseik nagy része gólba fut, a falat előbb kell
+    zárni."""
+    from handball.pipeline.attack_types import (BTY_MIN_ENTRIES,
+                                                breakthrough_yield)
+
+    rec = breakthrough_yield(_bty_match(6, 4))["home"]
+    assert rec["entries"] >= BTY_MIN_ENTRIES, rec
+    assert rec["goal_pct"] and rec["goal_pct"] >= 40.0, rec
+    assert rec["verdict"] and "bejutnak ÉS büntetnek" in rec["verdict"]
+
+
+def test_breakthrough_yield_flags_the_blunt_penetration():
+    """Ha bejutnak, de nem büntetnek, a záró-fal és a kapus dolgozik."""
+    from handball.pipeline.attack_types import breakthrough_yield
+
+    rec = breakthrough_yield(_bty_match(7, 0))["home"]
+    assert rec["goal_pct"] == 0.0, rec
+    assert rec["verdict"] and "nem büntetnek" in rec["verdict"], rec
+
+
+def test_breakthrough_yield_silent_with_few_entries():
+    """Kevés betörésből nincs ítélet — a számok viszont látszanak."""
+    from handball.pipeline.attack_types import breakthrough_yield
+
+    rec = breakthrough_yield(_bty_match(3, 1))["home"]
+    assert rec["entries"] == 3 and rec["goal_pct"] is None, rec
+    assert rec["verdict"] is None, rec
+
+
+def test_last_holders_names_the_dead_end():
+    """Ha a terméketlen támadások rendre ugyanannak a kezében halnak
+    el, rá kell tolni a nyomást."""
+    from handball.pipeline.attack_types import (LSTP_MIN_ATTACKS,
+                                                last_holders)
+
+    rec = last_holders(_lst_match([7, 7, 7, 7, 5]))["home"]
+    assert rec["attacks"] >= 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["attacks"] >= LSTP_MIN_ATTACKS, rec
+
+
+def test_last_holders_silent_with_few_attacks():
+    """Két terméketlen támadásból még nincs kiemelt név."""
+    from handball.pipeline.attack_types import last_holders
+
+    rec = last_holders(_lst_match([7, 5]))["home"]
+    assert rec["top"] is None, rec
+
+
+def test_lane_switchers_names_the_crosser():
+    """Ha a keresztmozgást rendre ugyanaz viszi, a védője
+    követés/átadás szabályát rá kell szabni."""
+    from handball.pipeline.attack_types import (LSWP_MIN_SWITCHES,
+                                                lane_switchers)
+
+    rec = lane_switchers(_lsw_match([7, 7, 7, 9]))["home"]
+    assert rec["switches"] >= LSWP_MIN_SWITCHES, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["switches"] >= LSWP_MIN_SWITCHES, rec
+
+
+def test_lane_switchers_silent_with_few_switches():
+    """Néhány sávváltásból nincs kiemelt név."""
+    from handball.pipeline.attack_types import lane_switchers
+
+    rec = lane_switchers(_lsw_match([7]))["home"]
+    assert rec["top"] is None, rec
+
+
+def test_backward_passers_names_the_turner():
+    """Ha nyomás alatt rendre ugyanaz fordítja vissza a labdát, rá
+    érdemes kimenni."""
+    from handball.pipeline.attack_types import (BPRP_MIN_PASSES,
+                                                backward_passers)
+
+    rec = backward_passers(_bpr_match([7, 7, 7, 7, 7, 9]))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["passes"] >= BPRP_MIN_PASSES, rec
+
+
+def test_backward_passers_silent_with_few_passes():
+    """Két hátra-passzból még nincs kiemelt név."""
+    from handball.pipeline.attack_types import backward_passers
+
+    rec = backward_passers(_bpr_match([7, 9]))["home"]
+    assert rec["top"] is None, rec
+
+
+def _scrf_match(fh_screened, sh_screened, n=5):
+    """Két félidő 90 mp-es szünettel: félidőnként `n` hazai őrzött
+    lövés, az elzárás a paraméterek szerint van vagy nincs."""
+    frames = []
+    t = 0
+
+    def _shot(screened):
+        nonlocal t
+        players = [_pl(1, Team.HOME, 30.0, 10.0),
+                   _pl(20, Team.AWAY, 31.5, 10.0)]
+        if screened:
+            players.append(_pl(2, Team.HOME, 31.5, 11.0))
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(30.0 + 0.8 * (i + 1),
+                                                40.0),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(n):
+        _shot(fh_screened)
+    for _ in range(int(90.0 * 25)):     # félidei szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(n):
+        _shot(sh_screened)
+    return Match(_meta(), frames)
+
+
+def test_screen_fade_flags_the_fading_screens():
+    """Az 1. félidőben elzárásból lőnek, a 2.-ban a lövő magára marad
+    → elfogy az elzárás-munka."""
+    from handball.pipeline.attack_types import screen_fade
+
+    rec = screen_fade(_scrf_match(True, False))["home"]
+    assert rec["fh_shots"] >= 4 and rec["sh_shots"] >= 4, rec
+    assert rec["fh_pct"] == 100.0 and rec["sh_pct"] == 0.0, rec
+    assert rec["verdict"] and "elfogy az elzárás" in rec["verdict"], rec
+
+
+def test_screen_fade_flags_the_strengthening_screens():
+    """Fordítva: a 2. félidőre erősödik az elzárás-játék."""
+    from handball.pipeline.attack_types import screen_fade
+
+    rec = screen_fade(_scrf_match(False, True))["home"]
+    assert rec["verdict"] and "erősödik" in rec["verdict"], rec
+
+
+def test_screen_fade_silent_without_halftime_or_change():
+    """Félidő-jel nélkül, illetve változatlan elzárás-aránynál nincs
+    ítélet."""
+    from handball.pipeline.attack_types import screen_fade
+
+    m = _scrf_match(True, True)
+    rec = screen_fade(m)["home"]
+    assert rec["verdict"] is None and rec["gap_pp"] == 0.0, rec
+    # Szünet nélkül (csak az 1. félidő kockái) nincs félidő-jel.
+    half = Match(_meta(), m.frames[:2100])
+    assert screen_fade(half)["home"]["fh_pct"] is None
+
+
+def _wif_frames(t0, wings, fps=25.0):
+    """A `_wing_match` kockái adott kezdő-időtől — hogy két félidő egy
+    felvételbe fűzhető legyen."""
+    frames = []
+    t = t0
+    for to_wing in wings:
+        for i in range(int(3.0 * fps)):        # hazai támadás
+            y = 2.0 if (to_wing and i >= 25) else 10.0
+            players = [_pl(1, Team.HOME, 26.0, y),
+                       _pl(2, Team.HOME, 24.0, 12.0),
+                       _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=26.0, y=y, confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):        # vendég-birtoklás közte
+            players = [_pl(1, Team.HOME, 5.0, 10.0),
+                       _pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0),
+                       _pl(22, Team.AWAY, 15.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=18.0 - 0.05 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_wing_involvement_fade_beszukulo_tamadas():
+    """Az 1. félidőben minden támadásban kimegy a labda a szélre, a
+    2.-ban egyben sem → érdemi beszűkülés.
+
+    Edzőileg ez a fáradás legkorábbi jele: a lábmunka fogy el először,
+    a labda középen ragad, és onnan már csak a nehéz átlövés marad.
+    """
+    from handball.pipeline.attack_types import (WING_INV_FADE_DROP_PCT,
+                                                wing_involvement_fade)
+
+    fps = 25.0
+    frames = _wif_frames(0, [True] * 7, fps)              # 1. félidő: széles
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]             # szünet
+    t = frames[-1].t + 1
+    frames += _wif_frames(t, [False] * 7, fps)            # 2. félidő: szűk
+
+    wf = wing_involvement_fade(Match(_meta(fps), frames))
+    h = wf["home"]
+    assert h["fh_attacks"] >= 6 and h["sh_attacks"] >= 6, h
+    assert h["fh_pct"] is not None and h["sh_pct"] is not None, h
+    assert h["fh_pct"] > h["sh_pct"], h
+    # POZITÍV = beszűkültek.
+    assert h["drop_pct"] is not None, h
+    assert h["drop_pct"] >= WING_INV_FADE_DROP_PCT, h
+
+
+def test_wing_involvement_fade_keves_tamadasnal_nincs_itelet():
+    """Félidő-jel nélkül (rövid felvétel) nincs mihez viszonyítani —
+    inkább None, mint egy fél felvételből vett szám."""
+    from handball.pipeline.attack_types import wing_involvement_fade
+
+    wf = wing_involvement_fade(Match(_meta(25.0), _wif_frames(0, [True] * 3)))
+    assert wf["home"]["drop_pct"] is None
+    assert wf["away"]["drop_pct"] is None
+
+
+def _puf_frames(t0, beallosok):
+    """Hazai támadás-sorozat: a `beallosok` elemenként megadja, a labda
+    a BEÁLLÓNÁL (5-ös, x=34) időzik-e, vagy végig az irányítónál."""
+    frames = []
+    t = t0
+    for beallos in beallosok:
+        for _ in range(200):                # 8 mp hazai támadás
+            bx = 34.0 if beallos else 28.0
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 27.0, 10.0),
+                _pl(5, Team.HOME, 34.0, 10.0),
+                _pl(20, Team.AWAY, 36.0, 8.0)],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(50):                 # vendég-birtoklás: szakasz-vég
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 20.0, 10.0),
+                _pl(5, Team.HOME, 20.0, 12.0),
+                _pl(20, Team.AWAY, 19.0, 10.0)],
+                ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_pivot_usage_fade_elfogyo_beallo():
+    """Az 1. félidőben minden támadás a beállón megy át, a 2.-ban egy
+    sem → érdemi esés.
+
+    Edzőileg: a beállóba adott labda a legnehezebb passz (takarásba,
+    testek közé, pontos időzítéssel). Fáradtan nem a beálló mozgása
+    hiányzik, hanem a bátor passz a kiszolgálótól.
+    """
+    from handball.pipeline.attack_types import (PIVOT_FADE_DROP_PCT,
+                                                pivot_usage_fade)
+
+    fps = 25.0
+    frames = _puf_frames(0, [True] * 7)                  # 1. félidő
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]            # szünet
+    t = frames[-1].t + 1
+    frames += _puf_frames(t, [False] * 7)                # 2. félidő
+
+    pf = pivot_usage_fade(Match(_meta(fps), frames))
+    h = pf["home"]
+    assert h["fh_attacks"] >= 6 and h["sh_attacks"] >= 6, h
+    assert h["fh_pct"] is not None and h["sh_pct"] is not None, h
+    assert h["fh_pct"] > h["sh_pct"], h
+    assert h["drop_pct"] is not None, h
+    assert h["drop_pct"] >= PIVOT_FADE_DROP_PCT, h
+
+
+def test_pivot_usage_fade_felido_jel_nelkul_nincs_itelet():
+    """Félidő-jel nélkül nincs mihez viszonyítani — inkább None."""
+    from handball.pipeline.attack_types import pivot_usage_fade
+
+    pf = pivot_usage_fade(Match(_meta(25.0), _puf_frames(0, [True] * 3)))
+    assert pf["home"]["drop_pct"] is None
+    assert pf["away"]["drop_pct"] is None
+
+
+def _adf_frames(t0, dist_m, fps=25.0, seconds=6.0):
+    """A `_depth_match` kockái adott kezdő-időtől — két félidő egybe."""
+    frames = []
+    x = 40.0 - dist_m
+    for i in range(int(seconds * fps)):
+        players = [_pl(1, Team.HOME, x, 10.0),
+                   _pl(2, Team.HOME, x, 6.0),
+                   _pl(3, Team.HOME, x, 14.0),
+                   _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                   _pl(21, Team.AWAY, 38.0, 8.0),
+                   _pl(22, Team.AWAY, 38.0, 12.0)]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_attack_depth_fade_hatrebb_allo_tamadas():
+    """Az 1. félidőben 8 m-en, a 2.-ban 13 m-en álló támadás → érdemi
+    hátrébb kerülés.
+
+    Edzőileg ez a fáradás legőszintébb jele: a hatos elleni munka
+    lábat kíván, és aki elfárad, egy lépéssel hátrébb marad — onnan
+    viszont már csak a kényelmes, de nehéz átlövés jön.
+    """
+    from handball.pipeline.attack_types import (ADEPTH_FADE_DROP_M,
+                                                attack_depth_fade)
+
+    fps = 25.0
+    frames = _adf_frames(0, 8.0, fps, seconds=6.0)          # 1. félidő
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]               # szünet
+    t = frames[-1].t + 1
+    frames += _adf_frames(t, 13.0, fps, seconds=6.0)        # 2. félidő
+
+    af = attack_depth_fade(Match(_meta(fps), frames))
+    h = af["home"]
+    assert h["fh_frames"] >= 100 and h["sh_frames"] >= 100, h
+    assert h["fh_m"] is not None and h["sh_m"] is not None, h
+    assert h["sh_m"] > h["fh_m"], h
+    # POZITÍV = hátrébb álltak.
+    assert h["drop_m"] is not None and h["drop_m"] >= ADEPTH_FADE_DROP_M, h
+
+
+def test_attack_depth_fade_felido_jel_nelkul_nincs_itelet():
+    """Félidő-jel nélkül nincs mihez viszonyítani — inkább None."""
+    from handball.pipeline.attack_types import attack_depth_fade
+
+    af = attack_depth_fade(Match(_meta(25.0), _adf_frames(0, 10.0)))
+    assert af["home"]["drop_m"] is None
+    assert af["away"]["drop_m"] is None
