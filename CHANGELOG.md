@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.183 óta)
+
+- **Gól a középkezdésből akkor is, ha a labdát a kapu előtt nem láttuk**
+  (motor): a jel a gól kapuját a labda utolsó kapu előtti pillanatából
+  vette — széles felvételen a távoli kapu előtt a kis labda gyakran
+  egyáltalán nem látszik, és ilyenkor a jel hallgatott. Most a gól
+  kapuját a játékosok utolsó felállt támadása is megadja (mindkét csapat
+  a kapu előtt tömörül); a felállás- és az irány-ellenőrzés változatlan.
+
 ## v0.1.183 — kiadva (2026-10-23)
 
 > Kiadás-jegyzet: KALIBRÁCIÓ — a több sportot kiszolgáló padlón (pl.

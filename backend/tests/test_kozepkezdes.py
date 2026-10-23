@@ -281,6 +281,59 @@ def test_kapu_elotti_labda_nelkul_nincs_gol():
     assert throw_off_goals(Match(_meta(fps), frames), []) == []
 
 
+def _jatekos_tamadas_meccs(tamadas_mp: float = 6.0, tamadas=None):
+    """Hazai felállt támadás a +x kapu előtt, a labdát a kapu előtt NEM
+    látjuk (a hátsó sávban 15 m-re, aztán sehol) → középkezdés → a
+    vendég támad."""
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def add(players, ball):
+        nonlocal t
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    for k in range(int(tamadas_mp * fps)):
+        add((tamadas or _tamadas)(),
+            Ball(x=25.0, y=10.0, confidence=1.0) if k % 10 == 0 else None)
+    for _ in range(int(6 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), None)
+    for k in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=20.0 + 0.05 * (k % 3), y=10.0, confidence=1.0))
+    for k in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=17.0 - 2.0 * k / (2 * fps), y=10.0, confidence=1.0))
+    return Match(_meta(fps), frames)
+
+
+def test_a_gol_kapuja_a_jatekosokbol_ha_a_labdat_a_kapu_elott_nem_lattuk():
+    """A labdát a kapu előtt nem láttuk, de a játékosok a +x kapu előtt
+    támadtak, utána középkezdés: hazai gól (lövés nélkül, a játékosokból)."""
+    from handball.pipeline.event_detection import unseen_goal
+
+    golok = _golok(_jatekos_tamadas_meccs())
+    assert len(golok) == 1, golok
+    g = golok[0]
+    assert g.team is Team.HOME and unseen_goal(g)
+    assert g.detail.get("attack_from_players") is True
+
+
+def test_tul_rovid_jatekos_tamadasbol_nincs_gol():
+    from handball.pipeline.event_detection import THROWOFF_ATTACK_MIN_S
+
+    assert _golok(_jatekos_tamadas_meccs(
+        tamadas_mp=THROWOFF_ATTACK_MIN_S - 1.0)) == []
+
+
+def test_kozepen_allo_jatekosokbol_nincs_gol():
+    """Ha a játékosok nem a kapu előtt álltak (nincs felállt támadás), és a
+    labdát sem láttuk a kapu előtt, nincs miből gólt következtetni."""
+    assert _golok(_jatekos_tamadas_meccs(
+        tamadas=lambda: _tamadas(x0=15.0))) == []
+
+
 def test_tul_regi_kapu_elotti_labda_nem_szamit():
     assert _golok(_meccs(szunet_mp=60.0)) == []
 

@@ -432,6 +432,14 @@ THROWOFF_GOALTIME_GAP_S = 0.4
 # megálló labdától (pl. ugyanaz a csapat újra ugyanarra a kapura megy).
 THROWOFF_FOLLOW_S = 15.0
 THROWOFF_FOLLOW_M = 3.0
+# Ha a labdát a kapu előtt NEM LÁTTUK (széles felvételen a távoli kapu
+# előtt a kis labda gyakran elvész), a gól kapuját a JÁTÉKOSOK mutatják:
+# a felállt támadásban mindkét csapat a kapu előtt tömörül. A mért
+# játékosok medián x-e a gólvonaltól legfeljebb ennyi méter, legalább
+# ennyi ideig (az utolsó ilyen szakaszban) — a középkezdés felállása
+# (medián ~20 m) és az átmenet nem ilyen.
+THROWOFF_ATTACK_ZONE_M = 13.0
+THROWOFF_ATTACK_MIN_S = 3.0
 
 
 def _median(xs: list) -> float:
@@ -641,6 +649,45 @@ def _upgradable_shot(frames, events: list, scorer: Team, t0: int, j: int,
     return lovesek[-1] if lovesek else None
 
 
+def _attack_stretch_before(frames, i: int, t_min: float, fps: float):
+    """A középkezdés (`i`) előtti UTOLSÓ felállt támadás a játékosokból:
+    (a szakasz utolsó kockájának indexe, a kapu x-e), vagy None.
+
+    Visszafelé a `t_min` időig: a mért játékosok (mindkét csapat,
+    legalább 2×THROWOFF_MIN_PLAYERS) medián x-e a gólvonaltól
+    THROWOFF_ATTACK_ZONE_M-en belül → támadás annál a kapunál. Az első
+    (legkésőbbi) ilyen kocka adja a kaput; a szakasz a másik kapunál
+    zajló támadásig tart, és legalább THROWOFF_ATTACK_MIN_S támadás-idő
+    kell (lépésenként legfeljebb 1 mp — a követés-hézag nem idő)."""
+    from ..models.tracking import PositionSource
+
+    kapu, veg = None, None
+    ido = 0.0
+    k = i - 1
+    while k >= 0 and frames[k].t >= t_min:
+        xs = [p.x for p in frames[k].players
+              if p.source == PositionSource.MEASURED
+              and p.team in (Team.HOME, Team.AWAY)]
+        allapot = None
+        if len(xs) >= 2 * THROWOFF_MIN_PLAYERS:
+            mx = _median(xs)
+            if mx <= THROWOFF_ATTACK_ZONE_M:
+                allapot = 0.0
+            elif mx >= COURT_LENGTH_M - THROWOFF_ATTACK_ZONE_M:
+                allapot = COURT_LENGTH_M
+        if allapot is not None:
+            if kapu is None:
+                kapu, veg = allapot, k
+            elif allapot != kapu:
+                break
+            if k + 1 < len(frames):
+                ido += min(frames[k + 1].t - frames[k].t, fps)
+        k -= 1
+    if kapu is None or ido < THROWOFF_ATTACK_MIN_S * fps:
+        return None
+    return veg, kapu
+
+
 def _in_center(b) -> bool:
     return (abs(b.x - COURT_LENGTH_M / 2.0) <= THROWOFF_ZONE_X_M
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
@@ -723,6 +770,10 @@ def throw_off_goals(match: Match, events: list,
     gól nélküli "0 : 0" a jelentés minden számát hiteltelenné teszi. A
     középkezdés jól látszik, ezért ez a gól második, független jele.
 
+    Ha a labdát a kapu előtt nem láttuk, a gól kapuját a játékosok
+    utolsó felállt támadása adja (_attack_stretch_before); az ilyen gól
+    részletében `attack_from_players: True` áll.
+
     Visszaad: az új eseménylistát (időrendben). Az ablakban látott
     lövést (nem gólt) gólra javítja, a már felismert gólt nem számolja
     kétszer, különben új gólt vesz fel a kapu előtti utolsó labda
@@ -767,12 +818,26 @@ def throw_off_goals(match: Match, events: list,
             continue
         # Melyik kapu előtt járt utoljára a labda?
         jeloltek = [(j, gx) for gx, j in last_near.items() if j is not None]
-        if not jeloltek:
+        t0 = frames[i].t
+        labda = max(jeloltek) if jeloltek else None
+        if labda is not None and t0 - frames[labda[0]].t > look_t:
+            labda = None
+        # ...vagy a játékosok utolsó felállt támadása (lásd
+        # _attack_stretch_before) — ha a labdát a kapu előtt nem láttuk,
+        # vagy a játékosok később egy MÁSIK kapunál támadtak.
+        try:
+            tam = _attack_stretch_before(frames, i, t0 - look_t, fps)
+        except Exception:
+            tam = None
+        if (labda is not None and tam is not None and tam[1] != labda[1]
+                and tam[0] > labda[0]):
+            labda = None
+        if labda is None and tam is None:
             i += 1
             continue
-        j, goal_x = max(jeloltek)
-        t0 = frames[i].t
-        if j in used_near or t0 - frames[j].t > look_t:
+        j, goal_x = labda if labda is not None else tam
+        jatekosbol = labda is None
+        if j in used_near:
             i += 1
             continue
         if any(frames[j].t < h <= t0 for h in hatarok):
@@ -826,6 +891,10 @@ def throw_off_goals(match: Match, events: list,
             # tudjuk" jobb, mint a magabiztosan rossz név.
             reszlet = {"outcome": "goal", "goal_source": "középkezdés",
                        "shot_seen": False}
+            if jatekosbol:
+                # A kaput a játékosok támadása adta, a labdát a kapu
+                # előtt nem láttuk.
+                reszlet["attack_from_players"] = True
             # A gól PILLANATA (a klip, a 3D jelenet és az idővonal ehhez
             # igazodik), nem a labda utolsó kapu előtti kockája.
             try:

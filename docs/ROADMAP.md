@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2778 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2781 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -257,6 +257,13 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   és mindkét csapat a saját térfelén van. Ez a pillanat jól látszik
   (álló, éles labda), ezért a gól utólag is kikövetkeztethető
   (`throw_off_goals`).
+
+  Ha a labdát a kapu előtt egyáltalán nem láttuk (a távoli kapu előtt a
+  kis labda elvész), a gól kapuját a JÁTÉKOSOK mutatják: a felállt
+  támadásban mindkét csapat a kapu előtt tömörül (a mért játékosok
+  mediánja a gólvonaltól 13 m-en belül, legalább 3 mp-ig). Ez csak a
+  szigorú jelben él (a felállás és a középkezdés utáni irány ott
+  ellenőrzött); a lehetséges gólok listáját nem bővíti.
 
   A tanulság a teszt-fixture-ökből jött: sok szintetikus "aktív
   játék" pontosan egy középkezdés képe volt (a két csapat a saját
