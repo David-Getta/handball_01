@@ -1445,12 +1445,20 @@ class _MatchScreenState extends State<MatchScreen> {
     // a ⋮ menüben javítsa ("set_player").
     final pid = (e["player_id"] as num?)?.toInt();
     final lovesSor = type == "goal" || type == "shot";
+    // A középkezdésből következtetett gól VALÓSZÍNŰ lövője (motor:
+    // event_detection._shooter_hint) — tipp, az edző fogadja el.
+    final tipp = pid == null
+        ? ((e["detail"] as Map?)?["shooter_hint"] as num?)?.toInt()
+        : null;
     final lovo = !lovesSor
         ? ""
         : pid != null
             ? " · ${_playerShort(match, pid)}"
             : ((e["detail"] as Map?)?["shot_seen"]) == false
-                ? " · lövő ismeretlen"
+                ? (tipp == null
+                    ? " · lövő ismeretlen"
+                    : " · lövő ismeretlen (valószínű: "
+                        "${_playerShort(match, tipp)})")
                 : "";
     // A kijelölt játékos lehet-e a lövő (ugyanannak a csapatnak a tagja).
     final sel = _selectedTrack;
@@ -1530,6 +1538,8 @@ class _MatchScreenState extends State<MatchScreen> {
                 _correct("remove", t, type);
               } else if (v == "player") {
                 _correct("set_player", t, type, playerId: _selectedTrack);
+              } else if (v == "hint") {
+                _correct("set_player", t, type, playerId: tipp);
               } else if (v == "3d") {
                 Navigator.of(context).pushReplacement(MaterialPageRoute(
                     builder: (_) => Court3DScreen(
@@ -1568,6 +1578,15 @@ class _MatchScreenState extends State<MatchScreen> {
                     child: ListTile(
                         leading: Icon(Icons.delete_outline, size: 17),
                         title: Text("Nem volt ilyen esemény"),
+                        dense: true)),
+              // A valószínű lövő elfogadása egy kattintással.
+              if (lovesSor && tipp != null)
+                PopupMenuItem(
+                    value: "hint",
+                    child: ListTile(
+                        leading: const Icon(Icons.person_search, size: 17),
+                        title: Text("A lövő: ${_playerShort(match, tipp)}"),
+                        subtitle: const Text("a gép tippje — elfogadom"),
                         dense: true)),
               // A lövő javítása: a pályán kijelölt játékos lesz a lövő.
               if (lovesSor && sel != null && selSajat && sel != pid)
@@ -1718,7 +1737,10 @@ class _MatchScreenState extends State<MatchScreen> {
                             (c["goal_t"] as num? ?? c["t"] as num).toInt(),
                             "goal",
                             team: c["team"] as String? ?? "home",
-                            playerId: _selectedTrack),
+                            // A kijelölt játékos, különben a gép tippje
+                            // (a felirat mutatja, kié lesz a gól).
+                            playerId: _selectedTrack ??
+                                (c["player_hint"] as num?)?.toInt()),
                 child: Text(_candLabel(match, c)),
               ),
               // "Nem gól": az edző lezárja a kérdést — a jelölt eltűnik
@@ -1759,9 +1781,12 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   /// A "Gól volt" felirata: kié lesz a gól — a kijelölt játékosé,
-  /// különben a látott lövés lövőjéé (ha a jelölt mögött látott lövés áll).
+  /// különben a látott lövés lövőjéé (ha a jelölt mögött látott lövés áll),
+  /// különben a gép tippjéé (a kapu felé tartó gyors labdából).
   String _candLabel(Match match, Map<String, dynamic> c) {
-    final pid = _selectedTrack ?? (c["player_id"] as num?)?.toInt();
+    final pid = _selectedTrack ??
+        (c["player_id"] as num?)?.toInt() ??
+        (c["player_hint"] as num?)?.toInt();
     return pid == null ? "Gól volt" : "Gól volt · ${_playerShort(match, pid)}";
   }
 

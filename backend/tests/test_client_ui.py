@@ -3685,6 +3685,24 @@ def test_a_jelolt_megerositese_a_latott_lovest_javitja():
         / "event_detection.py").read_text(encoding="utf-8")
 
 
+def test_a_valoszinu_lovo_egy_kattintassal_elfogadhato():
+    """A ↻ gól sora a gép tippjét is mutatja ("valószínű: #7"), a ⋮ menü
+    egy kattintással elfogadja; a lehetséges gól "Gól volt" gombja a
+    tippet adja lövőnek, ha az edző nem jelölt ki mást."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert '["shooter_hint"]' in meccs
+    assert '_correct("set_player", t, type, playerId: tipp)' in meccs
+    assert 'c["player_hint"]' in meccs
+    ed = (Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+          / "event_detection.py").read_text(encoding="utf-8")
+    assert 'reszlet["shooter_hint"] = tipp' in ed
+    assert 'jelolt["player_hint"] = tipp' in ed
+
+
 def test_a_lehetseges_golok_klipjei_kerhetok():
     """A "Lehetséges gólok" kártya és a Klipek lap is kéri a
     goal_candidate csomagot — a motor típus-nevével."""

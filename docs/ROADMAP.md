@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2768 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2772 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -276,7 +276,10 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   állás-alapú rétegekben viszont számít. (b) A lövője ismeretlen: a
   lövő-keresés a gól UTÁNI pillanattól keresne vissza, és a kapu előtt
   álló bármelyik támadót megtehetné szerzőnek — "a nem tudjuk jobb,
-  mint a magabiztosan rossz név". (c) Az ideje a gól pillanata (a kapu
+  mint a magabiztosan rossz név". Ha viszont a kapu felé tartó gyors
+  labdát láttuk (csak a gólvonalat nem), onnan a lövő-keresés ugyanaz,
+  mint egy látott lövésnél: a gép VALÓSZÍNŰ lövőt kínál, de nem írja be
+  — az edző egy kattintással fogadja el. (c) Az ideje a gól pillanata (a kapu
   felé tartó utolsó gyors labda, vagy a labda eltűnése), nem a labda
   kiszedése a hálóból — különben a klip és a 3D jelenet a gól utáni
   képet mutatná. (d) Egy régebbi, védett lövést nem ír át gólra (csak

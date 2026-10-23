@@ -101,7 +101,7 @@ def test_a_latott_lovest_golra_javitja():
     assert "goalkeeper_id" not in lov[0].detail
 
 
-def _kiszedeses_meccs(gyors: bool):
+def _kiszedeses_meccs(gyors: bool, jatekosok=None):
     """Támadás a +x kapu előtt → (gyors labda a kapu felé) → a labda
     eltűnik → a kapus 5 mp-ig áll vele a kapuban (a labda kiszedése) →
     középkezdés. Visszaad: (meccs, a lövés kezdő t-je, az eltűnés előtti
@@ -127,13 +127,13 @@ def _kiszedeses_meccs(gyors: bool):
     for _ in range(int(1 * fps)):          # eltűnik (háló, takarás)
         add(_tamadas(), None)
     for _ in range(int(5 * fps)):          # a kapus kiszedi, áll vele
-        add(_kozepkezdes_hazai_gol_utan(),
+        add(jatekosok or _kozepkezdes_hazai_gol_utan(),
             Ball(x=39.0, y=10.0, confidence=1.0))
     for _ in range(int(4 * fps)):
-        add(_kozepkezdes_hazai_gol_utan(), None)
+        add(jatekosok or _kozepkezdes_hazai_gol_utan(), None)
     for _ in range(int(2 * fps)):
-        add(_kozepkezdes_hazai_gol_utan(), Ball(x=20.0, y=10.0,
-                                                 confidence=1.0))
+        add(jatekosok or _kozepkezdes_hazai_gol_utan(),
+            Ball(x=20.0, y=10.0, confidence=1.0))
     for k in range(int(2 * fps)):
         add(_kozepkezdes_hazai_gol_utan(),
             Ball(x=17.0 - 2.0 * k / (2 * fps), y=10.0, confidence=1.0))
@@ -156,6 +156,42 @@ def test_a_kovetkeztetett_gol_ideje_a_labda_eltunese_ha_gyors_labda_nincs():
     m, _, eltunes_t = _kiszedeses_meccs(gyors=False)
     golok = _golok(m)
     assert len(golok) == 1 and golok[0].t == eltunes_t
+
+
+def test_a_latott_gyors_labdabol_valoszinu_lovot_kinal():
+    """Ha a kapu felé tartó gyors labdát láttuk, a gép VALÓSZÍNŰ lövőt
+    kínál (a lövés-felismerés lövő-keresésével) — de nem írja be: a gól
+    lövője üres, a tipp a részletben, és a "set_player" elfogadja."""
+    m, _, _ = _kiszedeses_meccs(gyors=True)
+    g = _golok(m)[0]
+    assert g.player_id is None
+    tipp = g.detail.get("shooter_hint")
+    assert tipp is not None and tipp < 10       # hazai mezőnyjátékos
+    m.meta.event_overrides = [{"op": "set_player", "t": g.t,
+                               "type": "goal", "player_id": tipp}]
+    assert _golok(m)[0].player_id == tipp
+
+
+def test_a_gyors_labda_nelkul_nincs_tipp():
+    """Ha csak a labda eltűnését láttuk, nincs tipp: a "nem tudjuk" jobb,
+    mint a magabiztosan rossz név."""
+    m, _, _ = _kiszedeses_meccs(gyors=False)
+    assert "shooter_hint" not in _golok(m)[0].detail
+
+
+def test_a_lehetseges_gol_is_hozza_a_valoszinu_lovot():
+    """Összekeveredett felállásnál a jel hallgat; a jelölt a látott gyors
+    labdából a valószínű lövőt is hozza (player_hint)."""
+    from handball.pipeline.event_detection import throw_off_candidates
+
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    m, _, _ = _kiszedeses_meccs(gyors=True, jatekosok=kevert)
+    assert _golok(m) == []
+    jel = throw_off_candidates(m)
+    assert len(jel) == 1 and "shot_t" not in jel[0]
+    assert jel[0].get("player_hint") is not None
 
 
 def test_eltunes_es_gyors_labda_nelkul_a_labda_utolso_kapu_elotti_pillanata():

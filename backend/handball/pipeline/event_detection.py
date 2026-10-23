@@ -505,7 +505,15 @@ def _throw_off_followed(frames, start: int, goal_x: float,
 
 def _inferred_goal_index(frames, j: int, goal_x: float,
                          fps: float, interp_conf: float) -> int:
-    """A lövés nélküli következtetett gól pillanatának kocka-indexe.
+    """A lövés nélküli következtetett gól pillanatának kocka-indexe (lásd
+    _inferred_goal_moment)."""
+    return _inferred_goal_moment(frames, j, goal_x, fps, interp_conf)[0]
+
+
+def _inferred_goal_moment(frames, j: int, goal_x: float,
+                          fps: float, interp_conf: float):
+    """A lövés nélküli következtetett gól pillanata: (kocka-index, mód),
+    a mód "loves" / "eltunes" / "utolso" — az alábbi három eset.
 
     A `j` a labda utolsó kapu előtti kockája — gyakran már a gól utáni
     pillanat. Visszafelé THROWOFF_GOALTIME_BACK_S másodpercen belül:
@@ -513,9 +521,10 @@ def _inferred_goal_index(frames, j: int, goal_x: float,
     (a kaputól THROWOFF_GOALTIME_RANGE_M méteren belül) — a lövés
     pillanata; (2) ha ilyen nincs, az utolsó olyan látott labda a kapu
     előtt, amely után legalább THROWOFF_GOALTIME_GAP_S hézag jön (a
-    gyors, elmosódott labda eltűnése); (3) különben `j`."""
+    gyors, elmosódott labda eltűnése); (3) különben `j`. Csak az (1)
+    után kereshető a lövő: ott a labda a lövés pillanatában van."""
     if not frames:
-        return j
+        return j, "utolso"
     t_min = frames[j].t - THROWOFF_GOALTIME_BACK_S * fps
     gap_t = THROWOFF_GOALTIME_GAP_S * fps
     latott = []          # (index, labda) a látott labdákból, időrendben
@@ -536,13 +545,27 @@ def _inferred_goal_index(frames, j: int, goal_x: float,
         fele_tart = dx > 0 if goal_x > 0 else dx < 0
         if (fele_tart and seb >= SHOT_SPEED_MS
                 and abs(b0.x - goal_x) <= THROWOFF_GOALTIME_RANGE_M):
-            return k0
+            return k0, "loves"
     # (2) a labda eltűnése a kapu előtt (a következő látott minta messze).
     for (k0, b0), (k1, _b1) in reversed(list(zip(latott, latott[1:]))):
         if (frames[k1].t - frames[k0].t >= gap_t
                 and abs(b0.x - goal_x) <= THROWOFF_GOALTIME_RANGE_M):
-            return k0
-    return j
+            return k0, "eltunes"
+    return j, "utolso"
+
+
+def _shooter_hint(match: Match, frames, j: int, goal_x: float, team: Team,
+                  config: TacticsConfig, fps: float, interp_conf: float):
+    """A lövés nélküli gól VALÓSZÍNŰ lövője (track id), vagy None.
+
+    Csak ha a kapu felé tartó gyors labdát láttuk (_inferred_goal_moment
+    "loves" módja): onnan a lövő-keresés (_shooter_release_before)
+    ugyanaz, mint egy látott lövésnél. Tipp, nem állítás — a gól
+    player_id-ja üres marad, az edző fogadja el."""
+    kg, mod = _inferred_goal_moment(frames, j, goal_x, fps, interp_conf)
+    if mod != "loves":
+        return None
+    return _shooter_release_before(match, kg, team, config, fps)[0]
 
 
 def _near_goal_stretch_start(frames, j: int, goal_x: float) -> int:
@@ -809,6 +832,14 @@ def throw_off_goals(match: Match, events: list,
                 kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
             except Exception:
                 kg = j
+            # A VALÓSZÍNŰ lövő (tipp, nem állítás — lásd _shooter_hint).
+            try:
+                tipp = _shooter_hint(match, frames, j, goal_x, scorer,
+                                     config, fps, _INTERP)
+            except Exception:
+                tipp = None
+            if tipp is not None:
+                reszlet["shooter_hint"] = tipp
             out.append(MatchEvent(t=frames[kg].t, type=EventType.GOAL,
                                   team=scorer, player_id=None,
                                   detail=reszlet))
@@ -842,7 +873,9 @@ def throw_off_candidates(match: Match,
     Visszaad: [{"t": a középkezdés ideje, "goal_t": a becsült
     gól-pillanat (a látott lövés ideje, ha van), "team": a kaput támadó
     csapat ("home"/"away"), "goal_x": a kapu x-e, és látott lövésnél
-    "shot_t" + "player_id" (a lövő, ha ismert)}], időrendben.
+    "shot_t" + "player_id" (a lövő, ha ismert); különben, ha a kapu
+    felé tartó gyors labdát láttuk, "player_hint" (a valószínű lövő,
+    lásd _shooter_hint)}], időrendben.
     """
     config = config or TacticsConfig()
     frames = match.frames
@@ -926,10 +959,16 @@ def throw_off_candidates(match: Match,
                     kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
                 except Exception:
                     kg = j
-                out.append({
-                    "t": t0, "goal_t": frames[kg].t,
-                    "team": csapat.value,
-                    "goal_x": goal_x})
+                jelolt = {"t": t0, "goal_t": frames[kg].t,
+                          "team": csapat.value, "goal_x": goal_x}
+                try:
+                    tipp = _shooter_hint(match, frames, j, goal_x, csapat,
+                                         config, fps, _INTERP)
+                except Exception:
+                    tipp = None
+                if tipp is not None:
+                    jelolt["player_hint"] = tipp
+                out.append(jelolt)
         i += still_n
     return out
 

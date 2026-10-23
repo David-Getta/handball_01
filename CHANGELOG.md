@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.182 óta)
 
+- **Valószínű lövő a középkezdésből következtetett gólnál** (motor +
+  kliens): a ↻ gól lövője szándékosan ismeretlen (a gól utáni képből
+  bárkit megtehetne szerzőnek). Ha viszont a gép a kapu felé tartó gyors
+  labdát látta, csak a gólvonalat nem, onnan a lövő-keresés ugyanaz,
+  mint egy látott lövésnél. Ilyenkor tippet ad, de nem írja be: a sor
+  "lövő ismeretlen (valószínű: #7)", a ⋮ menü egy kattintással
+  elfogadja; a lehetséges gólok "Gól volt" gombja is ezt adja lövőnek,
+  ha nincs kijelölt játékos. A gyors labda nélkül nincs tipp.
+
 - **A lehetséges gól megerősítése a látott lövést javítja** (motor +
   kliens, javítás): a "Lehetséges gólok" kártya "Gól volt" gombja mindig
   új gólt vett fel. Ha a jelölt mögött egy látott, de védésnek vagy
