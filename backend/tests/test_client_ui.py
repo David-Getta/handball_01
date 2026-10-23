@@ -3704,6 +3704,26 @@ def test_a_valoszinu_lovo_egy_kattintassal_elfogadhato():
     assert 'jelolt["player_hint"] = tipp' in ed
 
 
+def test_az_esemeny_ful_egyetlen_gorgetheto_felulet():
+    """Az Események fül fejléce (eredmény, lehetséges gólok, szűrők) és a
+    lista EGYÜTT gördül — a fix fejléc + kitöltő lista az alacsony
+    panelen a listát nulla magasra nyomta, és görgetni sem lehetett. Az
+    eredmény-sáv magyarázata az eredmény alatt áll, nem mellette."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    panel = meccs[meccs.index("Widget _eventsPanel(Match match)"):]
+    panel = panel[:panel.index("\n  }\n")]
+    assert "CustomScrollView(slivers:" in panel
+    assert "SliverList.separated(" in panel
+    assert "ListView.separated(" not in panel, "külön görgetett lista"
+    sav = meccs[meccs.index("Widget _scoreBar(Match match)"):]
+    sav = sav[:sav.index("\n  }\n")]
+    assert "Flexible(" not in sav, "a magyarázat a csapatnevek mellett"
+
+
 def test_a_lehetseges_golok_klipjei_kerhetok():
     """A "Lehetséges gólok" kártya és a Klipek lap is kéri a
     goal_candidate csomagot — a motor típus-nevével."""

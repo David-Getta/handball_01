@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.183 óta)
 
+- **Az Események fül alacsony panelen is görgethető** (kliens, javítás):
+  kis ablakban / laptopon a meccs-nézet jobb oldali paneljén a fejléc
+  (eredmény, lehetséges gólok, szűrők) kitöltötte a helyet — az
+  esemény-lista nulla magas lett, és görgetni sem lehetett. Most a fül
+  egyetlen görgethető felület; az eredmény-sáv magyarázó mondata pedig
+  az eredmény alá került (a csapatnevek mellett keskeny oszlopban
+  tucatnyi sor magasra nőtt).
+
 - **Gól a középkezdésből akkor is, ha a labdát a kapu előtt nem láttuk**
   (motor): a jel a gól kapuját a labda utolsó kapu előtti pillanatából
   vette — széles felvételen a távoli kapu előtt a kis labda gyakran

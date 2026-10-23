@@ -747,7 +747,27 @@ class _MatchScreenState extends State<MatchScreen> {
     final shown = (attackMode || ruleMode)
         ? const <Map<String, dynamic>>[]
         : _filteredEvents();
-    return Column(children: [
+    // EGYETLEN görgethető felület: a fejléc (eredmény, lehetséges gólok,
+    // szűrők) és a lista együtt gördül. Fix fejléc + kitöltő lista mellett
+    // az alacsony panelen (kis ablak, laptop) a fejléc kitöltötte a
+    // helyet: a lista nulla magas lett, és görgetni sem lehetett.
+    final ures = ruleMode
+        ? (shownRules.isEmpty ? "Nincs ilyen szakasz." : null)
+        : attackMode
+            ? (shownAttacks.isEmpty ? "Nincs ilyen típusú támadás." : null)
+            : (shown.isEmpty ? "Nincs ilyen típusú esemény." : null);
+    final sorok = ruleMode
+        ? shownRules.length
+        : attackMode
+            ? shownAttacks.length
+            : shown.length;
+    Widget sor(int i) => ruleMode
+        ? _ruleRow(shownRules[i], fps, match)
+        : attackMode
+            ? _attackRow(shownAttacks[i], fps, match)
+            : _eventRow(shown[i], fps, match);
+    return CustomScrollView(slivers: [
+      SliverToBoxAdapter(child: Column(children: [
       _scoreBar(match),
       if (_goalCands.isNotEmpty && _sourceLabel != "demó")
         _goalCandidatesCard(match),
@@ -949,44 +969,28 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ]),
       ),
-      Expanded(
-        child: ruleMode
-            ? (shownRules.isEmpty
-                ? Center(child: Text("Nincs ilyen szakasz.",
-                    style: AppText.label))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: shownRules.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (_, i) =>
-                        _ruleRow(shownRules[i], fps, match),
-                  ))
-            : attackMode
-            ? (shownAttacks.isEmpty
-                ? Center(child: Text("Nincs ilyen típusú támadás.",
-                    style: AppText.label))
-                : Column(children: [
-                    _attackEffBanner(_eventFilter.substring(4), match),
-                    Expanded(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: shownAttacks.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 6),
-                        itemBuilder: (_, i) =>
-                            _attackRow(shownAttacks[i], fps, match),
-                      ),
-                    ),
-                  ]))
-            : shown.isEmpty
-                ? Center(
-                    child: Text("Nincs ilyen típusú esemény.", style: AppText.label))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: shown.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (_, i) => _eventRow(shown[i], fps, match),
-                  ),
-      ),
+      if (attackMode && shownAttacks.isNotEmpty)
+        _attackEffBanner(_eventFilter.substring(4), match),
+      ])),
+      if (ures != null)
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(ures, style: AppText.label),
+            ),
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          sliver: SliverList.separated(
+            itemCount: sorok,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (_, i) => sor(i),
+          ),
+        ),
     ]);
   }
 
@@ -1024,7 +1028,11 @@ class _MatchScreenState extends State<MatchScreen> {
           horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: AppTheme.card(
           borderColor: _overrides.isEmpty ? null : AppColors.gold),
-      child: Row(children: [
+      // A magyarázó mondat az eredmény ALATT, teljes szélességben: a
+      // csapatnevek mellé szorítva keskeny oszlopban tucatnyi sor magasra
+      // nőtt, és kiszorította a panelből a listát.
+      child: Column(children: [
+      Row(children: [
         Expanded(
           child: Text(match.meta.homeTeam,
               textAlign: TextAlign.right,
@@ -1061,9 +1069,10 @@ class _MatchScreenState extends State<MatchScreen> {
               overflow: TextOverflow.ellipsis,
               style: AppText.value.copyWith(fontSize: 13)),
         ),
-        const SizedBox(width: AppSpacing.md),
-        Flexible(
-          flex: 2,
+      ]),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: double.infinity,
           child: Text(
               demo
                   ? "demó adat"
@@ -1079,8 +1088,9 @@ class _MatchScreenState extends State<MatchScreen> {
                       ? "a felismerés szerint — ha nem stimmel, a "
                           "sorok ⋮ menüjében javítható"
                       : "${_overrides.length} kézi javítással",
+              textAlign: TextAlign.center,
               style: AppText.label.copyWith(
-                  fontSize: 11.5,
+                  fontSize: 11,
                   color: nincsGol || _overrides.isNotEmpty
                       ? AppColors.gold
                       : AppColors.textFaint)),
