@@ -649,23 +649,16 @@ def _upgradable_shot(frames, events: list, scorer: Team, t0: int, j: int,
     return lovesek[-1] if lovesek else None
 
 
-def _attack_stretch_before(frames, i: int, t_min: float, fps: float):
-    """A középkezdés (`i`) előtti UTOLSÓ felállt támadás a játékosokból:
-    (a szakasz utolsó kockájának indexe, a kapu x-e), vagy None.
-
-    Visszafelé a `t_min` időig: a mért játékosok (mindkét csapat,
-    legalább 2×THROWOFF_MIN_PLAYERS) medián x-e a gólvonaltól
-    THROWOFF_ATTACK_ZONE_M-en belül → támadás annál a kapunál. Az első
-    (legkésőbbi) ilyen kocka adja a kaput; a szakasz a másik kapunál
-    zajló támadásig tart, és legalább THROWOFF_ATTACK_MIN_S támadás-idő
-    kell (lépésenként legfeljebb 1 mp — a követés-hézag nem idő)."""
+def _attack_states(frames) -> list:
+    """Kockánként a felállt támadás kapuja (0.0 / 40.0), vagy None: a mért
+    játékosok (mindkét csapat, legalább 2×THROWOFF_MIN_PLAYERS) medián
+    x-e a gólvonaltól THROWOFF_ATTACK_ZONE_M-en belül. Egy felismerésben
+    EGYSZER számoljuk (a visszatekintés ennek a tömbnek a bejárása)."""
     from ..models.tracking import PositionSource
 
-    kapu, veg = None, None
-    ido = 0.0
-    k = i - 1
-    while k >= 0 and frames[k].t >= t_min:
-        xs = [p.x for p in frames[k].players
+    out = []
+    for f in frames:
+        xs = [p.x for p in f.players
               if p.source == PositionSource.MEASURED
               and p.team in (Team.HOME, Team.AWAY)]
         allapot = None
@@ -675,6 +668,27 @@ def _attack_stretch_before(frames, i: int, t_min: float, fps: float):
                 allapot = 0.0
             elif mx >= COURT_LENGTH_M - THROWOFF_ATTACK_ZONE_M:
                 allapot = COURT_LENGTH_M
+        out.append(allapot)
+    return out
+
+
+def _attack_stretch_before(frames, i: int, t_min: float, fps: float,
+                           allapotok: Optional[list] = None):
+    """A középkezdés (`i`) előtti UTOLSÓ felállt támadás a játékosokból:
+    (a szakasz utolsó kockájának indexe, a kapu x-e), vagy None.
+
+    Visszafelé a `t_min` időig a kockánkénti támadás-állapotokon
+    (_attack_states — ha a hívó már kiszámolta, `allapotok`). Az első
+    (legkésőbbi) támadás-kocka adja a kaput; a szakasz a másik kapunál
+    zajló támadásig tart, és legalább THROWOFF_ATTACK_MIN_S támadás-idő
+    kell (lépésenként legfeljebb 1 mp — a követés-hézag nem idő)."""
+    if allapotok is None:
+        allapotok = _attack_states(frames)
+    kapu, veg = None, None
+    ido = 0.0
+    k = i - 1
+    while k >= 0 and frames[k].t >= t_min:
+        allapot = allapotok[k]
         if allapot is not None:
             if kapu is None:
                 kapu, veg = allapot, k
@@ -799,6 +813,8 @@ def throw_off_goals(match: Match, events: list,
     # felhasznált (egy kapu előtti szakaszból legfeljebb egy gól).
     last_near: dict = {0.0: None, COURT_LENGTH_M: None}
     used_near: set = set()
+    # A kockánkénti támadás-állapot (_attack_states) — lustán, egyszer.
+    allapotok = None
     # A középkezdés egy álló szakasz: a labdának el kell hagynia a
     # közepet, mielőtt újabb középkezdést keresünk.
     var_kilepesre = False
@@ -822,11 +838,22 @@ def throw_off_goals(match: Match, events: list,
         labda = max(jeloltek) if jeloltek else None
         if labda is not None and t0 - frames[labda[0]].t > look_t:
             labda = None
+        # A felállás: a gólt KAPÓ csapat a gól kapujának térfelén (a 0-s
+        # kapunál az alacsony x térfélen), a szerző a másikon. Olcsó, és a
+        # kapu-keresés előtt áll: a játékos-alapú keresés csak
+        # középkezdés-felállásnál kell.
+        low_team = _throw_off_low_team(frames[i + still_n // 2])
+        if low_team is None:
+            i += 1
+            continue
         # ...vagy a játékosok utolsó felállt támadása (lásd
         # _attack_stretch_before) — ha a labdát a kapu előtt nem láttuk,
         # vagy a játékosok később egy MÁSIK kapunál támadtak.
         try:
-            tam = _attack_stretch_before(frames, i, t0 - look_t, fps)
+            if allapotok is None:
+                allapotok = _attack_states(frames)
+            tam = _attack_stretch_before(frames, i, t0 - look_t, fps,
+                                         allapotok)
         except Exception:
             tam = None
         if (labda is not None and tam is not None and tam[1] != labda[1]
@@ -841,12 +868,6 @@ def throw_off_goals(match: Match, events: list,
             i += 1
             continue
         if any(frames[j].t < h <= t0 for h in hatarok):
-            i += 1
-            continue
-        # A felállás: a gólt KAPÓ csapat a gól kapujának térfelén (a 0-s
-        # kapunál az alacsony x térfélen), a szerző a másikon.
-        low_team = _throw_off_low_team(frames[i + still_n // 2])
-        if low_team is None:
             i += 1
             continue
         scorer = _attacking_team_for_goal(goal_x, config)

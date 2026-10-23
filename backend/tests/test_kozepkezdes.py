@@ -320,6 +320,45 @@ def test_a_gol_kapuja_a_jatekosokbol_ha_a_labdat_a_kapu_elott_nem_lattuk():
     assert g.detail.get("attack_from_players") is True
 
 
+def test_a_jatekos_alapu_kapu_kereses_olcso(monkeypatch):
+    """ŐR: a hosszan középen ÁLLÓ labdánál a játékos-alapú kapu-keresés
+    nem futhat kockánként újra a teljes visszatekintésen (egy fixture-ön
+    percekig tartott). Rossz felállásnál el sem indul; jó felállásnál a
+    kockánkénti állapot egyszer számolódik."""
+    import handball.pipeline.event_detection as ed
+
+    hivas = {"allapot": 0, "szakasz": 0}
+    eredeti_a = ed._attack_states
+    eredeti_s = ed._attack_stretch_before
+
+    def allapot(frames):
+        hivas["allapot"] += 1
+        return eredeti_a(frames)
+
+    def szakasz(*args, **kw):
+        hivas["szakasz"] += 1
+        return eredeti_s(*args, **kw)
+
+    monkeypatch.setattr(ed, "_attack_states", allapot)
+    monkeypatch.setattr(ed, "_attack_stretch_before", szakasz)
+    fps = 25.0
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    allo = [Frame(t=k, players=kevert, ball=Ball(x=20.0, y=10.0,
+                                                 confidence=1.0))
+            for k in range(int(60 * fps))]
+    ed.throw_off_goals(Match(_meta(fps), allo), [])
+    assert hivas == {"allapot": 0, "szakasz": 0}
+    # Középkezdés-felállás, de a labda nem indul el: a keresés fut, az
+    # állapot egyszer számolódik.
+    allo2 = [Frame(t=k, players=_kozepkezdes_hazai_gol_utan(),
+                   ball=Ball(x=20.0, y=10.0, confidence=1.0))
+             for k in range(int(60 * fps))]
+    ed.throw_off_goals(Match(_meta(fps), allo2), [])
+    assert hivas["allapot"] == 1 and hivas["szakasz"] > 0
+
+
 def test_tul_rovid_jatekos_tamadasbol_nincs_gol():
     from handball.pipeline.event_detection import THROWOFF_ATTACK_MIN_S
 
