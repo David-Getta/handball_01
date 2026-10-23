@@ -15,6 +15,7 @@ Python, szintetikus pályákon tesztelhető.
 from __future__ import annotations
 
 import math
+from bisect import bisect_left
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
@@ -407,6 +408,16 @@ THROWOFF_DEDUP_S = 3.0
 # után a támadás folytatódott (lepattanó, újabb helyzet) — azt a
 # védést nem írjuk át gólra.
 THROWOFF_UPGRADE_S = 10.0
+# ...kivéve, ha a lövés után a labda végig a kapuelőtérben maradt (a
+# hálóban, a kapusnál): a kapu közepétől ennyin belül mezőnyjátékos nem
+# tarthat labdát, tehát a támadás nem folytatódhatott — a középre ment
+# labda előtt a lövés gól volt, akármeddig tartotta a kapus. A lövés
+# utáni repülés (THROWOFF_HELD_FLIGHT_S) kimarad, a kapuelőtér elhagyása
+# után pedig legfeljebb THROWOFF_HELD_EXIT_S telhet el a labda utolsó
+# kapu előtti pillanatáig (a labdát a középre viszik).
+THROWOFF_HELD_M = 6.0
+THROWOFF_HELD_FLIGHT_S = 1.0
+THROWOFF_HELD_EXIT_S = 5.0
 # A lövés nélküli következtetett gól IDEJE: a labda utolsó kapu előtti
 # pillanata gyakran már a gól UTÁNI (a kapus kiszedi a labdát a hálóból).
 # Ennyit nézünk vissza a gól pillanatáért; a kapu felé tartó gyors labda
@@ -554,6 +565,33 @@ def _near_goal_stretch_start(frames, j: int, goal_x: float) -> int:
     return s
 
 
+def _held_at_goal_since(frames, k: int, j: int, goal_x: float,
+                        fps: float, interp_conf: float) -> bool:
+    """Igaz, ha a `k` kockától (a látott lövés) a `j`-ig (a labda utolsó
+    kapu előtti kockája) a LÁTOTT labda a kapuelőtérben maradt (a kapu
+    közepétől THROWOFF_HELD_M-en belül) — a lövés utáni repülés
+    (THROWOFF_HELD_FLIGHT_S) és a kapuelőtér végső elhagyása (legfeljebb
+    THROWOFF_HELD_EXIT_S a `j` előtt) kivételével. Ilyenkor a lövés után
+    a támadás nem folytatódott: a labda a hálóban / a kapusnál volt."""
+    gy = COURT_WIDTH_M / 2.0
+    t_repules = frames[k].t + THROWOFF_HELD_FLIGHT_S * fps
+    bent = None      # az utolsó kapuelőtéri látott labda indexe
+    kint = []        # a repülés utáni, kapuelőtéren kívüli látott labdák
+    for q in range(k, j + 1):
+        b = frames[q].ball
+        if b is None or b.confidence <= interp_conf:
+            continue
+        if math.hypot(b.x - goal_x, b.y - gy) <= THROWOFF_HELD_M:
+            bent = q
+        elif frames[q].t > t_repules:
+            kint.append(q)
+    if bent is None:
+        return False
+    if frames[j].t - frames[bent].t > THROWOFF_HELD_EXIT_S * fps:
+        return False
+    return all(q > bent for q in kint)
+
+
 def _in_center(b) -> bool:
     return (abs(b.x - COURT_LENGTH_M / 2.0) <= THROWOFF_ZONE_X_M
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
@@ -656,6 +694,7 @@ def throw_off_goals(match: Match, events: list,
     hatarok = _half_boundaries(match)
     dedup_t = THROWOFF_DEDUP_S * fps
     upgrade_t = THROWOFF_UPGRADE_S * fps
+    idok = [f.t for f in frames]
     out = list(events)
     # A kapu előtti UTOLSÓ labda kapunként (kocka-index), és az utolsó
     # felhasznált (egy kapu előtti szakaszból legfeljebb egy gól).
@@ -717,9 +756,16 @@ def throw_off_goals(match: Match, events: list,
                and min(ts, tj) - dedup_t <= e.t <= t0 for e in out):
             i += still_n
             continue
+        # A látott lövés: legfeljebb THROWOFF_UPGRADE_S-sel a labda
+        # utolsó kapu előtti pillanata előtt, vagy régebbi, de utána a
+        # labda a kapuelőtérben maradt (lásd _held_at_goal_since).
         lovesek = [k for k, e in enumerate(out)
                    if e.type is EventType.SHOT and e.team is scorer
-                   and max(t0 - look_t, tj - upgrade_t) <= e.t <= t0]
+                   and t0 - look_t <= e.t <= t0
+                   and (e.t >= tj - upgrade_t
+                        or _held_at_goal_since(
+                            frames, min(n - 1, bisect_left(idok, e.t)),
+                            j, goal_x, fps, _INTERP))]
         if lovesek:
             k = lovesek[-1]
             regi = out[k]

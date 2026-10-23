@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.182 óta)
+
+- **A látott lövés akkor is gólra javul, ha a kapus sokáig tartja a
+  labdát** (motor, javítás): a középkezdés a tévesen védésnek ítélt
+  látott lövést csak akkor írta át gólra, ha legfeljebb 10 mp-cel a
+  labda utolsó kapu előtti pillanata előtt esett. Ha a kapus a gól után
+  tovább tartotta a labdát (kiszedi a hálóból, odasétál), egy ÚJ, lövés
+  nélküli gól került az eredménybe, a téves védés pedig megmaradt: a
+  kapus mérlegében egy kapott gól védésként szerepelt, és a lövő sem
+  kapta meg a gólját. Most a régebbi lövés is gólra javul, ha utána a
+  labda végig a kapuelőtérben maradt (ott mezőnyjátékos nem tarthat
+  labdát, tehát a támadás nem folytatódott). Lepattanó után a védés
+  marad, és a gól új esemény, mint eddig.
+
 ## v0.1.182 — kiadva (2026-10-22)
 
 > Kiadás-jegyzet: JAVÍTÁS — ha a kapus a látott gól után sokáig a kapu

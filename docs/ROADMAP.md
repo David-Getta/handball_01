@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2758 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2760 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -280,7 +280,10 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   felé tartó utolsó gyors labda, vagy a labda eltűnése), nem a labda
   kiszedése a hálóból — különben a klip és a 3D jelenet a gól utáni
   képet mutatná. (d) Egy régebbi, védett lövést nem ír át gólra (csak
-  a gólhoz közeli, 10 mp-en belüli lövést).
+  a gólhoz közeli, 10 mp-en belüli lövést) — kivéve, ha utána a labda
+  végig a kapuelőtérben maradt (a hálóban, a kapusnál): ott mezőnyjátékos
+  nem tarthat labdát, a támadás tehát nem folytatódott, és a kapus
+  akármeddig tarthatta a labdát a középkezdés előtt.
 
   A szigorú jel mellé az EDZŐ DÖNTÉSE került: ahol a labda a középen
   állt, de a felállás vagy a támadás-irány nem igazolta a gólt, a

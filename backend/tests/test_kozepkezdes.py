@@ -357,6 +357,76 @@ def test_a_latott_golt_nem_szamolja_ketszer_ha_a_kapus_sokaig_tartja():
     assert throw_off_candidates(m) == []
 
 
+def _sokaig_tartott_meccs(lepattano_mp: float = 0.0):
+    """Hazai támadás → LÁTOTT lövés a kapu közepére, ami a kapusnál áll
+    meg (a felismerés védésnek ítéli) → (lepattanó: a támadás a 9 m-en
+    folytatódik) → a labda eltűnik → a kapus 12 mp-ig a kapuban tartja →
+    középkezdés."""
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def add(players, ball):
+        nonlocal t
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    for k in range(int(4 * fps)):
+        add(_tamadas(), Ball(x=31.0 + (k % 20) * 0.1, y=10.0, confidence=1.0))
+    for k in range(6):    # 25 m/s a kapu felé, a vonal előtt megáll
+        add(_tamadas(), Ball(x=33.0 + k, y=10.0, confidence=1.0))
+    for _ in range(int(1 * fps)):
+        add(_tamadas(), None)
+    for k in range(int(lepattano_mp * fps)):
+        add(_tamadas(), Ball(x=31.0 + (k % 20) * 0.1, y=10.0, confidence=1.0))
+    if lepattano_mp:
+        for _ in range(int(1 * fps)):    # a nem látott második lövés
+            add(_tamadas(), None)
+    for _ in range(int(12 * fps)):       # a kapus 12 mp-ig tartja
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=39.0, y=10.0, confidence=1.0))
+    for _ in range(int(3 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), None)
+    for _ in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(), Ball(x=20.0, y=10.0,
+                                                 confidence=1.0))
+    for k in range(int(2 * fps)):
+        add(_kozepkezdes_hazai_gol_utan(),
+            Ball(x=17.0 - 2.0 * k / (2 * fps), y=10.0, confidence=1.0))
+    return _kapussal(Match(_meta(fps), frames))
+
+
+def test_a_latott_lovest_akkor_is_golra_javitja_ha_a_kapus_sokaig_tartja():
+    """A látott lövés után a labda a kapuelőtérben maradt (a kapus 12
+    mp-ig tartotta — régebbi, mint THROWOFF_UPGRADE_S): a lövés volt a
+    gól. EGY gól, a lövőé, és a kapusnak kapott gól, nem védés."""
+    from handball.pipeline.event_detection import (THROWOFF_UPGRADE_S,
+                                                   unseen_goal)
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+
+    assert 12 > THROWOFF_UPGRADE_S
+    m = _sokaig_tartott_meccs()
+    lov = detect_shots(m)
+    assert [e.type for e in lov] == [EventType.GOAL], lov
+    assert lov[0].detail["goal_source"] == "középkezdés"
+    assert not unseen_goal(lov[0])
+    assert lov[0].player_id is not None
+    gk = goalkeeper_stats(m)["away"]
+    assert gk["on_target"] == 1 and gk["conceded"] == 1
+
+
+def test_a_lepattano_utani_golnal_a_latott_vedes_marad():
+    """Ha a látott lövés után a labda kikerült a kapuelőtérből (lepattanó,
+    a támadás folytatódott), a gól egy későbbi, nem látott lövésből esett:
+    a védés marad, és a gól új, lövés nélküli esemény."""
+    from handball.pipeline.event_detection import unseen_goal
+
+    lov = detect_shots(_sokaig_tartott_meccs(lepattano_mp=3.0))
+    assert [e.type for e in lov] == [EventType.SHOT, EventType.GOAL], lov
+    assert lov[0].detail["outcome"] == "save"
+    assert unseen_goal(lov[1])
+
+
 def test_lehetseges_gol_ha_a_felallas_nem_merheto():
     """Összekeveredett felállásnál a jel hallgat — a jelölt-lista
     viszont felkínálja a pillanatot az edzőnek, a becsült
