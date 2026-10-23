@@ -216,6 +216,23 @@ def test_a_lovo_javithato():
     assert ki[0].detail["manual"] is True
 
 
+def test_a_tipus_javitas_a_lovot_is_atveheti():
+    """A lehetséges gól megerősítése (a látott lövés gólra javítása) a
+    kijelölt játékossal: a "set_type" a lövőt is beállítja, és a végpont
+    a lövőt is tárolja."""
+    m = _shot_match()
+    t0 = detect_shots(m)[0].t
+    m.meta.event_overrides = [{"op": "set_type", "t": t0, "type": "goal",
+                               "player_id": 9}]
+    ki = detect_shots(m)
+    assert ki[0].type is EventType.GOAL and ki[0].player_id == 9
+
+    client, mid = _client()
+    r = client.post(f"/matches/{mid}/event-overrides", json={"overrides": [
+        {"op": "set_type", "t": 2, "type": "goal", "player_id": 9}]})
+    assert r.json()["overrides"][0]["player_id"] == 9
+
+
 def test_a_masik_csapat_jatekosa_nem_lehet_a_lovo():
     """A hazai lövés lövője nem lehet vendég játékos: a javítás elmarad."""
     from handball.models.tracking import PlayerPosition, PositionSource

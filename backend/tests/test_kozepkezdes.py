@@ -460,6 +460,30 @@ def test_lehetseges_gol_ha_a_felallas_nem_merheto():
     assert jel[0]["goal_t"] < jel[0]["t"]
 
 
+def test_a_jelolt_a_latott_lovest_hozza_es_a_megerosites_azt_javitja():
+    """A lehetséges gól mögött LÁTOTT lövés áll (a gép mellének ítélte):
+    a jelölt hozza a lövést (shot_t, a gól ideje is az), és a megerősítés
+    ("set_type" a lövés idejével) a lövést írja át gólra — EGY gól, nem
+    lövés + gól. A kijelölt játékos a lövő lesz."""
+    from handball.pipeline.event_detection import throw_off_candidates
+
+    kevert = ([_pl(i, Team.HOME, 18.0 + i, 3.0 + i * 2) for i in range(7)]
+              + [_pl(10 + i, Team.AWAY, 17.5 + i, 4.0 + i * 2)
+                 for i in range(7)])
+    m = _meccs(loves="mellé", kozep_jatekosok=kevert)
+    lov = detect_shots(m)
+    assert [e.type for e in lov] == [EventType.SHOT]
+    jel = throw_off_candidates(m)
+    assert len(jel) == 1
+    assert jel[0]["shot_t"] == lov[0].t == jel[0]["goal_t"]
+    m.meta.event_overrides = [{"op": "set_type", "t": jel[0]["shot_t"],
+                               "type": "goal", "player_id": 3}]
+    ki = detect_shots(m)
+    assert [e.type for e in ki] == [EventType.GOAL]
+    assert ki[0].player_id == 3
+    assert throw_off_candidates(m) == []
+
+
 def test_nincs_jelolt_ha_mar_van_gol():
     """A felismert (vagy következtetett) gól után nincs jelölt — a lista
     csak a hiányzó gólokat kínálja fel."""

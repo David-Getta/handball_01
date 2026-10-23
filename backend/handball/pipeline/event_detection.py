@@ -592,6 +592,32 @@ def _held_at_goal_since(frames, k: int, j: int, goal_x: float,
     return all(q > bent for q in kint)
 
 
+def _upgradable_shot(frames, events: list, scorer: Team, t0: int, j: int,
+                     goal_x: float, fps: float, interp_conf: float,
+                     idok: Optional[list] = None) -> Optional[int]:
+    """A középkezdés (`t0`) előtti gól LÁTOTT lövése: az `events` listabeli
+    indexe, vagy None. A `scorer` csapat legutolsó (nem gól) lövése a
+    középkezdés előtti THROWOFF_LOOKBACK_S-en belül, amely legfeljebb
+    THROWOFF_UPGRADE_S-sel a labda utolsó kapu előtti kockája (`j`) előtt
+    esett — vagy régebbi, de utána a labda a kapuelőtérben maradt
+    (_held_at_goal_since). A magától javító középkezdés-jel és a
+    lehetséges gólok megerősítése UGYANEZT a lövést választja."""
+    if idok is None:
+        idok = [f.t for f in frames]
+    n = len(frames)
+    look_t = THROWOFF_LOOKBACK_S * fps
+    upgrade_t = THROWOFF_UPGRADE_S * fps
+    tj = frames[j].t
+    lovesek = [k for k, e in enumerate(events)
+               if e.type is EventType.SHOT and e.team is scorer
+               and t0 - look_t <= e.t <= t0
+               and (e.t >= tj - upgrade_t
+                    or _held_at_goal_since(
+                        frames, min(n - 1, bisect_left(idok, e.t)),
+                        j, goal_x, fps, interp_conf))]
+    return lovesek[-1] if lovesek else None
+
+
 def _in_center(b) -> bool:
     return (abs(b.x - COURT_LENGTH_M / 2.0) <= THROWOFF_ZONE_X_M
             and abs(b.y - COURT_WIDTH_M / 2.0) <= THROWOFF_ZONE_Y_M)
@@ -693,7 +719,6 @@ def throw_off_goals(match: Match, events: list,
     # A félidő és a felvétel-darabok határa (lásd _half_boundaries).
     hatarok = _half_boundaries(match)
     dedup_t = THROWOFF_DEDUP_S * fps
-    upgrade_t = THROWOFF_UPGRADE_S * fps
     idok = [f.t for f in frames]
     out = list(events)
     # A kapu előtti UTOLSÓ labda kapunként (kocka-index), és az utolsó
@@ -756,18 +781,10 @@ def throw_off_goals(match: Match, events: list,
                and min(ts, tj) - dedup_t <= e.t <= t0 for e in out):
             i += still_n
             continue
-        # A látott lövés: legfeljebb THROWOFF_UPGRADE_S-sel a labda
-        # utolsó kapu előtti pillanata előtt, vagy régebbi, de utána a
-        # labda a kapuelőtérben maradt (lásd _held_at_goal_since).
-        lovesek = [k for k, e in enumerate(out)
-                   if e.type is EventType.SHOT and e.team is scorer
-                   and t0 - look_t <= e.t <= t0
-                   and (e.t >= tj - upgrade_t
-                        or _held_at_goal_since(
-                            frames, min(n - 1, bisect_left(idok, e.t)),
-                            j, goal_x, fps, _INTERP))]
-        if lovesek:
-            k = lovesek[-1]
+        # A látott lövés (lásd _upgradable_shot).
+        k = _upgradable_shot(frames, out, scorer, t0, j, goal_x, fps,
+                             _INTERP, idok)
+        if k is not None:
             regi = out[k]
             reszlet = dict(regi.detail or {})
             reszlet["outcome"] = "goal"
@@ -817,9 +834,15 @@ def throw_off_candidates(match: Match,
     Edzői olvasat: gyanú, nem állítás — a lejátszó a becsült
     gól-pillanatra ugrik, és egy kattintás kézi javításként veszi fel.
 
+    Ha a gól mögött LÁTOTT lövés áll (a gép védésnek / mellének ítélte —
+    ugyanaz a választás, mint a magától javító jelnél: _upgradable_shot),
+    a jelölt azt is hozza: a megerősítés a lövést írja át gólra, nem egy
+    új gólt vesz fel mellé (különben lövés + gól lenne egy gól helyett).
+
     Visszaad: [{"t": a középkezdés ideje, "goal_t": a becsült
-    gól-pillanat, "team": a kaput támadó csapat ("home"/"away"),
-    "goal_x": a kapu x-e}], időrendben.
+    gól-pillanat (a látott lövés ideje, ha van), "team": a kaput támadó
+    csapat ("home"/"away"), "goal_x": a kapu x-e, és látott lövésnél
+    "shot_t" + "player_id" (a lövő, ha ismert)}], időrendben.
     """
     config = config or TacticsConfig()
     frames = match.frames
@@ -833,8 +856,9 @@ def throw_off_candidates(match: Match,
     look_t = THROWOFF_LOOKBACK_S * fps
     back_t = THROWOFF_GOALTIME_BACK_S * fps
     hatarok = _half_boundaries(match)
-    golok = [e.t for e in detect_shots(match, config)
-             if e.type is EventType.GOAL]
+    esemenyek = detect_shots(match, config)
+    golok = [e.t for e in esemenyek if e.type is EventType.GOAL]
+    idok = [f.t for f in frames]
     # Az edző által ELVETETT jelöltek ("Nem gól"): a kézi javítások
     # "dismiss" tételei, a középkezdés idejével.
     elvetett = []
@@ -884,13 +908,27 @@ def throw_off_candidates(match: Match,
                 if any(abs(d - t0) <= elvet_ablak for d in elvetett):
                     i += still_n
                     continue
+                csapat = _attacking_team_for_goal(goal_x, config)
+                try:
+                    k = _upgradable_shot(frames, esemenyek, csapat, t0, j,
+                                         goal_x, fps, _INTERP, idok)
+                except Exception:
+                    k = None
+                if k is not None:
+                    lov = esemenyek[k]
+                    out.append({"t": t0, "goal_t": lov.t,
+                                "team": csapat.value, "goal_x": goal_x,
+                                "shot_t": lov.t,
+                                "player_id": lov.player_id})
+                    i += still_n
+                    continue
                 try:
                     kg = _inferred_goal_index(frames, j, goal_x, fps, _INTERP)
                 except Exception:
                     kg = j
                 out.append({
                     "t": t0, "goal_t": frames[kg].t,
-                    "team": _attacking_team_for_goal(goal_x, config).value,
+                    "team": csapat.value,
                     "goal_x": goal_x})
         i += still_n
     return out
@@ -914,7 +952,8 @@ def _apply_event_overrides(match: Match,
 
     Négy művelet (a `match.meta.event_overrides` listából):
       - "set_type": a pillanathoz legközelebbi lövés TÍPUSA lesz a
-        megadott (a leggyakoribb eset: a gól lövésként jött ki),
+        megadott (a leggyakoribb eset: a gól lövésként jött ki); a
+        megadott player_id-val a lövő is (ugyanannak a csapatnak),
       - "remove":   a pillanathoz legközelebbi lövés/gól törlése,
       - "add":      új lövés/gól felvétele a megadott pillanatra,
       - "set_player": a legközelebbi lövés/gól LÖVŐJE a megadott játékos
@@ -1001,9 +1040,16 @@ def _apply_event_overrides(match: Match,
                     # Gólból lövés: a kapus-érdem nem állapítható meg
                     # utólag, ezért a semleges "miss" jár.
                     reszlet["outcome"] = "miss"
+                # A lövő is megadható (a lehetséges gól megerősítése a
+                # kijelölt játékossal) — a másik csapaté nem.
+                lovo = regi.player_id
+                if j.get("player_id") is not None:
+                    pid = int(j["player_id"])
+                    if _csapata(pid) in (None, regi.team):
+                        lovo = pid
                 out[i] = MatchEvent(t=regi.t, type=uj_tipus,
                                     team=regi.team,
-                                    player_id=regi.player_id,
+                                    player_id=lovo,
                                     detail=reszlet)
             elif op == "set_player":
                 regi = out[i]

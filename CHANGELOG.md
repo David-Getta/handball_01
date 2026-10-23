@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.182 óta)
 
+- **A lehetséges gól megerősítése a látott lövést javítja** (motor +
+  kliens, javítás): a "Lehetséges gólok" kártya "Gól volt" gombja mindig
+  új gólt vett fel. Ha a jelölt mögött egy látott, de védésnek vagy
+  mellének ítélt lövés állt, az megmaradt — lövés + gól lett egy gól
+  helyett, és a kapus mérlegében a kapott gól védésként szerepelt. Most
+  a jelölt hozza a látott lövést (ugyanazzal a szabállyal, mint a
+  magától javító középkezdés), a gomb azt írja át gólra, a felirat a
+  lövőjét mutatja, és a kijelölt játékos lövőnek is megadható.
+
 - **A lövő az esemény-sorban, és javítható** (kliens + motor): a gól- és
   lövés-sor eddig csak a csapatot mutatta, a lövőt nem — az edző nem
   látta, kit nevezett meg a gép, és ha rosszat, nem tudta javítani; a

@@ -5606,10 +5606,11 @@ def create_app():
             if op == "add":
                 rec["team"] = ("home" if str(j.get("team")) == "home"
                                else "away")
+            if op in ("add", "set_type"):
                 # A LÖVŐ opcionális: ha az edző kijelölt egy játékost,
-                # a kézzel felvett gól hozzá tartozik — enélkül a gól
-                # ott van az eredményben, de a lövő-listákból (góllövő,
-                # toplista) kimaradna.
+                # a kézzel felvett (vagy lövésből gólra javított) gól
+                # hozzá tartozik — enélkül a gól ott van az eredményben,
+                # de a lövő-listákból (góllövő, toplista) kimaradna.
                 try:
                     if j.get("player_id") is not None:
                         rec["player_id"] = int(j["player_id"])

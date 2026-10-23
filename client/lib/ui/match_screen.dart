@@ -1704,19 +1704,22 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
               // A kijelölt játékos lesz a lövő (mint a Javítások menü
               // "Hiányzó gól" tételénél) — enélkül a gól kimaradna a
-              // góllövő-listákból.
+              // góllövő-listákból. Ha a jelölt mögött LÁTOTT lövés áll
+              // (a gép védésnek / mellének ítélte), azt javítjuk gólra
+              // ("set_type"), nem egy új gólt veszünk fel mellé.
               TextButton(
                 onPressed: _correcting
                     ? null
-                    : () => _correct(
-                        "add",
-                        (c["goal_t"] as num? ?? c["t"] as num).toInt(),
-                        "goal",
-                        team: c["team"] as String? ?? "home",
-                        playerId: _selectedTrack),
-                child: Text(_selectedTrack == null
-                    ? "Gól volt"
-                    : "Gól volt · ${_playerShort(match, _selectedTrack!)}"),
+                    : () => c["shot_t"] != null
+                        ? _correct("set_type", (c["shot_t"] as num).toInt(),
+                            "goal", playerId: _selectedTrack)
+                        : _correct(
+                            "add",
+                            (c["goal_t"] as num? ?? c["t"] as num).toInt(),
+                            "goal",
+                            team: c["team"] as String? ?? "home",
+                            playerId: _selectedTrack),
+                child: Text(_candLabel(match, c)),
               ),
               // "Nem gól": az edző lezárja a kérdést — a jelölt eltűnik
               // (a kézi javítások közé kerül, visszavonható).
@@ -1753,6 +1756,13 @@ class _MatchScreenState extends State<MatchScreen> {
         ],
       ),
     );
+  }
+
+  /// A "Gól volt" felirata: kié lesz a gól — a kijelölt játékosé,
+  /// különben a látott lövés lövőjéé (ha a jelölt mögött látott lövés áll).
+  String _candLabel(Match match, Map<String, dynamic> c) {
+    final pid = _selectedTrack ?? (c["player_id"] as num?)?.toInt();
+    return pid == null ? "Gól volt" : "Gól volt · ${_playerShort(match, pid)}";
   }
 
   /// Az ÖSSZES kézi javítás visszavonása (a felismerés eredeti képe).

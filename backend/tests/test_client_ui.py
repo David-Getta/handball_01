@@ -3625,7 +3625,8 @@ def test_a_kezdolap_jelzi_a_lehetseges_golokat():
 
 def test_a_lehetseges_gol_a_kijelolt_lovohoz_kerul():
     """A "Gól volt" a kijelölt játékost adja lövőnek — mint a Javítások
-    menü "Hiányzó gól" tétele (a motor player_id-t fogad)."""
+    menü "Hiányzó gól" tétele (a motor player_id-t fogad): új gólnál, a
+    másik csapat góljánál és a látott lövés gólra javításánál is."""
     lib = _client_lib()
     if not lib.exists():
         import pytest
@@ -3633,7 +3634,7 @@ def test_a_lehetseges_gol_a_kijelolt_lovohoz_kerul():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     kartya = meccs[meccs.index("Widget _goalCandidatesCard"):]
     kartya = kartya[:kartya.index("\n  }\n")]
-    assert kartya.count("playerId: _selectedTrack") == 2
+    assert kartya.count("playerId: _selectedTrack") == 3
 
 
 def test_a_lehetseges_gol_elvetheto():
@@ -3668,6 +3669,20 @@ def test_a_lovo_a_sorban_latszik_es_javithato():
     app_src = (Path(__file__).resolve().parents[1] / "handball" / "api"
                / "app.py").read_text(encoding="utf-8")
     assert '"set_player"):' in app_src
+
+
+def test_a_jelolt_megerositese_a_latott_lovest_javitja():
+    """A "Gól volt" a jelölt LÁTOTT lövését írja át gólra (set_type a
+    shot_t idejével), ha van — nem vesz fel mellé új gólt."""
+    lib = _client_lib()
+    if not lib.exists():
+        import pytest
+        pytest.skip("nincs kliens a fában")
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert '_correct("set_type", (c["shot_t"] as num).toInt(),' in meccs
+    assert '"shot_t": lov.t' in (
+        Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+        / "event_detection.py").read_text(encoding="utf-8")
 
 
 def test_a_lehetseges_golok_klipjei_kerhetok():

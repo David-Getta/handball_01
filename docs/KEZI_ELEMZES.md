@@ -158,7 +158,10 @@ A kártya soraiban:
 - **▶** — a lejátszó a becsült gól-pillanatra ugrik.
 - **Gól volt** — kézi javításként felveszi a gólt a valószínű csapatnak
   (a ⋮ menüből a másiknak). Ha előtte a pályán kijelölöd a lövőt, a gól
-  hozzá kerül (a gomb felirata mutatja: "Gól volt · #7").
+  hozzá kerül (a gomb felirata mutatja: "Gól volt · #7"). Ha a gép a
+  lövést látta, csak védésnek vagy mellének ítélte, a gomb azt a lövést
+  javítja gólra (a felirat a lövőjét mutatja) — nem vesz fel mellé egy
+  második gólt.
 - **Nem gól** — elveti a jelöltet (pl. időkérés után a középen tartott
   labda); többet nem kérdez rá.
 - **Klipek** (a kártya fejlécében) — a jelöltekből klip-csomagot vág;
