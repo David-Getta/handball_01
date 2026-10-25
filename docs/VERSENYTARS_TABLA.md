@@ -26,5 +26,45 @@ kalibráció + képen kívüli becslés; szabály-értő réteg (bírói dönté
 lenyomata követésből); teljesen helyi, magyarázható lánc; "kevés minta
 → nincs ítélet" megbízhatósági elv.
 
-⬜ Beadás előtt: friss ár-táblázat (listaárak forrással), és a
-kézilabda-piacra lépett új szereplők ellenőrzése.
+## Frissítés (2026. október): a kézilabda-piac szereplői
+
+A fenti tábla az általános (főleg futball-) szereplőkkel vet össze. A
+kézilabdában közben megjelentek a SZAKÁGI szereplők — közülük több a mi
+"automatikus kézilabda-elemzés" ígéretünkhöz közelebb van, mint a Veo
+vagy a Hudl. A forrás többnyire a cégek saját közleménye (független
+mérést nem találtunk); árat egyik sem közöl nyilvánosan.
+
+| Szereplő | Mit ad | Kinek / hol | Mihez kell |
+|---|---|---|---|
+| **Handball.ai** | automatikus videó-címkézés, esemény-felismerés, statisztika | EHF-partner (EURO, Bajnokok Ligája, 2026/27-ig), lengyel Superliga | profi szint, felhő |
+| **Spiideo AutoData (kézilabda)** | bármilyen forrású videóból <24 óra alatt adatbontás (lövés, gól, pozíció, kiállítás) | izlandi szövetség: 20 csarnok, 50+ AI-kamera | Spiideo-platform, felhő |
+| **Pixellot** | több kamerás AI-közvetítés + alap elemzés | portugál szövetség felső ligái; Magyarországon a jégkorong-szövetség (2021) | telepített kamera |
+| **Sideline Sports — XPS Network** | videó-elemzés, statisztika, edzéstervezés (elemzői munkaeszköz) | MINDEN HBL-klub (18 + 13), svéd liga (2025/26-tól), lengyel Superliga, japán és macedón szövetség | elemző / edzői munka |
+| **Kinexon** | szenzoros játékos- és labdakövetés | a HBL összes meccse (2028/29-ig), EHF EURO-k | telepített rendszer + szenzor |
+| **Veo / XbotGo** | panoráma vagy követő AI-kamera | amatőr klubok (Veo focira hangolt) | saját kamera |
+| **Nacsport, Once Sport Analyser, Hudl Sportscode, Dartfish, LongoMatch, Kinovea** | kézi címkézés, klipek (Once: automatikus követés is) | klubelemzők | elemzői munka |
+
+**Mit jelent ez nekünk.**
+
+- A profi szint FOGLALT: a felső ligákat a szövetségi szerződések
+  (Kinexon, Handball.ai, XPS, Pixellot) lefedik. Oda nem érdemes
+  belépni.
+- Az "AI kézilabda-elemzés" már NEM egyedi állítás (Handball.ai,
+  Spiideo AutoData). A megkülönböztetés a SZEGMENS és a MŰKÖDÉS:
+  amatőr / utánpótlás / NB II–III, nulla hardver (meglévő telefon vagy
+  kamera), helyben fut (a kiskorúak videója nem megy felhőbe), magyar
+  edzői nyelvű kész ítélet (meccsterv, felderítés, edzés-fókusz), és
+  minden ítélet mögött kimondott küszöb.
+- A Spiideo AutoData "bármilyen forrású videó" ígérete a mi "meglévő
+  kamera" érvünk közvetlen párja — a különbség a felhő és az ár (és
+  hogy ott emberi utófeldolgozás is lehet a 24 órában). Ezt a
+  pályázatban ki kell mondani, nem elhallgatni.
+- Az XPS a klubok MUNKAESZKÖZE (naptár, edzésterv, videó). Ellenfélnél
+  hasznosabb partnernek látni: a mi kimenetünk (klip-csomagok, jelentés)
+  XPS-be exportálva a meglévő munkafolyamatba illeszkedhet.
+- Magyarországon az MKSZ-nek nyilvános automata-kamera vagy elemző
+  szerződését nem találtuk — a hazai alsóbb osztályok nyitottak.
+
+⬜ Beadás előtt: friss ár-táblázat (listaárak forrással, ha kérhető
+ajánlat), és a Handball.ai / Spiideo AutoData kipróbálása (mit ad
+valójában egy NB II-es meccsfelvételen).
