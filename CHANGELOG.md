@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.184 óta)
+## v0.1.185 — kiadva (2026-10-25)
+
+> Kiadás-jegyzet: KALIBRÁCIÓ — a pályavonalakat a gép most csak a
+> padlón keresi (a lelátó, a korlát, a reklámtábla és a mennyezet
+> egyenesei kiesnek), és a festett felületek széle sem esik darabokra a
+> rajtuk futó fehér vonalak mentén. Valódi (grazi) kockán kipróbálva.
 
 - **Pályavonalak csak a padlón** (motor): a grazi kockán (valódi
   képernyőkép) a felismert vonalak zöme a lelátóról jött — ülősorok,
