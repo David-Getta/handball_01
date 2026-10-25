@@ -65,6 +65,24 @@ mérést nem találtunk); árat egyik sem közöl nyilvánosan.
 - Magyarországon az MKSZ-nek nyilvános automata-kamera vagy elemző
   szerződését nem találtuk — a hazai alsóbb osztályok nyitottak.
 
-⬜ Beadás előtt: friss ár-táblázat (listaárak forrással, ha kérhető
-ajánlat), és a Handball.ai / Spiideo AutoData kipróbálása (mit ad
-valójában egy NB II-es meccsfelvételen).
+## Árszegmensek (2026. október, nyilvános források)
+
+Tájékoztató: sok szereplő csak egyedi ajánlatot ad; a régi adatok
+évszámmal; ÁFA nélkül, vegyes pénznemben.
+
+| Szegmens | Szereplők | Ár (ahol nyilvános) |
+|---|---|---|
+| **Prémium** — telepített rendszer, szövetségi/liga-szerződés | Kinexon, Handball.ai, Spiideo (kamera + AutoData), Pixellot (több kamerás) | egyedi ajánlat; Pixellot-egység az USA-iskolákban 2018–21: ~2 500–4 950 $ egyszeri |
+| **Felső-közép** — elemzői munkaeszköz | Hudl Sportscode (csak éves licenc, macOS), Sideline XPS, Dartfish, Nacsport Pro/Elite | ajánlatra |
+| **Közép** — automata kamera előfizetéssel, amatőr klub | Veo (Starter / Team / Club), Hudl csapat-videó, Nacsport Scout, Once Sport Analyser | Veo 119 / 199 / 239 $/hó (+ kamera); Hudl Bronze 400 $/csapat/év; Nacsport Scout 595 £/év |
+| **Alsó** — ingyenes – pár száz € | Kinovea, Nacsport Basic / Basic+, XbotGo | Kinovea ingyenes; Nacsport 125 / 240 £/év; XbotGo Falcon ~600 $ egyszeri |
+
+**A rés:** automatikus, kézilabda-specifikus elemzést és kész edzői
+ítéletet ma csak a PRÉMIUM szint ad; az alsó és a közép szegmens
+kamerát vagy kézi címkéző eszközt ad (a munka az edzőnél marad). A
+SportMachine helye: alsó–közép ár, prémium tartalom — új hardver és
+elemző nélkül.
+
+⬜ Beadás előtt: ajánlatkérés a Handball.ai-tól és a Spiideótól (a két
+legközelebbi szereplő, áruk nem nyilvános), és kipróbálásuk egy NB
+II-es meccsfelvételen.
