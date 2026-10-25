@@ -62,8 +62,17 @@ mérést nem találtunk); árat egyik sem közöl nyilvánosan.
 - Az XPS a klubok MUNKAESZKÖZE (naptár, edzésterv, videó). Ellenfélnél
   hasznosabb partnernek látni: a mi kimenetünk (klip-csomagok, jelentés)
   XPS-be exportálva a meglévő munkafolyamatba illeszkedhet.
-- Magyarországon az MKSZ-nek nyilvános automata-kamera vagy elemző
-  szerződését nem találtuk — a hazai alsóbb osztályok nyitottak.
+- Magyarországon az MKSZ-nek nyilvános elemző-szoftver vagy
+  automata-kamera szerződését nem találtuk. Amit találtunk: 2025.
+  február 1-jétől SAJÁT FEJLESZTÉSŰ videó-rendszer (VR) segíti a
+  játékvezetőket a női és a férfi NB I minden mérkőzésén (a TV által nem
+  közvetítetteken is; szabályzata a 2025. július 1-jétől hatályos
+  versenykiírásban). Ez bírói eszköz, nem teljesítmény-elemzés — de azt
+  jelenti, hogy az NB I-es csarnokokban van szövetségi rögzítés, ami
+  elemzés bemenete is lehetne. A szövetség tehát saját fejlesztésre
+  nyitott; a nemzetközi kupákban induló magyar klubok az EHF-en
+  keresztül a Handball.ai / XPS eszközeit is elérik. Az alsóbb
+  osztályok és az utánpótlás lefedetlenek.
 
 ## Árszegmensek (2026. október, nyilvános források)
 
