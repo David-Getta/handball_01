@@ -70,6 +70,17 @@
      felezővonal két vége szintetikus képen 200–600 px-re csúszott.
      Két látható kapuelőtérrel (teljes pálya) a feladat jól kondicionált
      — ha a felvétel ilyen, ez a következő lépés.
+   - VALÓDI KOCKÁN (grazi csarnok, THW Kiel vs BT Füchse, a felhasználó
+     képernyőképe): a felismert vonalak zöme a LELÁTÓRÓL jött (ülősorok,
+     üveg-korlát, LED-tábla, mennyezet). Most a vonalakat csak a becsült
+     PADLÓN keressük (`floor_mask`: a padló uralkodó színe + a festett
+     felületek, a folt kitöltött körvonala — nem a konvex burka, mert
+     elöl a kispad és a reklámtábla belóg). A festett mezők széle előbb
+     ZÁRÁST kap (a rajtuk futó fehér röplabda-vonalak rései bezárulnak).
+     Ami ezen a kockán így is nehéz: a piros kötélkorlát a padló előtt
+     fut (a legerősebb "piros vonal"), a pálya fehér vonalai halványak,
+     a közeli oldalvonalat a padok takarják — itt a kézi sarok-jelölés
+     marad, a rózsaszín "látott vonalak" segítségével.
 
 ## Bevezető (fade-in) képkockák — futási megfigyelés
 - A felvétel **eleje sötét** (Filmora-átúszás, csak a vízjel látszik). A 0–14.

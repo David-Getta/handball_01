@@ -247,3 +247,65 @@ def test_kert_szinnel_nincs_tartalek():
     r = detect_court_quad(img, "kek")
     assert r["color"] == "kek" and r["tried"] == ["kek"]
     assert r["suggested_quad"] is None
+
+
+# --- Csak a padlón ------------------------------------------------------
+# A grazi kockán (valódi képernyőkép) a felismert vonalak zöme a
+# LELÁTÓRÓL jött: ülősorok, üveg-korlát, reklámtábla, mennyezet — a
+# Hough az egész képen keresett.
+
+def _lelato_es_palya(h=300, w=400):
+    """Felül sötét lelátó világos ülősor-vonalakkal és függőleges
+    korlát-oszlopokkal (rács → sok metszéspont), alul fa padló piros
+    pályával."""
+    img = np.zeros((h, w, 3), dtype=np.uint8)
+    img[:120] = (40, 40, 45)
+    for y in range(10, 115, 15):              # ülősorok
+        img[y:y + 2, :] = (230, 230, 230)
+    for x in range(20, w, 60):                # korlát-oszlopok
+        img[:118, x:x + 2] = (230, 230, 230)
+    img[120:] = (205, 180, 140)               # parketta
+    for y in (150, 280):                      # piros oldalvonalak
+        img[y:y + 3, :] = (215, 45, 40)
+    for x in (40, 360):                       # piros alapvonalak
+        img[120:, x:x + 3] = (215, 45, 40)
+    return img
+
+
+def test_a_lelato_vonalai_nem_palyavonalak():
+    """A padló-szűkítés nélkül a lelátó rácsából áll össze négyszög; a
+    padlón keresve a piros pályából."""
+    from handball.pipeline.broadcast_lines import detect_court_quad, floor_mask
+
+    img = _lelato_es_palya()
+    roi = floor_mask(img)
+    assert roi is not None
+    assert roi[200, 200] and not roi[50, 200], "a padló-maszk rossz helyen"
+    r = detect_court_quad(img, "auto")
+    assert r["floor"] is True
+    assert r["suggested_quad"], r["tried"]
+    assert r["color"] == "piros", r["tried"]
+    assert min(y for _x, y in r["suggested_quad"]) >= 115
+    regi = detect_court_quad(img, "auto", use_floor=False)
+    assert regi["color"] == "feher"
+    assert regi["suggested_quad"] and min(
+        y for _x, y in regi["suggested_quad"]) < 115
+
+
+def test_egyszinu_kepnel_nincs_padlo_szukites():
+    from handball.pipeline.broadcast_lines import floor_mask
+
+    assert floor_mask(_hall()) is None
+
+
+def test_a_festett_feluleten_atfuto_feher_vonal_nem_el():
+    """A zöld felületet átszelő vékony fehér vonal mentén nincs "él" — a
+    zárás a rést bezárja, a felület egy folt marad."""
+    from handball.pipeline.broadcast_lines import field_edge_mask
+
+    img = _hall(h=200, w=300)
+    img[40:170, 30:270] = (40, 170, 90)
+    img[100:103, 30:270] = (240, 240, 240)    # fehér röplabda-vonal
+    mask = field_edge_mask(img)
+    assert not mask[95:108, 100:200].any(), "a fehér vonal mentén él"
+    assert mask[38:43, 150].any()

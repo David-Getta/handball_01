@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.184 óta)
+
+- **Pályavonalak csak a padlón** (motor): a grazi kockán (valódi
+  képernyőkép) a felismert vonalak zöme a lelátóról jött — ülősorok,
+  korlát, reklámtábla, mennyezet. Most a vonal-keresés a becsült padlóra
+  szűkül (a padló uralkodó színe és a festett felületek, a kispad és a
+  tábla nélkül), és a festett mezők széle sem esik darabokra a rajtuk
+  futó fehér vonalak mentén.
+
 ## v0.1.184 — kiadva (2026-10-23)
 
 > Kiadás-jegyzet: JAVÍTÁS — a meccs-nézet Események füle alacsony
