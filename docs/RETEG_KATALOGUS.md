@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **513 réteg**, modulonként csoportosítva; a
+Összesen **514 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -115,7 +115,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `coach_summary` | A meccs automatikus edzői összefoglalója. |
 
-## decisions (17)
+## decisions (18)
 
 | Réteg | Mit mér |
 |---|---|
@@ -129,6 +129,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `press_outlet_roles` | Menekülő-poszt: NYOMÁS ALATT KIHEZ megy a labda. |
 | `press_outlets` | Menekülők: NYOMÁS ALATT KIHEZ megy a labda. |
 | `press_sensitive_roles` | Pressz-poszt: MELYIK POSZTJUK ejti a labdát szorításban. |
+| `pressure_decision_quality` | Döntés szorításban: A LEGJOBB OPCIÓT VÁLASZTJÁK-E, ha rájuk lépnek. |
 | `pressure_sensitive_players` | Pressz-érzékeny játékosok: KI VESZÍTI EL a labdát szorításban. |
 | `shot_choice_quality` | Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán. |
 | `soft_pass_roles` | Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan. |

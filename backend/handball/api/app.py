@@ -8980,6 +8980,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import pressure_decision_quality
+            res["pressure_decision_quality"] = \
+                pressure_decision_quality(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import second_chance_allowed
             res["second_chance_allowed"] = second_chance_allowed(match)
         except Exception:
@@ -11436,6 +11442,9 @@ def create_app():
                 from ..pipeline.decisions import shot_choice_quality
                 _layer("shot_choice_quality",
                        lambda: shot_choice_quality(match))
+                from ..pipeline.decisions import pressure_decision_quality
+                _layer("pressure_decision_quality",
+                       lambda: pressure_decision_quality(match))
                 from ..pipeline.defense import second_chance_allowed
                 _layer("second_chance_allowed",
                        lambda: second_chance_allowed(match))

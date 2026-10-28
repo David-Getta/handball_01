@@ -1562,6 +1562,36 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 487) Szorításban rosszabbul döntünk: ha ránk lépnek, a labdás nem
+    # néz fel — a jó opció ott van, de nem azt választjuk. Ellene a
+    # nyomás alatti DÖNTÉS gyakorlása kell, nem a labdabiztonság (az
+    # eladás-oldalt a pressz-tűrés szabályai viszik).
+    _szabaly = 487
+    try:
+        from .decisions import PDQ_DROP_PP, pressure_decision_quality
+        pdq487 = pressure_decision_quality(match, config)
+        for side in ("home", "away"):
+            rec487 = pdq487.get(side) or {}
+            if rec487.get("drop_pp") is None \
+                    or rec487["drop_pp"] < PDQ_DROP_PP:
+                continue
+            top487 = rec487.get("top")
+            kie487 = ""
+            if top487 and top487.get("jersey") is not None:
+                kie487 = f", leginkább a(z) {top487['jersey']}-es mezszámúnál"
+            add(side, "támadás", "Döntés szorításban",
+                f"szabadon a döntéseink {rec487['free_pct']:.0f}%-a, "
+                f"szorítva csak {rec487['pressed_pct']:.0f}%-a a legjobb "
+                f"opció ({rec487['pressed']} szorított döntés{kie487}) — "
+                "ha ránk lépnek, nem nézünk fel",
+                "döntés nyomás alatt: 2 a 2 és 3 a 3 elleni játék kilépő "
+                "védővel, ahol a labdás csak felnézés után adhat tovább, "
+                "és az edző jelére a szabad opció helye változik; a "
+                "videón a meccs szorított döntései, mindegyiknél a "
+                "legjobb opcióval")
+    except Exception:
+        pass
+
     # 486) A saját 7a6-unk EGY figurára épül: a lehozott kapus mellett a
     # kiszámíthatóság a legdrágább hiba — a hat védő rááll, az elvett
     # labda pedig azonnal gól az üres kapuba. Második megoldás kell.

@@ -164,6 +164,107 @@ def test_analyze_player_suboptimal_when_passing_to_worse():
     assert rep.avg_value_gap > 0.0
 
 
+# ---- Döntés szorításban (pressure_decision_quality) ------------------------
+
+
+def _pdq_match(n_pressed=12, n_free=12, match_id="pdq"):
+    """A hazai 1-es labdás (22, 10); a 2-es szabad beálló (35, 10) a
+    legjobb opció, a 3-as messzi szélső (20, 2) a rossz. SZORÍTVA
+    (vendég védő 1,6 m-re, a passzsávon kívül) mindig a szélre passzol,
+    SZABADON (a védő messze) mindig a beállóra. Két döntés között a
+    vendég 11-es birtokolja a labdát, így a visszajátszás nem számít
+    passznak."""
+    base = {1: (22.0, 10.0), 2: (35.0, 10.0), 3: (20.0, 2.0)}
+    frames = []
+    t = 0
+
+    def cast(dpos):
+        pl = [_pl(i, Team.HOME, *xy) for i, xy in base.items()]
+        pl.append(_pl(11, Team.AWAY, *dpos))
+        return pl
+
+    def hold(holder_xy, dpos, n=3):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=cast(dpos),
+                                ball=Ball(x=holder_xy[0], y=holder_xy[1],
+                                          confidence=1.0)))
+            t += 1
+
+    for kind, n in (("press", n_pressed), ("free", n_free)):
+        dpos = (22.0, 11.6) if kind == "press" else (28.0, 18.0)
+        for _ in range(n):
+            hold(dpos, dpos)                 # a vendég 11-esnél a labda
+            hold(base[1], dpos)              # az 1-esnél
+            hold(base[3] if kind == "press" else base[2], dpos)
+    return Match(MatchMeta(match_id=match_id, home_team="A",
+                           away_team="B", fps=25), frames)
+
+
+def test_pressure_decision_quality_flags_the_pressed_decisions():
+    """Szorítva mindig a rossz opció, szabadon mindig a legjobb: a réteg
+    kimondja, hogy szorításban rosszabbul döntenek, és megnevezi az
+    1-est."""
+    from handball.pipeline.decisions import (PDQ_MIN,
+                                             pressure_decision_quality)
+
+    rec = pressure_decision_quality(_pdq_match())["home"]
+    assert rec["pressed"] >= PDQ_MIN and rec["free"] >= PDQ_MIN, rec
+    assert rec["pressed_best"] == 0, rec
+    assert rec["free_best"] == rec["free"], rec
+    assert rec["drop_pp"] == 100.0, rec
+    assert rec["verdict"] and "szorításban rosszabbul döntenek" \
+        in rec["verdict"], rec
+    assert rec["top"] and rec["top"]["player_id"] == 1, rec
+
+
+def test_pressure_decision_quality_silent_with_few_decisions():
+    """Kevés szorított döntésből nincs ítélet (a darabszám látszik)."""
+    from handball.pipeline.decisions import pressure_decision_quality
+
+    rec = pressure_decision_quality(_pdq_match(n_pressed=3))["home"]
+    assert rec["pressed"] == 3, rec
+    assert rec["pressed_pct"] is None and rec["verdict"] is None, rec
+    assert rec["top"] is None, rec
+
+
+def test_a_szoritasos_dontes_felderitesben_es_edzesen_valodi_retegbol(
+        monkeypatch):
+    """A VALÓDI úton: felderítés (mezők, edzői kulcs, 468-as
+    meccsterv-szabály mindkét ága, combine_reports), a 487-es
+    edzés-szabály és az összefoglaló mondata."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    meccs = _pdq_match()
+    rep = scout_team(meccs, Team.HOME)
+    assert rep.pdq_pressed >= 10 and rep.pdq_pressed_best == 0, rep
+    assert rep.pdq_free >= 10 and rep.pdq_free_best == rep.pdq_free
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(rep))
+    assert "Szorításban rosszabbul döntenek" in kulcsok
+    ossz = combine_reports([rep, scout_team(_pdq_match(match_id="p2"),
+                                            Team.HOME)])
+    assert ossz.pdq_pressed == 2 * rep.pdq_pressed
+    assert ossz.pdq_players and ossz.pdq_players[0]["press"] \
+        == 2 * rep.pdq_players[0]["press"]
+    # 468: sokat kettőzünk → a kettőzés náluk rossz döntést kényszerít ki.
+    sajat = scout_team(_pdq_match(match_id="s1"), Team.HOME)
+    sajat.dbl_holder_frames, sajat.dbl_doubled_frames = 400, 160
+    terv = " ".join(matchup_plan(sajat, rep))
+    assert "a második ember náluk rossz döntést" in terv, terv
+    sajat.dbl_doubled_frames = 40
+    terv2 = " ".join(matchup_plan(sajat, rep))
+    assert "ritkán léptek a labdásra" in terv2, terv2
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    cimek = " ".join(t["title"] for t in training_focus(meccs)["home"])
+    assert "Döntés szorításban" in cimek
+    assert "szorításban rosszabbul döntenek" in str(coach_summary(meccs))
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

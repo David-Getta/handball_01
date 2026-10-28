@@ -893,6 +893,154 @@ def shot_choice_quality(match: Match,
     return out
 
 
+# Döntés szorításban: a döntés pillanatában legfeljebb PRESS_TIGHT_M-re
+# álló mezőny-védő a "szorítás", PDQ_FREE_M-nél messzebbi a "szabad" (a
+# kettő közti sáv kimarad, hogy a két minta tisztán elváljon). Ennyi
+# döntés kell MINDKÉT mintához; ekkora értékkülönbségen belül a választás
+# "a legjobb" (az értékmodell zaja ennyi); ekkora százalékpontos esés
+# számít érdeminek, ennél kisebb a "tartják a szintet" sáv, és e fölött
+# a szorított jó-arány "jól döntenek". Játékos-szinten ennyi szorított
+# döntés kell a névhez.
+PDQ_FREE_M = 3.5
+PDQ_MIN = 10
+PDQ_TOL = 0.05
+PDQ_DROP_PP = 15.0
+PDQ_STEADY_PP = 5.0
+PDQ_GOOD_PCT = 50.0
+PDQ_PLAYER_MIN = 5
+
+
+def pressure_decision_quality(match: Match,
+                              config: Optional[TacticsConfig] = None
+                              ) -> dict:
+    """Döntés szorításban: A LEGJOBB OPCIÓT VÁLASZTJÁK-E, ha rájuk lépnek.
+
+    A pressz-tűrés (pass_security) azt méri, mennyivel több az eladás
+    testközeli védő mellett — ez azt, hogy a labda MEGTARTÁSA mellett is
+    romlik-e a döntés. Minden labdás döntésnél (passz: a döntés kockáján;
+    lövés: az elengedés kockáján) kiértékeljük az opciókat
+    (evaluate_options: lövés + passz minden társhoz), és megnézzük, hogy
+    a választott opció a legjobb PDQ_TOL-os közelében volt-e. A
+    döntéseket két mintára bontjuk: SZORÍTOTT (a legközelebbi
+    mezőny-védő legfeljebb PRESS_TIGHT_M-re) és SZABAD (PDQ_FREE_M-nél
+    messzebb).
+
+    Edzőileg: ha szorításban a jó döntések aránya érdemben esik, a
+    labdásra lépő védekezés ellenük nem kockázat, hanem rossz döntést
+    kényszerít ki — a saját oldalon pedig a nyomás alatti felnézés a
+    gyakorlandó. Ha szorításban is tartják a szintet, a kilépés ellenük
+    csak rést nyit a fal mögött.
+
+    Visszatérés csapatonként: {"pressed", "pressed_best", "free",
+    "free_best", "pressed_pct", "free_pct", "drop_pp", "players", "top",
+    "verdict"} — a darabszámok mindig; a %-ok, a drop és a verdict None,
+    ha bármelyik minta PDQ_MIN alatt van. "players": játékosonként a
+    szorított döntések és közülük a legjobb-opciósak ({"player_id",
+    "jersey", "press", "press_best"}, a szorított döntések szerint
+    csökkenő); "top" az első játékos, akinek legalább PDQ_PLAYER_MIN
+    szorított döntése van, és a jó-aránya legalább PDQ_DROP_PP-vel a
+    csapat szabad aránya alatt van (None, ha nincs ilyen, vagy a csapat
+    mintája kevés).
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    tally = {s: {"pressed": 0, "pressed_best": 0, "free": 0,
+                 "free_best": 0} for s in ("home", "away")}
+    per_player: dict = {"home": {}, "away": {}}
+    jersey: dict = {}
+
+    def _record(frame: Frame, pos: PlayerPosition, team: Team,
+                chosen: Optional[float], options: list[Option]) -> None:
+        best = best_option(options)
+        if best is None or chosen is None:
+            return
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        if not dists:
+            return
+        near = min(dists)
+        good = int(chosen >= best.value - PDQ_TOL)
+        rec = tally[team.value]
+        if near <= PRESS_TIGHT_M:
+            rec["pressed"] += 1
+            rec["pressed_best"] += good
+            row = per_player[team.value].setdefault(
+                pos.track_id, {"press": 0, "press_best": 0})
+            row["press"] += 1
+            row["press_best"] += good
+            if pos.jersey_number is not None:
+                jersey.setdefault(pos.track_id, pos.jersey_number)
+        elif near > PDQ_FREE_M:
+            rec["free"] += 1
+            rec["free_best"] += good
+
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config)
+        chosen = next((o.value for o in opts
+                       if o.kind == "pass" and o.target_id == pe.receiver_id),
+                      None)
+        _record(pe.decision_frame, pe.passer_pos, pe.team, chosen, opts)
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL) \
+                or e.player_id is None:
+            continue
+        # A lövés-döntés az ELENGEDÉS pillanatában született (release_t).
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        opts = evaluate_options(f, shooter, config)
+        chosen = next((o.value for o in opts if o.kind == "shoot"), None)
+        _record(f, shooter, e.team, chosen, opts)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        t = tally[side]
+        rows = [{"player_id": pid, "jersey": jersey.get(pid), **r}
+                for pid, r in sorted(per_player[side].items(),
+                                     key=lambda kv: (-kv[1]["press"],
+                                                     kv[0]))]
+        rec = {**t, "pressed_pct": None, "free_pct": None,
+               "drop_pp": None, "players": rows, "top": None,
+               "verdict": None}
+        out[side] = rec
+        if t["pressed"] < PDQ_MIN or t["free"] < PDQ_MIN:
+            continue
+        pp = 100.0 * t["pressed_best"] / t["pressed"]
+        fp = 100.0 * t["free_best"] / t["free"]
+        rec["pressed_pct"] = round(pp, 1)
+        rec["free_pct"] = round(fp, 1)
+        rec["drop_pp"] = round(fp - pp, 1)
+        for row in rows:
+            if row["press"] >= PDQ_PLAYER_MIN and (
+                    fp - 100.0 * row["press_best"] / row["press"]
+                    >= PDQ_DROP_PP):
+                rec["top"] = row
+                break
+        if fp - pp >= PDQ_DROP_PP:
+            rec["verdict"] = (
+                f"szorításban rosszabbul döntenek: szabadon a döntéseik "
+                f"{fp:.0f}%-a, szorítva csak {pp:.0f}%-a a legjobb opció "
+                "— rájuk kell lépni, a labdásra lépő védekezés náluk "
+                "rossz döntést kényszerít ki")
+        elif fp - pp <= PDQ_STEADY_PP and pp >= PDQ_GOOD_PCT:
+            rec["verdict"] = (
+                f"szorításban is jól döntenek (szorítva a döntéseik "
+                f"{pp:.0f}%-a a legjobb opció, szabadon {fp:.0f}%) — a "
+                "kilépés ellenük csak rést nyit a fal mögött, zárt falban "
+                "kell védekezni")
+    return out
+
+
 # Labdatartó-poszt: ennyi poszthoz kötött labdatartás-másodperc kell
 # az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a labda
 # egy posztnál áll meg.

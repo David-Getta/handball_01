@@ -3,6 +3,24 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.185 óta)
+
+- **Döntés szorításban** (új réteg): A LEGJOBB OPCIÓT VÁLASZTJÁK-E,
+  ha rájuk lépnek. A pressz-rétegek eddig azt mérték, mennyivel több az
+  eladás testközeli védő mellett, és ki lő fedezetten. Ez azt méri,
+  hogy a labda megtartása mellett is romlik-e a DÖNTÉS: minden labdás
+  döntésnél (passz és lövés) a döntés-modell kiértékeli az opciókat, és
+  megnézi, a választott volt-e a legjobb. A szorított (2 m-en belüli
+  védő) és a szabad (3,5 m-en túli) döntéseket külön számolja. Edzői
+  olvasat: "szorításban rosszabbul döntenek — rájuk kell lépni, a
+  labdásra lépő védekezés náluk rossz döntést kényszerít ki", vagy
+  ellenkezőleg: "szorításban is jól döntenek — a kilépés csak rést
+  nyit". Játékosonként is megnevezi, kinél esik leginkább. Felületek:
+  elemzés-válasz és meccs-csomag, edzői összefoglaló, felderítés
+  (darabszám-mezők, edzői kulcs, 468. meccsterv-szabály a saját
+  kettőzéssel párosítva, összevont jelentés), 487. edzés-szabály
+  (döntés nyomás alatt), kliens-csempe "Döntés szorításban".
+
 ## v0.1.185 — kiadva (2026-10-25)
 
 > Kiadás-jegyzet: KALIBRÁCIÓ — a pályavonalakat a gép most csak a

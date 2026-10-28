@@ -6808,6 +6808,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Döntés szorításban: rájuk lépve romlik-e a döntésük (10+ szorított
+  // és 10+ szabad döntés; 15 százalékpontos esés felett "rosszabbul
+  // döntenek", 5 alatt és 50% fölött "jól döntenek" — a backenddel
+  // azonos küszöbök: PDQ_MIN, PDQ_DROP_PP, PDQ_STEADY_PP, PDQ_GOOD_PCT).
+  String? _pressureDecision(Map<String, dynamic> r) {
+    final pressed = (r["pdq_pressed"] as num?)?.toInt() ?? 0;
+    final pressedBest = (r["pdq_pressed_best"] as num?)?.toInt() ?? 0;
+    final free = (r["pdq_free"] as num?)?.toInt() ?? 0;
+    final freeBest = (r["pdq_free_best"] as num?)?.toInt() ?? 0;
+    if (pressed < 10 || free < 10) return null;
+    final pp = 100.0 * pressedBest / pressed;
+    final fp = 100.0 * freeBest / free;
+    if (fp - pp >= 15.0) {
+      return "szorítva a döntéseik ${pp.round()}%-a, szabadon "
+          "${fp.round()}%-a a legjobb opció ($pressed szorított döntés) · "
+          "lépjetek a labdásra, nála a szorítás rossz döntést kényszerít ki";
+    }
+    if (fp - pp <= 5.0 && pp >= 50.0) {
+      return "szorításban is jól döntenek (${pp.round()}% vs "
+          "${fp.round()}%) · a kilépés csak rést nyit, zárt falban "
+          "védekezzetek";
+    }
+    return null;
+  }
+
   // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
   // poszthoz kötött lövés, 60% részarány — a backenddel azonos
   // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
@@ -12526,6 +12551,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-poszt", _fastBreakRole(r)!],
       if (_shotChoice(r) != null)
         ["Lövésválasztás", _shotChoice(r)!],
+      if (_pressureDecision(r) != null)
+        ["Döntés szorításban", _pressureDecision(r)!],
       if (_timeoutFinisher(r) != null)
         ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)
@@ -12671,7 +12698,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                               "előkészít", "szervez", "asszist", "elsütés",
                               "középkezdés", "labda", "elad", "hiba",
                               "kockázatos", "pontatlan", "fedezett",
-                              "kihagy"]),
+                              "kihagy", "döntés"]),
     ("Emberek és cserék", ["csere", "váltó", "váltott", "rotáció",
                            "pad-", "sprint", "futás", "játékos",
                            "kezd", "ember", "páros", "időkérés",

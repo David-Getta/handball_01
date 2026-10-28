@@ -3576,6 +3576,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "lövés).")
     except Exception:
         pass
+    # Döntés szorításban: rájuk lépve romlik-e a döntésük.
+    try:
+        from .decisions import pressure_decision_quality
+        pdq = pressure_decision_quality(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (pdq.get(side) or {}).get("verdict")
+            if mondat:
+                body += (f" A(z) {name} {mondat} "
+                         f"({pdq[side]['pressed']} szorított döntés).")
+    except Exception:
+        pass
     # Időkérés-befejező: az időkérés után kire játszanak.
     try:
         from .stoppages import timeout_finisher

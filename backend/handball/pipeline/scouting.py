@@ -916,6 +916,16 @@ class ScoutingReport:
     # összegződik (arány = better / shots).
     scq_shots: int = 0
     scq_better: int = 0
+    # Döntés szorításban (decisions.pressure_decision_quality): a
+    # szorított és a szabad labdás döntések darabszáma, és közülük a
+    # legjobb-opciósaké; játékosonként a szorított döntések
+    # ({"player_id", "jersey", "press", "press_best"}). Darabszám,
+    # meccsek közt pontosan összegződik (arány = best / összes).
+    pdq_pressed: int = 0
+    pdq_pressed_best: int = 0
+    pdq_free: int = 0
+    pdq_free_best: int = 0
+    pdq_players: list = field(default_factory=list)
     # Kontra-poszt: a lerohanás-szakaszokra eső, poszthoz kötött
     # lövések darabszáma posztonként. Darabszám, meccsek közt
     # pontosan összegződik.
@@ -6482,6 +6492,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Fegyelmezett lövésválasztás (csak {_scq_pct:.0f}%-nál "
                 "volt jobb szabad helyzet) — ellenük a helyzet-teremtést "
                 "kell zárni, a lövés pillanatában már késő.")
+
+    # Döntés szorításban: rájuk lépve romlik-e a döntésük (a motorral
+    # azonos küszöbök: PDQ_MIN, PDQ_DROP_PP, PDQ_STEADY_PP, PDQ_GOOD_PCT).
+    if rep.pdq_pressed >= 10 and rep.pdq_free >= 10:
+        _pdq_pp = 100.0 * rep.pdq_pressed_best / rep.pdq_pressed
+        _pdq_fp = 100.0 * rep.pdq_free_best / rep.pdq_free
+        if _pdq_fp - _pdq_pp >= 15.0:
+            keys.append(
+                f"Szorításban rosszabbul döntenek: szabadon a döntéseik "
+                f"{_pdq_fp:.0f}%-a, szorítva csak {_pdq_pp:.0f}%-a a "
+                f"legjobb opció ({rep.pdq_pressed} szorított döntés) — "
+                "lépjetek a labdásra, nála a szorítás rossz döntést "
+                "kényszerít ki.")
+        elif _pdq_fp - _pdq_pp <= 5.0 and _pdq_pp >= 50.0:
+            keys.append(
+                f"Szorításban is jól döntenek (szorítva {_pdq_pp:.0f}%, "
+                f"szabadon {_pdq_fp:.0f}% a legjobb opció) — a kilépés "
+                "ellenük csak rést nyit, zárt falban védekezzetek.")
 
     # Időkérés-befejező: az időkérésük utáni támadásra kit fogjunk.
     _tof_n = sum(rep.tof_shots_by_role.values())
@@ -12158,6 +12186,13 @@ def _scout_team_cached(match: Match, team: Team,
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
         rep.scq_better = scqrec["better_options"]
+        from .decisions import pressure_decision_quality as _pdq
+        pdqrec = _pdq(match, config)[team.value]
+        rep.pdq_pressed = pdqrec["pressed"]
+        rep.pdq_pressed_best = pdqrec["pressed_best"]
+        rep.pdq_free = pdqrec["free"]
+        rep.pdq_free_best = pdqrec["free_best"]
+        rep.pdq_players = [dict(row) for row in pdqrec["players"]]
         from .stoppages import timeout_finisher as _tof
         tofrec = _tof(match, config)[team.value]
         rep.tof_timeouts = tofrec["timeouts"]
@@ -13734,6 +13769,26 @@ def _merge_covered_shooters(reports) -> list:
                                    key=lambda kv: -kv[1]["covered"])]
 
 
+def _merge_pdq_players(reports) -> list:
+    """Döntés szorításban: játékosonként a szorított döntések és a
+    legjobb-opciósak összegzése (a szorított döntések szerint
+    csökkenő, egyezésnél azonosító szerint)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.pdq_players or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "press": 0,
+                                    "press_best": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["press"] += int(row.get("press", 0))
+            rec["press_best"] += int(row.get("press_best", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: (-kv[1]["press"],
+                                                   kv[0]))]
+
+
 def _merge_pressure_players(reports) -> list:
     """Pressz-érzékeny játékosok: játékosonként a nyomott döntések és
     az azokból lett eladások összegzése (az eladás szerint
@@ -15231,6 +15286,54 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 468) Az ő szorításban romló döntésük × a ti kettőzésetek: ha
+    # rájuk lépve rosszabbul döntenek, a második ember náluk nem
+    # kockázat, hanem rossz döntést kényszerít ki — de csak annak, aki
+    # tényleg rálép a labdásra.
+    try:
+        if opp.pdq_pressed >= 10 and opp.pdq_free >= 10 \
+                and own.dbl_holder_frames >= 250:
+            _pp468 = 100.0 * opp.pdq_pressed_best / opp.pdq_pressed
+            _fp468 = 100.0 * opp.pdq_free_best / opp.pdq_free
+            if _fp468 - _pp468 >= 15.0:
+                _dbl468 = (100.0 * own.dbl_doubled_frames
+                           / own.dbl_holder_frames)
+                _top468 = next(
+                    (p for p in (opp.pdq_players or [])
+                     if p["press"] >= 5
+                     and _fp468 - 100.0 * p["press_best"] / p["press"]
+                     >= 15.0), None)
+                _kire468 = ""
+                if _top468:
+                    _who468 = (f"a(z) {_top468['jersey']}-es mezszámú"
+                               if _top468.get("jersey") is not None
+                               else f"a(z) {_top468['player_id']} "
+                                    "azonosítójú")
+                    _kire468 = (
+                        f" Elsőnek {_who468} játékosukra lépjetek (a "
+                        f"szorított döntéseiből {_top468['press_best']}/"
+                        f"{_top468['press']} volt a legjobb opció).")
+                _mi468 = (f"Az ellenfél szorításban rosszabbul dönt "
+                          f"(szabadon a döntései {_fp468:.0f}%-a, "
+                          f"szorítva csak {_pp468:.0f}%-a a legjobb "
+                          "opció)")
+                if _dbl468 >= 30.0:
+                    plan.append(
+                        f"{_mi468}, ti pedig sokat kettőztök (a "
+                        f"labdás-idő {_dbl468:.0f}%-ában) — a második "
+                        "ember náluk rossz döntést kényszerít ki: a "
+                        "labdásra azonnal lépjetek rá, ne a passzsávot "
+                        "várjátok." + _kire468)
+                else:
+                    plan.append(
+                        f"{_mi468}, ti viszont ritkán léptek a labdásra "
+                        f"(a labdás-idő {_dbl468:.0f}%-ában kettőztök) — "
+                        "ezen a meccsen a kilépő, labdásra lépő védekezés "
+                        "hozza a rossz döntéseiket; a falból a labda "
+                        "oldalán lépjen ki egy ember." + _kire468)
     except Exception:
         pass
 
@@ -23054,6 +23157,11 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rgp_goals_by_role_side for r in reports),
         scq_shots=sum(r.scq_shots for r in reports),
         scq_better=sum(r.scq_better for r in reports),
+        pdq_pressed=sum(r.pdq_pressed for r in reports),
+        pdq_pressed_best=sum(r.pdq_pressed_best for r in reports),
+        pdq_free=sum(r.pdq_free for r in reports),
+        pdq_free_best=sum(r.pdq_free_best for r in reports),
+        pdq_players=_merge_pdq_players(reports),
         rfb_shots_by_role=_merge_count_dicts(
             r.rfb_shots_by_role for r in reports),
         svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),
