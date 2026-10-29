@@ -100,3 +100,49 @@ def test_dontes_nelkuli_jatekos_ures_profilt_kap():
     client, mid = _client()
     d = client.get(f"/matches/{mid}/players/3/decisions").json()
     assert d["situations"] == {} and d["pressure"] is None, d
+
+
+def test_a_jatekos_trend_meccsenkent_mutatja_a_dontes_minoseget():
+    """A játékos-trend (mezszám szerint) meccsenként hozza a besorolt
+    döntéseit és közülük a legjobb-opciósakat, szorítva külön is — a
+    "jobban dönt-e" kérdés meccsről meccsre."""
+    client, mid = _client()
+    r = client.post(f"/matches/{mid}/jerseys",
+                    json={"track_id": 1, "jersey": 7})
+    assert r.status_code == 200, r.text
+    tr = client.get("/players/trend",
+                    params={"team": "A", "jersey": 7}).json()
+    assert len(tr["points"]) == 1, tr
+    p = tr["points"][0]
+    assert p["dec_n"] == 10 and p["dec_best"] == 0, p
+    assert p["dec_press"] == 10 and p["dec_press_best"] == 0, p
+    # Döntés nélküli szám: a mezők None-ok (nem 0), a felület "—"-t ír.
+    client.post(f"/matches/{mid}/jerseys",
+                json={"track_id": 3, "jersey": 11})
+    p3 = client.get("/players/trend",
+                    params={"team": "A", "jersey": 11}).json()["points"][0]
+    assert p3["dec_n"] is None and p3["dec_press"] is None, p3
+
+
+def test_a_szezon_lap_is_viszi_a_dontes_minoseget():
+    """A nyomtatott szezon-lap sem mondhat kevesebbet a képernyőnél: a
+    döntés-összesítő és a meccsenkénti oszlop rajta van; döntés nélküli
+    szezonban az oszlop el sem jelenik."""
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": "m1", "date": "2026-01-01", "opponent": "X",
+               "goals": 1, "shots": 2, "minutes": 40.0,
+               "distance_m": 4000.0, "top_speed_ms": 7.0,
+               "sprint_count": 5, "dec_n": 12, "dec_best": 3,
+               "dec_press": 8, "dec_press_best": 1},
+              {"match_id": "m2", "date": "2026-01-08", "opponent": "Y",
+               "goals": 0, "shots": 0, "minutes": 30.0,
+               "distance_m": 3000.0, "top_speed_ms": 6.5,
+               "sprint_count": 3, "dec_n": None, "dec_best": None}]
+    html = player_season_html("A", 7, pontok, "Kovács", None)
+    assert "Döntés: legjobb opció" in html
+    assert "3/12 (25%) · szorítva 1/8" in html
+    assert '<th class="num">Döntés</th>' in html
+    assert '<td class="num">3/12</td>' in html
+    nincs = [dict(p, dec_n=None, dec_best=None) for p in pontok]
+    assert "Döntés" not in player_season_html("A", 7, nincs, "Kovács", None)

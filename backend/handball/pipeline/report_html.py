@@ -4763,6 +4763,20 @@ def player_season_html(team: str, jersey: int, points: list[dict],
                               f"{m_total_s:.0f} mp · átl. "
                               f"{m_avg:.1f} m"))
 
+    # Döntés-minőség (a játékos-modellből): a besorolt helyzetekben hozott
+    # döntések és közülük a legjobb opció — ha a szezonban volt ilyen.
+    dec_n_sum = sum(p_.get("dec_n") or 0 for p_ in points)
+    has_dec = dec_n_sum > 0
+    if has_dec:
+        dec_best_sum = sum(p_.get("dec_best") or 0 for p_ in points)
+        dec_pr = sum(p_.get("dec_press") or 0 for p_ in points)
+        dec_pr_best = sum(p_.get("dec_press_best") or 0 for p_ in points)
+        totals.append(_metric(
+            "Döntés: legjobb opció",
+            f"{dec_best_sum}/{dec_n_sum} "
+            f"({100.0 * dec_best_sum / dec_n_sum:.0f}%)"
+            + (f" · szorítva {dec_pr_best}/{dec_pr}" if dec_pr else "")))
+
     rows = []
     for p_ in points:
         when = p_.get("date") or p_.get("match_id", "")
@@ -4791,22 +4805,28 @@ def player_season_html(team: str, jersey: int, points: list[dict],
                     f'{(p_.get("mark_dist") or 0.0):.1f} m</td>')
             else:
                 mark_cells = '<td class="num">—</td>'
+        dec_cells = ""
+        if has_dec:
+            dec_cells = (f'<td class="num">{p_.get("dec_best") or 0}/'
+                         f'{p_["dec_n"]}</td>' if p_.get("dec_n")
+                         else '<td class="num">—</td>')
         rows.append(
             f"<tr><td>{escape(str(when))}</td><td>{escape(opp)}</td>"
             f'<td class="num">{p_.get("minutes", 0):.0f}</td>'
             f'<td class="num">{game}</td>'
             f'<td class="num">{xg_c}</td>'
             f'<td class="num">{diff_c}</td>'
-            + gk_cells + mark_cells +
+            + gk_cells + mark_cells + dec_cells +
             f'<td class="num">{p_.get("distance_m", 0):.0f} m</td>'
             f'<td class="num">{p_.get("sprint_count", 0)}</td></tr>')
     gk_heads = ('<th class="num">Védés</th><th class="num">GSAx</th>'
                 if is_gk_season else "")
     mark_heads = ('<th class="num">Őrzés</th>' if has_marking else "")
+    dec_heads = ('<th class="num">Döntés</th>' if has_dec else "")
     table = ("<table><tr><th>Dátum</th><th>Ellenfél</th>"
              '<th class="num">Perc</th><th class="num">Gól/lövés</th>'
              '<th class="num">xG</th><th class="num">+/−</th>'
-             + gk_heads + mark_heads +
+             + gk_heads + mark_heads + dec_heads +
              '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
              + "".join(rows) + "</table>")
 

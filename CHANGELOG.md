@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.185 óta)
 
+- **Döntés-minőség a játékos-trendben és a szezon-lapon** (kliens +
+  motor): a játékos-trend (mezszám szerint, meccsről meccsre) eddig a
+  futómunkát, a lövést, az xG-t és az őrzést mutatta. Most azt is, hogy
+  a besorolt helyzetekben (kilépnek rá, szabad a 6 m-es társ, szabad
+  lőhely) hányszor választotta a legjobb opciót, és szorítva külön is —
+  összesítő-chipben és meccsenkénti "dönt." oszlopban (30% alatt arany
+  jelzéssel). A nyomtatott szezon-lap ugyanezt viszi. Így látszik, hogy
+  a döntés-edzés után JOBBAN dönt-e a játékos.
+
 - **Játékos-modell a Döntések panelen** (kliens + motor): a meccs-nézet
   Döntések fülén a kiválasztott játékosnál eddig csak az látszott, kihez
   passzol és milyen arányban optimálisan. Most alatta HELYZETENKÉNT is:

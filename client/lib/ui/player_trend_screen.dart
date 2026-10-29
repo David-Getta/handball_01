@@ -485,6 +485,17 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     final kvJo = _points.fold(
         0, (s, p) => s + ((p["quiz_correct"] as num?)?.toInt() ?? 0));
     final hasQuiz = kvItelt > 0;
+    // Döntés-minőség (a játékos-modellből): a besorolt helyzetekben hozott
+    // döntések és közülük a legjobb opció; szorítva külön is.
+    final decN = _points.fold(
+        0, (s, p) => s + ((p["dec_n"] as num?)?.toInt() ?? 0));
+    final decBest = _points.fold(
+        0, (s, p) => s + ((p["dec_best"] as num?)?.toInt() ?? 0));
+    final decPress = _points.fold(
+        0, (s, p) => s + ((p["dec_press"] as num?)?.toInt() ?? 0));
+    final decPressBest = _points.fold(
+        0, (s, p) => s + ((p["dec_press_best"] as num?)?.toInt() ?? 0));
+    final hasDec = decN > 0;
     return [
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
@@ -507,6 +518,10 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         if (hasQuiz)
           _chip("döntés-kvíz: $kvJo/$kvItelt ✓ "
               "(${(100.0 * kvJo / kvItelt).toStringAsFixed(0)}%)"),
+        if (hasDec)
+          _chip("döntés: legjobb $decBest/$decN "
+              "(${(100.0 * decBest / decN).toStringAsFixed(0)}%)"
+              "${decPress > 0 ? " · szorítva $decPressBest/$decPress" : ""}"),
       ]),
       // HOL TARTOK A KERETEN BELÜL — a nyers "4,2 km" magában semmit
       // nem mond, a keret-átlaghoz mérve viszont döntés lesz belőle.
@@ -530,10 +545,12 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           if (isGk) _cell("GSAx", 50),
           if (hasMark) _cell("őrzés", 66),
           if (hasQuiz) _cell("kvíz", 48),
+          if (hasDec) _cell("dönt.", 56),
           _cell("perc", 44),
         ]),
       ),
-      ..._points.map((p) => _row(p, maxDist, isGk, hasMark, hasQuiz)),
+      ..._points.map(
+          (p) => _row(p, maxDist, isGk, hasMark, hasQuiz, hasDec)),
     ];
   }
 
@@ -678,7 +695,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)));
 
   Widget _row(Map<String, dynamic> p, double maxDist, bool isGk,
-      bool hasMark, bool hasQuiz) {
+      bool hasMark, bool hasQuiz, bool hasDec) {
     final dist = (p["distance_m"] as num?)?.toDouble() ?? 0.0;
     final frac = maxDist > 0 ? (dist / maxDist).clamp(0.0, 1.0) : 0.0;
     final date = (p["date"] as String?) ?? "";
@@ -804,6 +821,24 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                   textAlign: TextAlign.right,
                   style: AppText.label.copyWith(
                       fontSize: 13, color: AppColors.textPrimary))),
+        // Döntés-minőség ezen a meccsen: a legjobb opció / besorolt
+        // döntés (30% alatt arany jelzés: itt romlott a döntése).
+        if (hasDec)
+          SizedBox(
+              width: 56,
+              child: Builder(builder: (_) {
+                final n = (p["dec_n"] as num?)?.toInt() ?? 0;
+                final b = (p["dec_best"] as num?)?.toInt() ?? 0;
+                return Text(n > 0 ? "$b/$n" : "—",
+                    textAlign: TextAlign.right,
+                    style: AppText.label.copyWith(
+                        fontSize: 13,
+                        color: n == 0
+                            ? AppColors.textFaint
+                            : (b < 0.3 * n
+                                ? AppColors.gold
+                                : AppColors.textPrimary)));
+              })),
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",

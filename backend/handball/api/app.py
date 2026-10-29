@@ -7212,6 +7212,11 @@ def create_app():
         track viseli ugyanazt a számot (megszakadt követés), összegzünk —
         pont ezért éri meg mezszámot rendelni a játékosokhoz.
 
+        A döntés-minőség (a játékos-modellből): "dec_n" a besorolt
+        helyzetekben hozott döntések száma, "dec_best" közülük a legjobb
+        opciót választók; "dec_press"/"dec_press_best" ugyanez a
+        szorított döntésekre — None, ha a meccsen nem volt ilyen döntése.
+
         A döntés-kvíz (a 3D közös nézés kvíz-jegyzetei a meccsen, a
         keret-név szerint — mint a keret-lapon): "quiz_answers" (ítélt
         válaszok) és "quiz_correct" (a jobb opcióra mutatott); None, ha a
@@ -7294,6 +7299,29 @@ def create_app():
                 if fr_tr:
                     mark_s = round(fr_tr / fps, 0)
                     mark_dist = round(ds_tr / fr_tr, 2)
+            except Exception:
+                pass
+            # Döntés-minőség ezen a meccsen (a játékos-modellből): a
+            # besorolt helyzetekben (kilépnek rá / szabad a 6 m-es társ /
+            # szabad lőhely) hozott döntései és közülük a legjobb
+            # opciót választók, valamint a szorított döntései — a
+            # "jobban dönt-e meccsről meccsre" trend alapja.
+            dec_n = dec_best = dec_press = dec_press_best = None
+            try:
+                from ..pipeline.decisions import (
+                    pressure_decision_quality, situational_decisions)
+                sd_tr = [r_ for r_ in situational_decisions(match)[
+                    side.value]["players"] if r_["player_id"] in tracks]
+                if sd_tr:
+                    dec_n = sum(s_["decisions"] for r_ in sd_tr
+                                for s_ in r_["situations"].values())
+                    dec_best = sum(s_["match"] for r_ in sd_tr
+                                   for s_ in r_["situations"].values())
+                pq_tr = [r_ for r_ in pressure_decision_quality(match)[
+                    side.value]["players"] if r_["player_id"] in tracks]
+                if pq_tr:
+                    dec_press = sum(r_["press"] for r_ in pq_tr)
+                    dec_press_best = sum(r_["press_best"] for r_ in pq_tr)
             except Exception:
                 pass
             # HOL TARTOK A CSAPATON BELÜL — a játékos legelső kérdése.
@@ -7380,6 +7408,10 @@ def create_app():
                 "xg_diff": round(goals - xg, 2) if xg is not None else None,
                 "quiz_answers": kv_itelt,
                 "quiz_correct": kv_jo,
+                "dec_n": dec_n,
+                "dec_best": dec_best,
+                "dec_press": dec_press,
+                "dec_press_best": dec_press_best,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey,
