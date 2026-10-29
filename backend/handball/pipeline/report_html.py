@@ -406,6 +406,27 @@ def _figura_ajanlo_rows(r: dict) -> str:
     return ((f"<p>{escape(mondat)}</p>" if mondat else "") + rows)
 
 
+def _vedekezesi_proba_rows(r: dict) -> str:
+    """Védekezési próba sorai: az ő visszatérő figuráik a mi falunk
+    ellen — a mondat, alatta figuránként az ismétlés, az időpont, a
+    lövőhelyzet (az alap fal elleni értékkel) és a 3D-link."""
+    def sor(f: dict) -> str:
+        t0 = float(f.get("t0_s") or 0)
+        ido = f"{int(t0 // 60)}:{int(t0 % 60):02d}"
+        link = (f' · <a href="/figura3d?{escape(str(f["link"]))}">3D ↗</a>'
+                if f.get("link") else "")
+        return (f'<div class="bar-row"><span class="bar-label" '
+                f'style="width:220px">{int(f.get("ismetles") or 0)}× · pl. '
+                f'{ido}</span><span class="bar-pct" style="width:auto">'
+                f'{float(f.get("pont_pct") or 0):.0f}% lövőhelyzet (alap '
+                f'fal: {float(f.get("alap_pct") or 0):.0f}%){link}</span>'
+                '</div>')
+    mondat = r.get("verdict")
+    return ((f"<p>{escape(mondat[:1].upper() + mondat[1:])}.</p>"
+             if mondat else "")
+            + "".join(sor(f) for f in r.get("figurak") or []))
+
+
 def _figure_svg(shape: list, w: int = 150, h: int = 75) -> str:
     """Egy figura-alak (6x3 rács, a +x kapu felé támadva) mini-pályán,
     inline SVG-ként: a cella átlátszatlansága a látogatottság. A
@@ -502,7 +523,8 @@ def _players(key_players: list) -> str:
 def scouting_report_html(rep: ScoutingReport,
                          playbook_match: dict | None = None,
                          matchup: list[str] | None = None,
-                         figura_ajanlo: dict | None = None) -> str:
+                         figura_ajanlo: dict | None = None,
+                         vedekezesi_proba: dict | None = None) -> str:
     """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
 
     `playbook_match` (opcionális): a mentett figurákkal való egyezés
@@ -512,6 +534,10 @@ def scouting_report_html(rep: ScoutingReport,
     `figura_ajanlo` (opcionális): a SAJÁT mentett figuráink rangsora a
     tanult faluk ellen (play_simulation.rank_playbook) — "Figuráink
     ellenük" szakaszként kerül be.
+    `vedekezesi_proba` (opcionális): az ő visszatérő figuráik a MI tanult
+    falunk ellen (play_simulation.defense_test, a figurák "link"
+    mezőjével — a /figura3d lekérdezése) — "Figuráik a falatok ellen"
+    szakaszként kerül be.
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
@@ -865,6 +891,10 @@ def scouting_report_html(rep: ScoutingReport,
   {("<h2>Figuráink ellenük (a tanult faluk ellen)</h2>"
     + _figura_ajanlo_rows(figura_ajanlo))
    if figura_ajanlo and figura_ajanlo.get("figurak") else ""}
+
+  {("<h2>Figuráik a falatok ellen (védekezési próba)</h2>"
+    + _vedekezesi_proba_rows(vedekezesi_proba))
+   if vedekezesi_proba and vedekezesi_proba.get("figurak") else ""}
 
   {("<h2>Visszatérő figuráik (meccsről meccsre)</h2>"
     + _setplay_library_rows(getattr(rep, "setplay_library", None) or {}))

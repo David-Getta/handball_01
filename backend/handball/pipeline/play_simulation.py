@@ -883,3 +883,85 @@ def rank_playbook(figurak: list, defense: DefenseModel, *,
                         f"{k['pont_pct']:.0f}% (az alap fal ellen "
                         f"{k['alap_pct']:.0f}%).")
     return {"figurak": sorok, "ajanlas": ajanlas}
+
+
+# ---- Védekezési próba: az ő visszatérő figuráik a MI tanult falunk ellen --
+# Egy figura akkor "visszatérő", ha legalább ennyiszer játszották (a
+# támadás-ujjlenyomatok klaszterében); legfeljebb ennyi figurát
+# értékelünk. A figura képviselője a klaszter LEGHOSSZABB szakasza (abban
+# látszik a teljes mozgás). Az alap-fal és az eltérés-küszöb a figura-
+# ajánlóé (AJANLO_ELTERES_PP).
+PROBA_MIN_ISMETLES = 2
+PROBA_MAX = 8
+
+
+def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
+                 config: TacticsConfig | None = None) -> dict:
+    """Védekezési próba: az `attacking` csapat visszatérő figuráit (a
+    meccs támadás-szakaszainak klaszterei, legalább PROBA_MIN_ISMETLES
+    ismétléssel) lejátsszuk a `defense` fal ellen — mint a figura-
+    ajánló, csak fordítva: az ő figurájuk, a mi falunk.
+
+    Edzőileg: "melyik figurájukra NEM vagyunk felkészülve?" — amelyik a
+    mi tanult falunk ellen nagyobb lövőhelyzetet teremt, mint egy alap
+    6-0 ellen, ott a falunk szokása (a kilépés, a kettőzés, a
+    labdakövetés) maga nyitja a rést; azt kell a meccs előtt
+    begyakorolni.
+
+    Visszaad: {"figurak": [{"t0_s", "t1_s", "ismetles", "pont_pct",
+    "alap_pct", "elteres_pp", "attackers", "labda"}, …] a pont szerint
+    csökkenőben (holtversenyben az idő), és "verdict" (magyar mondat,
+    vagy None, ha nincs visszatérő figura)}."""
+    from .setplays import (attack_signature, cluster_signatures,
+                           segment_attacks)
+
+    config = config or TacticsConfig()
+    seqs = segment_attacks(match, config)
+    labels = cluster_signatures([attack_signature(s) for s in seqs])
+    klaszter: dict[int, list] = {}
+    for s, lab in zip(seqs, labels):
+        if s.team == attacking:
+            klaszter.setdefault(lab, []).append(s)
+    alap = DefenseModel()
+    sorok = []
+    for lab in sorted(klaszter, key=lambda k: (-len(klaszter[k]), k)):
+        tagok = klaszter[lab]
+        if len(tagok) < PROBA_MIN_ISMETLES:
+            continue
+        rep = max(tagok, key=lambda s: (s.end_t - s.start_t, -s.start_t))
+        fig = attack_figure(match, (rep.start_t + rep.end_t) // 2,
+                            config=config)
+        if fig is None:
+            continue
+        try:
+            _, e = setplay_3d_match(fig["attackers"], defense,
+                                    ball=fig["labda"], config=config)
+            _, ea = setplay_3d_match(fig["attackers"], alap,
+                                     ball=fig["labda"], config=config)
+        except ValueError:
+            continue
+        pont, ap = e["best_shot_value"], ea["best_shot_value"]
+        sorok.append({
+            "t0_s": fig["t0_s"], "t1_s": fig["t1_s"],
+            "ismetles": len(tagok),
+            "pont_pct": round(100.0 * pont, 1),
+            "alap_pct": round(100.0 * ap, 1),
+            "elteres_pp": round(100.0 * (pont - ap), 1),
+            "attackers": fig["attackers"], "labda": fig["labda"],
+        })
+        if len(sorok) >= PROBA_MAX:
+            break
+    sorok.sort(key=lambda r: (-r["pont_pct"], r["t0_s"]))
+    verdict = None
+    if sorok:
+        b = sorok[0]
+        perc = int(b["t0_s"] // 60)
+        mp = int(b["t0_s"] % 60)
+        verdict = (f"a legveszélyesebb visszatérő figurájuk "
+                   f"({b['ismetles']}×, pl. {perc}:{mp:02d}-kor) a falatok "
+                   f"ellen {b['pont_pct']:.0f}% lövőhelyzetet teremt")
+        if b["elteres_pp"] >= AJANLO_ELTERES_PP:
+            verdict += (f" — a falatok szokása {b['elteres_pp']:.0f} "
+                        "százalékponttal többet enged, mint egy alap 6-0: "
+                        "ezt a figurát a meccs előtt be kell gyakorolni")
+    return {"figurak": sorok, "verdict": verdict}

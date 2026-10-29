@@ -276,3 +276,60 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0):
+    """A hazai (Ők) ugyanazt a beálló-figurát `ismetles`-szer játssza: az
+    1-es középen előre, a 2-es a szélről befut; a támadások közt a labda
+    a saját térfelükön (átmenet). A vendég (Mi) 6-0 fala `fal_x`-en."""
+    frames = []
+    t = 0
+    for _ in range(ismetles):
+        n = int(3 * fps)
+        for s in range(n):
+            u = s / (n - 1)
+            a1 = (25 + 5 * u, 10.0)
+            players = [_pl(1, Team.HOME, *a1),
+                       _pl(2, Team.HOME, 30 + 4 * u, 2 + 6 * u),
+                       _pl(3, Team.HOME, 27.0, 15.0)]
+            for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+                players.append(_pl(100 + i, Team.AWAY, fal_x, float(y)))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=a1[0], y=a1[1], confidence=1.0)))
+            t += 1
+        for _s in range(int(fps)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 15.0, 10.0)],
+                                ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="pr", home_team="Ők", away_team="Mi",
+                           fps=fps), frames)
+
+
+def test_a_vedekezesi_proba_az_o_figurajukat_a_mi_falunk_ellen_jatssza():
+    """A háromszor ismételt figurájuk egy sorként jön (3×), a mi falunk
+    és az alap 6-0 elleni lövőhelyzettel; a ritka (négyvédős) fal ellen
+    a próba kimondja a különbséget. Egyszeri támadás nem visszatérő
+    figura; a nem támadó csapatnál nincs mit próbálni."""
+    from handball.pipeline.play_simulation import (AJANLO_ELTERES_PP,
+                                                   PROBA_MIN_ISMETLES,
+                                                   defense_test)
+
+    r = defense_test(_proba_match(), Team.HOME, DefenseModel())
+    assert len(r["figurak"]) == 1
+    f = r["figurak"][0]
+    assert f["ismetles"] == 3 and f["elteres_pp"] == 0.0
+    assert f["attackers"] and len(f["labda"]) == len(f["attackers"][0])
+    assert r["verdict"].startswith(
+        "a legveszélyesebb visszatérő figurájuk (3×, pl. ")
+    assert "százalékponttal" not in r["verdict"]
+
+    ritka = defense_test(_proba_match(), Team.HOME,
+                         DefenseModel(num_defenders=2))
+    assert ritka["figurak"][0]["elteres_pp"] >= AJANLO_ELTERES_PP
+    assert "be kell gyakorolni" in ritka["verdict"]
+
+    egyszeri = _proba_match(ismetles=PROBA_MIN_ISMETLES - 1)
+    assert defense_test(egyszeri, Team.HOME, DefenseModel()) == {
+        "figurak": [], "verdict": None}
+    assert defense_test(_proba_match(), Team.AWAY, DefenseModel()) == {
+        "figurak": [], "verdict": None}

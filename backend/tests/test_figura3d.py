@@ -1055,3 +1055,33 @@ def test_a_felderito_lap_hozza_a_figura_ajanlot(tmp_path, monkeypatch):
     r = c.get("/matches/m51/scouting/export", params={"team": "away"})
     assert r.status_code == 200
     assert "Figuráink ellenük" in r.text and "Ellenük a(z)" in r.text
+
+
+def test_a_vedekezesi_proba_vegpont_es_a_felderito_lap(tmp_path, monkeypatch):
+    """GET /matches/{id}/vedekezesi-proba: az ő visszatérő figurájuk a
+    meccs másik oldalának (a mi) tanult fala ellen, 3D-linkkel; a
+    nyomtatható felderítő lap ugyanezt hozza. Hibás oldalra 400,
+    ismeretlen meccsre 404."""
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(_proba_match())
+    c = TestClient(app)
+    r = c.get("/matches/pr/vedekezesi-proba", params={"csapat": "home"})
+    assert r.status_code == 200
+    j = r.json()
+    assert (j["csapat"], j["vedelem"]) == ("Ők", "Mi")
+    assert len(j["figurak"]) == 1 and j["figurak"][0]["ismetles"] == 3
+    link = j["figurak"][0]["link"]
+    assert "meccs=pr" in link and "vedo=away" in link
+    assert c.get("/figura3d?" + link).status_code == 200
+    assert j["verdict"].startswith("a legveszélyesebb visszatérő figurájuk")
+    lap = c.get("/matches/pr/scouting/export", params={"team": "home"})
+    assert lap.status_code == 200
+    assert "Figuráik a falatok ellen" in lap.text
+    assert "A legveszélyesebb visszatérő figurájuk" in lap.text
+    assert c.get("/matches/pr/vedekezesi-proba",
+                 params={"csapat": "x"}).status_code == 400
+    assert c.get("/matches/nincs/vedekezesi-proba").status_code == 404
+    assert c.get("/matches/pr/vedekezesi-proba",
+                 params={"vedo_meccs": "nincs"}).status_code == 404

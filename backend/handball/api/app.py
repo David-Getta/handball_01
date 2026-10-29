@@ -3480,6 +3480,57 @@ def create_app():
                                               vedo_nev=vedo_nev,
                                               ajanlas=ajanlas))
 
+    def _vedekezesi_proba(match, csapat: Team, vedo_match, vedo_oldal: Team):
+        """Az `csapat` visszatérő figurái a `vedo_match` `vedo_oldal`
+        csapatából tanult fal ellen (play_simulation.defense_test), a
+        figurák /figura3d lekérdezésével ("link": a figura a tanult fal
+        ellen, 3D-ben bejárható)."""
+        from urllib.parse import quote
+
+        from ..pipeline.play_simulation import (defense_test,
+                                                figura_link_kod)
+        r = defense_test(match, csapat, DefenseModel.learn(vedo_match,
+                                                           vedo_oldal))
+        for f in r["figurak"]:
+            try:
+                f["link"] = (figura_link_kod(f["attackers"], f["labda"],
+                                             "Az ő figurájuk")
+                             + f"&meccs={quote(vedo_match.meta.match_id)}"
+                             + f"&vedo={vedo_oldal.value}")
+            except ValueError:
+                f["link"] = None
+        return r
+
+    @app.get("/matches/{match_id}/vedekezesi-proba")
+    def vedekezesi_proba(match_id: str, csapat: str = "away",
+                         vedo_meccs: str = "", vedo_oldal: str = ""):
+        """Védekezési próba: a `csapat` visszatérő figurái a MI tanult
+        falunk ellen — alapból a meccs másik oldaláé, vagy a `vedo_meccs`
+        `vedo_oldal` csapatáé (a saját meccsünkből). Visszaad: {"csapat",
+        "vedelem", "figurak" (a 3D-linkkel), "verdict"}."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = Team(csapat)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="csapat: 'home' vagy 'away'")
+        vm = _store.get(vedo_meccs) if vedo_meccs else match
+        if vm is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            vo = (Team(vedo_oldal) if vedo_oldal
+                  else Team.HOME if t == Team.AWAY else Team.AWAY)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="vedo_oldal: 'home' vagy 'away'")
+        r = _vedekezesi_proba(match, t, vm, vo)
+        return {"csapat": (match.meta.home_team if t == Team.HOME
+                           else match.meta.away_team),
+                "vedelem": (vm.meta.home_team if vo == Team.HOME
+                            else vm.meta.away_team), **r}
+
     @app.get("/playbook-rangsor")
     def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
                          melyseg: float = 6.0, rendszer: str = "6-0"):
@@ -13133,9 +13184,9 @@ def create_app():
         # Meccsterv-illesztés a másik oldallal (mint a képernyő
         # MECCSTERV kártyája) — hibatűrően, enélkül is teljes.
         matchup = None
+        own_t = Team.HOME if t == Team.AWAY else Team.AWAY
         try:
             from ..pipeline.scouting import matchup_plan
-            own_t = Team.HOME if t == Team.AWAY else Team.AWAY
             matchup = matchup_plan(
                 _scout_cached(match, own_t), rep_sc) or None
         except Exception:
@@ -13149,9 +13200,17 @@ def create_app():
                 ajanlo = rank_playbook(plays, DefenseModel.learn(match, t))
             except Exception:
                 ajanlo = None
+        # Védekezési próba: az ő visszatérő figuráik a MI falunk (a meccs
+        # másik oldala — mint a meccsterv) ellen, 3D-linkkel.
+        proba = None
+        try:
+            proba = _vedekezesi_proba(match, t, match, own_t)
+        except Exception:
+            proba = None
         _lib_nevekkel(rep_sc)
         html = scouting_report_html(rep_sc, playbook_match=pm,
-                                    matchup=matchup, figura_ajanlo=ajanlo)
+                                    matchup=matchup, figura_ajanlo=ajanlo,
+                                    vedekezesi_proba=proba)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     # A felderítő jelentések gyorsítótára: (meccs, csapat) → ScoutingReport.

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **Védekezési próba: az ő figuráik a mi tanult falunk ellen** (motor +
+  kliens): a figura-ajánló fordítottja. A felderítés az ellenfél
+  visszatérő figuráit (a támadás-ujjlenyomatok klaszterei, legalább két
+  ismétléssel) a TI tanult falatok ellen is lejátssza — a meccs másik
+  oldalának védekezéséből tanult rendszerrel, kilépéssel, kettőzéssel és
+  labdakövetéssel. Figuránként: hányszor hozták, mekkora lövőhelyzetet
+  teremt a falatok ellen és egy alap 6-0 ellen; ha a falatok szokása
+  legalább 5 százalékponttal többet enged, a próba kimondja: "ezt a
+  figurát a meccs előtt be kell gyakorolni". A felderítés képernyő új
+  kártyája ("Figuráik a falatok ellen") a figurát egy gombnyomással a
+  tervezőbe nyitja a ti falatok ellen; a nyomtatható felderítő lap
+  3D-linkkel hozza. Új végpont: /matches/{id}/vedekezesi-proba.
+
 - **Figura-ajánló: melyik figuránk működik ellenük** (motor + figura-
   tervező): a mentett figurákat eddig egyenként lehetett kipróbálni a
   tanult védelem ellen. Most az app MIND lejátssza az ellenfél tanult

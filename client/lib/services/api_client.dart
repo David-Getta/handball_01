@@ -428,6 +428,22 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Védekezési próba (GET /matches/{id}/vedekezesi-proba): a `csapat`
+  /// visszatérő figurái a meccs másik oldalának (a mi) tanult fala ellen —
+  /// {csapat, vedelem, figurak: [{t0_s, t1_s, ismetles, pont_pct, alap_pct,
+  /// elteres_pp, attackers, labda, link}], verdict}.
+  Future<Map<String, dynamic>> fetchDefenseTest(String matchId,
+      String csapat) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/vedekezesi-proba")
+            .replace(queryParameters: {"csapat": csapat}))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a védekezési próba", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Az edző figurájának szimulációja egy meccsből TANULT védelem ellen
   /// (POST /matches/{id}/simulate-setplay). A szerver a `defending` csapat
   /// védekezését tanulja meg a meccsből, és az ellen játssza le a figurát.

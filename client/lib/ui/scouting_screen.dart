@@ -57,6 +57,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   Map<String, dynamic>? _report;
   // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
   Map<String, dynamic>? _playbookMatch;
+  // Védekezési próba: az ő visszatérő figuráik a mi tanult falunk ellen
+  // (csak egy meccsnél — a fal a meccs másik oldaláé).
+  Map<String, dynamic>? _proba;
   String? _error;
   bool _loading = true;
 
@@ -116,11 +119,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           : await _api.fetchScouting(widget.matchId, _team);
       // Figura-egyezés: melyik MENTETT figurát játsszák (csak egy meccsnél).
       Map<String, dynamic>? pm;
+      Map<String, dynamic>? proba;
       if (widget.items == null) {
         try {
           pm = await _api.fetchPlaybookMatch(widget.matchId, _team);
         } catch (_) {
           pm = null; // enélkül is teljes a jelentés
+        }
+        try {
+          proba = await _api.fetchDefenseTest(widget.matchId, _team);
+        } catch (_) {
+          proba = null; // enélkül is teljes a jelentés
         }
       }
       // Meccsterv: a MI profilunk (ugyanezen meccsek másik oldala)
@@ -150,6 +159,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       setState(() {
         _report = r;
         _playbookMatch = pm;
+        _proba = proba;
         _matchup = matchup;
         _matchupStyle = style;
         _loading = false;
@@ -324,6 +334,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ("Honnan lőnek", Icons.sports_handball),
       ("Honnan kapják a lövéseket", Icons.shield_outlined),
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
+      if (_probaCard() != null)
+        ("Figuráik a falatok ellen", Icons.shield_moon_outlined),
       if (_figureLibraryCard(r) != null)
         ("Visszatérő figuráik", Icons.replay_outlined),
       if (_figureDossierCard(r) != null)
@@ -422,6 +434,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   KeyedSubtree(
                       key: _sectionKey("Ismert figuráik"),
                       child: _playbookCard(_playbookMatch!)),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (_probaCard() != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Figuráik a falatok ellen"),
+                      child: _probaCard()!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 if (_figureLibraryCard(r) != null) ...[
@@ -13411,6 +13429,92 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("A figura nem nyílt meg: ${humanError(e)}")));
     }
+  }
+
+  /// Védekezési próba: az ő visszatérő figuráik a mi tanult falunk
+  /// ellen (a backend play_simulation.defense_test-je) — figuránként az
+  /// ismétlés, az időpont, a lövőhelyzet az alap 6-0 elleni értékkel, és
+  /// a figura a tervezőben, a mi tanult falunk ellen. Null, ha nincs
+  /// visszatérő figura.
+  Widget? _probaCard() {
+    final p = _proba;
+    final figurak = ((p?["figurak"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+    if (p == null || figurak.isEmpty) return null;
+    final verdict = p["verdict"] as String?;
+    String ido(num? t) {
+      final s = (t ?? 0).toInt();
+      return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";
+    }
+
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.shield_moon_outlined,
+                size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text("FIGURÁIK A FALATOK ELLEN (védekezési próba)",
+                    style: AppText.sectionLabel)),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+              "A visszatérő figuráikat lejátszottuk a(z) "
+              "${p["vedelem"] ?? "saját csapatotok"} tanult fala ellen (a kilépésével, a kettőzésével, a "
+              "labdakövetésével).",
+              style: AppText.label),
+          if (verdict != null) ...[
+            const SizedBox(height: 6),
+            Text("${verdict[0].toUpperCase()}${verdict.substring(1)}.",
+                style: AppText.value.copyWith(fontSize: 13)),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          for (final f in figurak)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(
+                    child: Text(
+                        "${f["ismetles"]}× · pl. ${ido(f["t0_s"] as num?)} — "
+                        "${((f["pont_pct"] as num?) ?? 0).round()}% "
+                        "lövőhelyzet (alap fal: "
+                        "${((f["alap_pct"] as num?) ?? 0).round()}%)",
+                        style: AppText.label.copyWith(fontSize: 12))),
+                IconButton(
+                  tooltip: "A figurájuk a tervezőben — a falatok ellen",
+                  icon: const Icon(Icons.edit_outlined,
+                      size: 18, color: AppColors.accent),
+                  onPressed: () => _probaFiguraNyit(f),
+                ),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A próba figurája a tervezőben: a meccs másik oldalának (a mi)
+  /// tanult fala ellen fut (a tervező a csapat_oldal másik oldalát
+  /// tanulja).
+  Future<void> _probaFiguraNyit(Map<String, dynamic> f) async {
+    final kezdo = <String, dynamic>{
+      "attackers": f["attackers"],
+      "labda": f["labda"],
+      "t0_s": f["t0_s"],
+      "t1_s": f["t1_s"],
+      "csapat": _proba?["csapat"],
+      "csapat_oldal": _team,
+      "match_id": widget.matchId,
+    };
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            DesignerScreen(match: buildDemoMatch(), initial: kezdo)));
   }
 
   Widget _playbookCard(Map<String, dynamic> pm) {
