@@ -5,6 +5,32 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **Figura-ajánló: melyik figuránk működik ellenük** (motor + figura-
+  tervező): a mentett figurákat eddig egyenként lehetett kipróbálni a
+  tanult védelem ellen. Most az app MIND lejátssza az ellenfél tanult
+  fala ellen (rendszer, mélység, kilépés, labdakövetés, kettőzés), és
+  rangsorolja: melyik teremti a legnagyobb lövőhelyzetet, és melyiket
+  zárja ez a fal jobban vagy rosszabbul, mint egy alap 6-0. A tervező
+  "Figura betöltése" listája tanult falnál a rangsorban jön, figuránként
+  "ellenük 54% (+9 az alap falhoz)", fölötte az ajánlás: "Ellenük a(z)
+  „Szél” figura működik a legjobban … Óvatosan a(z) „Áttörés”
+  figurával: ellenük 38% (az alap fal ellen 53%)." A tanult fal elleni
+  nyomtatható figurafüzet is ebben a sorrendben, az ajánlással nyit, és
+  a nyomtatható felderítő lap új szakasza ("Figuráink ellenük") a
+  felderített csapat tanult fala ellen hozza a rangsort. Új végpont:
+  /playbook-rangsor.
+
+- **A tanult védelem kettőz is a szimulációban** (motor + figura-
+  tervező): a tanult fal eddig egy védővel lépett ki a labdásra. Most a
+  csapat-modell azt is megtanulja, MILYEN GYAKRAN JÖN MÁSODIK védő (két
+  védő 2,5 m-en belül a lőtávolságon belüli labdásnál — a kettőzés-
+  réteg küszöbe), és a szimulációban a második legközelebbi védő is
+  ennyire lép a labdás felé. Így a figura megmutatja, kit hagy szabadon
+  a kettőzés — a gyors, egy érintéses továbbadás ellene a recept. A
+  tervező eredmény-kártyája és a 3D/VR fejléce kiírja ("a tanult
+  védelem kettőz: 40%"); a hosszabb tanult fal-név a 3D fejlécében már
+  nem csonkul.
+
 - **A tanult fal a valódi labdakövetéssel tolódik** (motor + figura-
   tervező): a tanult védelem "mennyire követi a labdát" értéke eddig
   rögzített 0,5 volt — minden ellenfél fala ugyanannyit csúszott a
@@ -14,8 +40,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   átfordítás nyit rést; a helyben álló fal ellen a labda-oldali
   túlterhelés. A tervező eredmény-kártyája és a 3D/VR fejléce kiírja
   ("a tanult fal követi a labdát: 80%"). Ötven védekező kocka alatt,
-  vagy ha a labda nem mozog oldalt (2 m-es szórás alatt), az alapérték
-  marad. A kliens offline tanulója (learnDefense) ugyanezt számolja.
+  vagy ha a labda szinte csak középen jár (átlagosan 2 m-en belül), az
+  alapérték marad. A kliens offline tanulója (learnDefense) ugyanezt
+  számolja.
 
 - **A tanult védelem kilép a labdásra a szimulációban** (motor +
   figura-tervező): a figura-tervező "tanult védelem"-e eddig a fal

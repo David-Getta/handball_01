@@ -103,6 +103,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultVedok = null;
     _tanultKilep = null;
     _tanultKovet = null;
+    _tanultKettoz = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -144,6 +145,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // oldal-mozgásának ekkora részével tolódik el a fal. A 0,5 az alapérték
   // (nem tanulható meccsnél is ez jön) — azt nem írjuk ki.
   double? _tanultKovet;
+  // A tanult fal kettőzési hajlama (defense_model.double_rate): a labdás
+  // lőtávolságon belül ennyi részében állt két védő is mellette.
+  double? _tanultKettoz;
   String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
@@ -200,6 +204,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
         _tanultVedok = null;
         _tanultKilep = null;
         _tanultKovet = null;
+        _tanultKettoz = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -392,6 +397,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ((resp["defense_model"] as Map?)?["press_rate"] as num?)?.toDouble();
       _tanultKovet =
           ((resp["defense_model"] as Map?)?["lateral_gain"] as num?)?.toDouble();
+      _tanultKettoz =
+          ((resp["defense_model"] as Map?)?["double_rate"] as num?)?.toDouble();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -636,6 +643,20 @@ class _DesignerScreenState extends State<DesignerScreen> {
     }
   }
 
+  /// A figura-ajánló sora a betöltő listában: a tanult fal elleni
+  /// lövőhelyzet, és az alap 6-0-hoz mért eltérés, ha legalább 5
+  /// százalékpont (a backend AJANLO_ELTERES_PP-je).
+  static String _rangFelirat(Map<String, dynamic>? r) {
+    if (r == null) return "";
+    final pont = (r["pont_pct"] as num?)?.round();
+    if (pont == null) return "";
+    final el = (r["elteres_pp"] as num?)?.toDouble() ?? 0;
+    final kul = el.abs() >= 5
+        ? " (${el > 0 ? "+" : "−"}${el.abs().round()} az alap falhoz)"
+        : "";
+    return " · ellenük $pont%$kul";
+  }
+
   /// Mentett figura betöltése a könyvtárból (lista + törlés lehetőség).
   Future<void> _loadPlay() async {
     List<Map<String, dynamic>> plays;
@@ -646,6 +667,30 @@ class _DesignerScreenState extends State<DesignerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("A könyvtár nem érhető el: ${humanError(e)}")));
       return;
+    }
+    // Figura-ajánló: a tanult fal ellen rangsorolva (a legjobb elöl), a
+    // figuránkénti lövőhelyzettel — kézi falnál nincs rangsor.
+    final rang = <String, Map<String, dynamic>>{};
+    String? ajanlas;
+    final tanult = _tanultMeccs;
+    if (tanult != null && plays.isNotEmpty) {
+      try {
+        final r = await _api.rankPlaybook(tanult, vedo: _tanultOldal);
+        for (final row in (r["figurak"] as List? ?? const [])) {
+          final m = row as Map<String, dynamic>;
+          if (m["id"] is String) rang[m["id"] as String] = m;
+        }
+        ajanlas = r["ajanlas"] as String?;
+        final sorrend = rang.keys.toList();
+        plays.sort((a, b) {
+          final ia = sorrend.indexOf("${a["id"]}");
+          final ib = sorrend.indexOf("${b["id"]}");
+          return (ia < 0 ? sorrend.length : ia)
+              .compareTo(ib < 0 ? sorrend.length : ib);
+        });
+      } catch (_) {
+        // a rangsor nélkül is betölthető a figura
+      }
     }
     if (!mounted) return;
     final picked = await showDialog<String>(
@@ -662,12 +707,21 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (ajanlas != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(ajanlas,
+                              style: AppText.label.copyWith(
+                                  fontSize: 12, color: AppColors.accent)),
+                        ),
                       for (final p in plays)
                         ListTile(
                           dense: true,
                           title: Text("${p["name"]}",
                               style: AppText.value.copyWith(fontSize: 14)),
-                          subtitle: Text("${p["players"]} játékos",
+                          subtitle: Text(
+                              "${p["players"]} játékos"
+                              "${_rangFelirat(rang["${p["id"]}"])}",
                               style: AppText.label.copyWith(fontSize: 11)),
                           onTap: () => Navigator.pop(ctx, p["id"] as String),
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1147,6 +1201,14 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 "a tanult fal követi a labdát: "
                 "${((_tanultKovet ?? 0) * 100).round()}% — "
                 "${(_tanultKovet ?? 0) >= 0.5 ? "a labda oldalára húzódik" : "inkább helyben marad"}",
+                style: AppText.label.copyWith(fontSize: 11)),
+          // A kettőzés: a második védő is a labdásra lép (5% alatt nem
+          // írjuk ki) — a kettőzött labdás mellett valaki szabadul.
+          if (_tanultMeccs != null && (_tanultKettoz ?? 0) >= 0.05)
+            Text(
+                "a tanult védelem kettőz: "
+                "${((_tanultKettoz ?? 0) * 100).round()}% — a második "
+                "védő is a labdásra lép, mellette valaki szabadul",
                 style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),

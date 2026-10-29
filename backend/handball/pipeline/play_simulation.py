@@ -67,11 +67,19 @@ PRESS_GAP_M = 1.0
 # Labdakövetés: a hátsó sor közepe (a védők y-átlaga) mennyit mozdul a
 # labda oldal-mozgásával — a kettő (pálya-középtől mért) eltérésének
 # origón átmenő regressziója. Ennyi védekező kocka kell hozzá (minta-
-# szám), és a labdának legalább ekkora szórással (m) kell oldalt
-# mozognia: középen álló labdából az eltolódás nem tanulható, ilyenkor
-# az alapérték marad.
+# szám), és a labdának átlagosan (négyzetes középpel) legalább ennyi
+# méterre kell a pálya hossztengelyétől oldalt lennie: középen álló
+# labdából az eltolódás nem tanulható, ilyenkor az alapérték marad.
 LATERAL_LEARN_MIN_FRAMES = 50
 LATERAL_MIN_SPREAD_M = 2.0
+
+# Kettőzési hajlam: a lőtávolságon belüli labdás kockák közül azok, ahol
+# a labdáshoz legalább KÉT mezőnyvédő áll legfeljebb DOUBLE_CLOSE_M-re (a
+# defense.double_teams küszöbe) — a tanuláshoz ugyanannyi minta kell,
+# mint a kilépéshez. A szimulációban a második legközelebbi védő a saját
+# helyéről a labdás felé lép, és ennyire áll meg tőle.
+DOUBLE_CLOSE_M = 2.5
+DOUBLE_GAP_M = 1.2
 
 
 # ---- Tanult védekezési modell ---------------------------------------------
@@ -91,12 +99,17 @@ class DefenseModel:
                      kockák mekkora részén lépett rá a legközelebbi védő
                      (PRESS_CLOSE_M-en belül). A szimulációban ennyire
                      lép ki a labdáshoz legközelebbi védő; 0 = zárt fal.
+    - double_rate:   kettőzési hajlam (0..1): a lőtávolságon belüli labdás
+                     kockák mekkora részén állt KÉT védő is a labdáshoz
+                     DOUBLE_CLOSE_M-en belül. A szimulációban ennyire lép
+                     a második legközelebbi védő is a labdásra.
     """
     num_defenders: int = 6
     line_depth_m: float = 6.0
     lateral_gain: float = 0.5
     rendszer: str = "6-0"
     press_rate: float = 0.0
+    double_rate: float = 0.0
 
     @classmethod
     def learn(cls, match: Match, defending_team: Team,
@@ -115,8 +128,10 @@ class DefenseModel:
         labdakövetés: a hátsó sor y-átlagának és a labda y-jának
         (pálya-középtől mért) eltérése közti arány, origón átmenő
         regresszióval, 0..1-be szorítva — LATERAL_LEARN_MIN_FRAMES
-        alatt, vagy ha a labda oldal-szórása LATERAL_MIN_SPREAD_M alatti,
-        az alapérték (0,5) marad.
+        alatt, vagy ha a labda (négyzetes közép) oldal-eltérése
+        LATERAL_MIN_SPREAD_M alatti, az alapérték (0,5) marad. A kettőzési hajlam a kilépéséhez
+        hasonlóan: a lőtávolságon belüli labdás kockák közül azok aránya,
+        ahol két mezőnyvédő is DOUBLE_CLOSE_M-en belül állt.
         """
         from .decisions import ball_holder
         from .tactics import _BACK_MAX, detect_formation
@@ -126,7 +141,7 @@ class DefenseModel:
         hatso: list[float] = []
         formak: dict[str, int] = {}
         counts: list[int] = []
-        lovo_kockak = raleptek = 0
+        lovo_kockak = raleptek = kettoztek = 0
         kozep_y = COURT_WIDTH_M / 2.0
         kov_n, kov_bw, kov_bb = 0, 0.0, 0.0
         for f in match.frames:
@@ -149,9 +164,12 @@ class DefenseModel:
                 if holder is not None and holder.team != defending_team \
                         and abs(holder.x - goal_x) <= PRESS_RANGE_M:
                     lovo_kockak += 1
-                    if min(math.hypot(p.x - holder.x, p.y - holder.y)
-                           for p in outfield) <= PRESS_CLOSE_M:
+                    tav = sorted(math.hypot(p.x - holder.x, p.y - holder.y)
+                                 for p in outfield)
+                    if tav[0] <= PRESS_CLOSE_M:
                         raleptek += 1
+                    if len(tav) >= 2 and tav[1] <= DOUBLE_CLOSE_M:
+                        kettoztek += 1
                 sor = [p.y for p in outfield
                        if abs(p.x - goal_x) <= _BACK_MAX]
                 if sor and f.ball is not None:
@@ -175,6 +193,8 @@ class DefenseModel:
             rendszer=rendszer,
             press_rate=(round(raleptek / lovo_kockak, 3)
                         if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
+            double_rate=(round(kettoztek / lovo_kockak, 3)
+                         if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
         )
 
     def respond(self, ball: Ball, goal_x: float) -> list[tuple[float, float]]:
@@ -227,25 +247,40 @@ class DefenseModel:
                  goal_x: float, sign: float) -> list[tuple[float, float]]:
         """A kilépési hajlam: lőtávolságon belüli labdánál a labdáshoz
         legközelebbi védő `press_rate` arányban a labdás elé lép (a labda
-        és a kapu-közép vonalán, PRESS_GAP_M-re) — a hatoson belülre
-        sosem."""
-        if self.press_rate <= 0.0 or not out \
+        és a kapu-közép vonalán, PRESS_GAP_M-re); a kettőzési hajlam: a
+        második legközelebbi `double_rate` arányban a saját helyéről a
+        labdás felé, DOUBLE_GAP_M-re tőle — a hatoson belülre egyik sem."""
+        if (self.press_rate <= 0.0 and self.double_rate <= 0.0) or not out \
                 or abs(ball.x - goal_x) > PRESS_RANGE_M:
             return out
-        i = min(range(len(out)), key=lambda k: (
+        sorrend = sorted(range(len(out)), key=lambda k: (
             math.hypot(out[k][0] - ball.x, out[k][1] - ball.y), k))
-        dx, dy = goal_x - ball.x, COURT_WIDTH_M / 2.0 - ball.y
-        d = math.hypot(dx, dy) or 1.0
-        tx, ty = ball.x + dx / d * PRESS_GAP_M, ball.y + dy / d * PRESS_GAP_M
-        r = min(1.0, self.press_rate)
-        nx, ny = out[i][0] + (tx - out[i][0]) * r, out[i][1] + (ty - out[i][1]) * r
-        lateral = max(0.0, abs(ny - COURT_WIDTH_M / 2.0) - _GOAL_HALF_W)
-        boundary = (math.sqrt(GOAL_AREA_RADIUS_M ** 2 - lateral ** 2)
-                    if lateral < GOAL_AREA_RADIUS_M else 0.0)
-        if abs(nx - goal_x) < boundary + GOAL_AREA_MARGIN_M:
-            nx = goal_x + sign * (boundary + GOAL_AREA_MARGIN_M)
+
+        def lep(hely, cel, r):
+            nx = hely[0] + (cel[0] - hely[0]) * r
+            ny = hely[1] + (cel[1] - hely[1]) * r
+            lateral = max(0.0, abs(ny - COURT_WIDTH_M / 2.0) - _GOAL_HALF_W)
+            boundary = (math.sqrt(GOAL_AREA_RADIUS_M ** 2 - lateral ** 2)
+                        if lateral < GOAL_AREA_RADIUS_M else 0.0)
+            if abs(nx - goal_x) < boundary + GOAL_AREA_MARGIN_M:
+                nx = goal_x + sign * (boundary + GOAL_AREA_MARGIN_M)
+            return nx, ny
+
         out = list(out)
-        out[i] = (nx, ny)
+        if self.press_rate > 0.0:
+            i = sorrend[0]
+            dx, dy = goal_x - ball.x, COURT_WIDTH_M / 2.0 - ball.y
+            d = math.hypot(dx, dy) or 1.0
+            cel = (ball.x + dx / d * PRESS_GAP_M, ball.y + dy / d * PRESS_GAP_M)
+            out[i] = lep(out[i], cel, min(1.0, self.press_rate))
+        if self.double_rate > 0.0 and len(sorrend) >= 2:
+            j = sorrend[1]
+            dx, dy = out[j][0] - ball.x, out[j][1] - ball.y
+            d = math.hypot(dx, dy)
+            if d > DOUBLE_GAP_M:
+                cel = (ball.x + dx / d * DOUBLE_GAP_M,
+                       ball.y + dy / d * DOUBLE_GAP_M)
+                out[j] = lep(out[j], cel, min(1.0, self.double_rate))
         return out
 
 
@@ -324,16 +359,20 @@ FIGURA_3D_FPS = 6.0
 # Bemeneti korlátok (a link a böngészőből jön).
 FIGURA_3D_MAX_JATEKOS = 7
 FIGURA_3D_MAX_PONT = 10
-# A figura neve (a 3D fejléce, a /kovet sora) legfeljebb ennyi jel.
+# A figura neve (a 3D fejléce, a /kovet sora) legfeljebb ennyi jel. A
+# védelem neve hosszabb lehet: a tanult falé a csapatnév mellett a
+# rendszert, a kilépést, a labdakövetést és a kettőzést is viszi.
 FIGURA_3D_NEV_MAX = 60
+FIGURA_3D_VEDO_NEV_MAX = 140
 
 
-def figura_nev(s) -> str:
+def figura_nev(s, hossz: int = FIGURA_3D_NEV_MAX) -> str:
     """A figura neve megtisztítva: a látható jelek (vezérlőjel nélkül),
-    két szélén szóköz nélkül, legfeljebb FIGURA_3D_NEV_MAX; üres, ha nincs.
-    (A követő nevének tisztítója rövidebbre vág — az egy fej fölé fér.)"""
+    két szélén szóköz nélkül, legfeljebb `hossz` (alapból
+    FIGURA_3D_NEV_MAX); üres, ha nincs. (A követő nevének tisztítója
+    rövidebbre vág — az egy fej fölé fér.)"""
     s = "".join(ch for ch in str(s or "") if ch.isprintable()).strip()
-    return s[:FIGURA_3D_NEV_MAX].strip()
+    return s[:hossz].strip()
 # A figura passza ennyi m/s-mal száll (a valódinál lassabb — a
 # headsetben követhető), és legalább ennyi mp; a következő kulcs-pozícióra
 # érkezik (ott már az átvevőnél van).
@@ -597,7 +636,8 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
             jersey_number=FIGURA_KAPUS_MEZ))
     sim.meta.match_id = "figura-3d"
     sim.meta.home_team = figura_nev(name) or "Figura"
-    sim.meta.away_team = figura_nev(defense_name) or "Védelem"
+    sim.meta.away_team = (figura_nev(defense_name, FIGURA_3D_VEDO_NEV_MAX)
+                          or "Védelem")
     return sim, {
         "best_shot_value": round(float(ertekeles["best_shot_value"]), 3),
         "t_s": (round(ertekeles["step"] / fps, 1)
@@ -760,3 +800,86 @@ def evaluate_setplay(match: Match, config: TacticsConfig | None = None) -> dict:
             if score > best["best_shot_value"]:
                 best = {"best_shot_value": score, "step": f.t, "attacker_id": a.track_id}
     return best
+
+
+# ---- Figura-ajánló: melyik mentett figura működik EZ ellen a fal ellen ----
+# A rangsor a 3D-figura kiértékelése (setplay_3d_match: valós tempó, a fal
+# lépés-tempója), összevetve a kézi alap-fallal (6-0, 6 védő, 6 m).
+# Ekkora százalékpontos eltérés számít úgy, hogy EZ a fal jobban vagy
+# rosszabbul zárja a figurát, mint az alap; legfeljebb ennyi figurát
+# értékelünk (a könyvtár mérete — egy kérés ne fusson percekig).
+AJANLO_ELTERES_PP = 5.0
+AJANLO_MAX = 60
+
+
+def rank_playbook(figurak: list, defense: DefenseModel, *,
+                  config: TacticsConfig | None = None) -> dict:
+    """Figura-ajánló: a mentett figurák rangsora a `defense` fal ellen.
+
+    Minden figurát lejátszunk a fal ellen (setplay_3d_match — mint a 3D
+    és a figura-lap), és az alap-fal (DefenseModel()) ellen is: a
+    különbség megmutatja, hogy EZ a védelem melyik figurát zárja
+    rosszabbul (ott van a rés), és melyiket jobban.
+
+    Edzőileg: "melyik figuránkat vegyük elő ellenük?" — a tanult fal (a
+    rendszere, a mélysége, a kilépése, a labdakövetése, a kettőzése)
+    ellen a legnagyobb lövőhelyzetet teremtő figura az első; az
+    "óvatosan" figura az, amit ez a fal (az alap-falhoz mérten) legalább
+    AJANLO_ELTERES_PP-vel jobban zár, mint az ajánlottat.
+
+    Visszaad: {"figurak": [{"id", "name", "pont_pct" (a legjobb
+    lövőhelyzet ezen fal ellen, %), "alap_pct" (az alap-fal ellen),
+    "elteres_pp", "t_s", "tamado" (a legjobb helyzetű támadó sorszáma,
+    1-től)}, …] a pont szerint csökkenőben (holtversenyben név, id), és
+    "ajanlas" (magyar mondat, vagy None, ha nincs értékelhető figura)}.
+    A hibás (pont nélküli, nem szám koordinátájú) figura kimarad."""
+    alap = DefenseModel()
+    sorok = []
+    for d in list(figurak or [])[:AJANLO_MAX]:
+        if not isinstance(d, dict):
+            continue
+        try:
+            _, e = setplay_3d_match(d.get("attackers") or [], defense,
+                                    ball=d.get("labda"), config=config)
+            _, ea = setplay_3d_match(d.get("attackers") or [], alap,
+                                     ball=d.get("labda"), config=config)
+        except (TypeError, ValueError):
+            continue          # hibás figura-fájl: kimarad a rangsorból
+        pont, ap = e["best_shot_value"], ea["best_shot_value"]
+        sorok.append({
+            "id": d.get("id"),
+            "name": figura_nev(d.get("name")) or "névtelen",
+            "pont_pct": round(100.0 * pont, 1),
+            "alap_pct": round(100.0 * ap, 1),
+            "elteres_pp": round(100.0 * (pont - ap), 1),
+            "t_s": e["t_s"],
+            "tamado": e["attacker_id"],
+        })
+    sorok.sort(key=lambda r: (-r["pont_pct"], r["name"].lower(),
+                              str(r["id"] or "")))
+    ajanlas = None
+    if sorok:
+        b = sorok[0]
+        ajanlas = (f"Ellenük a(z) „{b['name']}” figura működik a "
+                   f"legjobban: {b['pont_pct']:.0f}% lövőhelyzet")
+        if b["tamado"] and b["t_s"] is not None:
+            # (az 1. és az 5. — "első", "ötödik" — magánhangzóval kezdődik)
+            nevelo = "az" if b["tamado"] in (1, 5) else "a"
+            mp = f"{b['t_s']:.1f}".replace(".", ",")
+            ajanlas += f" ({mp} mp-nél, {nevelo} {b['tamado']}. támadónál)"
+        if b["elteres_pp"] >= AJANLO_ELTERES_PP:
+            ajanlas += (f" — ez a fal {b['elteres_pp']:.0f} százalékponttal "
+                        "rosszabbul zárja, mint az alap 6-0")
+        ajanlas += "."
+        # A "kerüld": amit ez a fal az alaphoz mérten legalább
+        # AJANLO_ELTERES_PP-vel JOBBAN zár, mint az ajánlottat.
+        kerul = [r for r in sorok[1:]
+                 if r["elteres_pp"] <= min(0.0, b["elteres_pp"])
+                 - AJANLO_ELTERES_PP]
+        if kerul:
+            k = min(kerul, key=lambda r: (r["elteres_pp"], r["name"].lower(),
+                                          str(r["id"] or "")))
+            ajanlas += (f" Óvatosan a(z) „{k['name']}” figurával: ellenük "
+                        f"{k['pont_pct']:.0f}% (az alap fal ellen "
+                        f"{k['alap_pct']:.0f}%).")
+    return {"figurak": sorok, "ajanlas": ajanlas}

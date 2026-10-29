@@ -119,7 +119,8 @@ def figura_lap_html(utak: list, labda: list, defense, *, nev: str,
 
 
 def figura_fuzet_html(figurak: list, defense, *, vedo_nev: str,
-                      cim: str = "Figurafüzet") -> str:
+                      cim: str = "Figurafüzet",
+                      ajanlas: str | None = None) -> str:
     """A csapat FIGURAFÜZETE (önálló, nyomtatható HTML): a mentett
     figurák ({"name", "attackers", "labda"} — a /playbook alakja) egy
     dokumentumban — elöl tartalomjegyzék, utána figuránként egy oldal (a
@@ -127,7 +128,9 @@ def figura_fuzet_html(figurak: list, defense, *, vedo_nev: str,
     tartalomjegyzék alatt jelezve); legfeljebb FIGURA_FUZET_MAX figura.
 
     Edzőileg: a szezon figurái egy füzetben — az öltözőbe, az új
-    játékosnak, a meccs előtti átnézéshez."""
+    játékosnak, a meccs előtti átnézéshez. Az `ajanlas` (a figura-
+    ajánló mondata, play_simulation.rank_playbook) a tartalomjegyzék
+    fölé kerül — tanult fal elleni füzetnél."""
     from .play_simulation import figura_nev
 
     reszek, nevek, kimaradt = [], [], []
@@ -154,10 +157,12 @@ def figura_fuzet_html(figurak: list, defense, *, vedo_nev: str,
                      + escape(", ".join(kimaradt)) + "</div>")
     torzs = (f"<h1>{escape(cim)}</h1>"
              f'<div class="al">{len(nevek)} figura · {escape(vedo_nev)}</div>'
+             + (f'<p class="ajanlo">{escape(ajanlas)}</p>' if ajanlas else "")
              + tartalom
              + "".join(f'<section class="figura">{r}</section>' for r in reszek))
     return _dokumentum(cim, torzs,
                        ".tj{font-size:14px;line-height:1.7}"
+                       ".ajanlo{font-size:14px;font-weight:600}"
                        ".figura{break-before:page;margin-top:24px}")
 
 

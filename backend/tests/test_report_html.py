@@ -100,6 +100,25 @@ def test_playbook_section_rendering():
     assert "Ismert figuráik" not in scouting_report_html(_rep())
 
 
+def test_figura_ajanlo_szakasz():
+    """A saját figuráink rangsora a tanult faluk ellen: az ajánló mondat
+    és legfeljebb FIGURA_AJANLO_SOROK sor, escape-elve; üres rangsornál
+    nincs szakasz."""
+    from handball.pipeline.report_html import FIGURA_AJANLO_SOROK
+
+    sorok = [{"id": str(i), "name": f"<F{i}>", "pont_pct": 60.0 - i,
+              "alap_pct": 50.0} for i in range(FIGURA_AJANLO_SOROK + 2)]
+    html = scouting_report_html(_rep(), figura_ajanlo={
+        "figurak": sorok, "ajanlas": "Ellenük a(z) „<F0>” figura …"})
+    assert "Figuráink ellenük" in html
+    assert "Ellenük a(z) „&lt;F0&gt;” figura" in html
+    assert "60% lövőhelyzet (alap fal: 50%)" in html
+    assert f"&lt;F{FIGURA_AJANLO_SOROK - 1}&gt;" in html
+    assert f"&lt;F{FIGURA_AJANLO_SOROK}&gt;" not in html
+    assert "Figuráink ellenük" not in scouting_report_html(
+        _rep(), figura_ajanlo={"figurak": [], "ajanlas": None})
+
+
 def test_a_visszatero_figurak_szakasza_rajzzal():
     """A meccsről meccsre visszatérő figurák alakkal (inline SVG) és
     edzői névvel; visszatérő figura nélkül a szakasz nincs."""

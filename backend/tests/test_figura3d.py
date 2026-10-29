@@ -905,3 +905,153 @@ def test_a_figura_oldal_figura_lap_gombja():
     oldal = view3d_html(m, figura=e)
     assert 'window.open("/figura-lap?" + FIGURA_KOD, "_blank");' in oldal
     assert 'lapGomb.id = "figuraLapGomb";' in oldal
+
+
+_AJANLO_FIGURAK = [
+    {"id": "a", "name": "Áttörés",
+     "attackers": [[[26, 10], [29, 10], [31.5, 10]], [[26, 4], [26, 4], [26, 4]]]},
+    {"id": "b", "name": "Szél", "labda": [1, 1, 0],
+     "attackers": [[[30, 2], [33, 2], [36, 1.5]], [[27, 10], [29, 10], [30, 10]]]},
+    {"id": "c", "name": "Átlövő",
+     "attackers": [[[27, 13], [28, 13], [29, 13]], [[27, 6], [27, 6], [27, 6]]]},
+    {"id": "x", "name": "Hibás", "attackers": []},
+    {"id": "y", "name": "Szöveg", "attackers": [[["a", "b"]]]},
+]
+
+
+def test_a_figura_ajanlo_rangsorol_es_figyelmeztet():
+    """5-1 fal ellen: a szélső figura az első (az alaphoz képest sem zár
+    jobban), a középső áttörést viszont az előretolt védő elvágja — arra
+    figyelmeztet. A hibás figurák kimaradnak; a rangsor csökkenő."""
+    from handball.pipeline.play_simulation import (AJANLO_ELTERES_PP,
+                                                   rank_playbook)
+
+    r = rank_playbook(_AJANLO_FIGURAK,
+                      DefenseModel(num_defenders=5, rendszer="5-1"))
+    ids = [s["id"] for s in r["figurak"]]
+    assert ids[0] == "b" and set(ids) == {"a", "b", "c"}
+    pontok = [s["pont_pct"] for s in r["figurak"]]
+    assert pontok == sorted(pontok, reverse=True)
+    attores = next(s for s in r["figurak"] if s["id"] == "a")
+    assert attores["elteres_pp"] <= -AJANLO_ELTERES_PP
+    assert r["ajanlas"].startswith("Ellenük a(z) „Szél” figura működik a "
+                                   "legjobban")
+    assert "a 2. támadónál" in r["ajanlas"]
+    assert "Óvatosan a(z) „Áttörés” figurával" in r["ajanlas"]
+
+
+def test_a_figura_ajanlo_kimondja_a_rest_es_ures_konyvtarnal_hallgat():
+    """A ritka (kétvédős) fal az áttörést jóval rosszabbul zárja, mint az
+    alap: az ajánlás kimondja a különbséget; az alap fal ellen nincs
+    eltérés, nincs figyelmeztetés; üres könyvtárnál nincs ajánlás."""
+    from handball.pipeline.play_simulation import rank_playbook
+
+    r = rank_playbook(_AJANLO_FIGURAK[:1], DefenseModel(num_defenders=2))
+    assert "az 1. támadónál" in r["ajanlas"]
+    assert "százalékponttal rosszabbul zárja, mint az alap 6-0" in r["ajanlas"]
+    alap = rank_playbook(_AJANLO_FIGURAK, DefenseModel())
+    assert all(s["elteres_pp"] == 0.0 for s in alap["figurak"])
+    assert "Óvatosan" not in alap["ajanlas"]
+    assert "rosszabbul zárja" not in alap["ajanlas"]
+    assert rank_playbook([], DefenseModel()) == {"figurak": [],
+                                                 "ajanlas": None}
+
+
+def test_a_figura_ajanlo_vegpont(tmp_path, monkeypatch):
+    """GET /playbook-rangsor: a mentett figurák rangsora a tanult (vagy a
+    kézi) fal ellen, a fal nevével; hibás védő-oldalra 400, ismeretlen
+    meccsre 404."""
+    c = TestClient(_app(tmp_path, monkeypatch))
+    for d in _AJANLO_FIGURAK[:3]:
+        body = {"name": d["name"], "attackers": d["attackers"]}
+        if "labda" in d:
+            body["labda"] = d["labda"]
+        assert c.post("/playbook", json=body).status_code == 200
+    r = c.get("/playbook-rangsor", params={"rendszer": "5-1", "vedok": 5})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["vedelem"].startswith("Védelem (5-1")
+    assert [s["name"] for s in j["figurak"]][0] == "Szél"
+    assert "Óvatosan a(z) „Áttörés” figurával" in j["ajanlas"]
+    r = c.get("/playbook-rangsor", params={"meccs": "fm", "vedo": "away"})
+    assert r.status_code == 200 and r.json()["vedelem"].startswith(
+        "Tanult védelem — B")
+    assert len(r.json()["figurak"]) == 3
+    assert c.get("/playbook-rangsor", params={"meccs": "fm",
+                                              "vedo": "x"}).status_code == 400
+    assert c.get("/playbook-rangsor",
+                 params={"meccs": "nincs"}).status_code == 404
+
+
+def test_a_figurafuzet_tanult_fal_ellen_a_rangsorban_jon(tmp_path,
+                                                        monkeypatch):
+    """A tanult fal elleni figurafüzet a figura-ajánló rangsorában hozza
+    a figurákat, az ajánló mondattal; kézi falnál név szerint, ajánlás
+    nélkül."""
+    import re
+
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(Match(MatchMeta(match_id="m51", home_team="A",
+                                        away_team="Ötegyes", fps=25.0),
+                              _otegyes_frames()))
+    c = TestClient(app)
+    for d in _AJANLO_FIGURAK[:3]:
+        body = {"name": d["name"], "attackers": d["attackers"]}
+        if "labda" in d:
+            body["labda"] = d["labda"]
+        assert c.post("/playbook", json=body).status_code == 200
+
+    def sorrend(html):
+        tj = re.search(r'<ol class="tj">(.*?)</ol>', html).group(1)
+        return re.findall(r"<li>(.*?)</li>", tj)
+
+    r = c.get("/figura-fuzet", params={"meccs": "m51", "vedo": "away"})
+    assert r.status_code == 200
+    rang = c.get("/playbook-rangsor",
+                 params={"meccs": "m51", "vedo": "away"}).json()
+    assert sorrend(r.text) == [s["name"] for s in rang["figurak"]]
+    assert 'class="ajanlo"' in r.text and "Ellenük a(z)" in r.text
+    r = c.get("/figura-fuzet")
+    # (a név-sorrend a kisbetűs kódpont szerinti — az ékezetes a végén)
+    assert sorrend(r.text) == ["Szél", "Átlövő", "Áttörés"]
+    assert 'class="ajanlo"' not in r.text
+
+
+def _otegyes_frames():
+    """A hazai támad, a vendég 5-1-ben véd (5 védő a 6 m-en, egy
+    előretolt 9,5 m-en) — a tanult fal 5-1."""
+    frames = []
+    for t in range(10):
+        players = [PlayerPosition(track_id=i + 1, team=Team.HOME, x=28.0,
+                                  y=10.0, source=PositionSource.MEASURED,
+                                  confidence=1.0) for i in range(3)]
+        players += [PlayerPosition(track_id=100 + i, team=Team.AWAY, x=x,
+                                   y=y, source=PositionSource.MEASURED,
+                                   confidence=1.0)
+                    for i, (x, y) in enumerate([(34, 3), (34, 6.5), (34, 10),
+                                                (34, 13.5), (34, 17),
+                                                (30.5, 10)])]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_a_felderito_lap_hozza_a_figura_ajanlot(tmp_path, monkeypatch):
+    """A nyomtatható felderítő lap (scouting/export) a mentett figuráink
+    rangsorát is hozza a felderített csapat tanult fala ellen; mentett
+    figura nélkül a szakasz nincs."""
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(Match(MatchMeta(match_id="m51", home_team="A",
+                                        away_team="Ötegyes", fps=25.0),
+                              _otegyes_frames()))
+    c = TestClient(app)
+    r = c.get("/matches/m51/scouting/export", params={"team": "away"})
+    assert r.status_code == 200 and "Figuráink ellenük" not in r.text
+    for d in _AJANLO_FIGURAK[:3]:
+        body = {"name": d["name"], "attackers": d["attackers"]}
+        if "labda" in d:
+            body["labda"] = d["labda"]
+        assert c.post("/playbook", json=body).status_code == 200
+    r = c.get("/matches/m51/scouting/export", params={"team": "away"})
+    assert r.status_code == 200
+    assert "Figuráink ellenük" in r.text and "Ellenük a(z)" in r.text

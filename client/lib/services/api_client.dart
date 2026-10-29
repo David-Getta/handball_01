@@ -249,6 +249,20 @@ class ApiClient {
     return (json["plays"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Figura-ajánló (GET /playbook-rangsor): a mentett figurák rangsora a
+  /// `meccs` `vedo` csapatából tanult fal ellen — {vedelem, figurak:
+  /// [{id, name, pont_pct, alap_pct, elteres_pp, t_s, tamado}], ajanlas}.
+  Future<Map<String, dynamic>> rankPlaybook(String meccs,
+      {String vedo = "away"}) async {
+    final uri = Uri.parse("$baseUrl/playbook-rangsor")
+        .replace(queryParameters: {"meccs": meccs, "vedo": vedo});
+    final resp = await http.get(uri).timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a figura-rangsor", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy mentett figura betöltése (attackers: játékosonként [[x,y],[x,y]]).
   Future<Map<String, dynamic>> fetchPlay(String playId) async {
     final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));

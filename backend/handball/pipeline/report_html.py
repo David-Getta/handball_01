@@ -387,6 +387,25 @@ def _playbook_rows(pm: dict) -> str:
                    f'mintájú.</p>')
 
 
+# A felderítő lap figura-ajánlójában legfeljebb ennyi figura-sor.
+FIGURA_AJANLO_SOROK = 5
+
+
+def _figura_ajanlo_rows(r: dict) -> str:
+    """Figura-ajánló sorai: a mentett figuráink a tanult faluk ellen —
+    az ajánló mondat, alatta a legjobb FIGURA_AJANLO_SOROK figura a
+    lövőhelyzettel és az alap 6-0 fal elleni értékkel."""
+    rows = "".join(
+        f'<div class="bar-row"><span class="bar-label" style="width:220px">'
+        f'{escape(str(f.get("name")))}</span><span class="bar-pct" '
+        f'style="width:auto">{float(f.get("pont_pct") or 0):.0f}% '
+        f'lövőhelyzet (alap fal: {float(f.get("alap_pct") or 0):.0f}%)'
+        '</span></div>'
+        for f in (r.get("figurak") or [])[:FIGURA_AJANLO_SOROK])
+    mondat = r.get("ajanlas")
+    return ((f"<p>{escape(mondat)}</p>" if mondat else "") + rows)
+
+
 def _figure_svg(shape: list, w: int = 150, h: int = 75) -> str:
     """Egy figura-alak (6x3 rács, a +x kapu felé támadva) mini-pályán,
     inline SVG-ként: a cella átlátszatlansága a látogatottság. A
@@ -482,13 +501,17 @@ def _players(key_players: list) -> str:
 
 def scouting_report_html(rep: ScoutingReport,
                          playbook_match: dict | None = None,
-                         matchup: list[str] | None = None) -> str:
+                         matchup: list[str] | None = None,
+                         figura_ajanlo: dict | None = None) -> str:
     """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
 
     `playbook_match` (opcionális): a mentett figurákkal való egyezés
     ({total_attacks, matched, unmatched}) — külön szakaszként kerül be.
     `matchup` (opcionális): a meccsterv-illesztés mondatai — "a kettőnk
     párosítása" szakaszként kerül be.
+    `figura_ajanlo` (opcionális): a SAJÁT mentett figuráink rangsora a
+    tanult faluk ellen (play_simulation.rank_playbook) — "Figuráink
+    ellenük" szakaszként kerül be.
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
@@ -838,6 +861,10 @@ def scouting_report_html(rep: ScoutingReport,
 
   {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
    if playbook_match else ""}
+
+  {("<h2>Figuráink ellenük (a tanult faluk ellen)</h2>"
+    + _figura_ajanlo_rows(figura_ajanlo))
+   if figura_ajanlo and figura_ajanlo.get("figurak") else ""}
 
   {("<h2>Visszatérő figuráik (meccsről meccsre)</h2>"
     + _setplay_library_rows(getattr(rep, "setplay_library", None) or {}))

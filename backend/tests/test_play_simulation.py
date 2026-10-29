@@ -113,10 +113,59 @@ def test_a_vedekezes_modell_megtanulja_a_labdakovetest():
     assert abs(eltolas - 0.6 * 3.0) < 1e-6
 
 
-def test_a_figura3d_fejlece_mutatja_a_tanult_labdakovetest(tmp_path,
+def _dupla_match(dupla: bool, n: int = 60):
+    """A hazai 1-es labdás 9 m-en (31; 13,3); a vendég fal a hatoson,
+    egy védő mindig 1,2 m-re rálép, `dupla` esetén egy második is 2 m-re
+    mellé áll."""
+    frames = []
+    for t in range(n):
+        players = [_pl(1, Team.HOME, 31.0, 13.3), _pl(2, Team.HOME, 28.0, 8.0)]
+        for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+            x, yy = 34.0, float(y)
+            if y == 14:
+                x, yy = 32.0, 14.2
+            if dupla and y == 11:
+                x, yy = 32.5, 11.9
+            players.append(_pl(100 + i, Team.AWAY, x, yy))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=31.0, y=13.3, confidence=1.0)))
+    return Match(MatchMeta(match_id="d", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_kettozest():
+    """Ha két védő is rendre a labdás mellett áll, a kettőzési hajlam
+    magas; egy rálépő védőnél 0 (az csak kilépés); kevés mintából nem
+    tanul. A szimulációban a második legközelebbi védő a labdás felé lép,
+    és 1,2 m-re megáll tőle; a többi a falban marad."""
+    import math
+
+    from handball.pipeline.play_simulation import (DOUBLE_GAP_M,
+                                                   PRESS_LEARN_MIN_FRAMES)
+
+    assert DefenseModel.learn(_dupla_match(True), Team.AWAY).double_rate == 1.0
+    assert DefenseModel.learn(_dupla_match(False), Team.AWAY).double_rate == 0.0
+    keves = _dupla_match(True, n=PRESS_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).double_rate == 0.0
+
+    labda = Ball(x=31.0, y=13.3, confidence=1.0)
+    egy = DefenseModel(press_rate=1.0).respond(labda, goal_x=40.0)
+    ketto = DefenseModel(press_rate=1.0, double_rate=1.0).respond(
+        labda, goal_x=40.0)
+    valtozott = [i for i, (a, b) in enumerate(zip(egy, ketto)) if a != b]
+    assert len(valtozott) == 1, (egy, ketto)
+    x, y = ketto[valtozott[0]]
+    assert abs(math.hypot(x - 31.0, y - 13.3) - DOUBLE_GAP_M) < 1e-6
+    # távoli labdánál senki nem kettőz
+    tavol = Ball(x=24.0, y=10.0, confidence=1.0)
+    assert (DefenseModel(double_rate=1.0).respond(tavol, goal_x=40.0)
+            == DefenseModel().respond(tavol, goal_x=40.0))
+
+
+def test_a_figura3d_fejlece_mutatja_a_tanult_falat(tmp_path,
                                                           monkeypatch):
     """A meccsből tanult fal fejléce kiírja a labdakövetést (ha nem az
-    alapérték)."""
+    alapérték), a kilépést és a kettőzést (5% felett)."""
     from fastapi.testclient import TestClient
 
     from handball.api.app import create_app
@@ -128,6 +177,11 @@ def test_a_figura3d_fejlece_mutatja_a_tanult_labdakovetest(tmp_path,
         "u": "30,5,32,8;30,15,31,12", "meccs": "k", "vedo": "away"})
     assert r.status_code == 200
     assert "követi a labdát: 60%" in r.text
+    app.state.put_match(_dupla_match(True))
+    r = TestClient(app).get("/figura3d", params={
+        "u": "30,5,32,8;30,15,31,12", "meccs": "d", "vedo": "away"})
+    assert r.status_code == 200
+    assert "kilép a labdásra: 100%" in r.text and "kettőz: 100%" in r.text
 
 
 def test_a_kilepo_vedo_a_labdas_ele_lep_a_szimulacioban():

@@ -3383,7 +3383,9 @@ def create_app():
                 f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
                 if modell.press_rate >= 0.05 else "") + (
                 f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
-                if modell.lateral_gain != 0.5 else "")
+                if modell.lateral_gain != 0.5 else "") + (
+                f" · kettőz: {modell.double_rate * 100:.0f}%"
+                if modell.double_rate >= 0.05 else "")
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))),
@@ -3441,7 +3443,9 @@ def create_app():
         dokumentumban (böngészőből PDF) — tartalomjegyzék, utána
         figuránként egy oldal (pipeline.figura_lap.figura_fuzet_html).
         `ids` ("a,b,…"): csak ezek, ebben a sorrendben; alapból mind, név
-        szerint. A fal a /figura-lap-é (tanult vagy kézi)."""
+        szerint — tanult fal (`meccs`) ellen viszont a figura-ajánló
+        rangsorában, az ajánló mondattal (play_simulation.rank_playbook).
+        A fal a /figura-lap-é (tanult vagy kézi)."""
         from fastapi.responses import HTMLResponse
 
         from ..pipeline.figura_lap import FIGURA_FUZET_MAX, figura_fuzet_html
@@ -3460,11 +3464,42 @@ def create_app():
                 continue  # hiányzó / sérült figura-fájl kimarad
             if isinstance(d, dict):
                 figurak.append(d)
+        ajanlas = None
         if not ids.strip():
             figurak.sort(key=lambda d: (str(d.get("name") or "").lower(),
                                         str(d.get("id") or "")))
+            if meccs:
+                from ..pipeline.play_simulation import rank_playbook
+                rang = rank_playbook(figurak, modell)
+                hely = {r["id"]: i for i, r in enumerate(rang["figurak"])}
+                # (a stabil rendezés a név-sorrendet tartja a rangsoron
+                # kívüli — hibás — figuráknál)
+                figurak.sort(key=lambda d: hely.get(d.get("id"), len(hely)))
+                ajanlas = rang["ajanlas"]
         return HTMLResponse(figura_fuzet_html(figurak, modell,
-                                              vedo_nev=vedo_nev))
+                                              vedo_nev=vedo_nev,
+                                              ajanlas=ajanlas))
+
+    @app.get("/playbook-rangsor")
+    def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
+                         melyseg: float = 6.0, rendszer: str = "6-0"):
+        """Figura-ajánló: a mentett figurák rangsora a `meccs` `vedo`
+        csapatából TANULT fal ellen (vagy a kézi fal ellen — mint a
+        /figura-fuzet), az alap 6-0-hoz mért eltéréssel és egy magyar
+        ajánló mondattal (play_simulation.rank_playbook). Visszaad:
+        {"vedelem", "figurak", "ajanlas"}."""
+        from ..pipeline.play_simulation import rank_playbook
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        figurak = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue  # hiányzó / sérült figura-fájl kimarad
+            if isinstance(d, dict):
+                figurak.append(d)
+        return {"vedelem": vedo_nev, **rank_playbook(figurak, modell)}
 
     # A figura-videók gyorsítótára (a várólapról többen is letöltik) és a
     # rajzolás zárja (egyszerre egy — a többi kérés vár).
@@ -13105,9 +13140,18 @@ def create_app():
                 _scout_cached(match, own_t), rep_sc) or None
         except Exception:
             matchup = None
+        # Figura-ajánló: a SAJÁT mentett figuráink a tanult faluk ellen
+        # (a felderített csapat a védekező) — hibatűrően.
+        ajanlo = None
+        if plays:
+            try:
+                from ..pipeline.play_simulation import rank_playbook
+                ajanlo = rank_playbook(plays, DefenseModel.learn(match, t))
+            except Exception:
+                ajanlo = None
         _lib_nevekkel(rep_sc)
         html = scouting_report_html(rep_sc, playbook_match=pm,
-                                    matchup=matchup)
+                                    matchup=matchup, figura_ajanlo=ajanlo)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     # A felderítő jelentések gyorsítótára: (meccs, csapat) → ScoutingReport.
