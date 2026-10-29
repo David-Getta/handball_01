@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.185 óta)
+## v0.1.186 — kiadva (2026-10-29)
+
+> Kiadás-jegyzet: DÖNTÉS-MODELL — az app most azt is megmondja, HOGYAN
+> dönt egy játékos és egy csapat helyzetenként (ha kilépnek rá, ha
+> szabad a 6 m-es társ, ha szabad lőhelyen van), és hogy szorításban
+> romlik-e a döntése. A meccs-nézet Döntések fülén játékosonként, a
+> játékos-trendben meccsről meccsre is látszik; a felderítés, a
+> meccsterv és az edzés-fókusz új szabályokkal használja.
 
 - **Döntés-minőség a játékos-trendben és a szezon-lapon** (kliens +
   motor): a játékos-trend (mezszám szerint, meccsről meccsre) eddig a
