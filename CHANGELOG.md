@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.185 óta)
 
+- **Játékos-modell a Döntések panelen** (kliens + motor): a meccs-nézet
+  Döntések fülén a kiválasztott játékosnál eddig csak az látszott, kihez
+  passzol és milyen arányban optimálisan. Most alatta HELYZETENKÉNT is:
+  ha kilépnek rá, ha szabad a 6 m-es társa, ha szabad lőhelyen van —
+  mit választ (lövés, passz a 6 m-re, passz a szélre, visszajátszás,
+  átadás, színes sávon), és hányszor a legjobbat; plusz a szorított
+  döntései a csapat szabad arányához mérve. Nyolc döntés alatt a sor
+  "kevés minta" jelölést kap. Az adatot a motor játékos-végpontja adja
+  (a két új döntés-réteg gyorsítótárazott eredményéből, így a
+  játékos-váltás nem számol újra).
+
 - **Helyzet-döntés** (új réteg): MIT CSINÁLNAK az egyes helyzetekben,
   és mi lett volna a legjobb. Ez a "hogyan dönt" játékos- és
   csapat-modell első helyzetenkénti képe: minden labdás döntést

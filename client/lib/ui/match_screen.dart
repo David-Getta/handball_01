@@ -4630,7 +4630,10 @@ class _MatchScreenState extends State<MatchScreen> {
                           progression: _progression,
                           goalTimeline: _goalTimeline,
                         ),
-                  DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
+                  DecisionsPanel(
+                      key: ValueKey(match.meta.matchId),
+                      match: match,
+                      api: _api),
                   _eventsPanel(match),
                   _notesPanel(match),
                 ],

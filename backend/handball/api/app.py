@@ -13413,18 +13413,58 @@ def create_app():
 
     @app.get("/matches/{match_id}/players/{player_id}/decisions")
     def get_player_decisions(match_id: str, player_id: int):
-        """Egy játékos passz-döntései: kihez passzol és mennyire optimálisan."""
+        """Egy játékos döntései: kihez passzol és mennyire optimálisan —
+        és a játékos-modell helyzetenkénti képe.
+
+        "situations": helyzetenként (kilépnek rá / szabad a 6 m-es társ /
+        szabad lőhely) a döntések száma, a választások darabszáma és a
+        legjobb-opciósak száma (decisions.situational_decisions);
+        "pressure": a szorított döntései és közülük a legjobb-opciósak,
+        a csapat szabad döntéseinek legjobb-arányával (decisions.
+        pressure_decision_quality), vagy None, ha nem volt szorított
+        döntése. A két réteg meccs-szintű eredménye gyorsítótárazott: a
+        játékos-váltás nem számol újra."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         r = analyze_player_decisions(match, player_id)
-        return {
+        out = {
             "player_id": r.player_id,
             "passes": r.passes,
             "pass_distribution": r.pass_distribution,
             "optimal_rate": r.optimal_rate,
             "avg_value_gap": r.avg_value_gap,
+            "situations": {},
+            "pressure": None,
         }
+        try:
+            from ..pipeline.decisions import situational_decisions
+            sit = _cached_result(match_id, "situational-decisions",
+                                 lambda: situational_decisions(match))
+            for side in ("home", "away"):
+                row = next((p for p in (sit.get(side) or {}).get(
+                    "players") or [] if p["player_id"] == player_id), None)
+                if row:
+                    out["situations"] = row["situations"]
+                    break
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import pressure_decision_quality
+            pdq = _cached_result(match_id, "pressure-decisions",
+                                 lambda: pressure_decision_quality(match))
+            for side in ("home", "away"):
+                rec = pdq.get(side) or {}
+                row = next((p for p in rec.get("players") or []
+                            if p["player_id"] == player_id), None)
+                if row:
+                    out["pressure"] = {"press": row["press"],
+                                       "press_best": row["press_best"],
+                                       "team_free_pct": rec.get("free_pct")}
+                    break
+        except Exception:
+            pass
+        return out
 
     @app.post("/matches/{match_id}/simulate-setplay")
     def simulate(match_id: str, body: dict, defending: str = "away"):

@@ -633,6 +633,19 @@ class ApiClient {
     return (json["moments"] as List?) ?? const [];
   }
 
+  /// Egy játékos döntés-profilja (GET /matches/{id}/players/{pid}/decisions):
+  /// helyzetenként mit választ és hányszor a legjobbat, és a szorított
+  /// döntései — a Döntések panel játékos-modellje.
+  Future<Map<String, dynamic>> fetchPlayerDecisions(
+      String matchId, int playerId) async {
+    final resp = await http.get(Uri.parse(
+        "$baseUrl/matches/$matchId/players/$playerId/decisions"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a döntés-profil", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> fetchKeyPlayers(String matchId) async {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-players"));
