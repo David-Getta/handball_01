@@ -3381,7 +3381,9 @@ def create_app():
                 else match.meta.away_team) + (
                 f" ({modell.rendszer})" if modell.rendszer != "6-0" else "") + (
                 f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
-                if modell.press_rate >= 0.05 else "")
+                if modell.press_rate >= 0.05 else "") + (
+                f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
+                if modell.lateral_gain != 0.5 else "")
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))),

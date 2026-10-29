@@ -102,6 +102,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultMeccs = null;
     _tanultVedok = null;
     _tanultKilep = null;
+    _tanultKovet = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -139,6 +140,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // A tanult fal kilépési hajlama (defense_model.press_rate): a labdás
   // lőtávolságon belül ennyi részében lépett rá a legközelebbi védő.
   double? _tanultKilep;
+  // A tanult fal labdakövetése (defense_model.lateral_gain): a labda
+  // oldal-mozgásának ekkora részével tolódik el a fal. A 0,5 az alapérték
+  // (nem tanulható meccsnél is ez jön) — azt nem írjuk ki.
+  double? _tanultKovet;
   String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
@@ -194,6 +199,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
         _tanultMeccs = f["match_id"] as String;
         _tanultVedok = null;
         _tanultKilep = null;
+        _tanultKovet = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -384,6 +390,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ((resp["defense_model"] as Map?)?["num_defenders"] as num?)?.toInt();
       _tanultKilep =
           ((resp["defense_model"] as Map?)?["press_rate"] as num?)?.toDouble();
+      _tanultKovet =
+          ((resp["defense_model"] as Map?)?["lateral_gain"] as num?)?.toDouble();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -1131,6 +1139,14 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 "a tanult védelem a labdásra lép: "
                 "${((_tanultKilep ?? 0) * 100).round()}% — a szimulációban "
                 "is kilép",
+                style: AppText.label.copyWith(fontSize: 11)),
+          if (_tanultMeccs != null &&
+              _tanultKovet != null &&
+              _tanultKovet != 0.5)
+            Text(
+                "a tanult fal követi a labdát: "
+                "${((_tanultKovet ?? 0) * 100).round()}% — "
+                "${(_tanultKovet ?? 0) >= 0.5 ? "a labda oldalára húzódik" : "inkább helyben marad"}",
                 style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),

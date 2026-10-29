@@ -103,6 +103,12 @@ DefenseModel learnDefense(Match match, Team team,
   final hatso = <double>[];
   final formak = <String, int>{};
   final counts = <int>[];
+  // Labdakövetés (a backend LATERAL_LEARN_MIN_FRAMES = 50 és
+  // LATERAL_MIN_SPREAD_M = 2.0 küszöbével): a hátsó sor y-átlaga a
+  // labda y-jához képest, origón átmenő regresszióval.
+  const kozepY = courtWidth / 2;
+  var kovN = 0;
+  var kovBw = 0.0, kovBb = 0.0;
   for (final f in match.frames) {
     final ph = classifyPhase(f, config);
     final defends = (team == Team.away && ph == Phase.homeAttack) ||
@@ -119,7 +125,22 @@ DefenseModel learnDefense(Match match, Team team,
       if (defenseSystems.containsKey(cimke)) {
         formak[cimke] = (formak[cimke] ?? 0) + 1;
       }
+      final sor = outfield
+          .where((p) => (p.x - goalX).abs() <= hatsoMax)
+          .map((p) => p.y)
+          .toList();
+      final ball = f.ball;
+      if (sor.isNotEmpty && ball != null) {
+        final b = ball.y - kozepY;
+        kovN++;
+        kovBw += b * (sor.reduce((a, c) => a + c) / sor.length - kozepY);
+        kovBb += b * b;
+      }
     }
+  }
+  var kovetes = 0.5;
+  if (kovN >= 50 && kovBb / kovN >= 2.0 * 2.0) {
+    kovetes = (kovBw / kovBb).clamp(0.0, 1.0).toDouble();
   }
   double mean(List<double> v) => v.isEmpty ? 0 : v.reduce((a, b) => a + b) / v.length;
   var rendszer = "6-0";
@@ -135,6 +156,7 @@ DefenseModel learnDefense(Match match, Team team,
     lineDepthM: rendszer != "6-0" && hatso.isNotEmpty
         ? mean(hatso)
         : (depths.isEmpty ? 6.0 : mean(depths)),
+    lateralGain: kovetes,
     rendszer: rendszer,
   );
 }

@@ -70,6 +70,66 @@ def test_a_vedekezes_modell_megtanulja_a_kilepesi_hajlamot():
     assert DefenseModel.learn(keves, Team.AWAY).press_rate == 0.0
 
 
+def _kovet_match(gain: float, n: int = 60, labda_ys=(5, 7, 10, 13, 15)):
+    """A hazai labdás 12 m-re a kaputól, a labda y-ja `labda_ys` szerint
+    körbejár; a vendég fal a hatoson a labda oldal-eltérésének `gain`
+    részével tolódik el."""
+    frames = []
+    for t in range(n):
+        by = float(labda_ys[t % len(labda_ys)])
+        players = [_pl(1, Team.HOME, 28.0, by), _pl(2, Team.HOME, 27.0, 5.0),
+                   _pl(3, Team.HOME, 27.0, 15.0)]
+        for i, y in enumerate((4, 7, 9, 11, 13, 16)):
+            players.append(_pl(100 + i, Team.AWAY, 34.0,
+                               y + gain * (by - 10.0)))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0, y=by, confidence=1.0)))
+    return Match(MatchMeta(match_id="k", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_labdakovetest():
+    """A labdával 60%-ban együtt tolódó fal → 0,6; a helyben álló fal →
+    0; középen álló labdából (nincs oldal-mozgás) és kevés mintából (50
+    kocka alatt) nem tanul — az alapérték (0,5) marad. A tanult modell a
+    szimulációban is ennyit tolódik."""
+    import statistics
+
+    from handball.pipeline.play_simulation import LATERAL_LEARN_MIN_FRAMES
+
+    tanult = DefenseModel.learn(_kovet_match(0.6), Team.AWAY)
+    assert abs(tanult.lateral_gain - 0.6) < 1e-9
+    assert DefenseModel.learn(_kovet_match(0.0), Team.AWAY).lateral_gain == 0.0
+    kozep = _kovet_match(0.6, labda_ys=(10,))
+    assert DefenseModel.learn(kozep, Team.AWAY).lateral_gain == 0.5
+    keves = _kovet_match(0.6, n=LATERAL_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).lateral_gain == 0.5
+
+    def fal_kozep(model, by):
+        return statistics.fmean(y for _, y in model.respond(
+            Ball(x=24.0, y=by, confidence=1.0), goal_x=40.0))
+
+    eltolas = fal_kozep(tanult, 13.0) - fal_kozep(tanult, 10.0)
+    assert abs(eltolas - 0.6 * 3.0) < 1e-6
+
+
+def test_a_figura3d_fejlece_mutatja_a_tanult_labdakovetest(tmp_path,
+                                                          monkeypatch):
+    """A meccsből tanult fal fejléce kiírja a labdakövetést (ha nem az
+    alapérték)."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_kovet_match(0.6))
+    r = TestClient(app).get("/figura3d", params={
+        "u": "30,5,32,8;30,15,31,12", "meccs": "k", "vedo": "away"})
+    assert r.status_code == 200
+    assert "követi a labdát: 60%" in r.text
+
+
 def test_a_kilepo_vedo_a_labdas_ele_lep_a_szimulacioban():
     """press_rate=1: lőtávolságon belüli labdánál a labdáshoz legközelebbi
     védő a labdás és a kapu-közép vonalán 1 m-re áll meg előtte; a többi

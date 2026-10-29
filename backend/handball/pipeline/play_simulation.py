@@ -64,6 +64,15 @@ PRESS_CLOSE_M = 2.0
 PRESS_LEARN_MIN_FRAMES = 50
 PRESS_GAP_M = 1.0
 
+# Labdakövetés: a hátsó sor közepe (a védők y-átlaga) mennyit mozdul a
+# labda oldal-mozgásával — a kettő (pálya-középtől mért) eltérésének
+# origón átmenő regressziója. Ennyi védekező kocka kell hozzá (minta-
+# szám), és a labdának legalább ekkora szórással (m) kell oldalt
+# mozognia: középen álló labdából az eltolódás nem tanulható, ilyenkor
+# az alapérték marad.
+LATERAL_LEARN_MIN_FRAMES = 50
+LATERAL_MIN_SPREAD_M = 2.0
+
 
 # ---- Tanult védekezési modell ---------------------------------------------
 
@@ -73,7 +82,9 @@ class DefenseModel:
 
     - num_defenders: hány mezőnyvédő áll a vonalban (kapus nélkül).
     - line_depth_m:  a védővonal átlagos mélysége a SAJÁT kaputól (méter).
-    - lateral_gain:  mennyire követi a védelem a labda y-helyzetét (0..1).
+    - lateral_gain:  mennyire követi a védelem a labda y-helyzetét (0..1):
+                     a labda oldal-mozgásának ekkora részével tolódik el
+                     a fal (0 = helyben áll, 1 = teljesen a labdával megy).
     - rendszer:      a védekezési rendszer (VEDEKEZESI_RENDSZEREK kulcsa:
                      "6-0", "5-1", "4-2", "3-2-1", "3-3").
     - press_rate:    kilépési hajlam (0..1): a lőtávolságon belüli labdás
@@ -100,7 +111,12 @@ class DefenseModel:
         nélkül), különben az összesből. A kilépési hajlam: a lőtávolságon
         (PRESS_RANGE_M) belüli labdás kockák közül azok aránya, ahol a
         labdáshoz legközelebbi mezőnyvédő PRESS_CLOSE_M-en belül állt —
-        PRESS_LEARN_MIN_FRAMES alatt 0 (zárt fal, nem találgatunk).
+        PRESS_LEARN_MIN_FRAMES alatt 0 (zárt fal, nem találgatunk). A
+        labdakövetés: a hátsó sor y-átlagának és a labda y-jának
+        (pálya-középtől mért) eltérése közti arány, origón átmenő
+        regresszióval, 0..1-be szorítva — LATERAL_LEARN_MIN_FRAMES
+        alatt, vagy ha a labda oldal-szórása LATERAL_MIN_SPREAD_M alatti,
+        az alapérték (0,5) marad.
         """
         from .decisions import ball_holder
         from .tactics import _BACK_MAX, detect_formation
@@ -111,6 +127,8 @@ class DefenseModel:
         formak: dict[str, int] = {}
         counts: list[int] = []
         lovo_kockak = raleptek = 0
+        kozep_y = COURT_WIDTH_M / 2.0
+        kov_n, kov_bw, kov_bb = 0, 0.0, 0.0
         for f in match.frames:
             ph = classify_phase(f, config)
             defends = ((defending_team == Team.AWAY and ph == Phase.HOME_ATTACK) or
@@ -134,6 +152,17 @@ class DefenseModel:
                     if min(math.hypot(p.x - holder.x, p.y - holder.y)
                            for p in outfield) <= PRESS_CLOSE_M:
                         raleptek += 1
+                sor = [p.y for p in outfield
+                       if abs(p.x - goal_x) <= _BACK_MAX]
+                if sor and f.ball is not None:
+                    b = f.ball.y - kozep_y
+                    kov_n += 1
+                    kov_bw += b * (statistics.fmean(sor) - kozep_y)
+                    kov_bb += b * b
+        kovetes = 0.5
+        if kov_n >= LATERAL_LEARN_MIN_FRAMES \
+                and kov_bb / kov_n >= LATERAL_MIN_SPREAD_M ** 2:
+            kovetes = round(max(0.0, min(1.0, kov_bw / kov_bb)), 3)
         # A leggyakoribb (holtversenyben a címke szerint — determinisztikus).
         rendszer = (max(formak.items(), key=lambda kv: (kv[1], kv[0]))[0]
                     if formak else "6-0")
@@ -142,6 +171,7 @@ class DefenseModel:
         return cls(
             num_defenders=round(statistics.fmean(counts)) if counts else 6,
             line_depth_m=melyseg,
+            lateral_gain=kovetes,
             rendszer=rendszer,
             press_rate=(round(raleptek / lovo_kockak, 3)
                         if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),

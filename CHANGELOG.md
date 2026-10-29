@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **A tanult fal a valódi labdakövetéssel tolódik** (motor + figura-
+  tervező): a tanult védelem "mennyire követi a labdát" értéke eddig
+  rögzített 0,5 volt — minden ellenfél fala ugyanannyit csúszott a
+  labda oldalára. Most a csapat-modell az ellenfél meccséből tanulja:
+  a hátsó sor közepe mennyit mozdul a labda oldal-mozgásával. A
+  zártan, egy tömbben a labdával menő fal ellen a gyenge oldali
+  átfordítás nyit rést; a helyben álló fal ellen a labda-oldali
+  túlterhelés. A tervező eredmény-kártyája és a 3D/VR fejléce kiírja
+  ("a tanult fal követi a labdát: 80%"). Ötven védekező kocka alatt,
+  vagy ha a labda nem mozog oldalt (2 m-es szórás alatt), az alapérték
+  marad. A kliens offline tanulója (learnDefense) ugyanezt számolja.
+
 - **A tanult védelem kilép a labdásra a szimulációban** (motor +
   figura-tervező): a figura-tervező "tanult védelem"-e eddig a fal
   alakját (védőszám, mélység, rendszer) tanulta meg az ellenfél
