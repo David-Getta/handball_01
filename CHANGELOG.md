@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.186 óta)
+## v0.1.187 — kiadva (2026-10-29)
+
+> Kiadás-jegyzet: TANULT ELLENFÉL-MODELL, FIGURA-AJÁNLÓ ÉS VÉDEKEZÉSI
+> PRÓBA — a figura-tervező tanult védelme most az ellenfél valódi
+> kilépését, kettőzését és labdakövetését is megtanulja. Erre épülve az
+> app a mentett figuráinkat MIND lejátssza ellene, és megmondja, melyik
+> működik a legjobban ellenük (a tervezőben, a figurafüzetben és a
+> felderítő lapon); fordítva pedig az ő visszatérő figuráikat a MI
+> tanult falunk ellen, hogy kiderüljön, melyikre kell felkészülni. A
+> játékos döntési szokása (mit csinál, ha kilépnek rá, ha szabad a 6
+> m-es társa) a felderítésben mezszám szerint, a 3D/VR döntés-
+> feliratban, az élő döntés-figyelőben és a kiosztható játékos-lapon
+> ("Döntéseid") is megjelenik.
 
 - **Védekezési próba: az ő figuráik a mi tanult falunk ellen** (motor +
   kliens): a figura-ajánló fordítottja. A felderítés az ellenfél
