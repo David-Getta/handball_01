@@ -54,6 +54,16 @@ VEDEKEZESI_RENDSZEREK = {
 # vonalnál az előretoltak is kijjebb kerülnek).
 ELORETOLT_MIN_ELONY_M = 1.5
 
+# Kilépési hajlam: a labdás a saját kaputól ennyi méteren belül van
+# (lőtávolság), és a legközelebbi mezőnyvédő ennyin belül van tőle —
+# akkor "ráléptek". Ennyi ilyen labdás kocka kell a tanuláshoz (minta-
+# szám: ritkítva is ennyi minta). A szimulációban a kilépő védő a labdás
+# és a kapu-közép vonalán ennyire áll meg a labdás előtt.
+PRESS_RANGE_M = 11.0
+PRESS_CLOSE_M = 2.0
+PRESS_LEARN_MIN_FRAMES = 50
+PRESS_GAP_M = 1.0
+
 
 # ---- Tanult védekezési modell ---------------------------------------------
 
@@ -66,11 +76,16 @@ class DefenseModel:
     - lateral_gain:  mennyire követi a védelem a labda y-helyzetét (0..1).
     - rendszer:      a védekezési rendszer (VEDEKEZESI_RENDSZEREK kulcsa:
                      "6-0", "5-1", "4-2", "3-2-1", "3-3").
+    - press_rate:    kilépési hajlam (0..1): a lőtávolságon belüli labdás
+                     kockák mekkora részén lépett rá a legközelebbi védő
+                     (PRESS_CLOSE_M-en belül). A szimulációban ennyire
+                     lép ki a labdáshoz legközelebbi védő; 0 = zárt fal.
     """
     num_defenders: int = 6
     line_depth_m: float = 6.0
     lateral_gain: float = 0.5
     rendszer: str = "6-0"
+    press_rate: float = 0.0
 
     @classmethod
     def learn(cls, match: Match, defending_team: Team,
@@ -82,8 +97,12 @@ class DefenseModel:
         és a felismert formák (tactics.detect_formation) közül a
         VEDEKEZESI_RENDSZEREK-ben szereplő leggyakoribbat — nem 6-0
         rendszernél a vonal mélysége a HÁTSÓ sor védőiből (az előretoltak
-        nélkül), különben az összesből.
+        nélkül), különben az összesből. A kilépési hajlam: a lőtávolságon
+        (PRESS_RANGE_M) belüli labdás kockák közül azok aránya, ahol a
+        labdáshoz legközelebbi mezőnyvédő PRESS_CLOSE_M-en belül állt —
+        PRESS_LEARN_MIN_FRAMES alatt 0 (zárt fal, nem találgatunk).
         """
+        from .decisions import ball_holder
         from .tactics import _BACK_MAX, detect_formation
         config = config or TacticsConfig()
         goal_x = config.own_goal_x(defending_team)
@@ -91,6 +110,7 @@ class DefenseModel:
         hatso: list[float] = []
         formak: dict[str, int] = {}
         counts: list[int] = []
+        lovo_kockak = raleptek = 0
         for f in match.frames:
             ph = classify_phase(f, config)
             defends = ((defending_team == Team.AWAY and ph == Phase.HOME_ATTACK) or
@@ -107,6 +127,13 @@ class DefenseModel:
                 cimke = detect_formation(f, defending_team, config).label
                 if cimke in VEDEKEZESI_RENDSZEREK:
                     formak[cimke] = formak.get(cimke, 0) + 1
+                holder = ball_holder(f, config)
+                if holder is not None and holder.team != defending_team \
+                        and abs(holder.x - goal_x) <= PRESS_RANGE_M:
+                    lovo_kockak += 1
+                    if min(math.hypot(p.x - holder.x, p.y - holder.y)
+                           for p in outfield) <= PRESS_CLOSE_M:
+                        raleptek += 1
         # A leggyakoribb (holtversenyben a címke szerint — determinisztikus).
         rendszer = (max(formak.items(), key=lambda kv: (kv[1], kv[0]))[0]
                     if formak else "6-0")
@@ -116,6 +143,8 @@ class DefenseModel:
             num_defenders=round(statistics.fmean(counts)) if counts else 6,
             line_depth_m=melyseg,
             rendszer=rendszer,
+            press_rate=(round(raleptek / lovo_kockak, 3)
+                        if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
         )
 
     def respond(self, ball: Ball, goal_x: float) -> list[tuple[float, float]]:
@@ -162,6 +191,31 @@ class DefenseModel:
                              + kovet * (ball.y - COURT_WIDTH_M / 2.0)))
             out.append((goal_x + sign * max(melyseg,
                                             eleje + ELORETOLT_MIN_ELONY_M), y))
+        return self._kilepes(out, ball, goal_x, sign)
+
+    def _kilepes(self, out: list[tuple[float, float]], ball: Ball,
+                 goal_x: float, sign: float) -> list[tuple[float, float]]:
+        """A kilépési hajlam: lőtávolságon belüli labdánál a labdáshoz
+        legközelebbi védő `press_rate` arányban a labdás elé lép (a labda
+        és a kapu-közép vonalán, PRESS_GAP_M-re) — a hatoson belülre
+        sosem."""
+        if self.press_rate <= 0.0 or not out \
+                or abs(ball.x - goal_x) > PRESS_RANGE_M:
+            return out
+        i = min(range(len(out)), key=lambda k: (
+            math.hypot(out[k][0] - ball.x, out[k][1] - ball.y), k))
+        dx, dy = goal_x - ball.x, COURT_WIDTH_M / 2.0 - ball.y
+        d = math.hypot(dx, dy) or 1.0
+        tx, ty = ball.x + dx / d * PRESS_GAP_M, ball.y + dy / d * PRESS_GAP_M
+        r = min(1.0, self.press_rate)
+        nx, ny = out[i][0] + (tx - out[i][0]) * r, out[i][1] + (ty - out[i][1]) * r
+        lateral = max(0.0, abs(ny - COURT_WIDTH_M / 2.0) - _GOAL_HALF_W)
+        boundary = (math.sqrt(GOAL_AREA_RADIUS_M ** 2 - lateral ** 2)
+                    if lateral < GOAL_AREA_RADIUS_M else 0.0)
+        if abs(nx - goal_x) < boundary + GOAL_AREA_MARGIN_M:
+            nx = goal_x + sign * (boundary + GOAL_AREA_MARGIN_M)
+        out = list(out)
+        out[i] = (nx, ny)
         return out
 
 

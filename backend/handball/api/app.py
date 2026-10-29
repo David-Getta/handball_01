@@ -3379,7 +3379,9 @@ def create_app():
             vedo_nev = "Tanult védelem — " + (
                 match.meta.home_team if csapat == Team.HOME
                 else match.meta.away_team) + (
-                f" ({modell.rendszer})" if modell.rendszer != "6-0" else "")
+                f" ({modell.rendszer})" if modell.rendszer != "6-0" else "") + (
+                f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
+                if modell.press_rate >= 0.05 else "")
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))),

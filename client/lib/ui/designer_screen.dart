@@ -101,6 +101,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
   void _kezifal() {
     _tanultMeccs = null;
     _tanultVedok = null;
+    _tanultKilep = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -135,6 +136,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
   // hozott figuránál még ismeretlen).
   int? _tanultVedok;
+  // A tanult fal kilépési hajlama (defense_model.press_rate): a labdás
+  // lőtávolságon belül ennyi részében lépett rá a legközelebbi védő.
+  double? _tanultKilep;
   String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
@@ -189,6 +193,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       if (f["match_id"] is String) {
         _tanultMeccs = f["match_id"] as String;
         _tanultVedok = null;
+        _tanultKilep = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -377,6 +382,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _tanultOldal = side;
       _tanultVedok =
           ((resp["defense_model"] as Map?)?["num_defenders"] as num?)?.toInt();
+      _tanultKilep =
+          ((resp["defense_model"] as Map?)?["press_rate"] as num?)?.toDouble();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -1117,6 +1124,14 @@ class _DesignerScreenState extends State<DesignerScreen> {
           Text("legjobb lövőhelyzet · $quality", style: AppText.label.copyWith(fontSize: 11)),
           if (e.attackerId != null)
             Text("játékos #${e.attackerId}", style: AppText.label.copyWith(fontSize: 11)),
+          // A tanult fal kilépési hajlama: a szimulációban ennyire lép ki
+          // a labdáshoz legközelebbi védő (5% alatt zárt falnak vesszük).
+          if (_tanultMeccs != null && (_tanultKilep ?? 0) >= 0.05)
+            Text(
+                "a tanult védelem a labdásra lép: "
+                "${((_tanultKilep ?? 0) * 100).round()}% — a szimulációban "
+                "is kilép",
+                style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),
     );

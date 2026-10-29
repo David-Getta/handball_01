@@ -40,6 +40,58 @@ def test_defense_model_learns_depth_and_count():
     assert abs(model.line_depth_m - 6.0) < 1e-6
 
 
+def _press_match(nyom: bool, n: int = 60):
+    """A hazai 1-es labdás 9 m-en (31; 13,3); a vendég fal a hatoson,
+    `nyom` esetén a legközelebbi védő 1,2 m-re rálép."""
+    frames = []
+    for t in range(n):
+        players = [_pl(1, Team.HOME, 31.0, 13.3), _pl(2, Team.HOME, 28.0, 8.0)]
+        ys = (3, 6, 9, 11, 14, 17)
+        for i, y in enumerate(ys):
+            x, yy = 34.0, float(y)
+            if nyom and y == 14:
+                x, yy = 32.0, 14.2
+            players.append(_pl(100 + i, Team.AWAY, x, yy))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=31.0, y=13.3, confidence=1.0)))
+    return Match(MatchMeta(match_id="p", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_kilepesi_hajlamot():
+    """Ha a védő rendre rálép a lőtávolságon belüli labdásra, a modell
+    kilépési hajlama magas; zárt falnál 0; kevés mintából (50 kocka alatt)
+    nem tanul — 0 marad."""
+    from handball.pipeline.play_simulation import PRESS_LEARN_MIN_FRAMES
+
+    assert DefenseModel.learn(_press_match(True), Team.AWAY).press_rate == 1.0
+    assert DefenseModel.learn(_press_match(False), Team.AWAY).press_rate == 0.0
+    keves = _press_match(True, n=PRESS_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).press_rate == 0.0
+
+
+def test_a_kilepo_vedo_a_labdas_ele_lep_a_szimulacioban():
+    """press_rate=1: lőtávolságon belüli labdánál a labdáshoz legközelebbi
+    védő a labdás és a kapu-közép vonalán 1 m-re áll meg előtte; a többi
+    védő a falban marad. press_rate=0: a fal változatlan. Távoli labdánál
+    senki nem lép ki."""
+    import math
+
+    from handball.pipeline.play_simulation import PRESS_GAP_M
+
+    labda = Ball(x=31.0, y=13.3, confidence=1.0)
+    zart = DefenseModel().respond(labda, goal_x=40.0)
+    kilep = DefenseModel(press_rate=1.0).respond(labda, goal_x=40.0)
+    valtozott = [i for i, (a, b) in enumerate(zip(zart, kilep)) if a != b]
+    assert len(valtozott) == 1, (zart, kilep)
+    x, y = kilep[valtozott[0]]
+    assert abs(math.hypot(x - 31.0, y - 13.3) - PRESS_GAP_M) < 1e-6
+    assert x > 31.0  # a labdás és a kapu között
+    tavol = Ball(x=24.0, y=10.0, confidence=1.0)
+    assert (DefenseModel(press_rate=1.0).respond(tavol, goal_x=40.0)
+            == DefenseModel().respond(tavol, goal_x=40.0))
+
+
 def test_defense_respond_wall_outside_area_and_shift():
     """A 6-os fal a hatoson KÍVÜL áll (egy védő sincs a kapuelőtérben),
     középen a hatos előtt fél méterrel, a széleken az ívre simulva — és a

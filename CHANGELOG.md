@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **A tanult védelem kilép a labdásra a szimulációban** (motor +
+  figura-tervező): a figura-tervező "tanult védelem"-e eddig a fal
+  alakját (védőszám, mélység, rendszer) tanulta meg az ellenfél
+  meccséből, de mindig zárt falként állt. Most a csapat-modell azt is
+  megtanulja, MILYEN GYAKRAN LÉP RÁ a legközelebbi védő a lőtávolságon
+  belüli labdásra, és a szimulációban ugyanennyire kilép — így a
+  kitalált figura olyan védelem ellen fut, ahogy az ellenfél valóban
+  játszik: ha rendre kilépnek, a beálló mögöttük szabadul. A tervező
+  eredmény-kártyája és a böngészős 3D/VR fejléce kiírja: "a tanult
+  védelem a labdásra lép: 35%". Ötven labdás kocka alatt nem tanul
+  (zárt fal marad).
+
 - **"Döntéseid" a kiosztható játékos-lapon** (motor): a játékos meccs-
   lapja eddig a játék-mérleget, a fizikai mutatókat és a gyakorolni
   valót hozta. Most a játékos-modellt is, neki szólva: helyzetenként
