@@ -369,6 +369,35 @@ def test_a_helyzet_dontes_felderitesben_es_edzesen_valodi_retegbol(
     assert "szokása: ha kilépnek rájuk" in str(coach_summary(meccs))
 
 
+def test_a_jatekos_szokasa_mezszam_szerint_meccseken_at_osszeall():
+    """Felderítés játékosonként: a 9-es mezszámú 1-es meccsenként öt
+    döntésnél (kevés) hátra passzol kilépésre — egy meccsből nincs
+    szokás, kettőből összeáll, és az edzői kulcs megnevezi."""
+    from handball.pipeline.scouting import (_coach_keys, _sit_players,
+                                            combine_reports, scout_team)
+
+    def jelolt(match_id):
+        m = _sit_match(n=5, match_id=match_id)
+        for f in m.frames:
+            for p in f.players:
+                if p.track_id == 1:
+                    p.jersey_number = 9
+        return m
+
+    r1 = scout_team(jelolt("j1"), Team.HOME)
+    sor = [r for r in r1.sit_player_rows if r["jersey"] == 9]
+    assert sor and sor[0]["sit"] == "kilépnek rá", r1.sit_player_rows
+    assert sor[0]["decisions"] == 5 and sor[0]["best"], sor
+    assert _sit_players(r1) == [], "öt döntés még kevés"
+    ossz = combine_reports([r1, scout_team(jelolt("j2"), Team.HOME)])
+    szokas = _sit_players(ossz)
+    assert szokas and szokas[0][:4] == (
+        9, "kilépnek rá", "visszajátszás", "passz a 6 m-re"), szokas
+    assert szokas[0][6] == 10, szokas
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "Játékos-szokások: a(z) 9-es ha kilépnek rá" in kulcsok, kulcsok
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

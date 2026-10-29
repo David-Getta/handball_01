@@ -1065,6 +1065,10 @@ SIT_ACTIONS = ("lövés", "passz a 6 m-re", "passz a szélre",
 SIT_PHRASE = {"kilépnek rá": "kilépnek rájuk",
                "szabad a 6 m-es társ": "szabad a 6 m-es társuk",
                "szabad lőhely": "szabad lőhelyen kapják a labdát"}
+# Ugyanez EGY játékosról (a felderítés játékos-szokásaihoz).
+SIT_PHRASE_ONE = {"kilépnek rá": "ha kilépnek rá",
+                  "szabad a 6 m-es társ": "ha szabad a 6 m-es társa",
+                  "szabad lőhely": "szabad lőhelyen"}
 SIT_ADVICE = {
     "kilépnek rá": "lépjetek ki rájuk korán: a kilépés a gyengébb "
                    "megoldásba kényszeríti őket",
@@ -1119,7 +1123,8 @@ def situational_decisions(match: Match,
     legrosszabb egyezésű, legalább SIT_MIN döntéses helyzetről szól,
     ahol a szokás más, mint a leggyakoribb legjobb opció, és a
     legjobb-opció aránya legfeljebb SIT_MATCH_LOW_PCT (különben None).
-    "players": játékosonként helyzet → {"decisions", "actions", "match"};
+    "players": játékosonként helyzet → {"decisions", "actions", "best",
+    "match"};
     "top" az a játékos, akinél ugyanabban a helyzetben ugyanez a szokás
     (legalább SIT_PLAYER_MIN döntés), a legtöbb döntéssel.
     """
@@ -1205,9 +1210,10 @@ def situational_decisions(match: Match,
         rec["match"] += good
         prow = per_player[team.value].setdefault(holder.track_id, {})
         ps = prow.setdefault(sit, {"decisions": 0, "actions": {},
-                                   "match": 0})
+                                   "best": {}, "match": 0})
         ps["decisions"] += 1
         ps["actions"][act] = ps["actions"].get(act, 0) + 1
+        ps["best"][best_act] = ps["best"].get(best_act, 0) + 1
         ps["match"] += good
         if holder.jersey_number is not None:
             jersey.setdefault(holder.track_id, holder.jersey_number)

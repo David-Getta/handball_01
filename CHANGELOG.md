@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.186 óta)
+
+- **Játékos döntési szokása a felderítésben** (motor + kliens): a
+  helyzet-döntés eddig csapat-szinten mondta meg, melyik helyzetben rossz
+  a szokásuk. Most JÁTÉKOSONKÉNT is, mezszám szerint, több meccsen át
+  összegezve: "a 9-es ha kilépnek rá, a döntései 70%-a visszajátszás
+  (pedig a passz a 6 m-re érne többet, 14 döntés)". Ez az ellenfél
+  játékos-modellje: ha elég sokszor láttuk, megmondja, hogyan dönt egy
+  adott ember egy adott helyzetben — legfeljebb három nevet az edzői
+  kulcsban és az új "Játékos döntési szokása" csempén. Egy meccsből
+  ritkán áll össze (8 döntés kell helyzetenként), több meccs
+  összevonásával igen.
+
 ## v0.1.186 — kiadva (2026-10-29)
 
 > Kiadás-jegyzet: DÖNTÉS-MODELL — az app most azt is megmondja, HOGYAN

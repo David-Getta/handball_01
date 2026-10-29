@@ -6883,6 +6883,78 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return out;
   }
 
+  // Játékos-szokások: mezszámonként és helyzetenként összegezve (8+
+  // döntés, a szokás 50% felett, a legjobb opció 40% alatt, és a szokás
+  // nem a leggyakoribb legjobb opció — a backenddel azonos küszöbök:
+  // SIT_MIN, SIT_HABIT_PCT, SIT_MATCH_LOW_PCT; legfeljebb három ember).
+  String? _playerHabits(Map<String, dynamic> r) {
+    const acts = ["lövés", "passz a 6 m-re", "passz a szélre",
+                  "visszajátszás", "átadás"];
+    const phrase = {
+      "kilépnek rá": "ha kilépnek rá",
+      "szabad a 6 m-es társ": "ha szabad a 6 m-es társa",
+      "szabad lőhely": "szabad lőhelyen",
+    };
+    final rows = (r["sit_player_rows"] as List?) ?? const [];
+    final acc = <String, Map<String, dynamic>>{};
+    for (final raw in rows) {
+      final row = (raw as Map).cast<String, dynamic>();
+      final key = "${row["jersey"]}|${row["sit"]}";
+      final rec = acc.putIfAbsent(key, () => {
+            "jersey": (row["jersey"] as num).toInt(),
+            "sit": row["sit"] as String,
+            "n": 0, "m": 0, "a": <String, int>{}, "b": <String, int>{}
+          });
+      rec["n"] = (rec["n"] as int) + ((row["decisions"] as num?)?.toInt() ?? 0);
+      rec["m"] = (rec["m"] as int) + ((row["match"] as num?)?.toInt() ?? 0);
+      for (final k in ["a", "b"]) {
+        final src = ((k == "a" ? row["actions"] : row["best"]) as Map?)
+                ?.cast<String, dynamic>() ?? {};
+        final dst = rec[k] as Map<String, int>;
+        src.forEach((a, v) => dst[a] = (dst[a] ?? 0) + (v as num).toInt());
+      }
+    }
+    String top(Map<String, int> m) {
+      var bestA = acts.first;
+      var bestN = -1;
+      for (final a in acts) {
+        final c = m[a] ?? 0;
+        if (c > bestN) {
+          bestA = a;
+          bestN = c;
+        }
+      }
+      return bestA;
+    }
+    final perPlayer = <int, List<dynamic>>{};
+    final keys = acc.keys.toList()..sort();
+    for (final k in keys) {
+      final rec = acc[k]!;
+      final n = rec["n"] as int;
+      if (n < 8) continue;
+      final a = rec["a"] as Map<String, int>;
+      final habit = top(a);
+      final best = top(rec["b"] as Map<String, int>);
+      final share = 100.0 * (a[habit] ?? 0) / n;
+      final m = 100.0 * (rec["m"] as int) / n;
+      if (habit == best || share < 50.0 || m > 40.0) continue;
+      final j = rec["jersey"] as int;
+      final cur = perPlayer[j];
+      if (cur == null || m < (cur[4] as double)) {
+        perPlayer[j] = [j, rec["sit"], habit, share, m, n];
+      }
+    }
+    if (perPlayer.isEmpty) return null;
+    final list = perPlayer.values.toList()
+      ..sort((x, y) {
+        final c = (y[5] as int).compareTo(x[5] as int);
+        return c != 0 ? c : (x[0] as int).compareTo(y[0] as int);
+      });
+    return list.take(3).map((e) =>
+        "#${e[0]} ${phrase[e[1]]}: ${(e[3] as double).round()}% ${e[2]} "
+        "(${e[5]} döntés)").join(" · ");
+  }
+
   // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
   // poszthoz kötött lövés, 60% részarány — a backenddel azonos
   // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
@@ -12605,6 +12677,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Döntés szorításban", _pressureDecision(r)!],
       if (_situationHabit(r) != null)
         ["Helyzet-döntés", _situationHabit(r)!],
+      if (_playerHabits(r) != null)
+        ["Játékos döntési szokása", _playerHabits(r)!],
       if (_timeoutFinisher(r) != null)
         ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)

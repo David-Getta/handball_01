@@ -935,6 +935,11 @@ class ScoutingReport:
     sit_match: dict = field(default_factory=dict)
     sit_counts: dict = field(default_factory=dict)
     sit_best: dict = field(default_factory=dict)
+    # Helyzet-döntés JÁTÉKOSONKÉNT (a mezszám a kulcs, hogy meccsek közt
+    # ugyanaz az ember összeálljon): lapos sorok — {"jersey", "sit",
+    # "decisions", "match", "actions", "best"} — meccsek közt egymás
+    # mögé; a szokás a _sit_players-ben ÚJRASZÁMOLVA (arányt nem tárolunk).
+    sit_player_rows: list = field(default_factory=list)
     # Kontra-poszt: a lerohanás-szakaszokra eső, poszthoz kötött
     # lövések darabszáma posztonként. Darabszám, meccsek közt
     # pontosan összegződik.
@@ -6519,6 +6524,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Szorításban is jól döntenek (szorítva {_pdq_pp:.0f}%, "
                 f"szabadon {_pdq_fp:.0f}% a legjobb opció) — a kilépés "
                 "ellenük csak rést nyit, zárt falban védekezzetek.")
+
+    # Játékos-szokások: kinek van rossz szokása egy helyzetben.
+    try:
+        _sitp = _sit_players(rep)[:3]
+        if _sitp:
+            from .decisions import SIT_PHRASE_ONE, sit_article
+            _reszek = [
+                f"a(z) {j_}-es {SIT_PHRASE_ONE[s_]} a döntései "
+                f"{sh_:.0f}%-a {h_} (pedig {sit_article(b_)} {b_} érne "
+                f"többet, {n_} döntés)"
+                for j_, s_, h_, b_, sh_, mp_, n_ in _sitp]
+            keys.append(
+                "Játékos-szokások: " + "; ".join(_reszek) + " — a "
+                "védekezést rájuk szabjátok: abba a helyzetbe "
+                "kényszerítsétek őket, ahol rosszul döntenek.")
+    except Exception:
+        pass
 
     # Helyzet-döntés: melyik helyzetben rossz a szokásuk.
     try:
@@ -12217,7 +12239,14 @@ def _scout_team_cached(match: Match, team: Team,
         rep.pdq_free_best = pdqrec["free_best"]
         rep.pdq_players = [dict(row) for row in pdqrec["players"]]
         from .decisions import situational_decisions as _sit
-        sitrec = _sit(match, config)[team.value]["situations"]
+        sitfull = _sit(match, config)[team.value]
+        sitrec = sitfull["situations"]
+        rep.sit_player_rows = [
+            {"jersey": row["jersey"], "sit": s, "decisions": r["decisions"],
+             "match": r["match"], "actions": dict(r["actions"]),
+             "best": dict(r.get("best") or {})}
+            for row in sitfull["players"] if row.get("jersey") is not None
+            for s, r in sorted(row["situations"].items())]
         rep.sit_decisions = {s: r["decisions"] for s, r in sitrec.items()}
         rep.sit_match = {s: r["match"] for s, r in sitrec.items()}
         rep.sit_counts = {f"{s}|{a}": n for s, r in sitrec.items()
@@ -13829,6 +13858,46 @@ def _sit_habit(rep) -> tuple | None:
         if worst is None or match_pct < worst[4]:
             worst = (sit, habit, best, share, match_pct, n)
     return worst
+
+
+def _sit_players(rep) -> list:
+    """Játékos-szokások a felderítés lapos soraiból: mezszámonként és
+    helyzetenként összegezve, a motorral (situational_decisions)
+    azonos küszöbökkel — (mezszám, helyzet, szokás, legjobb opció, a
+    szokás %-a, a legjobb-opció %-a, döntésszám) játékosonként a
+    legrosszabb egyezésű helyzetre, a döntésszám szerint csökkenő
+    (egyezésnél mezszám szerint) sorrendben."""
+    from .decisions import (SIT_ACTIONS, SIT_HABIT_PCT, SIT_MATCH_LOW_PCT,
+                            SIT_MIN)
+    acc: dict = {}
+    for row in rep.sit_player_rows or []:
+        rec = acc.setdefault((row["jersey"], row["sit"]),
+                             {"n": 0, "m": 0, "a": {}, "b": {}})
+        rec["n"] += int(row.get("decisions", 0))
+        rec["m"] += int(row.get("match", 0))
+        for k, v in (row.get("actions") or {}).items():
+            rec["a"][k] = rec["a"].get(k, 0) + v
+        for k, v in (row.get("best") or {}).items():
+            rec["b"][k] = rec["b"].get(k, 0) + v
+    best_of: dict = {}
+    for (jersey, sit), rec in sorted(acc.items()):
+        n = rec["n"]
+        if n < SIT_MIN:
+            continue
+        habit = max(SIT_ACTIONS, key=lambda a: (rec["a"].get(a, 0),
+                                                -SIT_ACTIONS.index(a)))
+        best = max(SIT_ACTIONS, key=lambda a: (rec["b"].get(a, 0),
+                                               -SIT_ACTIONS.index(a)))
+        share = 100.0 * rec["a"].get(habit, 0) / n
+        match_pct = 100.0 * rec["m"] / n
+        if habit == best or share < SIT_HABIT_PCT \
+                or match_pct > SIT_MATCH_LOW_PCT:
+            continue
+        cur = best_of.get(jersey)
+        if cur is None or match_pct < cur[5]:
+            best_of[jersey] = (jersey, sit, habit, best, share, match_pct,
+                               n)
+    return sorted(best_of.values(), key=lambda r: (-r[6], r[0]))
 
 
 def _merge_pdq_players(reports) -> list:
@@ -23268,6 +23337,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sit_match=_merge_count_dicts(r.sit_match for r in reports),
         sit_counts=_merge_count_dicts(r.sit_counts for r in reports),
         sit_best=_merge_count_dicts(r.sit_best for r in reports),
+        sit_player_rows=[row for r in reports
+                         for row in (r.sit_player_rows or [])],
         rfb_shots_by_role=_merge_count_dicts(
             r.rfb_shots_by_role for r in reports),
         svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),
