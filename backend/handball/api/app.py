@@ -13443,6 +13443,19 @@ def create_app():
             match_id, "goal-candidates",
             lambda: {"candidates": throw_off_candidates(match)})
 
+    @app.get("/matches/{match_id}/decision-alerts")
+    def match_decision_alerts(match_id: str):
+        """Élő döntés-figyelő (decisions.live_decision_alerts): időrendben,
+        előre nézés nélkül, mikor válik láthatóvá egy csapat rossz
+        döntési szokása egy helyzetben — az élő képernyő időzített
+        jelzései közé kerül."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.decisions import live_decision_alerts
+        return _cached_result(match_id, "decision-alerts",
+                              lambda: live_decision_alerts(match))
+
     @app.get("/matches/{match_id}/players/{player_id}/decisions")
     def get_player_decisions(match_id: str, player_id: int):
         """Egy játékos döntései: kihez passzol és mennyire optimálisan —

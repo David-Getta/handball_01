@@ -1130,7 +1130,8 @@ def _from_area_m(x: float, y: float, goal_x: float) -> float:
 
 
 def situational_decisions(match: Match,
-                          config: Optional[TacticsConfig] = None) -> dict:
+                          config: Optional[TacticsConfig] = None,
+                          records_out: Optional[list] = None) -> dict:
     """Helyzet-döntés: MIT CSINÁLNAK az egyes helyzetekben, és mi lett
     volna a legjobb.
 
@@ -1162,6 +1163,10 @@ def situational_decisions(match: Match,
     "match"};
     "top" az a játékos, akinél ugyanabban a helyzetben ugyanez a szokás
     (legalább SIT_PLAYER_MIN döntés), a legtöbb döntéssel.
+
+    Ha `records_out` lista, a besorolt döntések egyenként is belekerülnek
+    ({"t", "side", "player_id", "sit", "act", "best_act", "good"}) — az
+    élő döntés-figyelő (live_decision_alerts) ezekből számol időrendben.
     """
     from ..models.tracking import Team as _Team
     from .defense import FREE_DEF_RADIUS_M
@@ -1234,6 +1239,11 @@ def situational_decisions(match: Match,
         rec["actions"][act] = rec["actions"].get(act, 0) + 1
         rec["best"][best_act] = rec["best"].get(best_act, 0) + 1
         rec["match"] += good
+        if records_out is not None:
+            records_out.append({"t": frame.t, "side": team.value,
+                                "player_id": holder.track_id, "sit": sit,
+                                "act": act, "best_act": best_act,
+                                "good": good})
         prow = per_player[team.value].setdefault(holder.track_id, {})
         ps = prow.setdefault(sit, {"decisions": 0, "actions": {},
                                    "best": {}, "match": 0})
@@ -1312,6 +1322,73 @@ def situational_decisions(match: Match,
             f"érne többet (csak {match_pct:.0f}%-ban választják a "
             f"legjobbat) — {SIT_ADVICE[sit]}")
     return out
+
+
+# Élő döntés-figyelő: egy csapat egy helyzetben ennyi döntése után
+# szólhat (élőben kevesebb mintával, mint a meccs utáni ítéletnél, mert a
+# kispadnak MOST kell a jel); a szokás- és egyezés-küszöb a
+# situational_decisions-é.
+LIVE_SIT_MIN = 6
+
+
+def live_decision_alerts(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Élő döntés-figyelő: a meccs KÖZBEN, időrendben, előre nézés
+    nélkül — mikor válik láthatóvá, hogy egy csapat egy helyzetben rossz
+    szokással dönt.
+
+    A situational_decisions egyenkénti döntéseit időrendben számoljuk;
+    csapatonként és helyzetenként az első olyan döntésnél szólunk, ahol
+    az addigi döntések száma eléri a LIVE_SIT_MIN-t, a leggyakoribb
+    választás (a szokás) aránya SIT_HABIT_PCT feletti, a legjobb opció
+    aránya SIT_MATCH_LOW_PCT alatti, és a szokás nem a leggyakoribb
+    legjobb opció. Helyzetenként egyszer szól — a jel a VÉDEKEZŐ
+    csapatnak szól (őt kell abba a helyzetbe kényszeríteni).
+
+    Edzőileg: ez a kispadnak szóló élő tanács — a félidei elemzés helyett
+    már a 15. percben: "kilépésre rendre hátra passzolnak, lépjetek ki
+    rájuk".
+
+    Visszatérés: {"alerts": [{"t" (a jelzést kiváltó döntés kockája),
+    "team" (a rossz szokású csapat), "situation", "habit", "best_action",
+    "decisions", "best", "text"}]} időrendben.
+    """
+    config = config or TacticsConfig()
+    recs: list = []
+    situational_decisions(match, config, records_out=recs)
+    recs.sort(key=lambda r: (r["t"], r["side"]))
+    names = {"home": match.meta.home_team, "away": match.meta.away_team}
+    acc: dict = {}
+    fired: set = set()
+    alerts: list = []
+    for r in recs:
+        key = (r["side"], r["sit"])
+        a = acc.setdefault(key, {"n": 0, "m": 0, "acts": {}, "best": {}})
+        a["n"] += 1
+        a["m"] += r["good"]
+        a["acts"][r["act"]] = a["acts"].get(r["act"], 0) + 1
+        a["best"][r["best_act"]] = a["best"].get(r["best_act"], 0) + 1
+        if key in fired or a["n"] < LIVE_SIT_MIN:
+            continue
+        habit = max(SIT_ACTIONS, key=lambda x: (a["acts"].get(x, 0),
+                                                -SIT_ACTIONS.index(x)))
+        best = max(SIT_ACTIONS, key=lambda x: (a["best"].get(x, 0),
+                                               -SIT_ACTIONS.index(x)))
+        share = 100.0 * a["acts"].get(habit, 0) / a["n"]
+        match_pct = 100.0 * a["m"] / a["n"]
+        if habit == best or share < SIT_HABIT_PCT \
+                or match_pct > SIT_MATCH_LOW_PCT:
+            continue
+        fired.add(key)
+        alerts.append({
+            "t": r["t"], "team": r["side"], "situation": r["sit"],
+            "habit": habit, "best_action": best, "decisions": a["n"],
+            "best": a["m"],
+            "text": (f"{names[r['side']]}: ha {SIT_PHRASE[r['sit']]}, eddig "
+                     f"{a['n']} döntésükből {a['acts'].get(habit, 0)} "
+                     f"{habit} volt, pedig {sit_article(best)} {best} érne "
+                     f"többet — {SIT_ADVICE[r['sit']]}")})
+    return {"alerts": alerts}
 
 
 # Labdatartó-poszt: ennyi poszthoz kötött labdatartás-másodperc kell

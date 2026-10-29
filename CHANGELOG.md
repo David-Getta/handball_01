@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **Élő döntés-figyelő** (motor + élő képernyő): az élő képernyő
+  időzített jelzései közé bekerül a játékos-modell. Meccs közben,
+  időrendben és előre nézés nélkül figyeli a két csapat döntéseit
+  helyzetenként, és amint egy rossz szokás kirajzolódik (hat döntés
+  után), szól a kispadnak: "Döntés-figyelő — A: ha kilépnek rájuk,
+  eddig 6 döntésükből 6 visszajátszás volt, pedig a passz a 6 m-re érne
+  többet — lépjetek ki rájuk korán". Helyzetenként egyszer szól, a
+  meccs utáni elemzésnél kevesebb mintával, mert a jelnek MOST kell
+  megjönnie. Új végpont: /matches/{id}/decision-alerts.
+
 - **A 3D/VR döntés-felirat a helyzetet és a szokást is kimondja**
   (motor + böngésző-nézet + app): a 3D nézet "Döntések" lapozója eddig
   azt írta, hogy jobb opció is volt. Most a játékos-modellből azt is,

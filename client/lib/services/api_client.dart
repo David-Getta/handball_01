@@ -633,6 +633,20 @@ class ApiClient {
     return (json["moments"] as List?) ?? const [];
   }
 
+  /// Élő döntés-figyelő (GET /matches/{id}/decision-alerts): időrendben,
+  /// előre nézés nélkül, mikor látszik egy csapat rossz döntési szokása —
+  /// az élő képernyő időzített jelzései közé.
+  Future<List<dynamic>> fetchDecisionAlerts(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/decision-alerts"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a döntés-figyelő", resp));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List?) ?? const [];
+  }
+
   /// Egy játékos döntés-profilja (GET /matches/{id}/players/{pid}/decisions):
   /// helyzetenként mit választ és hányszor a legjobbat, és a szorított
   /// döntései — a Döntések panel játékos-modellje.

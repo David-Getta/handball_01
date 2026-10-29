@@ -146,3 +146,13 @@ def test_a_szezon_lap_is_viszi_a_dontes_minoseget():
     assert '<td class="num">3/12</td>' in html
     nincs = [dict(p, dec_n=None, dec_best=None) for p in pontok]
     assert "Döntés" not in player_season_html("A", 7, nincs, "Kovács", None)
+
+
+def test_az_elo_dontes_figyelo_vegpontja():
+    """Az élő képernyő a /decision-alerts listát teszi időzített jelzésnek:
+    kocka ("t") és szöveg kell; nem létező meccsre 404."""
+    client, mid = _client()
+    al = client.get(f"/matches/{mid}/decision-alerts").json()["alerts"]
+    assert len(al) == 1 and al[0]["t"] > 0, al
+    assert "kilépnek rájuk" in al[0]["text"], al
+    assert client.get("/matches/nincs/decision-alerts").status_code == 404

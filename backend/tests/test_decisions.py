@@ -416,6 +416,30 @@ def test_a_3d_dontes_pillanat_viszi_a_helyzetet_es_a_szokast():
     assert decision_situation(f, holder) == "kilépnek rá"
 
 
+def test_az_elo_dontes_figyelo_idoben_szol_es_nem_nez_elore():
+    """Kilépésre tízszer hátra passzol: az élő figyelő a HATODIK ilyen
+    döntés kockáján szól (LIVE_SIT_MIN), egyszer, a csapat nevével és a
+    jobb opcióval; három döntésből (kevés) nem szól. A jelzés ideje nem
+    függ a későbbi döntésektől: a meccs első fele ugyanott szól."""
+    from handball.pipeline.decisions import (LIVE_SIT_MIN,
+                                             live_decision_alerts)
+
+    m = _sit_match()
+    al = live_decision_alerts(m)["alerts"]
+    assert len(al) == 1, al
+    a = al[0]
+    assert a["team"] == "home" and a["situation"] == "kilépnek rá", a
+    assert a["decisions"] == LIVE_SIT_MIN and a["best"] == 0, a
+    # A hatodik döntés: ciklusonként 9 kocka, a döntés a 2. tartás vége.
+    assert a["t"] == 9 * (LIVE_SIT_MIN - 1) + 5, a
+    assert a["text"].startswith("A: ha kilépnek rájuk, eddig 6 "
+                                "döntésükből 6 visszajátszás volt"), a
+    assert "a passz a 6 m-re érne többet" in a["text"], a
+    assert live_decision_alerts(_sit_match(n=3))["alerts"] == []
+    fele = Match(m.meta, m.frames[:9 * 7])
+    assert live_decision_alerts(fele)["alerts"][0]["t"] == a["t"]
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

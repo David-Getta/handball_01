@@ -143,6 +143,16 @@ class _LiveScreenState extends State<LiveScreen> {
                 "hosszú indítás az üres kapura!")));
       }
     } catch (_) {}
+    // Élő döntés-figyelő: a játékos-modellből — mikor válik láthatóvá egy
+    // csapat rossz döntési szokása egy helyzetben (a védekező oldalnak
+    // szól: abba a helyzetbe kell kényszeríteni őket).
+    try {
+      for (final a in await _api.fetchDecisionAlerts(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "dontes", "Döntés-figyelő — ${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Ismert figura: a csapat meccsről meccsre visszatérő figurája
     // indul — a védekező oldalnak szól (kettőzés a súlypontnál). A
     // könyvtár több elemzett meccsből épül; egy meccsnél a lista üres.
