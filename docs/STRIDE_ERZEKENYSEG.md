@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **513 réteg** összevetve, ebből **19 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **515 réteg** összevetve, ebből **20 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -39,7 +39,7 @@ háromszor annyi valós időt követelnek.
 
 ### `counter_plan`
 
-- `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 15 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
+- `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 18 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 17 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 - `home.pairs[2].verdict`: sűrűn `a(z) beálló közelről fejez be (átl. 6.0 m) — őt ki kell zárni` → ritkítva `a(z) beálló közelről fejez be (átl. 5.9 m) — őt ki kell zárni`
 - `home.pairs[4].verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `a(z) 1. figurájuk indításainak 100%-a a(z) beálló posztról jön — amint a labda odaér, zárni kell a kiinduló passzsávot, és a figura el sem indul`
 
@@ -49,7 +49,7 @@ háromszor annyi valós időt követelnek.
 
 ### `key_player`
 
-- `home.verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 15 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
+- `home.verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 18 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 17 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 
 ### `key_post`
 
@@ -70,6 +70,11 @@ háromszor annyi valós időt követelnek.
 ### `pivot_runners`
 
 - `home.top`: sűrűn `6` → ritkítva `None`
+
+### `pressure_decision_quality`
+
+- `away.verdict`: sűrűn `szorításban is jól döntenek (szorítva a döntéseik 100%-a a legjobb opció, szabadon 100%) — a kilépés ellenük csak rést nyit a fal mögött, zárt falban kell védekezni` → ritkítva `None`
+- `home.verdict`: sűrűn `szorításban rosszabbul döntenek: szabadon a döntéseik 40%-a, szorítva csak 17%-a a legjobb opció — rájuk kell lépni, a labdásra lépő védekezés náluk rossz döntést kényszerít ki` → ritkítva `szorításban rosszabbul döntenek: szabadon a döntéseik 38%-a, szorítva csak 17%-a a legjobb opció — rájuk kell lépni, a labdásra lépő védekezés náluk rossz döntést kényszerít ki`
 
 ### `role_shooting_hand`
 
