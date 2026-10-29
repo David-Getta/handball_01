@@ -156,3 +156,21 @@ def test_az_elo_dontes_figyelo_vegpontja():
     assert len(al) == 1 and al[0]["t"] > 0, al
     assert "kilépnek rájuk" in al[0]["text"], al
     assert client.get("/matches/nincs/decision-alerts").status_code == 404
+
+
+def test_a_jatekos_lap_viszi_a_donteseit():
+    """A kiosztható játékos-lap "Döntéseid" szakasza: helyzetenként a
+    döntések, a választások és a legjobb opció aránya, szorítva külön,
+    és a rossz szokásra egy tegező mondat. Döntés nélküli játékosnál a
+    szakasz el sem jelenik."""
+    from handball.pipeline.report_html import player_report_html
+
+    m = _match()
+    html = player_report_html(m, 1)
+    assert "<h2>Döntéseid</h2>" in html
+    assert "<b>Ha kilépnek rád</b>: 10 döntés — 10× visszajátszás; " \
+        "a legjobb: 0/10" in html, html
+    assert "0/10</div><div class=\"ml\">szorítva" in html
+    assert "Ha kilépnek rád rendre a visszajátszás a választásod, pedig " \
+        "a passz a 6 m-re érne többet" in html
+    assert "Döntéseid" not in player_report_html(m, 3)

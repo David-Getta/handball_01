@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **"Döntéseid" a kiosztható játékos-lapon** (motor): a játékos meccs-
+  lapja eddig a játék-mérleget, a fizikai mutatókat és a gyakorolni
+  valót hozta. Most a játékos-modellt is, neki szólva: helyzetenként
+  (ha kilépnek rád, ha szabad a 6 m-es társad, szabad lőhelyen) hány
+  döntése volt, mit választott, és hányszor a legjobbat; szorítva
+  külön; és ha egy helyzetben rossz a szokása, egy mondat: "Ha
+  kilépnek rád rendre a visszajátszás a választásod, pedig a passz a
+  6 m-re érne többet — mielőtt döntesz, nézz fel". A játékos ezt viszi
+  haza a meccs után.
+
 - **Élő döntés-figyelő** (motor + élő képernyő): az élő képernyő
   időzített jelzései közé bekerül a játékos-modell. Meccs közben,
   időrendben és előre nézés nélkül figyeli a két csapat döntéseit

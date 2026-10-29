@@ -4503,6 +4503,76 @@ def player_report_html(match, track_id: int) -> str:
             focus_html = f"<h2>Mit gyakorolj</h2><ul>{_lis}</ul>"
     except Exception:
         pass  # a lap e blokk nélkül is teljes
+    # DÖNTÉSEID: a játékos-modell róla — helyzetenként mit választott, és
+    # hányszor a legjobbat; ha egy helyzetben rossz a szokása, egy mondat
+    # arról, mit érdemes másképp (a meccsjelentés küszöbeivel).
+    decision_html = ""
+    try:
+        from .decisions import (SIT_ACTIONS, SIT_HABIT_PCT,
+                                SIT_MATCH_LOW_PCT, SIT_PLAYER_MIN,
+                                SIT_SITUATIONS, pressure_decision_quality,
+                                sit_article, situational_decisions)
+        _sd = situational_decisions(match)[row["team"]]["players"]
+        _osz: dict = {}
+        for _r in _sd:
+            if _r["player_id"] not in tids:
+                continue
+            for _s, _v in _r["situations"].items():
+                _a = _osz.setdefault(_s, {"n": 0, "m": 0, "a": {}, "b": {}})
+                _a["n"] += _v["decisions"]
+                _a["m"] += _v["match"]
+                for _k, _c in _v["actions"].items():
+                    _a["a"][_k] = _a["a"].get(_k, 0) + _c
+                for _k, _c in (_v.get("best") or {}).items():
+                    _a["b"][_k] = _a["b"].get(_k, 0) + _c
+        _te = {"kilépnek rá": "Ha kilépnek rád",
+               "szabad a 6 m-es társ": "Ha szabad a 6 m-es társad",
+               "szabad lőhely": "Szabad lőhelyen"}
+        _sorok, _tanacs = [], []
+        _n_ossz = _m_ossz = 0
+        for _s in SIT_SITUATIONS:
+            _a = _osz.get(_s)
+            if not _a or not _a["n"]:
+                continue
+            _n_ossz += _a["n"]
+            _m_ossz += _a["m"]
+            _valasz = ", ".join(
+                f"{_a['a'][x]}× {x}" for x in SIT_ACTIONS if _a["a"].get(x))
+            _sorok.append(f"<li><b>{escape(_te[_s])}</b>: {_a['n']} döntés "
+                          f"— {escape(_valasz)}; a legjobb: "
+                          f"{_a['m']}/{_a['n']}</li>")
+            _h = max(SIT_ACTIONS, key=lambda x: (_a["a"].get(x, 0),
+                                                 -SIT_ACTIONS.index(x)))
+            _b = max(SIT_ACTIONS, key=lambda x: (_a["b"].get(x, 0),
+                                                 -SIT_ACTIONS.index(x)))
+            if (_a["n"] >= SIT_PLAYER_MIN and _h != _b
+                    and 100.0 * _a["a"].get(_h, 0) / _a["n"] >= SIT_HABIT_PCT
+                    and 100.0 * _a["m"] / _a["n"] <= SIT_MATCH_LOW_PCT):
+                _tanacs.append(
+                    f"{_te[_s]} rendre {sit_article(_h)} {_h} a "
+                    f"választásod, pedig {sit_article(_b)} {_b} érne "
+                    "többet — mielőtt döntesz, nézz fel: ott van a jobb "
+                    "megoldás.")
+        _pr = _prb = 0
+        for _r in pressure_decision_quality(match)[row["team"]]["players"]:
+            if _r["player_id"] in tids:
+                _pr += _r["press"]
+                _prb += _r["press_best"]
+        if _sorok:
+            _met = (f'<div class="metric"><div class="mv">{_m_ossz}/'
+                    f'{_n_ossz}</div><div class="ml">a legjobb opció '
+                    'a besorolt helyzetekben</div></div>')
+            if _pr:
+                _met += (f'<div class="metric"><div class="mv">{_prb}/'
+                         f'{_pr}</div><div class="ml">szorítva (védő 2 '
+                         'm-en belül)</div></div>')
+            decision_html = (
+                f'<h2>Döntéseid</h2><div class="metrics">{_met}</div>'
+                f'<ul>{"".join(_sorok)}</ul>'
+                + "".join(f'<p class="note">{escape(t_)}</p>'
+                          for t_ in _tanacs))
+    except Exception:
+        pass  # a lap e blokk nélkül is teljes
     sub = f"{meta.home_team} vs {meta.away_team}"
     if meta.date:
         sub += f" · {meta.date}"
@@ -4554,6 +4624,7 @@ def player_report_html(match, track_id: int) -> str:
 <div class="metrics">{game_html}</div>
 <h2>Fizikai mutatók</h2>
 <div class="metrics">{"".join(phys_items)}</div>
+{decision_html}
 {tips_html}
 {focus_html}
 <footer>A számok a pálya-koordinátás követésből és a magyarázható
