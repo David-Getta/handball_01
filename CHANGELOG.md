@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.185 óta)
 
+- **Helyzet-döntés** (új réteg): MIT CSINÁLNAK az egyes helyzetekben,
+  és mi lett volna a legjobb. Ez a "hogyan dönt" játékos- és
+  csapat-modell első helyzetenkénti képe: minden labdás döntést
+  besorol (kilépnek rá, szabad a 6 m-es társ, szabad lőhely), és
+  számolja, mit választottak (lövés, passz a 6 m-re, passz a szélre,
+  visszajátszás, átadás), és mit adott volna a legjobb opció. A legjobb
+  opciónál a fedezett lövő és a fogott fogadó kevesebbet ér. Edzői
+  olvasat: "ha kilépnek rájuk, a döntéseik 70%-a visszajátszás, pedig a
+  passz a 6 m-re érne többet — lépjetek ki rájuk korán: a kilépés a
+  gyengébb megoldásba kényszeríti őket". Játékosonként is megnevezi,
+  kinek ez a szokása. Felületek: elemzés-válasz és meccs-csomag, edzői
+  összefoglaló, felderítés (helyzet × választás darabszámok, edzői
+  kulcs, 469. meccsterv-szabály a saját kilépő védővel párosítva,
+  összevont jelentés), 488. edzés-szabály (a rossz szokás átírása
+  helyzet-gyakorlattal), Kulcs-ember lencse, kliens-csempe
+  "Helyzet-döntés".
+
 - **Döntés szorításban** (új réteg): A LEGJOBB OPCIÓT VÁLASZTJÁK-E,
   ha rájuk lépnek. A pressz-rétegek eddig azt mérték, mennyivel több az
   eladás testközeli védő mellett, és ki lő fedezetten. Ez azt méri,

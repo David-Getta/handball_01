@@ -3587,6 +3587,16 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"({pdq[side]['pressed']} szorított döntés).")
     except Exception:
         pass
+    # Helyzet-döntés: melyik helyzetben rossz a szokásuk.
+    try:
+        from .decisions import situational_decisions
+        sit = situational_decisions(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (sit.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name} szokása: {mondat}."
+    except Exception:
+        pass
     # Időkérés-befejező: az időkérés után kire játszanak.
     try:
         from .stoppages import timeout_finisher

@@ -6833,6 +6833,56 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Helyzet-döntés: melyik helyzetben rossz a szokásuk (helyzetenként
+  // 8+ döntés, a szokás 50% felett, a legjobb opció 40% alatt, és a
+  // szokás nem a leggyakoribb legjobb opció — a backenddel azonos
+  // küszöbök: SIT_MIN, SIT_HABIT_PCT, SIT_MATCH_LOW_PCT; a helyzetek és
+  // a választások sorrendje is a motoré, a holtverseny így ugyanúgy dől).
+  String? _situationHabit(Map<String, dynamic> r) {
+    const sits = ["kilépnek rá", "szabad a 6 m-es társ", "szabad lőhely"];
+    const acts = ["lövés", "passz a 6 m-re", "passz a szélre",
+                  "visszajátszás", "átadás"];
+    const phrase = {
+      "kilépnek rá": "ha kilépnek rájuk",
+      "szabad a 6 m-es társ": "ha szabad a 6 m-es társuk",
+      "szabad lőhely": "szabad lőhelyen",
+    };
+    final dec = (r["sit_decisions"] as Map?)?.cast<String, dynamic>() ?? {};
+    final match = (r["sit_match"] as Map?)?.cast<String, dynamic>() ?? {};
+    final counts = (r["sit_counts"] as Map?)?.cast<String, dynamic>() ?? {};
+    final best = (r["sit_best"] as Map?)?.cast<String, dynamic>() ?? {};
+    String? out;
+    double? worstMatch;
+    for (final s in sits) {
+      final n = (dec[s] as num?)?.toInt() ?? 0;
+      if (n < 8) continue;
+      String top(Map<String, dynamic> m) {
+        var bestA = acts.first;
+        var bestN = -1;
+        for (final a in acts) {
+          final c = (m["$s|$a"] as num?)?.toInt() ?? 0;
+          if (c > bestN) {
+            bestA = a;
+            bestN = c;
+          }
+        }
+        return bestA;
+      }
+      final habit = top(counts);
+      final bestAct = top(best);
+      final share = 100.0 * ((counts["$s|$habit"] as num?)?.toInt() ?? 0) / n;
+      final m = 100.0 * ((match[s] as num?)?.toInt() ?? 0) / n;
+      if (habit == bestAct || share < 50.0 || m > 40.0) continue;
+      if (worstMatch == null || m < worstMatch) {
+        worstMatch = m;
+        out = "${phrase[s]} a döntéseik ${share.round()}%-a $habit, "
+            "pedig $bestAct érne többet ($n döntésből ${m.round()}% a "
+            "legjobb) · ide kell kényszeríteni őket";
+      }
+    }
+    return out;
+  }
+
   // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
   // poszthoz kötött lövés, 60% részarány — a backenddel azonos
   // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
@@ -12553,6 +12603,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövésválasztás", _shotChoice(r)!],
       if (_pressureDecision(r) != null)
         ["Döntés szorításban", _pressureDecision(r)!],
+      if (_situationHabit(r) != null)
+        ["Helyzet-döntés", _situationHabit(r)!],
       if (_timeoutFinisher(r) != null)
         ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)

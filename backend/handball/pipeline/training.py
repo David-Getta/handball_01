@@ -1562,6 +1562,49 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 488) Rossz szokásunk egy helyzetben: a döntés-modell szerint egy
+    # visszatérő helyzetben (kilépnek ránk, szabad a 6 m-es társ, szabad
+    # lőhely) rendre nem a legjobb megoldást választjuk — ez nem
+    # egyszeri hiba, hanem begyakorolt reflex, amit át kell írni.
+    _szabaly = 488
+    try:
+        from .decisions import sit_article, situational_decisions
+        mikor488 = {"kilépnek rá": "ránk lépnek",
+                    "szabad a 6 m-es társ": "szabad a 6 m-es társunk",
+                    "szabad lőhely": "szabad lőhelyen kapjuk a labdát"}
+        sit488 = situational_decisions(match, config)
+        gyak488 = {
+            "kilépnek rá": "döntés kilépő védő ellen: 2 a 2 a beállóval, a "
+                           "védő a labdásra lép — a labdás a kilépés "
+                           "mögötti teret keresi (beálló vagy áttörés), "
+                           "visszajátszás csak jelre",
+            "szabad a 6 m-es társ": "beálló-észlelés: 3 a 3 beállóval, a "
+                                    "beálló szabadulásakor az edző jelez, "
+                                    "és a labdásnak egy másodpercen belül "
+                                    "be kell játszania",
+            "szabad lőhely": "döntés szabad lőhelyről: befutás 9 m-re, az "
+                             "edző jelére változó védő-helyzettel — "
+                             "azonnali lövés, vagy a 6 m-es passz, ha ott "
+                             "a jobb opció",
+        }
+        for side in ("home", "away"):
+            rec488 = sit488.get(side) or {}
+            s488 = rec488.get("situation")
+            if not rec488.get("verdict") or s488 not in gyak488:
+                continue
+            n488 = rec488["situations"][s488]["decisions"]
+            m488 = rec488["situations"][s488]["match"]
+            b488 = rec488["best_action"]
+            add(side, "támadás", "Rossz szokás egy helyzetben",
+                f"ha {mikor488[s488]}, "
+                f"rendre {sit_article(rec488['habit'])} "
+                f"{rec488['habit']} a választásunk, pedig "
+                f"{sit_article(b488)} {b488} érne többet ({n488} "
+                f"döntésből csak {m488} a legjobb)",
+                gyak488[s488])
+    except Exception:
+        pass
+
     # 487) Szorításban rosszabbul döntünk: ha ránk lépnek, a labdás nem
     # néz fel — a jó opció ott van, de nem azt választjuk. Ellene a
     # nyomás alatti DÖNTÉS gyakorlása kell, nem a labdabiztonság (az

@@ -752,6 +752,7 @@ KPL_LAYERS: tuple = (
     ("Kiosztás-célpont", "attack_types", "kickout_targets"),
     ("Pressz-érzékeny", "decisions", "pressure_sensitive_players"),
     ("Szorításban rosszul döntő", "decisions", "pressure_decision_quality"),
+    ("Rossz helyzet-szokású", "decisions", "situational_decisions"),
     ("Emberelőny-lövő", "rules", "powerplay_shooters"),
     ("Emberhátrány-lövő", "rules", "shorthanded_shooters"),
     ("Fáradt-eladó", "decisions", "tired_turnover_players"),

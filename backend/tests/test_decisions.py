@@ -265,6 +265,110 @@ def test_a_szoritasos_dontes_felderitesben_es_edzesen_valodi_retegbol(
     assert "szorításban rosszabbul döntenek" in str(coach_summary(meccs))
 
 
+# ---- Helyzet-döntés (situational_decisions) --------------------------------
+
+
+def _sit_match(n=10, target=4, match_id="sd"):
+    """A hazai 1-es labdásra (30; 13,3) a vendég 11-es rálép (1,2 m); a
+    2-es szabad 6 m-es társ (34,2; 12,5), a 3-as szélső, a 4-es hátul
+    (26,5; 10). A labdás minden döntésnél a `target`-nek passzol; két
+    döntés között a vendég 12-es birtokol."""
+    base = {1: (30.0, 13.3), 2: (34.2, 12.5), 3: (37.0, 18.5),
+            4: (26.5, 10.0)}
+    frames = []
+    t = 0
+
+    def cast():
+        return ([_pl(i, Team.HOME, *xy) for i, xy in base.items()]
+                + [_pl(11, Team.AWAY, 31.0, 14.0),
+                   _pl(12, Team.AWAY, 33.0, 8.0)])
+
+    def hold(xy, k=3):
+        nonlocal t
+        for _ in range(k):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=xy[0], y=xy[1], confidence=1.0)))
+            t += 1
+
+    for _ in range(n):
+        hold((33.0, 8.0))
+        hold(base[1])
+        hold(base[target])
+    return Match(MatchMeta(match_id=match_id, home_team="A",
+                           away_team="B", fps=25), frames)
+
+
+def test_situational_decisions_names_the_bad_habit():
+    """Kilépésre mindig hátra passzol, pedig a 6 m-es társ szabad: a
+    réteg megnevezi a helyzetet, a szokást, a jobb opciót és az 1-est."""
+    from handball.pipeline.decisions import situational_decisions
+
+    rec = situational_decisions(_sit_match())["home"]
+    s = rec["situations"]["kilépnek rá"]
+    assert s["decisions"] == 10 and s["match"] == 0, s
+    assert rec["situation"] == "kilépnek rá", rec
+    assert rec["habit"] == "visszajátszás", rec
+    assert rec["best_action"] == "passz a 6 m-re", rec
+    assert rec["top"] and rec["top"]["player_id"] == 1, rec
+    assert "ha kilépnek rájuk" in rec["verdict"], rec
+    assert "a passz a 6 m-re érne többet" in rec["verdict"], rec
+
+
+def test_situational_decisions_silent_when_choice_is_best_or_rare():
+    """Ha a legjobbat választja (a 6 m-es társ), vagy kevés a döntés,
+    nincs ítélet — a darabszámok akkor is látszanak."""
+    from handball.pipeline.decisions import situational_decisions
+
+    jo = situational_decisions(_sit_match(target=2))["home"]
+    assert jo["situations"]["kilépnek rá"]["match"] == 10, jo
+    assert jo["verdict"] is None and jo["situation"] is None, jo
+    keves = situational_decisions(_sit_match(n=3))["home"]
+    assert keves["situations"]["kilépnek rá"]["decisions"] == 3
+    assert keves["verdict"] is None, keves
+
+
+def test_a_helyzet_dontes_felderitesben_es_edzesen_valodi_retegbol(
+        monkeypatch):
+    """A VALÓDI úton: felderítés (darabszám-mezők, edzői kulcs, a 469-es
+    meccsterv-szabály mindkét ága, combine_reports), a 488-as
+    edzés-szabály és az összefoglaló mondata."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    meccs = _sit_match()
+    rep = scout_team(meccs, Team.HOME)
+    assert rep.sit_decisions["kilépnek rá"] == 10, rep.sit_decisions
+    assert rep.sit_counts["kilépnek rá|visszajátszás"] == 10
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(rep))
+    assert "Rossz szokás: ha kilépnek rájuk" in kulcsok, kulcsok
+    ossz = combine_reports([rep, scout_team(_sit_match(match_id="s2"),
+                                            Team.HOME)])
+    assert ossz.sit_decisions["kilépnek rá"] == 20
+    assert ossz.sit_best["kilépnek rá|passz a 6 m-re"] == 20
+    # 469: van kilépő védőnk → ő hozza ki; nincs → valaki lépjen ki.
+    sajat = scout_team(_sit_match(match_id="s3"), Team.HOME)
+    sajat.adv_players = [
+        {"player_id": 5, "frames": 200, "depth_sum_m": 200 * 9.0},
+        {"player_id": 6, "frames": 200, "depth_sum_m": 200 * 6.0},
+        {"player_id": 7, "frames": 200, "depth_sum_m": 200 * 6.0}]
+    terv = " ".join(matchup_plan(sajat, rep))
+    assert "ő hozza ki a rossz döntésüket" in terv, terv
+    sajat.adv_players = []
+    terv2 = " ".join(matchup_plan(sajat, rep))
+    assert "nálatok viszont nincs kilépő védő" in terv2, terv2
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(meccs)["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Rossz szokás egy helyzetben" in cimek, cimek
+    ok = " ".join(t.get("reason", "") + " " + str(t) for t in tetelek)
+    assert "ha ránk lépnek" in ok, ok
+    assert "szokása: ha kilépnek rájuk" in str(coach_summary(meccs))
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

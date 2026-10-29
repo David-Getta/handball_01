@@ -102,10 +102,10 @@ Sorrendben (kb. 200–280 sor összesen):
    - `_coach_keys`: edzői kulcs (mit tegyen ellene a saját csapat),
    - `scout_team`: mezők kitöltése a motorból,
    - `matchup_plan`: új sorszámozott páros szabály (az ő gyengéjük ×
-     a ti erősségetek) — a KÖVETKEZŐ szám: 469,
+     a ti erősségetek) — a KÖVETKEZŐ szám: 470,
    - `combine_reports`: a mezők összegzése.
 5. **Edzés-fókusz** (`pipeline/training.py`, `training_focus`) — új
-   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 488.
+   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 489.
    A blokk alakja: `# N) …` komment, alatta `_szabaly = N`, aztán a
    `try:`. A sorszám a rangsor kulcsa (`rank_focus`: területek között
    forog, területen belül a kisebb sorszám — az alap-szabály — előre);

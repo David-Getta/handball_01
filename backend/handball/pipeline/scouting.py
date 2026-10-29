@@ -926,6 +926,15 @@ class ScoutingReport:
     pdq_free: int = 0
     pdq_free_best: int = 0
     pdq_players: list = field(default_factory=list)
+    # Helyzet-döntés (decisions.situational_decisions): helyzetenként a
+    # döntések száma (sit_decisions) és a legjobb-opciósak (sit_match),
+    # "helyzet|választás" kulccsal a választások (sit_counts) és a
+    # legjobb opciók (sit_best) darabszáma. Darabszám, meccsek közt
+    # pontosan összegződik.
+    sit_decisions: dict = field(default_factory=dict)
+    sit_match: dict = field(default_factory=dict)
+    sit_counts: dict = field(default_factory=dict)
+    sit_best: dict = field(default_factory=dict)
     # Kontra-poszt: a lerohanás-szakaszokra eső, poszthoz kötött
     # lövések darabszáma posztonként. Darabszám, meccsek közt
     # pontosan összegződik.
@@ -6510,6 +6519,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Szorításban is jól döntenek (szorítva {_pdq_pp:.0f}%, "
                 f"szabadon {_pdq_fp:.0f}% a legjobb opció) — a kilépés "
                 "ellenük csak rést nyit, zárt falban védekezzetek.")
+
+    # Helyzet-döntés: melyik helyzetben rossz a szokásuk.
+    try:
+        _sith = _sit_habit(rep)
+        if _sith:
+            from .decisions import SIT_ADVICE, SIT_PHRASE, sit_article
+            _s, _h, _b, _sh, _mp, _n = _sith
+            keys.append(
+                f"Rossz szokás: ha {SIT_PHRASE[_s]}, a döntéseik "
+                f"{_sh:.0f}%-a {_h}, pedig {sit_article(_b)} {_b} érne "
+                f"többet ({_n} döntésből csak {_mp:.0f}% a legjobb) — "
+                f"{SIT_ADVICE[_s]}.")
+    except Exception:
+        pass
 
     # Időkérés-befejező: az időkérésük utáni támadásra kit fogjunk.
     _tof_n = sum(rep.tof_shots_by_role.values())
@@ -12193,6 +12216,14 @@ def _scout_team_cached(match: Match, team: Team,
         rep.pdq_free = pdqrec["free"]
         rep.pdq_free_best = pdqrec["free_best"]
         rep.pdq_players = [dict(row) for row in pdqrec["players"]]
+        from .decisions import situational_decisions as _sit
+        sitrec = _sit(match, config)[team.value]["situations"]
+        rep.sit_decisions = {s: r["decisions"] for s, r in sitrec.items()}
+        rep.sit_match = {s: r["match"] for s, r in sitrec.items()}
+        rep.sit_counts = {f"{s}|{a}": n for s, r in sitrec.items()
+                          for a, n in r["actions"].items()}
+        rep.sit_best = {f"{s}|{a}": n for s, r in sitrec.items()
+                        for a, n in r["best"].items()}
         from .stoppages import timeout_finisher as _tof
         tofrec = _tof(match, config)[team.value]
         rep.tof_timeouts = tofrec["timeouts"]
@@ -13769,6 +13800,37 @@ def _merge_covered_shooters(reports) -> list:
                                    key=lambda kv: -kv[1]["covered"])]
 
 
+def _sit_habit(rep) -> tuple | None:
+    """Helyzet-döntés a felderítés darabszámaiból: (helyzet, szokás,
+    legjobb opció, a szokás %-a, a legjobb-opció %-a, döntésszám) a
+    legrosszabb egyezésű helyzetre, vagy None — a motorral
+    (decisions.situational_decisions) azonos küszöbökkel és
+    holtverseny-renddel."""
+    from .decisions import (SIT_ACTIONS, SIT_HABIT_PCT, SIT_MATCH_LOW_PCT,
+                            SIT_MIN, SIT_SITUATIONS)
+    worst = None
+    for sit in SIT_SITUATIONS:
+        n = (rep.sit_decisions or {}).get(sit, 0)
+        if n < SIT_MIN:
+            continue
+        acts = {a: (rep.sit_counts or {}).get(f"{sit}|{a}", 0)
+                for a in SIT_ACTIONS}
+        bests = {a: (rep.sit_best or {}).get(f"{sit}|{a}", 0)
+                 for a in SIT_ACTIONS}
+        habit = max(SIT_ACTIONS,
+                    key=lambda a: (acts[a], -SIT_ACTIONS.index(a)))
+        best = max(SIT_ACTIONS,
+                   key=lambda a: (bests[a], -SIT_ACTIONS.index(a)))
+        share = 100.0 * acts[habit] / n
+        match_pct = 100.0 * (rep.sit_match or {}).get(sit, 0) / n
+        if habit == best or share < SIT_HABIT_PCT \
+                or match_pct > SIT_MATCH_LOW_PCT:
+            continue
+        if worst is None or match_pct < worst[4]:
+            worst = (sit, habit, best, share, match_pct, n)
+    return worst
+
+
 def _merge_pdq_players(reports) -> list:
     """Döntés szorításban: játékosonként a szorított döntések és a
     legjobb-opciósak összegzése (a szorított döntések szerint
@@ -15286,6 +15348,46 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 469) Az ő rossz szokásuk kilépésre × a ti kilépő védőtök: ha
+    # rájuk lépve rendre a gyengébb megoldást választják, a kilépés
+    # ellenük fegyver — és ha van előretolt emberetek, ő hozza ki.
+    try:
+        _sit469 = _sit_habit(opp)
+        if _sit469 and _sit469[0] == "kilépnek rá":
+            from .decisions import sit_article as _art469
+            _s469, _h469, _b469, _sh469, _mp469, _n469 = _sit469
+            _mi469 = (f"Ha kilépnek rájuk, a döntéseik {_sh469:.0f}%-a "
+                      f"{_h469}, pedig {_art469(_b469)} {_b469} érne "
+                      f"többet ({_n469} döntésből csak {_mp469:.0f}% a "
+                      "legjobb)")
+            _adv469 = [r for r in (own.adv_players or [])
+                       if r["frames"] >= 100]
+            _gap469, _who469 = 0.0, None
+            if len(_adv469) >= 3:
+                _adv469 = sorted(_adv469, key=lambda r: (
+                    -(r["depth_sum_m"] / r["frames"]), r["player_id"]))
+                _base469 = (sum(r["depth_sum_m"] for r in _adv469[1:])
+                            / max(1, sum(r["frames"]
+                                         for r in _adv469[1:])))
+                _gap469 = (_adv469[0]["depth_sum_m"] / _adv469[0]["frames"]
+                           - _base469)
+                _who469 = _adv469[0]["player_id"]
+            if _gap469 >= 2.5:
+                plan.append(
+                    f"{_mi469}, ti pedig kilépő védővel játszotok (a(z) "
+                    f"{_who469} azonosítójú {_gap469:.1f} méterrel a sor "
+                    "előtt áll) — ő hozza ki a rossz döntésüket: a "
+                    "labdásra lépjen ki, a mögötte maradt teret pedig a "
+                    "szomszédja zárja.")
+            else:
+                plan.append(
+                    f"{_mi469}, nálatok viszont nincs kilépő védő — "
+                    "ezen a meccsen a falból a labda oldalán lépjen ki "
+                    "egy ember a labdásra: a kilépés náluk nem kockázat, "
+                    "hanem a gyengébb megoldás kikényszerítése.")
     except Exception:
         pass
 
@@ -23162,6 +23264,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pdq_free=sum(r.pdq_free for r in reports),
         pdq_free_best=sum(r.pdq_free_best for r in reports),
         pdq_players=_merge_pdq_players(reports),
+        sit_decisions=_merge_count_dicts(r.sit_decisions for r in reports),
+        sit_match=_merge_count_dicts(r.sit_match for r in reports),
+        sit_counts=_merge_count_dicts(r.sit_counts for r in reports),
+        sit_best=_merge_count_dicts(r.sit_best for r in reports),
         rfb_shots_by_role=_merge_count_dicts(
             r.rfb_shots_by_role for r in reports),
         svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),

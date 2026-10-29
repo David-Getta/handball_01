@@ -1041,6 +1041,247 @@ def pressure_decision_quality(match: Match,
     return out
 
 
+# Helyzet-döntés: a 6 m-es vonaltól ennyin belül álló társ "6 m-es"
+# (beálló), a kapu közepétől oldalra ennyire álló fogadó szélső; ennyivel
+# távolabb a kaputól a visszajátszás; a 6 m-es vonaltól ennyin belül
+# lőtávolság (≈ 10 m). A fedezett lövő/fogadó értéke legfeljebb ennyivel
+# csökken (testközeli védőnél). Helyzetenként ennyi döntés kell; a
+# leggyakoribb választás e fölött "szokás", a legjobb-opció aránya e
+# alatt "rossz szokás"; játékos-szinten ennyi döntés kell a névhez.
+SIT_LINE_M = 1.5
+SIT_WING_M = 6.0
+SIT_BACK_M = 1.5
+SIT_RANGE_M = 4.0
+SIT_COVER_LOSS = 0.6
+SIT_MIN = 8
+SIT_HABIT_PCT = 50.0
+SIT_MATCH_LOW_PCT = 40.0
+SIT_PLAYER_MIN = 5
+
+# A helyzetek (a besorolás sorrendjében) és a választások neve.
+SIT_SITUATIONS = ("kilépnek rá", "szabad a 6 m-es társ", "szabad lőhely")
+SIT_ACTIONS = ("lövés", "passz a 6 m-re", "passz a szélre",
+               "visszajátszás", "átadás")
+SIT_PHRASE = {"kilépnek rá": "kilépnek rájuk",
+               "szabad a 6 m-es társ": "szabad a 6 m-es társuk",
+               "szabad lőhely": "szabad lőhelyen kapják a labdát"}
+SIT_ADVICE = {
+    "kilépnek rá": "lépjetek ki rájuk korán: a kilépés a gyengébb "
+                   "megoldásba kényszeríti őket",
+    "szabad a 6 m-es társ": "a szabad 6 m-es társukat ritkán veszik "
+                            "észre, a beállóőr bátran kisegíthet a "
+                            "labdásra",
+    "szabad lőhely": "a szabad lőhelyet nem jól használják, a fal "
+                     "ellenük hátrébb állhat és a 6 m-t zárhatja",
+}
+
+
+def sit_article(word: str) -> str:
+    """A határozott névelő (a/az) egy választás vagy helyzet elé."""
+    return "az" if word[:1].lower() in "aáeéiíoóöőuúüű" else "a"
+
+
+def _from_area_m(x: float, y: float, goal_x: float) -> float:
+    """Távolság a kapuelőtér (6 m-es) vonalától méterben (a vonalon 0)."""
+    dx = abs(x - goal_x)
+    if GOAL_Y - 1.5 <= y <= GOAL_Y + 1.5:
+        return max(0.0, dx - 6.0)
+    py = GOAL_Y - 1.5 if y < GOAL_Y - 1.5 else GOAL_Y + 1.5
+    return max(0.0, math.hypot(dx, y - py) - 6.0)
+
+
+def situational_decisions(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Helyzet-döntés: MIT CSINÁLNAK az egyes helyzetekben, és mi lett
+    volna a legjobb.
+
+    A döntés-elemzés eddig összesítve mondta meg, mennyire optimális egy
+    passz — ez a játékos- és csapat-modell helyzetenkénti képe. Minden
+    labdás döntést (passz a döntés kockáján, lövés az elengedésén)
+    besorolunk: KILÉPNEK RÁ (mezőny-védő legfeljebb PRESS_TIGHT_M-re),
+    SZABAD A 6 M-ES TÁRS (egy társ a 6 m-es vonalnál, a legközelebbi
+    védő FREE_DEF_RADIUS_M-nél messzebb), vagy SZABAD LŐHELY (a labdás
+    PDQ_FREE_M-en túl szabad, lőtávolságon belül). A választás: lövés,
+    passz a 6 m-re, passz a szélre, visszajátszás vagy átadás. A legjobb
+    opciót az xG-szerű helyzetérték adja (a fogadóé a passz
+    sikerességével), a fedezett lövő és a fogott fogadó
+    SIT_COVER_LOSS-szal leértékelve.
+
+    Edzőileg ez a "hogyan dönt" modell: ha egy helyzetben a szokásuk
+    (a választásaik SIT_HABIT_PCT-nél nagyobb része) nem a legjobb
+    megoldás, ott kell őket abba a helyzetbe kényszeríteni — kilépni
+    rájuk, kisegíteni a beállóról, vagy hátrébb állni.
+
+    Visszatérés csapatonként: {"situations": {helyzet: {"decisions",
+    "actions", "best", "match"}}, "players", "situation", "habit",
+    "best_action", "top", "verdict"} — a darabszámok mindig (minden
+    helyzet szerepel); a "situation"/"habit"/"best_action"/"verdict" a
+    legrosszabb egyezésű, legalább SIT_MIN döntéses helyzetről szól,
+    ahol a szokás más, mint a leggyakoribb legjobb opció, és a
+    legjobb-opció aránya legfeljebb SIT_MATCH_LOW_PCT (különben None).
+    "players": játékosonként helyzet → {"decisions", "actions", "match"};
+    "top" az a játékos, akinél ugyanabban a helyzetben ugyanez a szokás
+    (legalább SIT_PLAYER_MIN döntés), a legtöbb döntéssel.
+    """
+    from ..models.tracking import Team as _Team
+    from .defense import FREE_DEF_RADIUS_M
+    from .event_detection import EventType, detect_shots
+    from .xg import xg_of_position
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+
+    def _empty():
+        return {s: {"decisions": 0, "actions": {}, "best": {}, "match": 0}
+                for s in SIT_SITUATIONS}
+
+    tally = {"home": _empty(), "away": _empty()}
+    per_player: dict = {"home": {}, "away": {}}
+    jersey: dict = {}
+
+    def _action(holder, target, goal_x) -> str:
+        if target is None:
+            return "lövés"
+        if abs(target.y - GOAL_Y) >= SIT_WING_M:
+            return "passz a szélre"
+        if _from_area_m(target.x, target.y, goal_x) <= SIT_LINE_M:
+            return "passz a 6 m-re"
+        if abs(target.x - goal_x) - abs(holder.x - goal_x) >= SIT_BACK_M:
+            return "visszajátszás"
+        return "átadás"
+
+    def _record(frame: Frame, holder: PlayerPosition, team,
+                target_id: Optional[int]) -> None:
+        goal_x = config.attacks_toward_x(team)
+        opp = _Team.AWAY if team == _Team.HOME else _Team.HOME
+        defs = [p for p in frame.players
+                if p.team == opp and p.role != "kapus"]
+        if not defs:
+            return
+        mates = [p for p in frame.players
+                 if p.team == team and p.track_id != holder.track_id
+                 and p.role != "kapus"]
+
+        def near(p):
+            return min(math.hypot(d.x - p.x, d.y - p.y) for d in defs)
+
+        def cover(p):
+            return 1.0 - SIT_COVER_LOSS * max(
+                0.0, 1.0 - near(p) / FREE_DEF_RADIUS_M)
+
+        target = None
+        if target_id is not None:
+            target = next((p for p in mates if p.track_id == target_id),
+                          None)
+            if target is None:
+                return
+        hn = near(holder)
+        if hn <= PRESS_TIGHT_M:
+            sit = "kilépnek rá"
+        elif any(_from_area_m(p.x, p.y, goal_x) <= SIT_LINE_M
+                 and abs(p.y - GOAL_Y) < SIT_WING_M
+                 and near(p) > FREE_DEF_RADIUS_M for p in mates):
+            sit = "szabad a 6 m-es társ"
+        elif hn > PDQ_FREE_M and \
+                _from_area_m(holder.x, holder.y, goal_x) <= SIT_RANGE_M:
+            sit = "szabad lőhely"
+        else:
+            return
+        options = [(xg_of_position(holder.x, holder.y, goal_x)
+                    * cover(holder), None)]
+        for p in mates:
+            options.append((xg_of_position(p.x, p.y, goal_x)
+                            * pass_completion(holder, p, frame)
+                            * cover(p), p))
+        best_v, best_p = max(options, key=lambda o: o[0])
+        chosen_v = next(v for v, p in options if p is target)
+        act = _action(holder, target, goal_x)
+        best_act = _action(holder, best_p, goal_x)
+        good = int(chosen_v >= best_v - PDQ_TOL)
+        rec = tally[team.value][sit]
+        rec["decisions"] += 1
+        rec["actions"][act] = rec["actions"].get(act, 0) + 1
+        rec["best"][best_act] = rec["best"].get(best_act, 0) + 1
+        rec["match"] += good
+        prow = per_player[team.value].setdefault(holder.track_id, {})
+        ps = prow.setdefault(sit, {"decisions": 0, "actions": {},
+                                   "match": 0})
+        ps["decisions"] += 1
+        ps["actions"][act] = ps["actions"].get(act, 0) + 1
+        ps["match"] += good
+        if holder.jersey_number is not None:
+            jersey.setdefault(holder.track_id, holder.jersey_number)
+
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        _record(pe.decision_frame, pe.passer_pos, pe.team, pe.receiver_id)
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL) \
+                or e.player_id is None:
+            continue
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is not None:
+            _record(f, shooter, e.team, None)
+
+    def _top_of(counts: dict) -> Optional[str]:
+        # Holtversenyben a választások rögzített sorrendje dönt.
+        if not counts:
+            return None
+        return max(SIT_ACTIONS, key=lambda a: (counts.get(a, 0),
+                                               -SIT_ACTIONS.index(a)))
+
+    out: dict = {}
+    for side in ("home", "away"):
+        sits = tally[side]
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "situations": s}
+                for pid, s in sorted(per_player[side].items())]
+        rec = {"situations": sits, "players": rows, "situation": None,
+               "habit": None, "best_action": None, "top": None,
+               "verdict": None}
+        out[side] = rec
+        worst = None
+        for sit in SIT_SITUATIONS:
+            s = sits[sit]
+            if s["decisions"] < SIT_MIN:
+                continue
+            habit, best_act = _top_of(s["actions"]), _top_of(s["best"])
+            share = 100.0 * s["actions"][habit] / s["decisions"]
+            match_pct = 100.0 * s["match"] / s["decisions"]
+            if habit == best_act or share < SIT_HABIT_PCT \
+                    or match_pct > SIT_MATCH_LOW_PCT:
+                continue
+            if worst is None or match_pct < worst[1]:
+                worst = (sit, match_pct, habit, best_act, share)
+        if worst is None:
+            continue
+        sit, match_pct, habit, best_act, share = worst
+        rec.update(situation=sit, habit=habit, best_action=best_act)
+        cands = []
+        for row in rows:
+            ps = row["situations"].get(sit)
+            if not ps or ps["decisions"] < SIT_PLAYER_MIN:
+                continue
+            if 100.0 * ps["actions"].get(habit, 0) / ps["decisions"] \
+                    >= SIT_HABIT_PCT and 100.0 * ps["match"] \
+                    / ps["decisions"] <= SIT_MATCH_LOW_PCT:
+                cands.append((-ps["decisions"], row["player_id"], row))
+        if cands:
+            rec["top"] = min(cands, key=lambda c: c[:2])[2]
+        rec["verdict"] = (
+            f"ha {SIT_PHRASE[sit]}, a döntéseik {share:.0f}%-a {habit}, "
+            f"pedig a modell szerint {sit_article(best_act)} {best_act} "
+            f"érne többet (csak {match_pct:.0f}%-ban választják a "
+            f"legjobbat) — {SIT_ADVICE[sit]}")
+    return out
+
+
 # Labdatartó-poszt: ennyi poszthoz kötött labdatartás-másodperc kell
 # az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a labda
 # egy posztnál áll meg.
