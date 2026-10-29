@@ -1704,8 +1704,18 @@ class _Court3DScreenState extends State<Court3DScreen>
         ? "LÖVÉS (${sz(d["best_value"])})"
         : "passz a másik társhoz (${sz(d["best_value"])})";
     final csapat = d["team"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+    // A döntés helyzete a játékos-modellből: ha a passzolónak ebben a
+    // helyzetben legalább 5 döntése volt (SIT_PLAYER_MIN), az is kiderül,
+    // visszatérő szokás-e (a böngésző-nézet helyzetSzoveg-e ugyanezt írja).
+    final helyzet = d["situation"] as String?;
+    final hN = (d["sit_n"] as num?)?.toInt() ?? 0;
+    final hJo = (d["sit_best"] as num?)?.toInt() ?? 0;
+    final hSz = helyzet == null
+        ? ""
+        : " · helyzet: $helyzet${hN >= 5 ? " — ebben a helyzetben $hN "
+            "döntéséből $hJo volt a legjobb" : ""}";
     return "$csapat — jobb opció is volt: $jobb a választott passz "
-        "(${sz(d["chosen_value"])}) helyett · különbség ${sz(d["gap"])}";
+        "(${sz(d["chosen_value"])}) helyett · különbség ${sz(d["gap"])}$hSz";
   }
 
   /// A labdás passzsávjai a pillanatnyi állásból (court_geometry.passLanes).

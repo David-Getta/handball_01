@@ -140,14 +140,16 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         passzok = []  # passz-vonalak nélkül is működjön a nézet
     # Döntés-pillanatok: ahol a modell szerint érdemben jobb opció is volt
     # — [mp, hazai?, passzoló x, y, választott x, y, érték, "s"/"p",
-    # a jobb cél x, y, érték, különbség] időrendben (court3d).
+    # a jobb cél x, y, érték, különbség, helyzet | null, a passzoló
+    # döntései ebben a helyzetben, közülük a legjobb] időrendben (court3d).
     try:
         from .court3d import decision_moments
         dontesek = [
             [d["s"], 1 if d["team"] == "home" else 0, *d["passer"],
              *d["chosen"], d["chosen_value"],
              "s" if d["best_kind"] == "shoot" else "p", *d["best"],
-             d["best_value"], d["gap"]]
+             d["best_value"], d["gap"], d.get("situation"),
+             d.get("sit_n", 0), d.get("sit_best", 0)]
             for d in decision_moments(match)["moments"]]
     except Exception:
         dontesek = []  # döntés-pillanatok nélkül is működjön a nézet
@@ -2327,6 +2329,15 @@ function dontesUgras(irany){
 document.getElementById("dontesElozo").onclick = () => dontesUgras(-1);
 document.getElementById("dontesKov").onclick = () => dontesUgras(1);
 function szam2(v){ return v.toFixed(2).replace(".", ","); }
+// A döntés helyzete a játékos-modellből (court3d.decision_moments): ha a
+// passzolónak ebben a helyzetben legalább 5 döntése volt (SIT_PLAYER_MIN),
+// az is kiderül, ez visszatérő szokás-e — az app felirata ugyanezt írja.
+function helyzetSzoveg(helyzet, n, jo){
+  if (!helyzet) return "";
+  return " · helyzet: " + helyzet + ((n || 0) >= 5
+    ? " — ebben a helyzetben " + n + " döntéséből " + (jo || 0) + " volt a legjobb"
+    : "");
+}
 function dontesFrissit(t){
   const d = szurt(DONTESEK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   // A szabad lövés felirata KÜLÖN dobozban (a döntés-felirat alatt): két
@@ -2360,7 +2371,7 @@ function dontesFrissit(t){
   if (dontesCsoport.userData.kesz && dontesCsoport.userData.d === d) return;
   csoportUrit(dontesCsoport); dontesCsoport.userData.kesz = true; dontesCsoport.userData.d = d;
   if (!d){ dontesFelirat.style.display = "none"; return; }
-  const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
+  const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap, helyzet, hN, hJo] = d;
   const vonalD = (x2, y2, szin) => {
     const g = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(px, 1.15, W - py), new THREE.Vector3(x2, 1.15, W - y2)]);
@@ -2371,7 +2382,7 @@ function dontesFrissit(t){
   const jobb = fajta === "s" ? "LÖVÉS (" + szam2(bval) + ")" : "passz a másik társhoz (" + szam2(bval) + ")";
   dontesFelirat.innerHTML = "<b>" + hx(hazai ? ADAT.home : ADAT.away) + "</b> — jobb opció is volt: " +
     "<span style='color:#d9b544'>" + jobb + "</span> a választott passz (" + szam2(cval) +
-    ") helyett · különbség " + szam2(gap);
+    ") helyett · különbség " + szam2(gap) + helyzetSzoveg(helyzet, hN, hJo);
   dontesFelirat.style.display = "block";
 }
 

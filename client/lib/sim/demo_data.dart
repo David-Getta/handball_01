@@ -146,7 +146,7 @@ List<Map<String, dynamic>> buildDemoPasses(Match m, {int lepes = 25}) {
 List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
   final ki = <Map<String, dynamic>>[];
-  for (final p in buildDemoPasses(m, lepes: lepes).take(2)) {
+  for (final (i, p) in buildDemoPasses(m, lepes: lepes).take(2).indexed) {
     ki.add({
       "s": ((p["t"] as int) - 1) / fps,
       "team": "home",
@@ -157,6 +157,11 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
       "best": [courtLength, courtWidth / 2],
       "best_value": 0.36,
       "gap": 0.18,
+      // A játékos-modell helyzete: az első pillanat visszatérő szokás
+      // (hat ilyen döntésből egy volt a legjobb), a második nem besorolt.
+      "situation": i == 0 ? "kilépnek rá" : null,
+      "sit_n": i == 0 ? 6 : 0,
+      "sit_best": i == 0 ? 1 : 0,
     });
   }
   return ki;

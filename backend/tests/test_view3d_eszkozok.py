@@ -180,7 +180,9 @@ def test_a_tomor_adat_viszi_a_megallitast():
 
 def test_a_tomor_adat_viszi_a_dontes_pillanatokat(tmp_path, monkeypatch):
     """A tömör adat "decisions" sorai a decision_moments pillanatai
-    (azonos sorrendben, a 12 mezős alakban); a végpont ugyanazt adja."""
+    (azonos sorrendben, a 15 mezős alakban: a 12 régi mező után a
+    játékos-modell helyzete és a passzoló döntései ebben a helyzetben);
+    a végpont ugyanazt adja."""
     from fastapi.testclient import TestClient
 
     from handball.api.app import create_app
@@ -195,8 +197,9 @@ def test_a_tomor_adat_viszi_a_dontes_pillanatokat(tmp_path, monkeypatch):
     d = decision_moments(m)["moments"]
     assert len(sorok) == len(d) > 0
     for r, x in zip(sorok, d):
-        assert len(r) == 12 and r[0] == x["s"] and r[-1] == x["gap"]
+        assert len(r) == 15 and r[0] == x["s"] and r[11] == x["gap"]
         assert r[7] == ("s" if x["best_kind"] == "shoot" else "p")
+        assert r[12:] == [x["situation"], x["sit_n"], x["sit_best"]]
     monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
     app = create_app()
     app.state.put_match(m)
@@ -3060,3 +3063,27 @@ def test_a_panel_osszecsukhato_es_a_sugo_megjegyzett():
                  "sugoNyitva = !sugoNyitva; sugoMent(); sugoAllit();"):
         assert kell in oldal, kell
     assert "let sugoNyitva = innerWidth >= 1200;" not in oldal
+
+
+def test_a_dontes_felirat_kimondja_a_helyzetet_es_a_szokast():
+    """A 3D döntés-felirat a játékos-modellből a helyzetet is kimondja; 5
+    döntéstől (SIT_PLAYER_MIN) azt is, hányból volt a legjobb — így
+    látszik, hogy a pillanat visszatérő szokás. Helyzet nélkül semmit
+    nem fűz hozzá (a régi felirat marad)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function helyzetSzoveg")
+    i1 = kod.index("\n}\n", i0) + 2
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(["
+          'helyzetSzoveg("kilépnek rá", 10, 0), '
+          'helyzetSzoveg("szabad lőhely", 3, 1), '
+          "helyzetSzoveg(null, 0, 0)]));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        " · helyzet: kilépnek rá — ebben a helyzetben 10 döntéséből 0 "
+        "volt a legjobb",
+        " · helyzet: szabad lőhely",
+        ""]

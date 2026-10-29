@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.186 óta)
 
+- **A 3D/VR döntés-felirat a helyzetet és a szokást is kimondja**
+  (motor + böngésző-nézet + app): a 3D nézet "Döntések" lapozója eddig
+  azt írta, hogy jobb opció is volt. Most a játékos-modellből azt is,
+  MILYEN helyzetben (kilépnek rá, szabad a 6 m-es társ, szabad lőhely),
+  és ha a passzolónak ebben a helyzetben legalább öt döntése volt a
+  meccsen, hogy hányból volt a legjobb: "· helyzet: kilépnek rá — ebben
+  a helyzetben 10 döntéséből 0 volt a legjobb". VR-szemüvegben, közös
+  nézésnél így látszik, hogy a pillanat nem egyszeri hiba, hanem
+  visszatérő szokás — ezen érdemes megállni.
+
 - **Játékos döntési szokása a felderítésben** (motor + kliens): a
   helyzet-döntés eddig csapat-szinten mondta meg, melyik helyzetben rossz
   a szokásuk. Most JÁTÉKOSONKÉNT is, mezszám szerint, több meccsen át

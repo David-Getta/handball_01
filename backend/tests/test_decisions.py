@@ -398,6 +398,24 @@ def test_a_jatekos_szokasa_mezszam_szerint_meccseken_at_osszeall():
     assert "Játékos-szokások: a(z) 9-es ha kilépnek rá" in kulcsok, kulcsok
 
 
+def test_a_3d_dontes_pillanat_viszi_a_helyzetet_es_a_szokast():
+    """A 3D döntés-pillanatok (court3d.decision_moments) a játékos-modell
+    helyzetét is viszik: kilépésre hátra passzolt tízszer, mind a tíz
+    pillanat "kilépnek rá", és a passzoló tíz ilyen döntéséből nulla
+    volt a legjobb."""
+    from handball.pipeline.court3d import decision_moments
+    from handball.pipeline.decisions import decision_situation
+
+    m = _sit_match()
+    mom = decision_moments(m)["moments"]
+    assert len(mom) == 10, mom
+    assert {d["situation"] for d in mom} == {"kilépnek rá"}, mom
+    assert all(d["sit_n"] == 10 and d["sit_best"] == 0 for d in mom), mom
+    f = m.frames[3]
+    holder = next(p for p in f.players if p.track_id == 1)
+    assert decision_situation(f, holder) == "kilépnek rá"
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

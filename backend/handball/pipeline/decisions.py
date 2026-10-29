@@ -1085,6 +1085,41 @@ def sit_article(word: str) -> str:
     return "az" if word[:1].lower() in "aáeéiíoóöőuúüű" else "a"
 
 
+def decision_situation(frame: Frame, holder: PlayerPosition,
+                       config: Optional[TacticsConfig] = None
+                       ) -> Optional[str]:
+    """Egy labdás döntés helyzete a situational_decisions besorolása
+    szerint ("kilépnek rá" / "szabad a 6 m-es társ" / "szabad lőhely"),
+    vagy None, ha egyik sem (vagy nincs mezőny-védő a kockán). A 3D
+    döntés-pillanatok felirata is ezt mondja ki."""
+    from .defense import FREE_DEF_RADIUS_M
+
+    config = config or TacticsConfig()
+    goal_x = config.attacks_toward_x(holder.team)
+    defs = [p for p in frame.players
+            if p.team != holder.team and p.role != "kapus"]
+    if not defs:
+        return None
+    mates = [p for p in frame.players
+             if p.team == holder.team and p.track_id != holder.track_id
+             and p.role != "kapus"]
+
+    def near(p):
+        return min(math.hypot(d.x - p.x, d.y - p.y) for d in defs)
+
+    hn = near(holder)
+    if hn <= PRESS_TIGHT_M:
+        return "kilépnek rá"
+    if any(_from_area_m(p.x, p.y, goal_x) <= SIT_LINE_M
+           and abs(p.y - GOAL_Y) < SIT_WING_M
+           and near(p) > FREE_DEF_RADIUS_M for p in mates):
+        return "szabad a 6 m-es társ"
+    if hn > PDQ_FREE_M and \
+            _from_area_m(holder.x, holder.y, goal_x) <= SIT_RANGE_M:
+        return "szabad lőhely"
+    return None
+
+
 def _from_area_m(x: float, y: float, goal_x: float) -> float:
     """Távolság a kapuelőtér (6 m-es) vonalától méterben (a vonalon 0)."""
     dx = abs(x - goal_x)
@@ -1180,17 +1215,8 @@ def situational_decisions(match: Match,
                           None)
             if target is None:
                 return
-        hn = near(holder)
-        if hn <= PRESS_TIGHT_M:
-            sit = "kilépnek rá"
-        elif any(_from_area_m(p.x, p.y, goal_x) <= SIT_LINE_M
-                 and abs(p.y - GOAL_Y) < SIT_WING_M
-                 and near(p) > FREE_DEF_RADIUS_M for p in mates):
-            sit = "szabad a 6 m-es társ"
-        elif hn > PDQ_FREE_M and \
-                _from_area_m(holder.x, holder.y, goal_x) <= SIT_RANGE_M:
-            sit = "szabad lőhely"
-        else:
+        sit = decision_situation(frame, holder, config)
+        if sit is None:
             return
         options = [(xg_of_position(holder.x, holder.y, goal_x)
                     * cover(holder), None)]

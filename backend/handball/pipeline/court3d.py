@@ -361,16 +361,29 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
     Visszatérés: {"moments": [{"s", "t" (a döntés kockája), "team",
     "player_id" (a passzoló), "passer": [x, y],
     "chosen": [x, y], "chosen_value", "best_kind", "best": [x, y],
-    "best_value", "gap"}] időrendben, "passes": {"home"/"away": db},
-    "flagged": {"home"/"away": db}} — a "best" passznál a jobb társ
-    helye, lövésnél a támadott kapu közepe."""
-    from .decisions import best_option, detect_passes, evaluate_options
+    "best_value", "gap", "situation", "sit_n", "sit_best"}] időrendben,
+    "passes": {"home"/"away": db}, "flagged": {"home"/"away": db}} — a
+    "best" passznál a jobb társ helye, lövésnél a támadott kapu közepe.
+    A "situation" a döntés helyzete a játékos-modell besorolásában
+    (decisions.decision_situation; None, ha egyik sem), a "sit_n" /
+    "sit_best" a passzoló ÖSSZES döntése ebben a helyzetben a meccsen, és
+    közülük a legjobb-opciósak (situational_decisions) — a felirat ebből
+    mondja ki, ha a pillanat a játékos visszatérő szokása."""
+    from .decisions import (best_option, decision_situation, detect_passes,
+                            evaluate_options, situational_decisions)
 
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
     moments: list[dict] = []
     passes = {"home": 0, "away": 0}
     flagged = {"home": 0, "away": 0}
+    try:
+        _sd = situational_decisions(match, config)
+        sit_rows = {(side_, r_["player_id"]): r_["situations"]
+                    for side_ in ("home", "away")
+                    for r_ in _sd[side_]["players"]}
+    except Exception:
+        sit_rows = {}
     for pe in detect_passes(match, config):
         side = getattr(pe.team, "value", pe.team)
         if side not in passes:
@@ -398,6 +411,8 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
             # Lövés: a cél a TÁMADOTT kapu közepe (a vonal a kapura mutat).
             cel = [float(config.attacks_toward_x(pe.team)), COURT_WIDTH_M / 2.0]
         flagged[side] += 1
+        sit = decision_situation(pe.decision_frame, pe.passer_pos, config)
+        sit_rec = (sit_rows.get((side, pe.passer_id)) or {}).get(sit) or {}
         moments.append({
             "s": round(pe.decision_frame.t / fps, 2),
             "t": pe.decision_frame.t, "team": side,
@@ -409,6 +424,9 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
             "best": cel,
             "best_value": round(best.value, 3),
             "gap": round(gap, 3),
+            "situation": sit,
+            "sit_n": int(sit_rec.get("decisions", 0)),
+            "sit_best": int(sit_rec.get("match", 0)),
         })
     moments.sort(key=lambda m_: m_["s"])
     return {"moments": moments, "passes": passes, "flagged": flagged}

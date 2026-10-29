@@ -137,6 +137,11 @@ void main() {
     }
     expect(find.textContaining("jobb opció is volt: LÖVÉS (0,36)"),
         findsOneWidget);
+    // A játékos-modell helyzete és a szokás is a feliratban.
+    expect(
+        find.textContaining("helyzet: kilépnek rá — ebben a helyzetben 6 "
+            "döntéséből 1 volt a legjobb"),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });
