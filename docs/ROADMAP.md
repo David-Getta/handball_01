@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (1312 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2815 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -67,7 +67,10 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - Trajektória-szekvenciák klaszterezése → visszatérő figurák azonosítása.
   ✅ alap kész és tesztelt: támadás-szegmentálás → mozgás-ujjlenyomat →
   klaszterezés (`setplays.py`, API: `/setplays`).
-- Figura-könyvtár csapatonként. ⏳ (finomabb trajektória-modell későbbi bővítés).
+- Figura-könyvtár csapatonként. ✅ kész és tesztelt (`setplays.py`:
+  `setplay_shapes` + `setplay_library` — irány-normált alakok, a több
+  meccsből összefésült felderítés megmondja, melyik figura tér vissza
+  meccsről meccsre; finomabb trajektória-modell későbbi bővítés).
 - **Eredmény**: "ez a csapat ezt a N figurát játssza, ilyen gyakorisággal" — az
   alap-felismerés megvan; a pontosság a valódi adattal és finomabb leíróval nő.
 
@@ -89,10 +92,30 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 
 ## 6. fázis — 3D & LiDAR
 - LiDAR ingest, 3D rekonstrukció, pontfelhő-alapú követés.
-- 3D bejárható nézet (web, Three.js).
+- 3D bejárható nézet — ELSŐ KÖR KÉSZ ✅: a kliens "3D pálya" füle a
+  kész meccset térben játssza le, szabad (játék-szerű) mozgással, a
+  meglévő egykamerás követésből. A többkamerás/LiDAR bemenet ide
+  csatlakozik majd.
 
 ## 7. fázis — VR
-- VR kliens (Unity), a csapat bejár a pályára, edző mutatja a szituációt.
+- VR kliens: a tervezett út a WebXR (böngészős headset — a Quest-féle
+  önálló eszközökön telepítés nélkül fut), a 3D pálya nézetére építve;
+  a natív (Unity) kliens későbbi opció, ha a WebXR kevés lenne.
+  ELSŐ LÉPCSŐ KÉSZ ✅: a motor `/matches/{id}/view3d` végpontja a
+  meccset WebXR-képes oldalként adja ki (three.js, VR-gomb, bal karos
+  közlekedés); a kliens "Böngészős 3D / VR" gombja nyitja.
+- A csapat bejár a pályára, az edző mutatja a szituációt. MÁSODIK LÉPCSŐ
+  KÉSZ ✅ (közös nézés, `docs/3D_PALYA.md`): az edző vezet (az appból vagy
+  a böngészőből), a csapat headsetjei követik (rövid link: `/kovet`);
+  mutató a padlón, "📍 Ide mindenki", jelenlét (a játékosok névvel látják
+  egymást és az edzőt), kvíz (a játékosok a padlóra mutatnak; döntés-
+  pillanatnál a modell jobb opciójához mérve, az eredmény a jegyzetek
+  közé). A több headsetes hálózati út az appból egy kapcsoló (🏟
+  Klub-hálózat — a hálózatról csak a közös nézés érhető el), és internet
+  nem kell (a three.js a motorból). A megbeszélés visszanézhető (⏺
+  Felvétel — az edző hangjával; a csapat linkjéről is indítható).
+  Nyitott: próba valódi headsetekkel (eddig headless böngészővel,
+  szimulált VR-munkamenettel és ál-mikrofonnal tesztelve).
 
 ## 8. fázis — Élő meccskövetés
 - Valós idejű pipeline (streaming inferencia).
@@ -105,3 +128,181 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - **Kamera**: fix taktikai kamera (felülről) sokkal könnyebb, mint broadcast vágás.
 - **Kalibráció**: kézi keypoint az MVP-hez elég; automatikus vonalfelismerés később.
 - **EPV-modell**: kevés nyilvános kézilabda-adat van — ez a legkutatás-igényesebb rész.
+- **Birtoklás-váltás billegése — MEGOLDVA.** A birtokos a labdához
+  LEGKÖZELEBBI játékos, és a váltás egyetlen képkockából eldőlt.
+  Tömörülésnél (és zajos labda-észlelésnél) ez kockánként ide-oda
+  billegett, és minden billenésből passz vagy ELADOTT LABDA lett — az
+  első éles meccsen ez a meccs ELŐTTI felállásnál is eladásokat
+  gyártott.
+
+  A megoldás három nekifutásból állt össze. (1) Minimális tartás
+  MINDEN birtoklás-váltásra: működik, de globálisan megváltoztatja a
+  szemantikát, és 16+ fixture épít az egy-kockás váltásra. (2)
+  Pattanás-szűrő (A → B → A): nem járható, mert a fixture-ök szerint
+  ugyanez legitim oda-vissza passzolás is lehet — a kettőt CSAK az
+  időtartam különbözteti meg. (3) **A járható út: a kitartást csak az
+  ELADOTT LABDÁRA követeljük meg**, a csapaton belüli passzra nem. A
+  passz kisebb állítás (a labda nem hagyta el a csapatot); az eladott
+  labdához viszont a labdának oda kell érnie az ellenfélhez, és neki
+  uralnia is kell.
+
+  A megvalósítás CSAPAT-futamokon dolgozik, nem játékosonként: ha az
+  ellenfél megszerzi a labdát és rögtön tovább is passzolja, az attól
+  még valódi szerzés — játékosonkénti méréssel az ő passzaik elnyelnék
+  a jelöltet. A `TURNOVER_MIN_HOLD_S = 0,3` a termék alap-ritkításával
+  (stride=3) ~0,36 másodpercnyi valós idő; ennél gyorsabban valódi
+  labdaszerzés sem stabilizálódik. A felvétel VÉGÉN álló, meg nem
+  erősített futam nem ad eseményt.
+
+  A 18 érintett fixture átírva valósághű birtoklás-hosszra (a
+  kockánként váltó birtokos valódi meccsen nem fordul elő); a teljes
+  csomag zöld. A minőség-jelentés `TURNOVER_RATE_MAX_PER_MIN` jelzése
+  megmarad hátsó védvonalnak: ha az eladás-ütem így is hihetetlen, azt
+  kimondja.
+
+- **A javíthatatlan felismerés — MEGOLDVA.** A felismerés téved:
+  gólt lövésnek lát, lövést nem vesz észre. Eddig ezt SEMMIVEL nem
+  lehetett javítani, és ez nem részlet-kérdés volt: az edző egy rossz
+  eredményű jelentésnek EGYETLEN számát sem hiszi el, akkor sem, ha a
+  többi pontos. A javítás ezért nem a felületre került, hanem a
+  LÖVÉS-FELISMERÉSBE (`_apply_event_overrides`): onnan minden rétegen
+  átüt (eredmény, xG, lövő-listák, hajrá-elemzés, felderítés) —
+  egyetlen helyen javítunk, nem ötszázon.
+
+  Három művelet (típus-váltás, törlés, felvétel), a meccs mellett
+  külön fájlban tárolva; az egyeztetés-ablak IDŐTARTAM
+  (`OVERRIDE_MATCH_S`), és egy régi, elcsúszott javítás csendben
+  elmarad ahelyett, hogy egy MÁSIK esemény típusát írná át. A
+  meccsből származtatott kivonat-gyorsítótárakat a javítás
+  kifejezetten dobja: a kulcsuk a kockaszám, ami nem változik.
+
+  Mellé HIHETŐSÉG-ellenőrzések kerültek, hogy a hibát ne csak az
+  vegye észre, aki már gyanakszik: "gyanúsan kevés gól" (kézilabdában
+  a két csapat együtt percenként nagyjából egy gólt szerez) és
+  "aránytalan eredmény" (a két kapu felismerése KÜLÖN romolhat el —
+  féloldalas kalibráció, takart kapu). Mindkettő megmondja, HOL
+  javítható: a figyelmeztetés nem zsákutca, hanem teendő.
+
+- **A darabokban felvett meccs — MEGOLDVA.** Aki telefonnal vagy
+  fényképezőgéppel vesz fel, nem egy tiszta hatvanperces fájlt kap,
+  hanem darabokat: a felvétel négy gigánál vagy tíz percnél elvágódik.
+  A program eddig úgy tett, mintha nem így lenne — hat klip hat külön
+  "meccs" volt, kalibrálva egyenként, összefűzve kézzel (két
+  rögzített mezőben), az emberi munka (jegyzet, kézi javítás,
+  kiállítás) pedig az összefűzésnél némán elveszett.
+
+  A megoldás rétegei (v0.1.75–v0.1.78): akárhány szakasz összefűzhető
+  sorrend-tartással; az összefűzés FORRÁS-TÉRKÉPET ment (melyik
+  játékidő melyik fájl melyik kép-indexén van), így az összefűzött
+  meccsből klip vágható; a jegyzet, a kézi javítás és a kiállítás
+  idő-eltolással átjön; a köteg örökli a fő videó kalibrációját, és a
+  feldolgozás végén MAGÁTÓL áll össze egy meccsé (csoport-jel +
+  darabszám, hogy versenyben se zárulhasson le fél csoporttal). A
+  szezon-számolás pedig tudja, hogy a darab és az egész ugyanaz a
+  meccs — nem dupláz. A teljes utat lánc-teszt járja végig a valódi
+  végpontokon.
+
+- **Kocka vagy másodperc — MEGOLDVA, de visszatérhet.** Egyetlen nap
+  alatt HÉT olyan küszöböt találtunk, ami kockában volt megadva, pedig
+  IDŐTARTAMOT jelent. Mivel a feldolgozás ritkít (a termék alapja
+  minden 3. kocka, tehát `match.meta.fps` a forrás harmada), mindegyik
+  háromszoros valós időt követelt a termékben:
+
+  hossz-korlát ("Félidő ~35 p" → 29 perc egy 30 fps-es telefonvideón),
+  labda-hézagpótlás (fél helyett közel másfél másodpercnyi hézagot
+  töltöttünk ki egyenessel — annyi idő alatt kétszer is passzolhatnak,
+  vagyis NEM LÉTEZŐ birtoklást és passzokat gyártottunk), a képen
+  kívüli becslés sebesség-elhalása (2 helyett 6 másodperc egyenes
+  vonalú vetítés: egy sprintelőt a pálya túlsó végébe visz) és
+  felezési ideje, az őrzési párok küszöbe (a kommentje maga mondta,
+  hogy "1 mp @ 25 fps"), a blokkolt-poszt visszanézése (három
+  másodperccel a blokk előtt már MÁS volt a labdánál), a labdatartás
+  érintés-küszöbe és a beálló-villanás szűrője.
+
+  A szabály: **MINTASZÁM maradhat kockában** (100 minta tényleg 100
+  minta), **IDŐTARTAM kötelezően másodpercben**, `X_S` néven, a
+  `match.meta.fps`-ből számolva. Az őr
+  (`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
+  átállított küszöb kocka-alakja újra futó kódba kerül. Mérhető hatás:
+  a stride-érzékenységi jelentésből kiesett a `hold_time_roles`.
+
+- **A néma kód — a védelem ára.** Minden réteget és szabályt
+  `try/except Exception: pass` véd, hogy egy elromló réteg ne vigye el
+  a többit. Ez helyes — de az ára, hogy egy ELGÉPELT NÉV vagy egy
+  rossz alakú tétel NÉMÁN semmit nem csinál, és a tesztek zöldek
+  maradnak, különösen ha az adott ág a mintameccsen amúgy sem futna
+  le. Öt hajrá-edzésszabállyal pontosan ez történt: `focus[side]`-ra
+  írtak az `out[side]` helyett, és soha nem futottak le.
+
+  Futtatással ez nem elkapható. Az ellenszer STATIKUS:
+  `test_nincs_definialatlan_nev_a_motorban` (hatókör-helyes AST-elemzés,
+  külső függőség nélkül), `test_minden_edzes_tetel_a_kozos_alakot_koveti`
+  (nyers `append` tilalma), a felderítés-mezők két őre (néma mező,
+  elgépelt mezőnév), és a meccs-csomag `_hibas_retegek` listája, ami
+  megnevezi, ha valami mégis elhasalt.
+
+- **A nem látott gól — RÉSZBEN MEGOLDVA.** Terepen a kezdőlap mind a
+  négy valódi meccse (19–29 perc) "0 : 0"-val állt. A gól-felismerés a
+  gólvonalat átlépő labdát kereste — de a gól pillanatában a labda a
+  leggyorsabb és a leginkább takart (elmosódott röppálya, kapus, háló),
+  tehát széles, ritkított felvételen épp ezt a kockát nem látjuk.
+
+  Három lépés, ebben a sorrendben. (1) **Őszinteség**: tíz perc fölött
+  gól nélkül a felület "? : ?"-t mutat, nem egy magabiztos "0 : 0"-t.
+  (2) **Diagnózis**: a minőség-jelentés szétválasztja a három okot — a
+  lövést látta, a gólt nem; a labdát a kapuk előtt sosem látta (a
+  felvétel vagy a kalibráció a gond); a kapu előtt látta, de lövést
+  nem mért (a gyors labdát hagyja ki). (3) **Második, független jel**:
+  minden gólt KÖZÉPKEZDÉS követ — a labda a felezővonal közepén áll,
+  és mindkét csapat a saját térfelén van. Ez a pillanat jól látszik
+  (álló, éles labda), ezért a gól utólag is kikövetkeztethető
+  (`throw_off_goals`).
+
+  Ha a labdát a kapu előtt egyáltalán nem láttuk (a távoli kapu előtt a
+  kis labda elvész), a gól kapuját a JÁTÉKOSOK mutatják: a felállt
+  támadásban mindkét csapat a kapu előtt tömörül (a mért játékosok
+  mediánja a gólvonaltól 13 m-en belül, legalább 3 mp-ig). Ez csak a
+  szigorú jelben él (a felállás és a középkezdés utáni irány ott
+  ellenőrzött); a lehetséges gólok listáját nem bővíti.
+
+  A tanulság a teszt-fixture-ökből jött: sok szintetikus "aktív
+  játék" pontosan egy középkezdés képe volt (a két csapat a saját
+  térfelén, a labda középen áll), és az első változat hat meglévő
+  teszt védéseit gólra írta át. A felállás önmagában tehát nem elég.
+  Ami a valódi középkezdést elválasztja: UTÁNA a gólt kapó csapat
+  támad, a labda tizenöt másodpercen belül átér a gólt szerző
+  térfelére. A félidő és a felvétel-darab határán át nem
+  következtetünk (a második félidő kezdése nem az első utolsó
+  támadásának gólja).
+
+  A következtetett gól HATÁRAI külön döntések voltak. (a) Ha a lövést
+  magát nem láttuk, a kapus védés-arányába és az xG-be NEM számít: a
+  hasonlóan nem látott védéseknek nincs középkezdésük, a mérleg
+  féloldalas lenne — egy jó kapus is gyengének látszana, ítélettel
+  együtt (`unseen_goal`). Az eredményben, a gól-listákban és az
+  állás-alapú rétegekben viszont számít. (b) A lövője ismeretlen: a
+  lövő-keresés a gól UTÁNI pillanattól keresne vissza, és a kapu előtt
+  álló bármelyik támadót megtehetné szerzőnek — "a nem tudjuk jobb,
+  mint a magabiztosan rossz név". Ha viszont a kapu felé tartó gyors
+  labdát láttuk (csak a gólvonalat nem), onnan a lövő-keresés ugyanaz,
+  mint egy látott lövésnél: a gép VALÓSZÍNŰ lövőt kínál, de nem írja be
+  — az edző egy kattintással fogadja el. (c) Az ideje a gól pillanata (a kapu
+  felé tartó utolsó gyors labda, vagy a labda eltűnése), nem a labda
+  kiszedése a hálóból — különben a klip és a 3D jelenet a gól utáni
+  képet mutatná. (d) Egy régebbi, védett lövést nem ír át gólra (csak
+  a gólhoz közeli, 10 mp-en belüli lövést) — kivéve, ha utána a labda
+  végig a kapuelőtérben maradt (a hálóban, a kapusnál): ott mezőnyjátékos
+  nem tarthat labdát, a támadás tehát nem folytatódott, és a kapus
+  akármeddig tarthatta a labdát a középkezdés előtt.
+
+  A szigorú jel mellé az EDZŐ DÖNTÉSE került: ahol a labda a középen
+  állt, de a felállás vagy a támadás-irány nem igazolta a gólt, a
+  pillanat "Lehetséges gól"-ként jelenik meg (meccs-nézet kártya,
+  kezdőlap-címke, klip-csomag), és egy kattintás kézi javításként
+  felveszi. A gép így nem találgat gólt — de a gyanút sem nyeli el.
+
+  Nyitott: a nem gólra végződő lövés (védés, mellé) ugyanígy
+  elveszhet, ha a röppályát nem látjuk — a következő jelölt jel a
+  kapus-kidobás (a labda a kapuelőtérben, a kapusnál áll meg). Ez
+  nehezebb: a kidobás védés UTÁN és mellé lövés után is jön, tehát a
+  kapus-mérlegnek nem ad kapura tartó lövést, csak kísérletet.

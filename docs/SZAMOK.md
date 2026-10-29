@@ -9,12 +9,12 @@ legyenek. A teszt-csomag őre nem engedi elavulni.
 
 | Mérték | Érték | Miből számolva |
 |---|---:|---|
-| Elemző réteg (meccs-csomag) | **313** | `_layer("...")` regisztrációk az `api/app.py`-ban |
-| Automata teszt | **1312** | `def test_*` függvények a `backend/tests/`-ben |
-| Meccsterv-szabály | **265** | a legnagyobb sorszámozott szabály a `pipeline/scouting.py`-ban |
-| Edzés-szabály | **286** | a legnagyobb sorszámozott szabály a `pipeline/training.py`-ban |
-| Kliens-csempe (felderítés) | **286** | csempe-sorok a `client/lib/ui/scouting_screen.dart`-ban |
-| Pipeline-modul | **56** | `.py` fájlok a `backend/handball/pipeline/`-ban |
+| Elemző réteg (meccs-csomag) | **515** | `_layer("...")` regisztrációk az `api/app.py`-ban |
+| Automata teszt | **2815** | `def test_*` függvények a `backend/tests/`-ben |
+| Meccsterv-szabály | **469** | a legnagyobb sorszámozott szabály a `pipeline/scouting.py`-ban |
+| Edzés-szabály | **488** | a legnagyobb sorszámozott szabály a `pipeline/training.py`-ban |
+| Kliens-csempe (felderítés) | **490** | csempe-sorok a `client/lib/ui/scouting_screen.dart`-ban |
+| Pipeline-modul | **63** | `.py` fájlok a `backend/handball/pipeline/`-ban |
 
 A rétegek tételes listája (mit mér melyik):
 [`docs/RETEG_KATALOGUS.md`](RETEG_KATALOGUS.md).

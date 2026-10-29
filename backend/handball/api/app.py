@@ -11,6 +11,14 @@ szervert a `create_app()`-ből indítjuk (lásd scripts/serve.py vagy uvicorn).
 
 Végpontok (MVP):
 - GET  /health                     → életjel.
+- GET  /legal/terms                → a felhasználási feltételek szövege + verzió.
+- GET  /accounts/status            → van-e már fiók a gépen.
+- POST /accounts/register          → fiók létrehozása (a feltételek elfogadásával).
+- POST /accounts/login             → belépés → munkamenet-kulcs (token).
+- GET  /accounts/me                → a belépett fiók.
+- POST /accounts/accept-terms      → a megújult feltételek elfogadása.
+- POST /accounts/logout            → kilépés (a kulcs érvénytelenítése).
+- POST /accounts/change-password   → jelszócsere.
 - POST /matches/process            → videó-feldolgozás indítása (háttérszál) → job_id.
 - GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
 - GET  /matches                     → a tárolt meccsek listája (könyvtár nézet).
@@ -32,6 +40,8 @@ Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + obj
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ..models.tracking import Match, MatchMeta, Team
 from ..storage import data_root
 from ..pipeline.pipeline import summarize
@@ -48,6 +58,563 @@ from ..pipeline.event_detection import detect_events, event_counts
 from ..pipeline.play_simulation import DefenseModel, SetPlay, simulate_setplay, evaluate_setplay
 
 
+def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
+    """Melyik FUTÓ feldolgozást tesszük félre az új elemzés miatt.
+
+    Ha a felhasználó a VÁRAKOZÁST választotta (queue_behind), a futó
+    munkához nem nyúlunk — az új elemzés a sorban megvárja, míg az
+    előző befejeződik. Különben az új elemzés azonnal indul, és a
+    futó (korábbi) munkát szelíden félretesszük: az addig feldolgozott
+    rész elmentődik, később folytatható.
+
+    Visszatérés: a félreteendő munkák listája (üres, ha nincs ilyen).
+    """
+    if queue_behind:
+        return []
+    return [j for j in jobs
+            if j.get("job_id") != job_id and j.get("status") == "running"]
+
+
+def calib_pairs_of(match) -> list:
+    """A meccs kalibráció-párjai [(H0, régió), …].
+
+    Két térfél-kalibrációnál mindkettő; régi mentésen (a calib_pairs
+    mező előttről) az egyetlen court_homography + calib_region páros.
+    Üres lista, ha nincs geometria — a hívó ebből tudja, hogy nem tud
+    rajzolni/mérni.
+    """
+    # A közös kalibráció-pár olvasó (a klip-rajz is ezt használja).
+    from ..pipeline.calib_overlay import calib_pairs
+    return calib_pairs(match)
+
+
+def train_metrics(eredmeny) -> dict:
+    """A tanítás mérőszámai emberi alakban (0..1 → %).
+
+    A felhasználó eddig csak annyit látott, hogy "kész" — azt nem, hogy
+    JAVULT-e a modell. A mAP50 az összkép, a labda-osztály külön sora
+    pedig a lényeg: kézilabdánál a labda a szűk keresztmetszet. Minden
+    ág izolált: ha az ultralytics más alakban adja vissza, mérőszám
+    nélkül is kész a tanítás.
+    """
+    ki: dict = {}
+    rd = getattr(eredmeny, "results_dict", None) or {}
+    for kulcs, nev in (("metrics/mAP50(B)", "map50"),
+                       ("metrics/precision(B)", "precision"),
+                       ("metrics/recall(B)", "recall")):
+        try:
+            ki[nev] = round(100.0 * float(rd[kulcs]), 1)
+        except Exception:
+            pass
+    try:  # osztályonkénti AP50 — a labda sora a lényeg
+        box = eredmeny.box
+        nevek = getattr(eredmeny, "names", {}) or {}
+        for idx, ap in zip(box.ap_class_index.tolist(),
+                           box.ap50.tolist()):
+            osztaly = str(nevek.get(int(idx), idx))
+            ki[f"map50_{osztaly}"] = round(100.0 * float(ap), 1)
+    except Exception:
+        pass
+    return ki
+
+
+def should_install(uj: dict, regi: dict) -> dict:
+    """Élesbe álljon-e az új modell? — a tanítás VÉDŐHÁLÓJA.
+
+    A tanítás eddig vakon lecserélte a súlyt, akkor is, ha az új modell
+    rosszabb lett (kevés vagy pontatlan címke, túltanulás). Itt a
+    validációs halmazon mért számokat vetjük össze: a LABDA AP50-je
+    dönt (kézilabdánál az a szűk keresztmetszet), ha az nincs, az
+    összesített mAP50. Ha nincs mihez mérni (első tanítás, vagy a
+    mostani modell nem mérhető ugyanezen a halmazon), élesbe áll.
+    Visszatérés: {"install": bool, "reason": magyar egy mondat}.
+    """
+    kulcs = ("map50_ball" if "map50_ball" in uj and "map50_ball" in regi
+             else "map50")
+    if kulcs not in uj:
+        return {"install": True,
+                "reason": "nincs mérőszám az új modellről — élesbe áll"}
+    if kulcs not in regi:
+        return {"install": True,
+                "reason": "első tanítás — nincs korábbi modell, amihez "
+                          "mérni lehetne"}
+    mi = "labda mAP50" if kulcs == "map50_ball" else "mAP50"
+    u, r = float(uj[kulcs]), float(regi[kulcs])
+    if u >= r:
+        return {"install": True,
+                "reason": f"{mi}: {u:.0f}% az eddigi {r:.0f}% helyett"}
+    return {"install": False,
+            "reason": f"{mi}: {u:.0f}% az eddigi {r:.0f}% helyett — "
+                      "rosszabb lett, a mostani modell marad"}
+
+
+_TJ_TAGS = ("__kv__", "__t__", "__s__")
+
+
+def typed_json_encode(o):
+    """Típus-megőrző JSON-alak: a nem-szöveg kulcsú szótár, a tuple és
+    a halmaz címkét kap (a sima JSON ezeket csendben átírná — pl. a
+    mezszám→poszt szótár egész kulcsaiból szöveg lenne). Ismeretlen
+    típusra TypeError: az ilyen jelentést nem tároljuk."""
+    if o is None or isinstance(o, (bool, int, float, str)):
+        return o
+    if isinstance(o, list):
+        return [typed_json_encode(v) for v in o]
+    if isinstance(o, tuple):
+        return {"__t__": [typed_json_encode(v) for v in o]}
+    if isinstance(o, (set, frozenset)):
+        return {"__s__": [typed_json_encode(v) for v in o]}
+    if isinstance(o, dict):
+        if all(isinstance(k, str) and k not in _TJ_TAGS for k in o):
+            return {k: typed_json_encode(v) for k, v in o.items()}
+        return {"__kv__": [[typed_json_encode(k), typed_json_encode(v)]
+                           for k, v in o.items()]}
+    raise TypeError(type(o).__name__)
+
+
+def typed_json_decode(o):
+    if isinstance(o, list):
+        return [typed_json_decode(v) for v in o]
+    if isinstance(o, dict):
+        if len(o) == 1:
+            (k, v), = o.items()
+            if k == "__kv__":
+                return {typed_json_decode(a): typed_json_decode(b)
+                        for a, b in v}
+            if k == "__t__":
+                return tuple(typed_json_decode(x) for x in v)
+            if k == "__s__":
+                return {typed_json_decode(x) for x in v}
+        return {k: typed_json_decode(v) for k, v in o.items()}
+    return o
+
+
+class _MatchStore(dict):
+    """Meccs-tár, amely a lemezről HÁTTÉRBEN töltődik, és a memóriában
+    csak a LEGUTÓBB HASZNÁLT meccseket tartja.
+
+    A motor induláskor eddig az ÖSSZES mentett meccset beolvasta, mielőtt
+    a portot megnyitotta volna. Egy teljes meccs ~75 MB JSON, több
+    másodperc — húsz meccsnél ez percekig zárva tartotta a motort: a
+    kliens "nem érem el a háttérmotort"-ot mondott, a könyvtár nem nyílt,
+    és minden újraindítás (frissítés, őrkutya) elölről kezdte.
+
+    Ez a tár szótár marad (a több száz végpont változatlanul `_store[id]`,
+    `.get`, `in`, `.values()` alakban használja), de a betöltés alatt:
+
+    - a `/health` és a `/matches` NEM vár (`status()`, `snapshot()`,
+      `summaries()`): a motor azonnal válaszol, a lista a már betöltött
+      meccseket adja a betöltés állásával;
+    - a KÉRT meccs igény szerint, soron kívül töltődik (`loader`): amit
+      az edző most nyit, ahhoz nem kell megvárni a többit;
+    - minden más olvasás (`values`, `keys`, `items`, iterálás, `len`)
+      megvárja a betöltés végét — a szezon-összesítések így teljes
+      könyvtárból dolgoznak, nem féllel.
+
+    MEMÓRIA-PLAFON (`hot_limit`, HANDBALL_STORE_HOT, alap 6): egy
+    betöltött meccs ~85 MB memóriát foglal, egy harminc meccses könyvtár
+    tehát 2,5 GB-ot — egy laptopon a motor mellett futó felismeréssel
+    együtt ez lapozáshoz, végső soron a motor kilövéséhez vezet ("nem
+    érem el a motort"). Ezért a tár csak a legutóbb használt `hot_limit`
+    meccset tartja teljesen a memóriában; a többinek csak a FEJLÉCÉT
+    (meta + kockaszám) őrzi ("hideg" meccs), és a következő
+    hozzáféréskor a lemezről tölti vissza (`loader`). A lemez mindig
+    friss (minden módosítás a `_put_match`-en át ír), ezért a kidobás
+    nem veszít adatot. Csak olyan meccset dobunk ki, amelyik a lemezen
+    megvan (`exists`); a könyvtár-szintű olvasások (`values`, `items`)
+    a hideg meccseket átmenetileg visszatöltik.
+
+    Írás közben nem vár: a futó feldolgozás eredménye azonnal bekerül, a
+    háttér-betöltő pedig a már bent lévőt nem írja felül.
+    """
+
+    def __init__(self, hot_limit: Optional[int] = None):
+        super().__init__()
+        import os
+        import threading
+        self._ready = threading.Event()
+        self._ready.set()                 # amíg nincs betöltés, kész
+        self._lock = threading.RLock()
+        self.loader = None                # match_id -> Match | None
+        self.exists = None                # match_id -> bool (lemezen van-e)
+        self.progress = {"loaded": 0, "total": 0, "current": None}
+        if hot_limit is None:
+            try:
+                hot_limit = int(os.environ.get("HANDBALL_STORE_HOT", "6"))
+            except ValueError:
+                hot_limit = 6
+        self.hot_limit = hot_limit        # <= 0: nincs plafon
+        self._cold: dict = {}             # match_id -> (meta, kockaszám)
+        self._touch: dict = {}            # match_id -> használat-sorszám
+        self._tick = 0
+        self._bulk = 0                    # >0: könyvtár-szintű olvasás fut
+        self.evictions = 0                # méréshez/teszthez
+
+    # ---- a betöltő oldala --------------------------------------------
+    @property
+    def loading(self) -> bool:
+        return not self._ready.is_set()
+
+    def begin_loading(self, total: int) -> None:
+        self.progress = {"loaded": 0, "total": int(total), "current": None}
+        if total > 0:
+            self._ready.clear()
+
+    def finish_loading(self) -> None:
+        self.progress["current"] = None
+        self._ready.set()
+
+    def put_raw(self, key, value, overwrite: bool = True) -> None:
+        with self._lock:
+            if overwrite or not (dict.__contains__(self, key)
+                                 or key in self._cold):
+                self._store(key, value)
+
+    def put_cold(self, key, meta, num_frames: int,
+                 overwrite: bool = True) -> None:
+        """Egy meccs FEJLÉCÉNEK beírása hidegként (a fejléc-indexből,
+        betöltés nélkül). `overwrite=False`: a már bent lévőt (meleget
+        vagy hideget) nem bántja."""
+        with self._lock:
+            if not overwrite and (dict.__contains__(self, key)
+                                  or key in self._cold):
+                return
+            if dict.__contains__(self, key):
+                dict.__delitem__(self, key)
+            self._cold[key] = (meta, int(num_frames))
+
+    def status(self) -> dict:
+        """A betöltés állása — NEM vár (a /health-nek)."""
+        return {"loading": self.loading,
+                "loaded": int(self.progress.get("loaded", 0)),
+                "total": int(self.progress.get("total", 0))}
+
+    def snapshot(self) -> list:
+        """A már betöltött (meleg) meccsek listája — NEM vár."""
+        with self._lock:
+            return list(dict.values(self))
+
+    def summaries(self) -> list:
+        """MINDEN ismert meccs fejléce (meta, kockaszám) — NEM vár, és a
+        hideg meccseket NEM tölti vissza (a könyvtár-listának)."""
+        with self._lock:
+            out = [(m.meta, len(m.frames)) for m in dict.values(self)]
+            out.extend(self._cold.values())
+            return out
+
+    # ---- meleg/hideg kezelés -----------------------------------------
+    def _store(self, key, value) -> None:
+        """Beírás a meleg tárba (a hívó tartja a zárat)."""
+        dict.__setitem__(self, key, value)
+        self._cold.pop(key, None)
+        self._tick += 1
+        self._touch[key] = self._tick
+        self._evict()
+
+    def _mark(self, key) -> None:
+        self._tick += 1
+        self._touch[key] = self._tick
+
+    def _evict(self) -> None:
+        """A legrégebben használt meleg meccsek kidobása a plafon fölött
+        — csak a lemezen meglévőket, és könyvtár-szintű olvasás alatt
+        nem (az visszatöltené)."""
+        if self.hot_limit <= 0 or self._bulk > 0 or self.loader is None \
+                or self.exists is None:
+            return
+        while dict.__len__(self) > self.hot_limit:
+            jeloltek = sorted(dict.keys(self), key=lambda k: self._touch.get(k, 0))
+            kidobva = False
+            for k in jeloltek:
+                if dict.__len__(self) <= self.hot_limit:
+                    break
+                try:
+                    lemezen = bool(self.exists(k))
+                except Exception:
+                    lemezen = False
+                if not lemezen:
+                    continue
+                m = dict.__getitem__(self, k)
+                self._cold[k] = (m.meta, len(m.frames))
+                dict.__delitem__(self, k)
+                self.evictions += 1
+                kidobva = True
+            if not kidobva:
+                break  # semmi sem dobható ki (nincs a lemezen)
+
+    def _load(self, key, cold: bool):
+        """Meccs betöltése a lemezről ZÁR NÉLKÜL — a beolvasás egy teljes
+        meccsnél másodpercek, és közben a /health, a lista és a többi
+        olvasás nem várhat rá (a kliens a lassú motort "dolgozónak"
+        látja, a nem felelőt halottnak). A zár csak a beírásra kell.
+
+        `cold=True`: hideg meccs visszatöltése — ha a fájl közben
+        eltűnt, a fejléc se maradjon (a könyvtár különben egy
+        megnyithatatlan meccset mutatna örökké)."""
+        loader = self.loader
+        if loader is None:
+            return None
+        try:
+            m = loader(key)
+        except Exception:
+            m = None
+        # (A kapusok jelölése a fájl beolvasásakor történik —
+        # _read_match_file —, így a háttér-betöltő útja is jelöl.)
+        with self._lock:
+            if dict.__contains__(self, key):
+                # Közben más szál is betöltötte: az övé marad (egy példány).
+                self._mark(key)
+                return dict.__getitem__(self, key)
+            if m is None:
+                if cold:
+                    self._cold.pop(key, None)
+                return None
+            self._store(key, m)
+            return m
+
+    def _revive(self, key):
+        """Hideg meccs visszatöltése a lemezről (zár nélkül)."""
+        return self._load(key, cold=True)
+
+    # ---- igény szerinti betöltés ---------------------------------------
+    def _try_load(self, key):
+        """A kért meccs soron kívüli betöltése a betöltés alatt."""
+        with self._lock:
+            if dict.__contains__(self, key):
+                self._mark(key)
+                return dict.__getitem__(self, key)
+        return self._load(key, cold=False)
+
+    # ---- olvasás -------------------------------------------------------
+    def _hot(self, key):
+        """A meleg meccs (használat-jelöléssel) vagy None — zárral."""
+        with self._lock:
+            if dict.__contains__(self, key):
+                self._mark(key)
+                return dict.__getitem__(self, key)
+            return None
+
+    def __getitem__(self, key):
+        m = self._hot(key)
+        if m is not None:
+            return m
+        if key in self._cold:
+            m = self._revive(key)
+            if m is not None:
+                return m
+        if self.loading:
+            m = self._try_load(key)
+            if m is not None:
+                return m
+            self._ready.wait()
+        m = self._hot(key)
+        if m is not None:
+            return m
+        if key in self._cold:
+            m = self._revive(key)
+            if m is not None:
+                return m
+        raise KeyError(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key) -> bool:
+        if dict.__contains__(self, key) or key in self._cold:
+            return True
+        if self.loading:
+            if self._try_load(key) is not None:
+                return True
+            self._ready.wait()
+        return dict.__contains__(self, key) or key in self._cold
+
+    def _all_keys(self) -> list:
+        with self._lock:
+            return list(dict.keys(self)) + [k for k in self._cold
+                                            if not dict.__contains__(self, k)]
+
+    def _all_values(self) -> list:
+        """MINDEN meccs betöltve (a hidegek visszatöltve) — a kidobás a
+        felsorolás végéig szünetel, utána egyszer fut le. A visszatöltés
+        zár nélkül megy (lásd _load), így a többi olvasás közben sem vár."""
+        with self._lock:
+            self._bulk += 1
+        try:
+            out = []
+            for k in self._all_keys():
+                m = self._hot(k)
+                if m is None:
+                    m = self._revive(k)
+                if m is not None:
+                    out.append((k, m))
+            return out
+        finally:
+            with self._lock:
+                self._bulk -= 1
+                self._evict()
+
+    def values(self):
+        self._ready.wait()
+        return [m for _, m in self._all_values()]
+
+    def keys(self):
+        self._ready.wait()
+        return self._all_keys()
+
+    def items(self):
+        self._ready.wait()
+        return self._all_values()
+
+    def __iter__(self):
+        self._ready.wait()
+        return iter(self._all_keys())
+
+    def __len__(self) -> int:
+        self._ready.wait()
+        return len(self._all_keys())
+
+    # ---- írás ----------------------------------------------------------
+    def __setitem__(self, key, value) -> None:
+        with self._lock:
+            self._store(key, value)
+
+    def __delitem__(self, key) -> None:
+        # A törlés legyen végleges: ha a háttér-betöltő még nem ért oda,
+        # a törlés után hozná be — ezért megvárjuk.
+        self._ready.wait()
+        with self._lock:
+            volt_hideg = self._cold.pop(key, None) is not None
+            self._touch.pop(key, None)
+            if dict.__contains__(self, key):
+                dict.__delitem__(self, key)
+            elif not volt_hideg:
+                raise KeyError(key)
+
+    def pop(self, key, *default):
+        self._ready.wait()
+        with self._lock:
+            if dict.__contains__(self, key):
+                self._cold.pop(key, None)
+                self._touch.pop(key, None)
+                return dict.pop(self, key)
+            if key in self._cold:
+                m = self._revive(key)
+                self._cold.pop(key, None)
+                self._touch.pop(key, None)
+                if m is not None:
+                    return dict.pop(self, key)
+            if default:
+                return default[0]
+            raise KeyError(key)
+
+
+# HÁLÓZATI ŐR: a más gépről (nem a saját gépről) jövő kérés ezeket érheti
+# el, ha a motor a hálózat felé is nyitva van — a közös nézés követő-útja:
+# a rövid link, a 3D oldal, a közös nézés állapota (minden metódus: a
+# vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
+# oldal mutatja őket), a névlista (a követő "Ki vagy?"-a), a three.js
+# (a 3D oldal a motorból tölti) és a megbeszélés-felvételek visszajátszása
+# (a hangjukkal; a néző jelezheti, hogy megnézte — "Ki nézte meg?").
+HALOZATI_ENGEDETT = (
+    ("GET", r"^/kovet$"),
+    ("GET", r"^/matches/[^/]+/view3d$"),
+    ("GET", r"^/matches/[^/]+/frame$"),
+    ("GET", r"^/matches/[^/]+/notes$"),
+    ("GET", r"^/library/players$"),
+    ("GET", r"^/vendor/three@[0-9.]+/[A-Za-z0-9_./-]+$"),
+    (None, r"^/matches/[^/]+/shared3d$"),
+    ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+(/hang)?)?$"),
+    ("POST", r"^/matches/[^/]+/felvetelek/[A-Za-z0-9]+/megnezte$"),
+    # A tervező figurája 3D-ben (a /kovet várólapja linkeli).
+    ("GET", r"^/figura3d$"),
+    # A figura videója (a várólapról a telefonra tölthető).
+    ("GET", r"^/figura-video$"),
+)
+
+
+def halozati_nyitott() -> bool:
+    """A motor a hálózat felé is nyitva van-e (HANDBALL_HOST nem a saját
+    gép — a több headsetes közös nézés klub-hálózati útja)."""
+    import os
+    host = os.environ.get("HANDBALL_HOST", "127.0.0.1").strip()
+    return host not in ("", "127.0.0.1", "localhost", "::1")
+
+
+def halozati_cimek() -> list:
+    """A gép hálózati (nem loopback, nem link-local) IPv4-címei — a
+    klub-hálózati csapat-linkhez. Elöl az, amelyiken a gép kifelé
+    forgalmazna (UDP-"kapcsolódás" egy dokumentációs címre: csomag nem
+    megy ki), utána a gépnév címei; ismétlés nélkül. Üres, ha nincs."""
+    import ipaddress
+    import socket
+    jeloltek = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("192.0.2.1", 9))
+            jeloltek.append(s.getsockname()[0])
+        finally:
+            s.close()
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET):
+            jeloltek.append(info[4][0])
+    except OSError:
+        pass
+    ki = []
+    for c in jeloltek:
+        try:
+            ip = ipaddress.ip_address(c)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_link_local or ip.is_unspecified:
+            continue
+        if c not in ki:
+            ki.append(c)
+    return ki
+
+
+def _halozati_or_telepit(app) -> None:
+    """A hálózati őr: ha a HANDBALL_HOST nem a saját gép (a több headsetes
+    közös nézés klub-hálózati útja — docs/3D_PALYA.md), a más gépről jövő
+    kérés csak a HALOZATI_ENGEDETT utakat érheti el, a többi 403 (a
+    meccsek, az elemzések, az írás és a törlés a hálózatról zárva). A
+    saját gépről (loopback) minden megy, mint eddig; alapból (127.0.0.1)
+    az őr nincs is telepítve."""
+    import ipaddress
+    import re
+
+    if not halozati_nyitott():
+        return
+    engedett = [(m, re.compile(r)) for m, r in HALOZATI_ENGEDETT]
+
+    def _sajat_gep(cim: str) -> bool:
+        try:
+            return ipaddress.ip_address(cim).is_loopback
+        except ValueError:
+            return cim == "localhost"
+
+    from fastapi.responses import JSONResponse
+
+    @app.middleware("http")
+    async def _halozati_or(request, call_next):
+        cim = request.client.host if request.client else ""
+        if not _sajat_gep(cim):
+            ut = request.url.path
+            if not any((m is None or request.method == m) and r.match(ut)
+                       for m, r in engedett):
+                return JSONResponse(status_code=403, content={
+                    "detail": "a hálózatról csak a közös nézés érhető el "
+                              "(a 3D oldal és a /kovet) — a többi a motor "
+                              "gépéről"})
+        return await call_next(request)
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -61,11 +628,22 @@ def create_app():
     from fastapi import FastAPI, HTTPException, Request
 
     app = FastAPI(title="Handball Analysis API", version="0.1.0")
+    _halozati_or_telepit(app)
 
     # Meccs-tár: memóriában (match_id -> Match), lemezre TÜKRÖZVE, hogy a szerver
     # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).
     # Ez az MVP-perzisztencia; később adatbázis + objektumtár.
-    _store: dict[str, Match] = {}
+    #
+    # A betöltés HÁTTÉRBEN fut (lásd _MatchStore): egy teljes meccs
+    # ~75 MB JSON, több másodperc — húsz meccsnél a régi, induláskor
+    # blokkoló betöltés PERCEKIG tartotta a portot zárva, a kliens pedig
+    # "nem érem el a háttérmotort"-ot mondott, és a könyvtár nem nyílt.
+    _store = _MatchStore()
+    # A minőség-pontszám kiszámítása végigjárja a meccs összes kockáját,
+    # a "korábbi feldolgozásaid" listát viszont minden jelentés-nyitás
+    # kéri. Kulcs: (match_id, kockaszám) — egy újrafeldolgozott meccs
+    # így friss pontszámot kap, a változatlan pedig nem számolódik újra.
+    _quality_score_cache: dict[tuple, int] = {}
     # Írható adat-gyökér: telepítve felhasználói mappa, fejlesztésben a backend/
     # (lásd handball/storage.py) — a telepített app a saját mappájába nem írhat.
     _data_dir = data_root() / "data" / "matches"
@@ -82,31 +660,353 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return _data_dir / f"{safe}.params.json"
 
-    def _load_store_from_disk() -> int:
-        """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
-        visszaállítás után). A jegyzet/mezszám/roster kísérőfájlokat a nevük
-        különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
-        loaded = 0
-        for f in sorted(_data_dir.glob("*.json")):
-            if any(f.name.endswith(s) for s in
-                   (".notes.json", ".jerseys.json", ".roster.json",
-                    ".params.json")):
-                continue
-            try:
-                m = Match.from_json(f.read_text(encoding="utf-8"))
-                _store[m.meta.match_id] = m
-                loaded += 1
-            except Exception:
-                pass  # sérült fájlt átugrunk, ne akadályozza az indulást
-        return loaded
+    def _overrides_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.events.json"
 
-    # Indításkor betöltjük a korábban lementett meccseket a memóriába.
-    _load_store_from_disk()
+    def _load_overrides(match_id: str) -> list:
+        """A meccshez tárolt KÉZI esemény-javítások (üres, ha nincs).
+
+        A javítás a felismerés hibáját írja felül; hibás fájlra üres
+        listát adunk, mert a javítás hiánya rosszabb ugyan, de a
+        meccs elvesztésénél sokkal kevésbé rossz.
+        """
+        p = _overrides_path(match_id)
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("overrides"), list):
+                    return d["overrides"]
+            except Exception:
+                pass
+        return []
+
+    def _match_files() -> list:
+        """A könyvtár meccs-fájljai, a LEGFRISSEBB elöl — a háttér-betöltés
+        ebben a sorrendben halad, hogy amit az edző most nyitna, az
+        legyen kész először. A jegyzet/mezszám/roster kísérőfájlokat a
+        nevük különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
+        # A ponttal kezdődő fájl (a fejléc-index) nem meccs — a pathlib
+        # `*` mintája a rejtett fájlt is találja, a shell-lel ellentétben.
+        files = [f for f in _data_dir.glob("*.json")
+                 if not f.name.startswith(".")
+                 and not any(f.name.endswith(s) for s in
+                             (".notes.json", ".jerseys.json", ".roster.json",
+                              ".params.json", ".events.json",
+                              ".annotations.json"))]
+
+        def _mtime(f):
+            try:
+                return f.stat().st_mtime
+            except OSError:
+                return 0.0
+        return sorted(files, key=lambda f: (-_mtime(f), f.name))
+
+    def _read_match_file(f) -> Optional[Match]:
+        """Egy meccs-fájl beolvasása (a kézi esemény-javításokkal együtt);
+        sérült fájlra None — ne akadályozza a többit."""
+        try:
+            m = Match.from_json(f.read_text(encoding="utf-8"))
+            # A kézi esemény-javítások a meccs mellett, külön
+            # fájlban élnek — a felismerés a meta-ból olvassa őket,
+            # tehát betöltéskor ide kell tenni.
+            m.meta.event_overrides = _load_overrides(m.meta.match_id)
+        except Exception:
+            return None
+        # A kapusok jelölése a tárba lépés ELŐTT (zár nélkül), MINDEN
+        # lemezes úton — igény szerinti betöltés és a háttér-betöltő
+        # (put_raw) is: a hatókörön KÍVÜL futó végpontok is kapusként
+        # látják a kapust (a hatókör nyitása idempotensen ugyanezt teszi).
+        try:
+            from ..pipeline.primitive_cache import mark_goalkeepers
+            mark_goalkeepers(m)
+        except Exception:
+            pass
+        return m
+
+    def _load_one_from_disk(match_id: str) -> Optional[Match]:
+        """Egy meccs betöltése IGÉNY SZERINT a betöltés közben: a kliens
+        kérte, a háttér-betöltő még nem ért oda. A fájlnév a fertőtlenített
+        azonosító — ha a fájl belső azonosítója más, az nem ez a meccs."""
+        p = _match_path(match_id)
+        if not p.exists():
+            return None
+        m = _read_match_file(p)
+        if m is None or m.meta.match_id != match_id:
+            return None
+        return m
+
+    _store.loader = _load_one_from_disk
+    _store.exists = lambda mid: _match_path(mid).exists()
+
+    # --- Fejléc-index: a könyvtár meccseinek meta + kockaszám, a fájl
+    # méretével és idejével. Indításkor a meleg kereten túli meccsekhez
+    # ebből jön a fejléc (nem kell 70 MB JSON-t beolvasni, csak azért,
+    # hogy ki is dobjuk). Egy módosított fájl (más méret/idő) mindig
+    # frissen olvasódik be. A név ponttal kezdődik: a `*.json` glob
+    # (a meccs-fájlok listája) így nem látja meccsnek.
+    _index_path = _data_dir / ".index.json"
+
+    def _read_index() -> dict:
+        try:
+            d = json.loads(_index_path.read_text(encoding="utf-8"))
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    def _index_header(index: dict, f: Path):
+        """(meta, kockaszám) az indexből, ha a bejegyzés a fájllal egyezik;
+        különben None (be kell olvasni)."""
+        ent = index.get(f.name)
+        if not isinstance(ent, dict):
+            return None
+        try:
+            st = f.stat()
+            if int(ent.get("size", -1)) != st.st_size or \
+                    int(ent.get("mtime", -1)) != int(st.st_mtime):
+                return None
+            known = MatchMeta.__dataclass_fields__.keys()
+            meta = MatchMeta(**{k: v for k, v in ent["meta"].items()
+                                if k in known})
+            # A fájlnév a FERTŐTLENÍTETT azonosító (szóköz, ékezet → "_"):
+            # ugyanazzal a szabállyal hasonlítunk, különben az ilyen
+            # azonosítójú meccs sosem jönne az indexből.
+            if _match_path(meta.match_id).name != f.name:
+                return None
+            meta.event_overrides = _load_overrides(meta.match_id)
+            return meta, int(ent["n"])
+        except Exception:
+            return None
+
+    def _write_index() -> None:
+        """Az index újraírása a tár fejléceiből (atomikusan). Hiba esetén
+        csendben elmarad: az index csak gyorsítás, a forrás a meccs-fájl."""
+        from dataclasses import asdict
+        try:
+            out = {}
+            for meta, n in _store.summaries():
+                p = _match_path(meta.match_id)
+                if not p.exists():
+                    continue
+                st = p.stat()
+                out[p.name] = {"meta": asdict(meta), "n": int(n),
+                               "size": st.st_size, "mtime": int(st.st_mtime)}
+            tmp = _index_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(out, ensure_ascii=False),
+                           encoding="utf-8")
+            tmp.replace(_index_path)
+        except Exception:
+            pass
+
+    def _load_store_from_disk(background: bool = False) -> int:
+        """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
+        visszaállítás után).
+
+        `background=True`: a betöltés külön szálon fut, a hívó azonnal
+        visszatér (a visszaadott szám a talált fájloké). A tár addig
+        "töltődik": a /health és a /matches azonnal válaszol, a többi
+        olvasás megvárja a végét, a kért meccs pedig igény szerint,
+        soron kívül töltődik (lásd _MatchStore). Háttérben a már bent
+        lévő (igény szerint betöltött vagy közben feldolgozott) meccset
+        nem írjuk felül; a szinkron (visszaállítás utáni) betöltés
+        felülír, mert ott a lemez a friss.
+        """
+        files = _match_files()
+        index = _read_index()
+        # A meleg keret: ennyi meccset olvasunk be teljesen (a
+        # legfrissebbeket); a többinek a fejléce az indexből jön, ha az
+        # a fájllal egyezik — a beolvasás (meccsenként ~2 mp) így nem
+        # ismétlődik minden indításkor egy harminc meccses könyvtáron,
+        # csak azért, hogy utána ki is dobjuk.
+        keret = _store.hot_limit if _store.hot_limit > 0 else None
+
+        def _run() -> int:
+            loaded = 0
+            meleg = 0
+            try:
+                for f in files:
+                    _store.progress["current"] = f.stem
+                    fejlec = None
+                    if keret is not None and meleg >= keret:
+                        fejlec = _index_header(index, f)
+                    if fejlec is not None:
+                        meta, n = fejlec
+                        _store.put_cold(meta.match_id, meta, n,
+                                        overwrite=not background)
+                        loaded += 1
+                    else:
+                        m = _read_match_file(f)
+                        if m is not None:
+                            _store.put_raw(m.meta.match_id, m,
+                                           overwrite=not background)
+                            loaded += 1
+                            meleg += 1
+                    _store.progress["loaded"] += 1
+            finally:
+                _store.finish_loading()
+                _write_index()
+            return loaded
+
+        _store.begin_loading(len(files))
+        if not background:
+            return _run()
+        import threading
+        threading.Thread(target=_run, name="match-store-loader",
+                         daemon=True).start()
+        return len(files)
+
+    # Indításkor betöltjük a korábban lementett meccseket a memóriába —
+    # HÁTTÉRBEN, hogy a motor azonnal válaszoljon. A tesztek (és aki a
+    # determinisztikus indulást kéri) a HANDBALL_STORE_SYNC=1 változóval
+    # a régi, blokkoló betöltést kapják.
+    import os as _os
+    _load_store_from_disk(
+        background=_os.environ.get("HANDBALL_STORE_SYNC", "") != "1")
 
     @app.get("/health")
-    def health():
-        """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
-        return {"status": "ok"}
+    async def health():
+        """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető.
+
+        A verziót is kiadja: a kliens összeveti a sajátjával, és a
+        FÉL-FRISSÜLT telepítés (új app + régi motor, vagy fordítva) így
+        azonnal látszik, nem rejtélyes hibákként. A könyvtár háttér-
+        betöltésének állását is mutatja ("library": loading/loaded/total),
+        hogy a kliens meg tudja mondani, mire vár.
+
+        SZÁNDÉKOSAN `async`: az eseményhurkon fut, nem a szál-készletben
+        — így akkor sem áll sorba a nehéz (elemző) kérések mögött, ha
+        azok épp lefoglalták a készletet. A törzs nem blokkol (a tár
+        állása nem vár a betöltésre)."""
+        from .. import __version__
+        return {"status": "ok", "version": __version__,
+                "library": _store.status()}
+
+    # A kilépés-függvény cserélhető: a tesztben nem állhat le a folyamat.
+    app.state.exit_fn = None  # None = os._exit
+
+    @app.post("/shutdown")
+    def shutdown():
+        """A motor SZÁNDÉKOS leállítása — a fél-frissülés őre használja.
+
+        Frissítés után a RÉGI motor-folyamat életben maradhat, és az új
+        app ahhoz csatlakozna (verzió-eltérés sáv). Az indító ezzel a
+        végponttal állítja le a régi motort, mielőtt a beépítettet
+        indítja. A motor eleve csak a 127.0.0.1-en figyel, tehát ezt
+        csak a helyi gép hívhatja."""
+        import os
+        import threading
+        import time
+
+        def _kilep():
+            time.sleep(0.3)  # a válasz még kimegy
+            (app.state.exit_fn or os._exit)(0)
+
+        threading.Thread(target=_kilep, daemon=True).start()
+        return {"stopping": True}
+
+    # --- Fiókok és felhasználási feltételek -------------------------------
+    # A program a Tulajdonos szellemi és fizikai tulajdona; a használat
+    # fiókhoz kötött, a fiók létrehozásához pedig a feltételek elfogadása
+    # kell (lásd handball/accounts.py). A végpontok vékonyak: a logika és a
+    # jelszó-kezelés az accounts modulban van, hogy FastAPI nélkül is
+    # tesztelhető legyen.
+
+    def _bearer(request: Request, body: dict | None = None) -> str:
+        """A munkamenet-kulcs: Authorization: Bearer <token> vagy törzs/query."""
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip()
+        if body and body.get("token"):
+            return str(body["token"])
+        return str(request.query_params.get("token") or "")
+
+    @app.get("/legal/terms")
+    def legal_terms():
+        """A felhasználási feltételek teljes szövege és verziója.
+
+        A kliens a fiók-készítő képernyőn ezt mutatja meg — elfogadás
+        (jelölőnégyzet) nélkül nem lehet fiókot létrehozni.
+        """
+        from ..accounts import terms_document
+        return terms_document()
+
+    @app.get("/accounts/status")
+    def accounts_status_ep():
+        """Van-e már fiók a gépen (első indításnál nincs) + a feltétel-verzió."""
+        from ..accounts import accounts_status
+        return accounts_status()
+
+    @app.post("/accounts/register")
+    def accounts_register(body: dict):
+        """Fiók létrehozása. Törzs: {"email", "password", "name", "team",
+        "accept_terms": true}. A feltételek elfogadása KÖTELEZŐ."""
+        from ..accounts import AccountError, register
+        try:
+            return register(
+                email=str(body.get("email") or ""),
+                password=str(body.get("password") or ""),
+                name=str(body.get("name") or ""),
+                team=str(body.get("team") or ""),
+                accept_terms=bool(body.get("accept_terms")),
+            )
+        except AccountError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/accounts/login")
+    def accounts_login(body: dict):
+        """Belépés. Törzs: {"email", "password"} → {"account", "token"}.
+        Ha az account "terms_ok" mezője hamis, a megújult feltételeket
+        el kell fogadni (POST /accounts/accept-terms)."""
+        from ..accounts import AccountError, login
+        try:
+            return login(str(body.get("email") or ""),
+                         str(body.get("password") or ""))
+        except AccountError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+    def accounts_me(request):
+        """A belépett fiók (Authorization: Bearer <token> vagy ?token=)."""
+        from ..accounts import me
+        acc = me(_bearer(request))
+        if acc is None:
+            raise HTTPException(status_code=401, detail="nincs bejelentkezés")
+        return acc
+
+    def accounts_accept_terms(request, body: dict | None = None):
+        """A jelenlegi feltétel-verzió elfogadása a belépett fiókkal."""
+        from ..accounts import AccountError, accept_terms
+        try:
+            return accept_terms(_bearer(request, body))
+        except AccountError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+    def accounts_logout(request, body: dict | None = None):
+        """Kilépés: a munkamenet-kulcs érvénytelenítése."""
+        from ..accounts import logout
+        return {"logged_out": logout(_bearer(request, body))}
+
+    def accounts_change_password(request, body: dict):
+        """Jelszócsere. Törzs: {"old_password", "new_password"} — a csere
+        minden korábbi munkamenetet érvénytelenít, és új kulcsot ad."""
+        from ..accounts import AccountError, change_password
+        try:
+            return change_password(_bearer(request, body),
+                                   str(body.get("old_password") or ""),
+                                   str(body.get("new_password") or ""))
+        except AccountError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # A `request` paraméter típusát KÉZZEL állítjuk be (a modul `from
+    # __future__ import annotations` miatt a sztring-annotáció nem oldódna
+    # fel a függvényen belüli névtérben), majd regisztráljuk az útvonalakat.
+    for _fn in (accounts_me, accounts_accept_terms, accounts_logout,
+                accounts_change_password):
+        _fn.__annotations__["request"] = Request
+    app.get("/accounts/me")(accounts_me)
+    app.post("/accounts/accept-terms")(accounts_accept_terms)
+    app.post("/accounts/logout")(accounts_logout)
+    app.post("/accounts/change-password")(accounts_change_password)
 
     @app.get("/health/full")
     def health_full():
@@ -200,6 +1100,29 @@ def create_app():
 
         return {"ok": all(c["ok"] for c in checks), "checks": checks}
 
+    def _nyers_tipus_ellenor(request, engedett: tuple) -> None:
+        """Nyers bájt-folyamos végpont (feltöltés, visszaállítás) csak
+        KIMONDOTT bináris tartalom-típussal fogad.
+
+        A motor a localhoston figyel, de a felhasználó böngészőjében
+        nyitott BÁRMELY weboldal küldhet ide "egyszerű" (előzetes
+        CORS-egyeztetés nélküli) POST-ot — text/plain, űrlap, vagy
+        típus nélküli törzs. A JSON-végpontokat a FastAPI típus-
+        ellenőrzése már megvédi; a nyers törzset olvasó végpontok
+        viszont bármit elfogadtak: egy idegen oldal így felülírhatta a
+        meccskönyvtárat. A bináris típus (application/zip,
+        application/octet-stream, video/*) nem "egyszerű": a böngésző
+        előbb CORS-egyeztetést kérne, amit a motor nem ad meg — az app
+        maga mindig ilyen típussal küld."""
+        tipus = (request.headers.get("content-type") or "").split(";")[0]
+        tipus = tipus.strip().lower()
+        if not any(tipus == e or (e.endswith("/*") and tipus.startswith(e[:-1]))
+                   for e in engedett):
+            raise HTTPException(
+                status_code=415,
+                detail=("nem támogatott tartalom-típus: "
+                        f"{tipus or '(nincs)'} — várt: {', '.join(engedett)}"))
+
     async def upload_video(request, filename: str = "match.mp4"):
         """Meccsvideó feltöltése (nyers bájt-folyam a törzsben, `filename` query).
 
@@ -210,6 +1133,7 @@ def create_app():
         """
         import re
         from pathlib import Path
+        _nyers_tipus_ellenor(request, ("application/octet-stream", "video/*"))
         uploads = data_root() / "uploads"
         uploads.mkdir(parents=True, exist_ok=True)
         # A fájlnevet fertőtlenítjük (path traversal ellen): csak biztonságos karakterek.
@@ -234,7 +1158,14 @@ def create_app():
         képernyő ezt tölti be, hogy a felhasználó a valódi képre húzza a sarkokat."""
         import cv2
         from fastapi import Response
-        cap = cv2.VideoCapture(path)
+
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            # A MIÉRT-et a felhasználó is látja: ékezetes útvonal,
+            # hiányzó fájl vagy ismeretlen kodek — teendővel együtt.
+            raise HTTPException(status_code=400, detail=str(e))
         cap.set(cv2.CAP_PROP_POS_FRAMES, t)
         ok, frame = cap.read()
         cap.release()
@@ -265,8 +1196,19 @@ def create_app():
             raise HTTPException(status_code=500,
                                 detail=f"a közvetítés-elemzés nem sikerült: {e}")
 
+    # A sarok-javaslat KOCKAKERESÉSE: ha a kért kockán nem áll össze a
+    # négyszög (tömeg, felirat, rossz pillanat), ennyi másodperces
+    # sugarú körben keresünk jobb kockát, ekkora lépésekkel. IDŐTARTAM,
+    # tehát másodpercben — a kocka-lépést a videó fps-éből számoljuk. A
+    # jelöltek száma korlátos, hogy a keresés pár másodperc maradjon.
+    BL_SEARCH_S = 20.0
+    BL_SEARCH_STEP_S = 2.0
+    BL_SEARCH_MAX_FRAMES = 14
+
     @app.get("/broadcast/lines")
-    def broadcast_lines(path: str, frame: int = 0):
+    def broadcast_lines(path: str, frame: int = 0,
+                        line_color: str = "auto",
+                        search_s: float = 0.0):
         """Pályavonal-jelöltek egy közvetítés-képkockából.
 
         A vonal-alapú auto-kalibráció első fele: a megadott képkockán
@@ -275,35 +1217,184 @@ def create_app():
         A kliens ezt rárajzolhatja a képre — így ellenőrizhető, mit lát
         a rendszer, mielőtt a pálya-modell megfeleltetés elkészül.
 
+        `search_s`: ha a kért kockán nem áll össze a négyszög, ennyi
+        MÁSODPERC sugarú körben keresünk jobb kockát (0 = nincs
+        keresés). A válasz "frame" mezője a TÉNYLEGESEN használt kocka,
+        a "searched" a megnézett kockák száma — a kliens ide léptet.
+
         404: a videó nem olvasható / nincs ilyen képkocka."""
         import os
         if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="video not found")
         try:
             import cv2
-            cap = cv2.VideoCapture(path)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
-            ok, img = cap.read()
+
+            from ..video_io import VideoOpenError, open_capture
+            try:
+                cap = open_capture(path)
+            except VideoOpenError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            from ..pipeline.broadcast_lines import detect_court_quad
+
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 25.0
+            hossz = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            sugar = max(0.0, min(float(search_s or 0.0), BL_SEARCH_S))
+            lepes = max(1, int(round(BL_SEARCH_STEP_S * fps)))
+            jeloltek = [int(frame)]
+            if sugar > 0:
+                maxlep = int(round(sugar * fps))
+                d = lepes
+                while d <= maxlep and len(jeloltek) < BL_SEARCH_MAX_FRAMES:
+                    for elojel in (1, -1):
+                        t = int(frame) + elojel * d
+                        if t < 0 or (hossz and t >= hossz):
+                            continue
+                        jeloltek.append(t)
+                    d += lepes
+
+            def _egy_kocka(t: int):
+                """Egy kocka vonal-felismerése; None, ha nem olvasható."""
+                cap.set(cv2.CAP_PROP_POS_FRAMES, t)
+                ok, img = cap.read()
+                if not ok or img is None:
+                    return None
+                h_, w_ = img.shape[:2]
+                # "auto"-nál a négyszög a cél: ha a legtöbb pixelt adó
+                # szín vonalaiból nem áll össze, a többi színt és a
+                # festett mezők szélét is kipróbálja (detect_court_quad).
+                found = detect_court_quad(img[:, :, ::-1], line_color)
+                return {"frame": int(t), "width": w_, "height": h_,
+                        "line_color": found["color"],
+                        "line_pixels": found["pixels"],
+                        "colors_tried": found["tried"],
+                        "lines": found["lines"],
+                        "corners": found["corners"],
+                        "suggested_quad": found["suggested_quad"]}
+
+            elso, legjobb = None, None
+            nezett = 0
+            for t in jeloltek:
+                r = _egy_kocka(t)
+                nezett += 1
+                if r is None:
+                    continue
+                if elso is None:
+                    elso = r
+                # A NÉGYSZÖG a cél; ha több kocka is ad, a több felismert
+                # vonalú nyer (tisztább kép, megbízhatóbb sarkok).
+                if r["suggested_quad"]:
+                    if legjobb is None or len(r["lines"]) > len(legjobb["lines"]):
+                        legjobb = r
+                    break
             cap.release()
-            if not ok or img is None:
+            if elso is None:
                 raise HTTPException(status_code=404,
                                     detail="frame not readable")
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            from ..pipeline.broadcast_lines import (
-                detect_court_lines, line_intersections,
-                suggest_calibration_quad)
-            lines = detect_court_lines(gray)
-            h, w = gray.shape[:2]
-            corners = line_intersections(lines, w, h)
-            return {"frame": int(frame), "width": w, "height": h,
-                    "lines": lines, "corners": corners,
-                    "suggested_quad": suggest_calibration_quad(corners,
-                                                               w, h)}
+            ki = legjobb or elso
+            ki["searched"] = nezett
+            ki["requested_frame"] = int(frame)
+            return ki
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(status_code=500,
                                 detail=f"a vonal-felismerés nem sikerült: {e}")
+
+    @app.get("/calib-score")
+    def calib_score(path: str, t: int = 100, calib: str = "",
+                    region: str = "full", rotate: bool = False):
+        """MENNYIRE ÜL a bejelölt kalibráció a valódi pályavonalakon?
+
+        A kalibráló képernyő gépi ellenőrzése — ugyanaz a mérés, amit a
+        feldolgozás is végez a kulcs-kockákon (`calib_overlay`), csak MÉG
+        az indítás ELŐTT, a most bejelölt 4 sarokra. A szem könnyen
+        elnézi a néhány képpontos csúszást, pedig a játékos-helyek azon
+        múlnak.
+
+        Emellett megkeresi, hogy egy ELTOLÁSSAL (±REFINE_MAX_PX) jobban
+        ülne-e a rajz — ha érdemben igen, a kliens egy gombbal ráigazítja
+        mind a négy sarkot (a négy sarok azonos eltolása pontosan a rajz
+        eltolása).
+
+        Visszatérés: {"fit", "itelet", "uzenet", "dx", "dy",
+        "fit_javitva", "javasolt", "width", "height", "t", "region"}.
+        400: hibás calib-paraméter / nem nyitható videó; 404: nincs ilyen
+        kocka.
+        """
+        import os
+
+        import cv2
+
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="video not found")
+        try:
+            corners = json.loads(calib) if calib else None
+        except Exception:
+            corners = None
+        if not corners or len(corners) != 4:
+            raise HTTPException(
+                status_code=400,
+                detail="a calib paraméter 4 sarokpont JSON-ban")
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(t))
+        ok, frame = cap.read()
+        cap.release()
+        if not ok or frame is None:
+            raise HTTPException(status_code=404, detail="frame not read")
+        import sys
+        backend_dir = str(Path(__file__).resolve().parents[2])
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        try:
+            from scripts.process_video import _calib_court_points
+
+            from ..pipeline import calib_overlay as co
+            from ..pipeline._homography import homography_from_points
+            sarkok = [tuple(map(float, p)) for p in corners]
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            h, w = gray.shape[:2]
+            sav, alap = co.edge_map(gray)
+
+            def _meres(reg: str, rot: bool):
+                """Egy beállítás illeszkedése + a mintapontok száma."""
+                h_ = homography_from_points(
+                    sarkok, _calib_court_points(reg, bool(rot)))
+                poly = co.overlay_pixels(h_, None, w, h, reg)
+                r_ = co.fit_on_edge_map(sav, alap, poly)
+                return h_, r_, len(co.sample_points(poly))
+
+            h0, res, ossz = _meres(region, bool(rotate))
+            fit = res.get("fit")
+            minta = int(res.get("samples") or 0)
+            coverage = (minta / ossz) if ossz else None
+            # A NÉMA hiba felderítése: ugyanezekre a sarkokra megmérjük a
+            # többi terület/forgatás beállítást is — ha egy másik érdemben
+            # jobban ül, a felhasználó azt kapja tanácsul (a leggyakoribb
+            # ok nem a pontatlan sarok, hanem az elállított választó).
+            masok = {}
+            for reg in ("full", "left", "right"):
+                for rot in (False, True):
+                    if (reg, rot) == (region, bool(rotate)):
+                        continue
+                    try:
+                        masok[(reg, rot)] = _meres(reg, rot)[1].get("fit")
+                    except Exception:
+                        masok[(reg, rot)] = None
+            alt = co.better_setting(masok, region, bool(rotate), fit)
+            shift = (co.refine_shift(sav, alap, h0, None, w, h, region)
+                     if fit is not None else None)
+            ki = co.calib_verdict(fit, shift, alternativ=alt,
+                                  coverage=coverage, samples=minta)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"az illeszkedés-mérés nem sikerült: {e}")
+        ki.update({"width": w, "height": h, "t": int(t), "region": region})
+        return ki
 
     @app.get("/detect-preview")
     def detect_preview(path: str, t: int = 100, imgsz: int = 1280,
@@ -334,7 +1425,11 @@ def create_app():
 
         if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="video not found")
-        cap = cv2.VideoCapture(path)
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         cap.set(cv2.CAP_PROP_POS_FRAMES, t)
         ok, frame = cap.read()
         cap.release()
@@ -342,17 +1437,13 @@ def create_app():
             raise HTTPException(status_code=404, detail="frame not read")
 
         # A nehéz feldolgozó segédei (súly-feloldás, osztályok, mezszín).
-        import sys
-        from pathlib import Path
-        backend_dir = str(Path(__file__).resolve().parents[2])
-        if backend_dir not in sys.path:
-            sys.path.insert(0, backend_dir)
         try:
             from ultralytics import YOLO
-            from scripts.process_video import (
-                _class_ids, _is_referee, _pick_device, _resolve_weights,
-                _torso_color,
-            )
+            _pv = _process_video_modul()
+            _class_ids, _is_referee, _pick_device = (
+                _pv._class_ids, _pv._is_referee, _pv._pick_device)
+            _resolve_weights, _torso_color = (_pv._resolve_weights,
+                                              _pv._torso_color)
             model = YOLO(_resolve_weights("yolov8n.pt"))
         except Exception as e:
             raise HTTPException(
@@ -360,8 +1451,14 @@ def create_app():
                 detail=f"a detektor nem érhető el: {e}")
 
         person_ids, ball_ids = _class_ids(getattr(model, "names", None))
+        # Futó feldolgozás mellett az Apple-GPU-t (MPS) a feldolgozás
+        # termelő szála használja — egy MÁSIK szálból indított GPU-munka a
+        # Metal-assertionnel leállítaná a motort (lásd _process_yolo).
+        eszkoz = _pick_device()
+        if eszkoz == "mps" and _gpu_foglalt():
+            eszkoz = "cpu"
         res = model.predict(frame, imgsz=imgsz, conf=0.2, verbose=False,
-                            device=_pick_device())[0]
+                            device=eszkoz)[0].cpu()
 
         persons = []   # (x1, y1, x2, y2, mezszín)
         referees = 0
@@ -425,6 +1522,78 @@ def create_app():
     # Memóriabeli, mint a _store; a szerver újraindításáig él.
     _jobs: dict[str, dict] = {}
 
+    def _apply_manual_window(body: dict, path: str) -> None:
+        """A KÉZI meccs-ablak (start_s / end_s) átváltása kockákra.
+
+        A feltöltött felvételben rendszerint benne van a bemelegítés, a
+        csapatbemutatás és a lefújás utáni rész. Az automatikus
+        meccs-ablak ezt megpróbálja levágni, de rossz kalibrációnál
+        (amikor a lelátó is a pályára vetül) becsapható — a
+        bemelegítő kapura lövésekből "lövés", az álldogálásból "eladott
+        labda" lesz. A felhasználó ezért MEGMONDHATJA másodpercben, hol
+        kezdődik és hol ér véget a meccs; ez felülír minden felismerést.
+
+        A törzset helyben írjuk át (start = nyers kockaszám, max = a
+        ritkítás UTÁNI, feldolgozandó kockák száma), hogy a mentett
+        paraméter-fájl és a Folytatás is ugyanezt lássa.
+        """
+        kezd = body.get("start_s")
+        veg = body.get("end_s")
+        hossz = body.get("max_s")
+        if kezd is None and veg is None and hossz is None:
+            return
+        try:
+            from ..video_io import video_fps
+            fps = video_fps(path)
+        except Exception:
+            fps = None
+        if not fps or fps <= 0:
+            return  # nem tudjuk átváltani — marad a kliens tartalék `max`-ja
+        stride = max(1, int(body.get("stride", 3) or 3))
+        if kezd is not None:
+            try:
+                body["start"] = max(0, int(round(float(kezd) * fps)))
+            except (TypeError, ValueError):
+                return
+        # A feldolgozandó kockaszám KÉT forrásból jöhet, és a szigorúbb
+        # nyer: a kifejezett végpont (end_s) és a hossz-korlát (max_s,
+        # "Próba ~2 perc" / "Félidő ~35 perc"). Aki 0–60 perces ablakot
+        # ad meg, de próbát indít, két percet vár — nem hatvanat.
+        #
+        # A hossz-korlátot a kliens kockában is elküldi (`max`), de ott
+        # csak 25 fps-sel tud számolni: egy 30 fps-es telefonvideón a
+        # "35 perc" valójában 29 perc lenne, egy 50 fps-esen 17,5. A
+        # felhasználó a feliratot hiszi el, nem a kockaszámot, ezért itt
+        # a VALÓDI fps dönt.
+        jeloltek: list[int] = []
+        if veg is not None:
+            try:
+                start_f = int(body.get("start", 0) or 0)
+                jeloltek.append(
+                    int(round((float(veg) * fps - start_f) / stride)))
+            except (TypeError, ValueError):
+                return
+        if hossz is not None:
+            try:
+                jeloltek.append(int(round(float(hossz) * fps / stride)))
+            except (TypeError, ValueError):
+                return
+        jeloltek = [k for k in jeloltek if k > 0]
+        if jeloltek:
+            body["max"] = min(jeloltek)
+
+    def _video_seconds_safe(path) -> float | None:
+        """A videó hossza másodpercben — hiba esetén None.
+
+        Csak a fejlécet olvassa, tehát gyors. Ha nem megy, a feldolgozás
+        attól még elindul: ez csak a becslés alapanyaga.
+        """
+        try:
+            from ..video_io import video_seconds
+            return video_seconds(path)
+        except Exception:
+            return None
+
     @app.post("/matches/process")
     def start_processing(body: dict):
         """Elindítja egy videó feldolgozását HÁTTÉRSZÁLON, és job_id-t ad vissza.
@@ -444,6 +1613,33 @@ def create_app():
         if not Path(path).exists():
             raise HTTPException(status_code=400,
                                 detail=f"a videó nem található: {path}")
+
+        # ELŐZETES ELLENŐRZÉS: a fél-egy órás feldolgozás legrosszabb
+        # vége az, amikor a végén derül ki, hogy nincs hova írni. Inkább
+        # itt utasítjuk el, amíg egy perc sem veszett el.
+        from ..preflight import disk_space_error
+        hely_hiba = disk_space_error(path, data_root())
+        if hely_hiba:
+            raise HTTPException(status_code=400, detail=hely_hiba)
+
+        # Az Apple-GPU-t (MPS) egyszerre csak EGY szál használhatja (lásd
+        # _process_yolo): ha a finomhangolás vagy a tanítóadat-gyűjtés épp
+        # a GPU-n dolgozik, a feldolgozás nem indulhat — a Metal mindkettőt
+        # leállítaná, és a tanítás órái is elvesznének.
+        if _gpu_kizarolagos():
+            if _train_state.get("running"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="a finomhangolás épp a gép grafikus gyorsítóját "
+                           "használja — várd meg a tanítás végét (Tanítás "
+                           "képernyő), utána indítsd a feldolgozást")
+            if _dataset_state.get("running"):
+                raise HTTPException(
+                    status_code=409,
+                    detail="a tanítóadat-gyűjtés épp a gép grafikus "
+                           "gyorsítóját használja — várd meg a gyűjtés "
+                           "végét (Tanítás képernyő), utána indítsd a "
+                           "feldolgozást")
 
         # Kalibráció-épség: elfajzott (apró/önmetsző) négyszöggel a teljes
         # feldolgozás rossz koordinátákat adna — inkább itt utasítjuk el.
@@ -480,6 +1676,10 @@ def create_app():
             if err:
                 raise HTTPException(status_code=400, detail=err)
 
+        # Kézi meccs-ablak: a mentés ELŐTT váltjuk kockákra, hogy a
+        # paraméter-fájl (és így a Folytatás) is ezt vigye.
+        _apply_manual_window(body, path)
+
         job_id = uuid.uuid4().hex[:12]
         match_id = body.get("match_id") or f"video-{job_id}"
         # A feldolgozási beállítások lemezre mentése: részleges eredménynél
@@ -489,22 +1689,57 @@ def create_app():
                 json.dumps(body, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
+        # A kliens kérdezi meg a felhasználót, ha épp fut egy elemzés:
+        # "megvárja az előzőt" (queue_behind=true) vagy "kezdje most".
+        behind = bool(body.get("queue_behind", False))
         job = {"job_id": job_id, "match_id": match_id, "status": "queued",
-               "stage": "A", "progress": 0.0, "message": "sorban áll",
+               "stage": "A", "progress": 0.0,
+               "message": ("sorban áll — megvárja az előző feldolgozást"
+                           if behind else "sorban áll"),
                "error": None, "created": time.time(),
-               "video": Path(path).name}
+               "queue_behind": behind,
+               "video": Path(path).name,
+               # A videó hossza a KÉSŐBBI becslésekhez kell: ebből és a
+               # tényleges munkaidőből tanulja meg a motor, milyen gyors
+               # EZ a gép (lásd preflight.speed_from_history).
+               "video_seconds": _video_seconds_safe(path),
+               # A minőségi profil — az idő-becslés ebből tanul.
+               "stride": int(body.get("stride", 3) or 3),
+               "imgsz": int(body.get("imgsz", 1280) or 1280),
+               # KÖTEG-CSOPORT: az egy meccshez tartozó darabok közös
+               # jele. Ha minden darab elkészült, a motor magától fűzi
+               # össze őket — a felhasználónak nem kell megjegyeznie,
+               # hogy a hat éjszakai feldolgozás után még van egy dolga.
+               "merge_group": (str(body["merge_group"])
+                               if body.get("merge_group") else None),
+               "merge_order": int(body.get("merge_order") or 0),
+               # Hány darabból áll a csoport ÖSSZESEN. Enélkül verseny
+               # lenne: ha az első darab elkészül, mielőtt a többit
+               # egyáltalán beküldték, a csoport "teljesnek" látszana
+               # egy darabbal — és az igazi összefűzés soha nem futna le.
+               "merge_total": int(body.get("merge_total") or 0)}
         _jobs[job_id] = job
         _job_params[job_id] = body
-        # Új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi) feldolgozást
-        # szelíden félretesszük — az addig feldolgozott rész elmentődik
-        # (befejezetlen elemzésként a könyvtárba kerül, később folytatható),
-        # és a sor rögtön a most indított munkával megy tovább.
-        for other in _jobs.values():
-            if other["job_id"] != job_id and other["status"] == "running":
-                other["cancel"] = True
-                other["preempted"] = True
-        _job_queue.put(job_id)
-        _ensure_worker()
+        # Alapesetben az új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi)
+        # feldolgozást szelíden félretesszük — az addig feldolgozott rész
+        # elmentődik (befejezetlen elemzésként a könyvtárba kerül, később
+        # folytatható), és a sor rögtön a most indított munkával megy
+        # tovább. Ha viszont a felhasználó a várakozást választotta
+        # (queue_behind), a futó munkához NEM nyúlunk: az új elemzés
+        # megvárja, míg az előző befejeződik.
+        preempted_now = preemptable_jobs(list(_jobs.values()), job_id, behind)
+        for other in preempted_now:
+            other["cancel"] = True
+            other["preempted"] = True
+        if preempted_now:
+            # AZONNALI indítás saját szálon: az új elemzés NEM várja meg,
+            # míg a félretett munka utómunkája/mentése lefut (az akár
+            # percekig tarthat, beragadt munkánál korábban örökre tartott
+            # volna) — a régi a háttérben menti magát, az új már megy.
+            _start_job_now(job_id)
+        else:
+            _job_queue.put(job_id)
+            _ensure_worker()
         return {"job_id": job_id, "match_id": match_id}
 
     # A feldolgozási SOR: a munkák egyesével futnak (egy nehéz ML-feldolgozás
@@ -525,28 +1760,299 @@ def create_app():
         _worker_flag["started"] = True
         _threading.Thread(target=_job_worker, daemon=True).start()
 
+    def _start_job_now(job_id):
+        """Egy sorba tett munka AZONNALI indítása saját szálon.
+
+        Előzésnél (a felhasználó a "kezdje most"-ot választotta) az új
+        elemzés nem mehet a soros munkásra: az a félretett munka
+        mentését (rosszabb esetben egy beragadt feldolgozást) várná
+        végig. Saját szálon indítva a régi és az új röviden átfedésben
+        fut — a régi már csak az utómunkáját menti, az új a detektálást
+        kezdi."""
+        job = _jobs.get(job_id)
+        if job is None or job["status"] != "queued":
+            return  # időközben megszakították
+        job["status"] = "running"
+        job["message"] = "indítás"
+        # A becsléshez a TÉNYLEGES indulás kell: a sorban töltött idő
+        # nem munka, és beleszámítva a hátralévő idő reménytelenül
+        # túlbecsült lenne.
+        import time as _t
+
+        job["started"] = _t.time()
+        body = _job_params.pop(job_id, {})
+        _threading.Thread(target=_run_job, args=(job, body),
+                          daemon=True).start()
+
     def _job_worker():
+        import time as _t
         while True:
             job_id = _job_queue.get()
             job = _jobs.get(job_id)
             if job is None or job["status"] != "queued":
                 continue  # időközben megszakították
+            # Ha épp fut egy munka (pl. előzéssel, saját szálon indított),
+            # a sorban álló megvárja — ez a "megvárja az előzőt" ígérete.
+            # Apple-GPU-n a tanítást / gyűjtést is megvárja: a sorban
+            # álló munka különben a GPU-n indulna mellettük (az MPS nem
+            # szál-biztos — a Metal mindkettőt leállítaná).
+            while (any(j.get("status") == "running"
+                       for j in _jobs.values())
+                   or _gpu_tanitas_fut()):
+                _t.sleep(2.0)
+            if job["status"] != "queued":
+                continue  # várakozás közben szakították meg
             job["status"] = "running"
             job["message"] = "indítás"
+            job["started"] = _t.time()
             _run_job(job, _job_params.pop(job_id, {}))
+
+    # A már összefűzött köteg-csoportok: egy csoportot pontosan EGYSZER
+    # fűzünk össze, akkor is, ha a "minden kész?" ellenőrzés versenyben
+    # futna le kétszer.
+    _merged_groups: set = set()
+
+    def _maybe_merge_group(job: dict) -> None:
+        """Köteg-utáni automatikus összefűzés, ha a csoport teljes.
+
+        Aki egy meccs hat darabját tölti fel, hat feldolgozást indít —
+        jellemzően éjszakára. Reggel hat KÜLÖN "meccset" talált, és
+        kézzel kellett összefűznie (jó sorrendben!). Ez a lépés pont az
+        a fajta, amit az ember elfelejt — a motor viszont tudja, mikor
+        lett kész az utolsó darab.
+
+        Csendes és hibatűrő: ha bármelyik darab megszakadt vagy
+        elhasalt, az összefűzés ELMARAD (fél meccset összefűzni
+        rosszabb, mint szólni), és az utolsó munka üzenete mondja meg,
+        miért.
+        """
+        csoport = job.get("merge_group")
+        if not csoport or csoport in _merged_groups:
+            return
+        tarsak = [j for j in _jobs.values()
+                  if j.get("merge_group") == csoport]
+        if any(j.get("status") in ("queued", "running") for j in tarsak):
+            return  # még dolgozik valamelyik darab
+        vart = max((j.get("merge_total") or 0 for j in tarsak), default=0)
+        if vart and len(tarsak) < vart:
+            return  # még nem minden darab lett beküldve — nem jelölünk
+        if csoport in _merged_groups:
+            return
+        _merged_groups.add(csoport)
+        rossz = [j for j in tarsak if j.get("status") != "done"]
+        if rossz or len(tarsak) < 2:
+            job["message"] = (job.get("message") or "") + (
+                " — az automatikus összefűzés elmaradt: "
+                f"{len(rossz)} darab nem készült el hibátlanul."
+                if rossz else "")
+            return
+        tarsak.sort(key=lambda j: j.get("merge_order") or 0)
+        ids = [j["match_id"] for j in tarsak]
+        # RÉSZLEGES darabot nem fűzünk össze némán: a "kész" státusz a
+        # megszakított-de-mentett feldolgozásra is igaz, de egy fél
+        # darabból összerakott meccs rossz meccs — inkább szólunk.
+        reszleges = [mid for mid in ids
+                     if _store.get(mid) is not None
+                     and _store[mid].meta.partial]
+        if reszleges:
+            job["message"] = (job.get("message") or "") + (
+                " — az automatikus összefűzés elmaradt: részleges darab "
+                f"({', '.join(reszleges)}); fejezd be a Folytatással, és "
+                "fűzd össze kézzel.")
+            return
+        try:
+            ki = _merge_and_store(ids)
+            uzenet = (f"kész — a köteg {len(ids)} darabja összefűzve: "
+                      f"{ki['match_id']}")
+            for j in tarsak:
+                j["message"] = uzenet
+        except Exception as e:
+            job["message"] = (job.get("message") or "") + (
+                f" — az automatikus összefűzés nem sikerült: {e}")
+
+    # A KORAI figyelmeztetésre érdemes jelek: ezek a feldolgozás elején
+    # is látszanak, és ha igazak, az egész óra kárba vész. Jobb három
+    # perc után megtudni, mint a végén.
+    _EARLY_MARKERS = ("TÚL sok játékos", "kalibráció NÉLKÜL")
+
+    def _checkpoint(job):
+        """A részeredmény mentése + KORAI minőség-riasztás a munkára.
+
+        A checkpoint pár percenként úgyis lefuttatja az utómunkát a
+        addig feldolgozott kockákra. Ugyanabból a részeredményből
+        kiolvassuk azt a két jelet, ami már a legelején eldönti, hogy
+        használható lesz-e a feldolgozás — és rátesszük a munkára, hogy
+        a felület kimondhassa, amíg még van értelme megszakítani.
+        """
+        def ment(m):
+            app.state.put_match(m)
+            try:
+                from ..pipeline.quality import compute_quality_report
+                q = compute_quality_report(m)
+                job["early_warnings"] = [
+                    w for w in q.get("warnings", [])
+                    if any(mark in w for mark in _EARLY_MARKERS)]
+            except Exception:
+                pass  # a riasztás hibája nem érintheti a mentést
+        return ment
+
+    # FUTÓ-MUNKA JEL: a futó feldolgozás állása a lemezen is. Terepen
+    # látott hiba: a motor-folyamat feldolgozás közben MEGHAL (a
+    # videó-dekóder vagy a modell natív kódja összeomlik, vagy a rendszer
+    # leállítja), az őrkutya újraindítja — és a memóriabeli munka-lista
+    # vele vész: a kliens csak annyit tudott mondani, hogy "a motor
+    # újraindult, a munka elveszett". A jelből az újrainduló motor tudja,
+    # MI futott, MEDDIG jutott, és (a natív összeomlás naplójából,
+    # handball.crashlog) MIÉRT állt le: a munka hibaként, okkal kerül
+    # vissza a listába.
+    import uuid as _uuid_mod
+    _futo_mappa = data_root() / "data" / "futo_munkak"
+    _boot_id = _uuid_mod.uuid4().hex
+    # A jel lemezre írása legfeljebb ennyi mp-enként (lépésváltáskor azonnal).
+    FUTO_JEL_S = 5.0
+    # Egy MÁSIK élő motor-példány jelét csak ennyi ideig hisszük el:
+    # újraindítás / pid-újrahasznosítás után a pid idegen folyamaté lehet.
+    # (A futó munka jele legalább 3 percenként frissül — az
+    # elakadás-átugró jelzései is írják.)
+    FUTO_JEL_ELO_S = 600.0
+    _futo_allapot: dict = {}   # job_id -> utolsó írás, lépés, napló-offset
+    _LEPES_NEVEK = {"A": "Kalibráció", "B": "Detektálás",
+                    "C": "Követés", "D": "Csapatszín / kapus / bíró",
+                    "E": "Pálya-koordináta", "F": "Képen kívüli becslés",
+                    "H": "Statisztika"}
+
+    def _futo_jel(job, uj=False):
+        """A futó munka állása a lemezre (ritkítva). A hibája sosem
+        állíthatja meg a feldolgozást."""
+        import os as _o
+        import time as _t
+        try:
+            jid = job["job_id"]
+            all_ = _futo_allapot.get(jid)
+            most = _t.time()
+            if uj or all_ is None:
+                # Az összeomlás-napló MOSTANI mérete: újraindulás után
+                # csak az EZUTÁN írt nyom tartozik ehhez a munkához.
+                from ..crashlog import crash_log_size
+                all_ = _futo_allapot[jid] = {"t": 0.0, "stage": None,
+                                             "offset": crash_log_size()}
+            if (not uj and all_["stage"] == job.get("stage")
+                    and most - all_["t"] < FUTO_JEL_S):
+                return
+            all_["t"], all_["stage"] = most, job.get("stage")
+            rec = {k: job.get(k) for k in (
+                "job_id", "match_id", "video", "stage", "progress",
+                "message", "created", "started", "video_seconds",
+                "stride", "imgsz")}
+            rec.update(boot=_boot_id, pid=_o.getpid(),
+                       crash_offset=all_["offset"], updated=most)
+            _futo_mappa.mkdir(parents=True, exist_ok=True)
+            p = _futo_mappa / f"{jid}.json"
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(rec, ensure_ascii=False),
+                           encoding="utf-8")
+            _o.replace(tmp, p)
+        except Exception:
+            pass
+
+    def _futo_jel_torol(job):
+        _futo_allapot.pop(job.get("job_id"), None)
+        try:
+            (_futo_mappa / f"{job['job_id']}.json").unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def _felbehagyott_munkak():
+        """Az ELŐZŐ motor-folyamat félbehagyott munkái (futó-munka jel
+        maradt utánuk) hibaként, OKKAL vissza a munka-listába és a
+        naplóba: a kliens így a "munka elveszett" helyett azt mondja meg,
+        hol és miért állt le a motor (a Folytatás az ellenőrző-mentéstől
+        ugyanúgy él). Egy MÁSIK, még élő motor-példány munkájához nem
+        nyúlunk."""
+        import os as _o
+        import time as _t
+        from ..crashlog import crash_summary, pid_alive
+        try:
+            jelek = sorted(_futo_mappa.glob("*.json"))
+        except Exception:
+            return
+        for p in jelek:
+            try:
+                rec = json.loads(p.read_text(encoding="utf-8"))
+                if not isinstance(rec, dict):
+                    raise ValueError("nem jel")
+            except Exception:
+                try:
+                    p.unlink(missing_ok=True)  # sérült jel
+                except Exception:
+                    pass
+                continue
+            if rec.get("boot") == _boot_id:
+                continue
+            pid = rec.get("pid")
+            try:
+                kor = _t.time() - float(rec.get("updated") or 0)
+            except (TypeError, ValueError):
+                kor = float("inf")
+            if (pid != _o.getpid() and pid_alive(pid)
+                    and kor < FUTO_JEL_ELO_S):
+                continue  # egy másik, élő motor friss munkája
+            jid = str(rec.get("job_id") or p.stem)
+            stage = str(rec.get("stage") or "A")
+            try:
+                prog = float(rec.get("progress") or 0.0)
+            except (TypeError, ValueError):
+                prog = 0.0
+            hol = f"{_LEPES_NEVEK.get(stage, stage)} [{stage}], {round(prog * 100)}%"
+            utolso = str(rec.get("message") or "").split(" — FIGYELEM:")[0].strip()
+            if utolso:
+                hol += f": „{utolso}”"
+            try:
+                ok = crash_summary(int(rec.get("crash_offset") or 0))
+            except Exception:
+                ok = None
+            msg = f"a motor váratlanul leállt a feldolgozás közben ({hol})"
+            msg += (f" — {ok}" if ok else
+                    " — a leállás nem hagyott nyomot a naplóban: ilyenkor "
+                    "jellemzően a rendszer állította le a motort (pl. "
+                    "elfogyott a memória), vagy a gép leállt / elaludt")
+            msg += (". A „Diagnosztika másolása” gomb összegyűjti a "
+                    "naplókat a hibabejelentéshez.")
+            job = {k: rec.get(k) for k in (
+                "match_id", "video", "created", "started", "video_seconds",
+                "stride", "imgsz")}
+            job.update(job_id=jid, status="error", stage=stage,
+                       progress=round(prog, 3), error=msg,
+                       message=f"hiba: {msg}", crashed=True,
+                       created=(rec.get("created") or rec.get("updated")
+                                or _t.time()))
+            if jid not in _jobs:
+                _jobs[jid] = job
+                _log_job(job)
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _run_job(job, body):
         match_id = job["match_id"]
         path = body.get("path")
-        if True:  # (behúzás-megőrző blokk a korábbi törzsnek)
+        # A futó-munka jel: ha a motor a munka közben meghal, az
+        # újrainduló ebből tudja, mi futott és meddig jutott.
+        _futo_jel(job, uj=True)
+        # ALVÁS-GÁTLÁS a munka idejére: a feldolgozás percekig-órákig
+        # tart, és közben a felhasználó nem a képernyőt nézi (lehajtja a
+        # laptop tetejét, elmegy). Zár nélkül a rendszer tétlenségi
+        # alvásra vált, és a számítás megáll vagy lelassul. A zár a
+        # folyamatunkhoz kötődik, és a `finally` ágon MINDIG feloldódik.
+        from ..power import KeepAwake
+        _awake = KeepAwake()
+        _awake.start()
+        job["keep_awake"] = _awake.active
+        try:  # (behúzás-megőrző blokk a korábbi törzsnek)
             # A nehéz feldolgozó a scripts.process_video-ban van; a backend/ mappát
             # biztosítjuk a sys.path-en, hogy a szerver bárhonnan indítva megtalálja.
-            import sys
-            from pathlib import Path
-            backend_dir = str(Path(__file__).resolve().parents[2])
-            if backend_dir not in sys.path:
-                sys.path.insert(0, backend_dir)
-            from scripts.process_video import process
+            process = _process_video_modul().process
 
             # Megszakítás: SZELÍD leállítás. A detektáló ciklus a stop_check
             # jelzésére megáll, de az addig feldolgozott kockákra az utómunka
@@ -567,6 +2073,7 @@ def create_app():
                     else:
                         msg = f"leállítás — az eddigi rész mentése… ({msg})"
                 job["message"] = msg
+                _futo_jel(job)
 
             try:
                 match = process(
@@ -599,7 +2106,12 @@ def create_app():
                     # Időszakos checkpoint: hosszú feldolgozásnál pár percenként
                     # elmentjük a részeredményt, így áramszünet/összeomlás után
                     # sem vész el minden — a könyvtárban ott a legutóbbi állapot.
-                    checkpoint_save=lambda m: app.state.put_match(m),
+                    checkpoint_save=_checkpoint(job),
+                    # A felhasználó megadta a meccs időablakát: az ő
+                    # állítása erősebb, mint az automatikus felismerésé —
+                    # az nem csíphet le többet a megadott szakaszból.
+                    manual_window=(body.get("start_s") is not None
+                                   or body.get("end_s") is not None),
                 )
                 cancelled = bool(job.pop("cancel", False))
                 preempted = bool(job.pop("preempted", False))
@@ -625,6 +2137,8 @@ def create_app():
                             f"({len(match.frames)} kocka)")
                     else:
                         job["message"] = f"kész ({len(match.frames)} frame)"
+                    _maybe_merge_group(job)
+                    _warm_results(match.meta.match_id)
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 msg = str(e)
                 # A nyers zlib-hiba ("Error -3 ... incorrect header check")
@@ -639,7 +2153,14 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = msg
                 job["message"] = f"hiba: {msg}"
-            _log_job(job)
+        finally:
+            # A zár feloldása MINDIG megtörténik — kész, hiba és
+            # megszakítás után is. Enélkül a gép a feldolgozás után is
+            # ébren maradna, ami a felhasználó akkumulátorát enné.
+            _awake.stop()
+            job.pop("keep_awake", None)
+            _futo_jel_torol(job)
+        _log_job(job)
 
     # Feldolgozás-napló: a LEZÁRT job-ok (kész/hiba/megszakítva) egy sora
     # a lemezre kerül — újraindítás után is visszanézhető, mi történt.
@@ -650,7 +2171,15 @@ def create_app():
             import time as _t
             rec = {k: job.get(k) for k in
                    ("job_id", "match_id", "status", "message", "error",
-                    "created", "video", "stage")}
+                    "created", "video", "stage",
+                    # Az ütem-tanuláshoz: a TÉNYLEGES munkaidő (started →
+                    # finished) és a videó hossza. A sorban töltött idő
+                    # nem munka, ezért nem a "created" a kezdet.
+                    "started", "video_seconds",
+                    # A minőségi profil: a "Pontos" ugyanarra a videóra
+                    # többszörös időt kér, tehát a becslés csak AZONOS
+                    # beállítású futásokból számolhat.
+                    "stride", "imgsz")}
             rec["finished"] = _t.time()
             _jobs_log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(_jobs_log_path, "a", encoding="utf-8") as f:
@@ -658,10 +2187,8 @@ def create_app():
         except Exception:
             pass  # a naplózás hibája nem érinti a feldolgozást
 
-    @app.get("/jobs/history")
-    def job_history(limit: int = 20):
-        """A lezárt feldolgozások naplója (legutóbbi elöl) — újraindítás
-        után is megvan; hibakereséshez és "mi futott le" áttekintéshez."""
+    def _job_log_rows() -> list:
+        """A feldolgozás-napló sorai (legrégebbi elöl), hibatűrően."""
         rows = []
         try:
             with open(_jobs_log_path, encoding="utf-8") as f:
@@ -674,17 +2201,158 @@ def create_app():
                             pass
         except FileNotFoundError:
             pass
+        return rows
+
+    # Az előző (meghalt) motor-folyamat félbehagyott munkái — okkal.
+    _felbehagyott_munkak()
+
+    @app.get("/jobs/history")
+    def job_history(limit: int = 20):
+        """A lezárt feldolgozások naplója (legutóbbi elöl) — újraindítás
+        után is megvan; hibakereséshez és "mi futott le" áttekintéshez."""
+        rows = _job_log_rows()
         rows.reverse()
         return {"jobs": rows[:max(1, min(int(limit), 100))]}
+
+    @app.post("/preflight")
+    def preflight(body: dict):
+        """Indítás ELŐTTI ellenőrzés egy videóra: hely és várható idő.
+
+        Fél-egy órás feldolgozásnál két kérdés fáj utólag: elfogyott a
+        hely a végén, illetve "nem tudtam, hogy ilyen sokáig tart". Ezt
+        a kettőt teszi fel előre. A becslés EZEN a gépen mért adatból
+        jön (a korábbi kész feldolgozások videó-ideje és munkaideje) —
+        kevés mérésnél inkább nincs becslés, mint egy téves szám.
+        """
+        from ..preflight import (disk_space_error, estimate_seconds,
+                                 free_gb, human_duration)
+
+        path = body.get("path")
+        letezik = bool(path) and Path(path).exists()
+        hossz = _video_seconds_safe(path) if letezik else None
+        # A MOST választott profil: a becslés csak az ugyanilyen
+        # beállítású korábbi futásokból számol (a "Pontos" profil
+        # többszörös időt kér ugyanarra a videóra).
+        try:
+            stride = int(body["stride"]) if body.get("stride") else None
+        except (TypeError, ValueError):
+            stride = None
+        try:
+            imgsz = int(body["imgsz"]) if body.get("imgsz") else None
+        except (TypeError, ValueError):
+            imgsz = None
+        # A FELDOLGOZANDÓ szakasz hossza, nem a teljes videóé: ha a
+        # felhasználó megadta a meccs időablakát, csak annak a részét
+        # dolgozzuk fel — a teljes hosszal számolt becslés ugyanúgy
+        # téves lenne, mint a rossz profillal számolt.
+        feldolgozando = hossz
+        if hossz:
+            try:
+                kezd = float(body["start_s"]) if body.get("start_s") is not None else 0.0
+            except (TypeError, ValueError):
+                kezd = 0.0
+            try:
+                veg = (float(body["end_s"]) if body.get("end_s") is not None
+                       else hossz)
+            except (TypeError, ValueError):
+                veg = hossz
+            kezd = max(0.0, min(kezd, hossz))
+            veg = max(0.0, min(veg, hossz))
+            if veg > kezd:
+                feldolgozando = veg - kezd
+            # HOSSZ-korlát ("Próba ~2 perc", "Félidő ~35 perc"): ennél
+            # többet akkor sem dolgozunk fel, ha a videó hosszabb — a
+            # becslés is erre szóljon, különben a próba-futásra a teljes
+            # videó idejét mondanánk.
+            try:
+                korlat = (float(body["max_s"])
+                          if body.get("max_s") is not None else None)
+            except (TypeError, ValueError):
+                korlat = None
+            if korlat and korlat > 0:
+                feldolgozando = min(feldolgozando, korlat)
+        becsult = estimate_seconds(feldolgozando, _job_log_rows(),
+                                   stride=stride, imgsz=imgsz)
+
+        # PROFIL-JAVASLAT rövid szakaszra. A "Pontos" profil egy teljes
+        # meccsen órákat kér, ezért jogosan nem az alapértelmezés — egy
+        # pár perces klipen viszont percekbe kerül, és pont azon segít
+        # a legtöbbet, ami a termék leggyengébb pontja amatőr,
+        # széles-látószögű felvételen: a LABDA felismerésén (a labda
+        # ott alig pár képpont, és rá épül a birtoklás, a passz, az
+        # eladás és a lövés).
+        #
+        # Csak akkor szólunk, ha NEM a Pontos van kiválasztva — a
+        # meglévő döntést nem kérdőjelezzük meg.
+        from ..pipeline.quality import CLIP_LENGTH_S
+
+        profil_javaslat = None
+        if (feldolgozando and 0 < feldolgozando < CLIP_LENGTH_S
+                and stride is not None and stride > 2):
+            profil_javaslat = (
+                f"Ez rövid szakasz ({feldolgozando / 60:.0f} perc). A "
+                "\"Pontos\" profil egy teljes meccsen órákat kérne, itt "
+                "viszont csak perceket — és pont a LABDA felismerésén "
+                "javít a legtöbbet, amire a birtoklás, a passz, az "
+                "eladás és a lövés is épül. Széles, távoli felvételen "
+                "ez a különbség dönti el, használható-e az elemzés.")
+
+        return {
+            # None, ha nincs mit javasolni (hosszú szakasz, vagy már a
+            # Pontos van kiválasztva). A mező mindig LÉTEZIK.
+            "profile_hint": profil_javaslat,
+            "path_ok": letezik,
+            "free_gb": free_gb(data_root()),
+            "space_error": disk_space_error(path if letezik else None,
+                                            data_root()),
+            "video_seconds": hossz,
+            # A feldolgozandó szakasz (a meccs-időablakkal szűkítve).
+            "processed_seconds": feldolgozando,
+            "estimate_s": becsult,
+            "estimate_label": human_duration(becsult),
+            "stride": stride,
+            "imgsz": imgsz,
+        }
+
+    # Hátralévő idő becslése: ennyi haladás alatt még nem becslünk. Az
+    # első pár százalék félrevezető (modell-betöltés, videó-megnyitás),
+    # és egy vadul téves "kb. 3 óra" rosszabb, mint a semmi.
+    ETA_MIN_PROGRESS = 0.05
+
+    def _with_eta(job: dict) -> dict:
+        """A munka rekordja HÁTRALÉVŐ IDŐ becsléssel (eta_s, másodperc).
+
+        Percekig futó feldolgozásnál ez a leghiányzóbb adat: enélkül a
+        felhasználó nem tudja eldönteni, megvárja-e, vagy elmegy. A
+        becslés a TÉNYLEGES munkaidő és a haladás arányából jön (a
+        sorban töltött idő nem számít bele), és csak akkor jelenik meg,
+        ha már van mire alapozni.
+        """
+        import time as _t
+
+        out = {k: v for k, v in job.items() if k != "cancel"}
+        out["eta_s"] = None
+        if job.get("status") != "running":
+            return out
+        started = job.get("started")
+        prog = float(job.get("progress") or 0.0)
+        if not started or prog < ETA_MIN_PROGRESS:
+            return out
+        eltelt = _t.time() - started
+        if eltelt <= 0:
+            return out
+        # Egyszerű, STABIL becslés: az eddigi átlagos ütem tartását
+        # feltételezzük. A pillanatnyi ütemből számolt becslés ugrálna.
+        out["eta_s"] = int(round(eltelt / prog * (1.0 - prog)))
+        return out
 
     @app.get("/jobs")
     def list_jobs():
         """A feldolgozási munkák listája (legújabb elöl) — a kezdőképernyő
         "folyamatban" kártyája ebből épül. A belső mezőket nem adjuk ki."""
-        jobs = sorted(_jobs.values(), key=lambda j: j.get("created", 0), reverse=True)
-        return {"jobs": [
-            {k: v for k, v in j.items() if k != "cancel"} for j in jobs[:20]
-        ]}
+        jobs = sorted(_jobs.values(), key=lambda j: j.get("created") or 0,
+                      reverse=True)
+        return {"jobs": [_with_eta(j) for j in jobs[:20]]}
 
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
@@ -708,9 +2376,12 @@ def create_app():
                 base = (job.get("message") or "").split(" — FIGYELEM:")[0]
                 job["message"] = (
                     f"{base} — FIGYELEM: {mins} perce nincs előrelépés. A "
-                    "feldolgozás elakadhatott ennél a videó-résznél; a "
-                    "Megszakítás menti az addig kész részt.")
-        return job
+                    "feldolgozás elakadt ennél a videó-résznél; a rendszer "
+                    "átugorja a hibás szakaszt és folytatja — ez több "
+                    "lépésben, egyre nagyobb ugrásokkal történik, ezért "
+                    "akár pár percig is tarthat (az átugrásokat itt "
+                    "kiírjuk). A Megszakítás menti az addig kész részt.")
+        return _with_eta(job)
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel_job(job_id: str):
@@ -729,6 +2400,15 @@ def create_app():
             job["message"] = "leállítás — az eddigi rész mentése…"
         return job
 
+    class _Fejlec:
+        """Meccs-fejléc a listázáshoz (meta + kockaszám), a teljes meccs
+        betöltése nélkül — a `len(x.frames)` alakot szolgálja ki."""
+        __slots__ = ("meta", "frames")
+
+        def __init__(self, meta, n):
+            self.meta = meta
+            self.frames = range(n)
+
     @app.get("/matches")
     def list_matches():
         """A tárolt meccsek listája (a kliens áttekintő/könyvtár nézetéhez).
@@ -737,8 +2417,26 @@ def create_app():
         képkocka-szám, fps és becsült hossz. Idő szerint (fps-alapú hossz) rendezve.
         """
         out = []
-        for m in _store.values():
+        # A betöltés ALATT is válaszol: a már bent lévő meccseket adja,
+        # és jelzi, hogy még töltődik (a kliens újrakérdez) — a régi,
+        # végét megváró lista percekig "nem érem el"-t mutatott.
+        allas = _store.status()
+        if not allas["loading"]:
+            _store.keys()  # a háttér-betöltés végét megvárja (teljes lista)
+        # Csak a FEJLÉC kell: a hideg (kidobott) meccseket nem töltjük
+        # vissza a listázáshoz — egy nagy könyvtár listája így is azonnali.
+        meccsek = [_Fejlec(meta, n) for meta, n in _store.summaries()]
+        # MELYIK meccs darabja: összefűzés után a darab és az egész is a
+        # listában van, azonos csapatnevekkel — jelölés nélkül három
+        # egyforma "Mi vs Ők" sor lenne, és a felhasználó nem tudná,
+        # melyiket nyissa meg.
+        resze: dict = {}
+        for m in meccsek:
+            for rid in (getattr(m.meta, "merged_from", None) or []):
+                resze[str(rid)] = m.meta.match_id
+        for m in meccsek:
             fps = m.meta.fps if m.meta.fps > 0 else 25.0
+            merged_from = list(getattr(m.meta, "merged_from", None) or [])
             out.append({
                 "match_id": m.meta.match_id,
                 "home_team": m.meta.home_team,
@@ -748,17 +2446,54 @@ def create_app():
                 "duration_s": len(m.frames) / fps,
                 # Részleges feldolgozás (megszakítva/összeomlás után mentve).
                 "partial": bool(m.meta.partial),
+                # Összefűzött meccs: hány darabból áll (0 = nem az).
+                "merged_parts": len(merged_from),
+                # Egy összefűzött meccs DARABJA: melyiké. None = önálló.
+                # A szezon-számolás az ilyet kihagyja — a felület ebből
+                # tudja jelezni, hogy a sor már benne van az egészben.
+                "part_of": resze.get(m.meta.match_id),
+                # Hány szakasz-határon maradt eldöntetlen a térfélcsere:
+                # itt az eredmény fordítva állhat, és a felületnek kézi
+                # ellenőrzést kell kínálnia (szakasz-tükrözés).
+                "undecided_segments": sum(
+                    1 for sz in (getattr(m.meta, "source_segments",
+                                         None) or [])
+                    if sz.get("mirror_decided") is False),
+                # A jegyzőkönyvi (valódi) végeredmény, ha az edző megadta
+                # — a felület a felismert mellett mutatja.
+                "real_goals_home": getattr(m.meta, "real_goals_home", None),
+                "real_goals_away": getattr(m.meta, "real_goals_away", None),
+                # A feldolgozás alatt mért kalibráció-illeszkedés
+                # minimuma (0..1): a könyvtár-sor ebből jelzi ránézésre,
+                # ha a kalibráció valahol elcsúszott. None = nem mért.
+                "calib_min_fit": (getattr(m.meta, "calib_fit", None)
+                                  or {}).get("min_fit"),
             })
         out.sort(key=lambda d: d["match_id"])
-        return {"matches": out}
+        # "library": a háttér-betöltés állása — a kliens ebből tudja,
+        # hogy a lista még nem teljes, és újrakérdez.
+        return {"matches": out, "library": allas}
 
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):
-        """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens)."""
+        """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens).
+
+        DARABOLVA (streamelve) adjuk ki, nem egy szótárként: egy teljes
+        meccs 60–70 MB JSON. A szótár-visszaadás a FastAPI saját
+        kódolóján is végigment (egy 60 perces meccsen 9 + 9 másodperc), és
+        ez alatt a motor az életjelre sem felelt időben — a kliens ilyenkor
+        halottnak hitte, és újraindította. A darabok közt a többi kérés is
+        sorra kerül, és a memóriában sincs egyszerre a teljes szöveg."""
+        from fastapi.responses import StreamingResponse
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return match.to_dict()
+
+        def _bajtok():
+            for darab in match.iter_json_chunks():
+                yield darab.encode("utf-8")
+
+        return StreamingResponse(_bajtok(), media_type="application/json")
 
     @app.patch("/matches/{match_id}")
     def update_match(match_id: str, body: dict):
@@ -773,9 +2508,34 @@ def create_app():
         home = body.get("home_team")
         away = body.get("away_team")
         date = body.get("date")
-        if home is None and away is None and date is None:
+        # A VALÓDI (jegyzőkönyvi) végeredmény: a pontosság-tükör alapja.
+        # A kulcs JELENLÉTE számít: {"real_goals_home": null} törlést
+        # jelent, a hiányzó kulcs pedig "ne nyúlj hozzá"-t.
+        van_valodi = ("real_goals_home" in body or "real_goals_away" in body)
+        if (home is None and away is None and date is None
+                and not van_valodi):
             raise HTTPException(status_code=400,
-                                detail="home_team, away_team or date required")
+                                detail="home_team, away_team, date vagy "
+                                       "real_goals_* kell")
+        if van_valodi:
+            def _gol(kulcs):
+                v = body.get(kulcs)
+                if v is None:
+                    return None
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400,
+                                        detail=f"{kulcs}: egész szám kell")
+                if not (0 <= v <= 99):
+                    raise HTTPException(status_code=400,
+                                        detail=f"{kulcs}: 0..99 között")
+                return v
+
+            match.meta.real_goals_home = _gol("real_goals_home")
+            match.meta.real_goals_away = _gol("real_goals_away")
+            # A minőség-jelentés (pontosság-tükör) elavul tőle.
+            _drop_derived_caches(match_id)
         if home is not None:
             match.meta.home_team = str(home).strip() or match.meta.home_team
         if away is not None:
@@ -796,7 +2556,9 @@ def create_app():
         return {"match_id": match_id,
                 "home_team": match.meta.home_team,
                 "away_team": match.meta.away_team,
-                "date": match.meta.date}
+                "date": match.meta.date,
+                "real_goals_home": match.meta.real_goals_home,
+                "real_goals_away": match.meta.real_goals_away}
 
     @app.post("/matches/{match_id}/swap-teams")
     def swap_teams(match_id: str):
@@ -810,6 +2572,2537 @@ def create_app():
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id, "swapped": True}
 
+    def _drop_derived_caches(match_id: str) -> None:
+        """A meccsből származtatott kivonatok eldobása.
+
+        A kivonat-gyorsítótárak kulcsa jellemzően a kockaszám / fájl-mtime,
+        ami a meccs HELYBEN módosításától (esemény-javítás, szakasz-
+        tükrözés) nem változik — ezért kézzel dobjuk el őket."""
+        _summary_cache.pop(match_id, None)
+        _training_cache.pop(match_id, None)
+        _ptf_cache.pop(match_id, None)
+        _clip_players_cache.pop(match_id, None)
+        for k in [k for k in _quality_score_cache if k[0] == match_id]:
+            _quality_score_cache.pop(k, None)
+        # A felderítés és a figura-alakok memória-tára is a kockaszám /
+        # csapatnevek szerint kulcsol — a csapatcsere vagy az azonos
+        # kockaszámú újrafeldolgozás után a régi jelentést adta volna.
+        for k in [k for k in _scout_cache if k[0] == match_id]:
+            _scout_cache.pop(k, None)
+        for k in [k for k in _shapes_cache if k[0] == match_id]:
+            _shapes_cache.pop(k, None)
+        _drop_results(match_id)
+
+    # --- Eredmény-gyorsítótár a NEHÉZ meccs-végpontokhoz -----------------
+    # Egy 60 perces meccsen a támadások 80, a védekezés 50, az edzői
+    # összefoglaló 45, az edzés-fókusz 30 másodperc volt — MINDEN
+    # megnyitáskor, a program újraindítása után is. Az eredményt ezért
+    # memóriában ÉS lemezen (data/cache/<meccs>/<végpont>.json) tartjuk.
+    # Az ujjlenyomat mindent tartalmaz, ami az eredményt befolyásolja: a
+    # motor verzióját (frissítés után újraszámol), a meccs-fájlt és a
+    # kísérő-fájlokat (kézi javítás, mezszám, keret), valamint a
+    # könyvtár-szintű neveket (játékos-, figuranevek). Ha a meccs nincs
+    # lemezen, nem gyorsítunk (nincs mihez kötni).
+    _result_mem: dict = {}
+    _results_root = data_root() / "data" / "cache"
+
+    def _result_fingerprint(match_id: str):
+        from .. import __version__
+        fajlok = [_match_path(match_id), _overrides_path(match_id),
+                  _jerseys_path(match_id), _roster_path(match_id),
+                  _data_dir.parent / "players.json",
+                  _data_dir.parent / "figures.json"]
+        reszek = [str(__version__)]
+        for i, f in enumerate(fajlok):
+            try:
+                st = f.stat()
+                reszek.append(f"{st.st_mtime_ns}:{st.st_size}")
+            except OSError:
+                if i == 0:
+                    return None          # a meccs nincs lemezen
+                reszek.append("-")
+        return "|".join(reszek)
+
+    def _result_dir(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _results_root / safe
+
+    def _drop_results(match_id: str) -> None:
+        import shutil
+        _result_mem.pop(match_id, None)
+        try:
+            shutil.rmtree(_result_dir(match_id), ignore_errors=True)
+        except Exception:
+            pass
+
+    import threading as _threading
+    _result_locks: dict = {}
+    _result_locks_guard = _threading.Lock()
+
+    def _cached_result(match_id: str, name: str, compute):
+        """A `compute()` eredménye gyorsítótárazva (lásd fent). A kimenet
+        JSON-körbejárt alakú — pontosan az, amit a kliens is megkapna.
+
+        Egy (meccs, végpont) párt egyszerre csak EGY szál számol: ha a
+        háttér-előszámolás épp dolgozik rajta, a kliens kérése megvárja, és
+        a kész eredményt kapja (nem számolja újra párhuzamosan)."""
+        with _result_locks_guard:
+            zar = _result_locks.setdefault((match_id, name), _threading.Lock())
+        with zar:
+            return _cached_result_locked(match_id, name, compute)
+
+    def _scoped(match_id: str, compute):
+        """A `compute()` a meccs primitive_cache hatókörében: a hatókör
+        nyitása jelöli a kapusokat (enélkül a lemezről visszatöltött
+        meccsen a kapus védőnek, birtokosnak számít — és a rossz eredmény
+        a gyorsítótárba kerülne), és a rétegek meccsenként egyszer
+        futnak."""
+        from ..pipeline.primitive_cache import primitive_cache
+        match = _store.get(match_id)
+        if match is None:
+            return compute()
+        with primitive_cache(match):
+            return compute()
+
+    def _cached_result_locked(match_id: str, name: str, compute):
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return _scoped(match_id, compute)
+        mem = _result_mem.setdefault(match_id, {})
+        hit = mem.get(name)
+        if hit is not None and hit[0] == fp:
+            return hit[1]
+        f = _result_dir(match_id) / f"{name}.json"
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(d, dict) and d.get("fp") == fp:
+                mem[name] = (fp, d["result"])
+                return d["result"]
+        except Exception:
+            pass
+        res = _scoped(match_id, compute)
+        try:
+            szoveg = json.dumps({"fp": fp, "result": res}, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return res                   # nem JSON-barát: nem tároljuk
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(szoveg, encoding="utf-8")
+            tmp.replace(f)
+        except Exception:
+            pass                         # a lemez nem írható: csak memória
+        kesz = json.loads(szoveg)["result"]
+        mem[name] = (fp, kesz)
+        return kesz
+
+    def _tactical_keys(match_id: str, match):
+        """A 3D védekezés-panel feltörés/megállítás kulcsai (a /view3d és a
+        /defence-timeline közös kulcsa) — a lemezes felderítés-tárból
+        (_scout_cached): a felderítés így meccsenként egyszer fut, nem a
+        3D oldal első megnyitásakor újra (egy teljes meccsen perceket)."""
+        from ..pipeline.court3d import tactical_keys_by_team
+
+        class _Reszleges(Exception):
+            """A részleges eredmény (egy csapat felderítése hibázott) —
+            visszaadjuk, de NEM tároljuk: a következő kérés újrapróbál."""
+
+        def szamol():
+            # Csapatonként külön: egy csapat felderítés-hibája nem viszi el
+            # a másik kulcsait (a hiányzót a tactical_keys_by_team maga
+            # próbálja, és csapatonként üresen hagyja, ha hibázik).
+            kesz = {}
+            hibas = False
+            for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+                try:
+                    kesz[side] = _scout_cached(match, team)
+                except Exception:
+                    hibas = True
+            res = tactical_keys_by_team(match, reports=kesz)
+            if hibas:
+                raise _Reszleges(res)
+            return res
+        try:
+            return _cached_result(match_id, "tactical-keys", szamol)
+        except _Reszleges as e:
+            return e.args[0]
+
+    def _warm_results(match_id: str) -> None:
+        """A nehéz végpontok ELŐSZÁMOLÁSA a háttérben, egy feldolgozás
+        végén: az edző jellemzően azonnal megnyitja a kész meccset — így az
+        első megnyitás sem négy perc. Egy szál, sorban (a legolcsóbbal
+        kezdve); a tesztek a HANDBALL_WARM_RESULTS=0 kapcsolóval kérik ki."""
+        import os
+        if os.environ.get("HANDBALL_WARM_RESULTS", "1") == "0":
+            return
+
+        def _run():
+            for name, fn in (("team-stats", _get_team_stats_raw),
+                             ("training", _get_training_raw),
+                             ("coach-summary", _get_coach_summary_raw),
+                             ("defense", _get_defense_raw),
+                             ("attacks", _get_attacks_raw)):
+                if match_id not in _store:
+                    return               # közben törölték
+                try:
+                    _cached_result(match_id, name,
+                                   lambda fn=fn: fn(match_id))
+                except Exception:
+                    pass                 # a kérés maga majd hibát ad
+            # A kezdőlap szezon-kártyáinak meccsenkénti része is (kivonat,
+            # toplista-hozzájárulás) — a friss meccs után azonnal kész.
+            m = _store.get(match_id)
+            if m is None:
+                return
+            for fn in (lambda: _match_summary(m),
+                       lambda: _cached_result(match_id, "player-tallies",
+                                              lambda: _player_tally_of(m)),
+                       # Az egyéni edzés-terv és a figura-könyvtár
+                       # meccsenkénti része is — különben a szezon-lapok
+                       # első megnyitása számolná, a hideg meccseket
+                       # visszatöltve.
+                       lambda: _player_focus_of(m),
+                       lambda: _cached_result(match_id, "setplay-shapes",
+                                              lambda: _shapes_of(m)),
+                       # A felderítés a legdrágább (csapatonként ~50 mp),
+                       # ezért a sor végén.
+                       lambda: _scout_cached(m, Team.AWAY),
+                       lambda: _scout_cached(m, Team.HOME),
+                       # A 3D oldal kulcsai a kész felderítésből (azonnal),
+                       # és a kezdőlap kártyájának videózandó jelenetei.
+                       lambda: _tactical_keys(match_id, m),
+                       lambda: _cached_result(
+                           match_id, "key-scenes",
+                           lambda: __import__(
+                               "handball.pipeline.court3d",
+                               fromlist=["key_scene_rows"]).key_scene_rows(m))):
+                try:
+                    fn()
+                except Exception:
+                    pass
+
+        _threading.Thread(target=_run, name=f"warm-{match_id}",
+                          daemon=True).start()
+
+    def _segment_summary(match) -> list:
+        """A forrás-szakaszok emberi olvasatban (a kliens szakasz-listája)."""
+        fps = match.meta.fps if match.meta.fps > 0 else 25.0
+        out = []
+        for i, sz in enumerate(getattr(match.meta, "source_segments",
+                                       None) or []):
+            t_to = sz.get("t_to")
+            out.append({
+                "index": i,
+                "from_s": sz["t_from"] / fps,
+                "to_s": (t_to / fps) if t_to is not None else None,
+                "file": Path(str(sz.get("video_path") or "")).name or None,
+                "mirrored": bool(sz.get("mirrored")),
+                # None = régi (v0.1.83 előtti) összefűzés, nincs döntés-adat.
+                "mirror_decided": sz.get("mirror_decided"),
+            })
+        return out
+
+    @app.get("/matches/{match_id}/segments")
+    def get_match_segments(match_id: str):
+        """Az összefűzött meccs forrás-szakaszai.
+
+        A szakasz-tükrözés kézi ellenőrzéséhez: melyik szakasz melyik
+        fájlból jött, mettől meddig tart, és tükrözte-e az összefűzés
+        (illetve született-e egyáltalán döntés)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        # A felismert eredmény is megy: a kézi térfél-döntéshez a
+        # felhasználó a VALÓDI végeredménnyel veti össze — anélkül a
+        # párbeszéd csak annyit tudna mondani, "nézd meg máshol".
+        osszegzes = _match_summary(match)
+        return {"match_id": match_id, "segments": _segment_summary(match),
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
+
+    @app.post("/matches/{match_id}/segments/{index}/flip")
+    def flip_match_segment(match_id: str, index: int):
+        """Egy szakasz KÉZI tükrözése — az ember dönti el a térfelet.
+
+        Az automatikus térfélcsere-felismerés kevés mért pozíciónál nem
+        dönt, és a minőség-jelentés csak annyit tud mondani: ellenőrizd
+        az eredményt. A meccset látott ember viszont TUDJA a valódi
+        végeredményt — ha az összefűzött meccs fordítva mutatja, ezzel
+        fordítja vissza. A döntés lemezre kerül (újraindítás után is él),
+        és a származtatott kivonatok (eredmény, összefoglaló,
+        edzés-fókusz) újraszámolódnak."""
+        from ..pipeline.merge import flip_segment
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            flip_segment(match, index)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        _drop_derived_caches(match_id)
+        # A friss (fordítás UTÁNI) eredmény megy vissza: a felhasználó
+        # azonnal látja, hogy a fordítással a valódi végeredmény
+        # jött-e ki — e nélkül vakon nyomkodná a gombot.
+        osszegzes = _match_summary(match)
+        return {"match_id": match_id, "index": index,
+                "segments": _segment_summary(match),
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
+
+    # ---- Tanítóadat-gyűjtés (a detektor finomhangolásához) ----
+    # A pontosság következő szintje a SAJÁT felvételeken finomhangolt
+    # modell (docs/FINETUNE.md) — de a gyűjtő eddig csak terminálból
+    # ment, amit a nem-műszaki edző sosem nyit meg. Ez a pár végpont a
+    # kliens "Tanítóadat gyűjtése" gombja mögött áll: a könyvtár
+    # meccseinek videóiból előcímkézett YOLO-adathalmazt épít.
+    _dataset_state: dict = {"running": False, "done": False}
+    # (a tesztek és a diagnosztika innen látják)
+    app.state.dataset_state = _dataset_state
+
+    def _process_video_modul():
+        """A nehéz feldolgozó modul (scripts.process_video): a backend/
+        mappát a sys.path-re tesszük, hogy a szerver bárhonnan indítva
+        megtalálja. Egy helyen — a feldolgozás, a detektálás-próba és a
+        GPU-kizárás is innen veszi."""
+        import importlib
+        import sys as _sys
+        backend_dir = str(Path(__file__).resolve().parents[2])
+        if backend_dir not in _sys.path:
+            _sys.path.insert(0, backend_dir)
+        return importlib.import_module("scripts.process_video")
+
+    def _gpu_kizarolagos() -> bool:
+        """Igaz, ha az inferencia-eszköz az Apple-GPU (MPS): azt egyszerre
+        csak egy szál használhatja — a tanítás, a gyűjtés és a feldolgozás
+        kizárja egymást. CUDA-n és CPU-n hamis."""
+        try:
+            return _process_video_modul()._pick_device() == "mps"
+        except Exception:
+            return False
+
+    def _gpu_tanitas_fut() -> bool:
+        """Apple-GPU-n a tanítás vagy a gyűjtés foglalja a GPU-t."""
+        return _gpu_kizarolagos() and bool(_train_state.get("running")
+                                           or _dataset_state.get("running"))
+
+    def _gpu_foglalt() -> bool:
+        """Apple-GPU-n használja-e MÁS munka a GPU-t (futó vagy sorban álló
+        feldolgozás, tanítás, gyűjtés) — a detektálás-próba ilyenkor a
+        CPU-n fut."""
+        return _gpu_kizarolagos() and (
+            any(j.get("status") in ("running", "queued")
+                for j in _jobs.values())
+            or bool(_train_state.get("running"))
+            or bool(_dataset_state.get("running")))
+
+    def _gpu_feldolgozas_fut() -> str | None:
+        """Apple-GPU-n a futó (vagy sorban álló — a munkás pillanatokon
+        belül indítja) feldolgozás foglalja a GPU-t: a tanítás és a gyűjtés
+        mellette leállítaná a motort — a 409 mondata, vagy None."""
+        if _gpu_kizarolagos() and any(j.get("status") in ("running", "queued")
+                                      for j in _jobs.values()):
+            return ("épp feldolgozás fut (vagy áll sorban), és az a gép "
+                    "grafikus gyorsítóját használja — várd meg a feldolgozás "
+                    "végét (vagy szakítsd meg a Feldolgozások képernyőn)")
+        return None
+
+    @app.post("/dataset/collect")
+    def dataset_collect(body: dict):
+        """Gyűjtés indítása: {"match_ids": [...], "samples": 200}.
+
+        Háttérszálon fut (a több száz kocka előcímkézése perceket vesz
+        igénybe); az állapot a /dataset/status végponton követhető.
+        409: már fut; 400: nincs elérhető videó / rossz mintaszám."""
+        import threading
+        if _dataset_state.get("running"):
+            raise HTTPException(status_code=409,
+                                detail="már fut egy gyűjtés — várd meg")
+        gpu_foglalt = _gpu_feldolgozas_fut()
+        if gpu_foglalt:
+            raise HTTPException(status_code=409, detail=gpu_foglalt)
+        try:
+            samples = int(body.get("samples") or 200)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="samples: egész szám kell")
+        samples = max(20, min(1000, samples))
+        videok = []
+        for mid in (body.get("match_ids") or []):
+            m = _store.get(str(mid))
+            if m is None:
+                raise HTTPException(status_code=404,
+                                    detail=f"match not found: {mid}")
+            vp = m.meta.video_path
+            if not vp or not Path(vp).exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"nincs elérhető videó ehhez: {mid} — "
+                           "összefűzött meccsnél a DARABOKAT jelöld ki")
+            videok.append((vp, m.meta.start_frame or 0, m))
+        if not videok:
+            raise HTTPException(status_code=400,
+                                detail="legalább egy meccs kell videóval")
+        out_dir = data_root() / "dataset"
+        _dataset_state.update({
+            "running": True, "done": False, "error": None,
+            "images": 0, "ball_pct": None, "videos_done": 0,
+            "videos_total": len(videok), "out_dir": str(out_dir),
+        })
+
+        def _gyujt():
+            try:
+                from scripts.collect_dataset import _make_detect_fn
+                from ..pipeline.dataset import (
+                    collect_dataset, hard_frame_indices,
+                )
+                detect = _make_detect_fn("yolov8n.pt", 1920, 0.35, 0.05)
+                osszes = 0
+                labdas = 0
+                for vp, start, m in videok:
+                    # Aktív tanulás: a tárolt követés labda-kieséseiből
+                    # is mintát veszünk — ott bukik a mostani modell.
+                    try:
+                        nehez = hard_frame_indices(m, samples // 2)
+                    except Exception:
+                        nehez = []  # javaslat nélkül egyenletes marad
+                    stats = collect_dataset(vp, detect, out_dir,
+                                            samples=samples, start=start,
+                                            hard_indices=nehez)
+                    osszes += stats.images
+                    labdas += stats.images_with_ball
+                    _dataset_state["images"] = osszes
+                    _dataset_state["videos_done"] += 1
+                _dataset_state["ball_pct"] = round(
+                    100.0 * labdas / max(1, osszes))
+                _dataset_state["done"] = True
+            except Exception as e:  # a hibát a státusz viszi a felületre
+                _dataset_state["error"] = str(e)
+            finally:
+                _dataset_state["running"] = False
+
+        threading.Thread(target=_gyujt, daemon=True).start()
+        return {"started": True, "out_dir": str(out_dir),
+                "videos_total": len(videok), "samples": samples}
+
+    @app.get("/dataset/status")
+    def dataset_status():
+        """A tanítóadat-gyűjtés állapota (a kliens haladás-nézete)."""
+        return dict(_dataset_state)
+
+    # A TANÍTÁS végpontja: a lánc utolsó lépése is gombra kerül. A
+    # feldolgozó ugyanazt az ultralytics-csomagot használja előrejelzésre,
+    # amelyik tanítani is tud — a kész modell a felhasználói súly-mappába
+    # kerül (a régi .bak mentésével), és a KÖVETKEZŐ feldolgozás már
+    # ezzel fut.
+    _train_state: dict = {"running": False, "done": False}
+    # (a tesztek és a diagnosztika innen látják)
+    app.state.train_state = _train_state
+
+    @app.post("/dataset/train")
+    def dataset_train(body: dict):
+        """Finomhangolás indítása: {"epochs": 60}. Órákig tarthat (CPU-n
+        különösen); háttérszálon fut, az állapot a /dataset/train-status.
+        400: nincs átnézett adathalmaz; 409: már fut tanítás/gyűjtés."""
+        import threading
+        if _train_state.get("running") or _dataset_state.get("running"):
+            raise HTTPException(status_code=409,
+                                detail="már fut tanítás vagy gyűjtés")
+        # Apple-GPU: a futó feldolgozás használja a GPU-t — a tanítás
+        # mellette leállítaná a motort (az MPS nem szál-biztos).
+        gpu_foglalt = _gpu_feldolgozas_fut()
+        if gpu_foglalt:
+            raise HTTPException(status_code=409, detail=gpu_foglalt)
+        yaml_ut = data_root() / "dataset" / "dataset.yaml"
+        if not yaml_ut.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="nincs adathalmaz — előbb Tanítóadat gyűjtése, "
+                       "majd a Címkézőben átnézés")
+        try:
+            epochs = max(5, min(200, int(body.get("epochs") or 60)))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="epochs: egész szám kell")
+        _train_state.update({"running": True, "done": False, "error": None,
+                             "epochs": epochs, "installed": None,
+                             "metrics": None, "baseline": None,
+                             "decision": None})
+
+        def _tanit():
+            try:
+                from scripts.finetune import install_weights
+                from scripts.process_video import (_pick_device,
+                                                   _resolve_weights)
+                from ultralytics import YOLO
+                # A MOSTANI éles súly: ebből indul a tanítás, és ehhez
+                # mérjük a végén az újat (védőháló).
+                regi_ut = _resolve_weights("yolov8n.pt")
+                model = YOLO(regi_ut)
+                eredmeny = model.train(
+                    data=str(yaml_ut), epochs=epochs, imgsz=960, batch=-1,
+                    device=_pick_device(),
+                    project=str(data_root() / "runs"), name="handball",
+                    exist_ok=True)
+                best = (Path(getattr(eredmeny, "save_dir",
+                                     data_root() / "runs" / "handball"))
+                        / "weights" / "best.pt")
+                if not best.exists():
+                    raise RuntimeError("a kész modell (best.pt) nem "
+                                       "jött létre")
+                uj_m = train_metrics(eredmeny)
+                _train_state["metrics"] = uj_m
+                # VÉDŐHÁLÓ: a mostani éles modellt ugyanazon a
+                # validációs halmazon mérjük. Csak akkor mérhető, ha
+                # már finomhangolt (2 osztály) — az általános COCO-
+                # modell osztályai nem esnek egybe, azon a mérés
+                # értelmetlen; ilyenkor "első tanítás".
+                regi_m: dict = {}
+                try:
+                    regi = YOLO(regi_ut)
+                    if len(getattr(regi, "names", {}) or {}) <= 2:
+                        regi_val = regi.val(
+                            data=str(yaml_ut), imgsz=960,
+                            device=_pick_device(),
+                            project=str(data_root() / "runs"),
+                            name="regi_val", exist_ok=True,
+                            verbose=False, plots=False)
+                        regi_m = train_metrics(regi_val)
+                except Exception:
+                    regi_m = {}  # mérés nélkül: első tanításként kezeljük
+                _train_state["baseline"] = regi_m
+                dontes = should_install(uj_m, regi_m)
+                _train_state["decision"] = dontes
+                if dontes["install"]:
+                    cel = install_weights(best)
+                    _train_state["installed"] = str(cel)
+                _train_state["done"] = True
+            except Exception as e:
+                _train_state["error"] = str(e)
+            finally:
+                _train_state["running"] = False
+
+        threading.Thread(target=_tanit, daemon=True).start()
+        return {"started": True, "epochs": epochs}
+
+    @app.get("/dataset/train-status")
+    def dataset_train_status():
+        """A tanítás állapota (a kliens követi; a kész modell útjával)."""
+        return dict(_train_state)
+
+    # A beépített CÍMKÉZŐ végpontjai: a gyűjtött képek átnézése és a
+    # dobozok javítása az appból — külső eszköz (CVAT/LabelImg) nélkül.
+    # A címke-fájlok szabványos YOLO-sorok (osztály cx cy w h, 0..1),
+    # tehát a kimenet továbbra is bármely külső eszközzel kompatibilis.
+    def _dataset_kep_ut(split: str, name: str) -> Path:
+        import re
+        if split not in ("train", "val"):
+            raise HTTPException(status_code=400, detail="split: train|val")
+        # Útvonal-védelem: csak sima fájlnév, könyvtár-ugrás nélkül.
+        if not re.fullmatch(r"[A-Za-z0-9._\-áéíóöőúüűÁÉÍÓÖŐÚÜŰ ]+", name) \
+                or ".." in name:
+            raise HTTPException(status_code=400, detail="rossz fájlnév")
+        return data_root() / "dataset" / "images" / split / name
+
+    @app.get("/dataset/images")
+    def dataset_images():
+        """A gyűjtött képek listája (split + fájlnév), címke-számmal."""
+        out = []
+        gyoker = data_root() / "dataset"
+        for split in ("train", "val"):
+            d = gyoker / "images" / split
+            if not d.exists():
+                continue
+            for f in sorted(d.iterdir()):
+                if f.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+                    continue
+                cimke = gyoker / "labels" / split / (f.stem + ".txt")
+                n_doboz = 0
+                if cimke.exists():
+                    try:
+                        n_doboz = len([s for s in cimke.read_text(
+                            encoding="utf-8").splitlines() if s.strip()])
+                    except Exception:
+                        n_doboz = 0
+                out.append({"split": split, "name": f.name,
+                            "boxes": n_doboz})
+        return {"images": out}
+
+    @app.get("/dataset/image/{split}/{name}")
+    def dataset_image(split: str, name: str):
+        """Egy gyűjtött kép (a címkéző rajzfelülete alá)."""
+        from fastapi.responses import FileResponse
+        ut = _dataset_kep_ut(split, name)
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        return FileResponse(str(ut))
+
+    @app.get("/dataset/labels/{split}/{name}")
+    def dataset_labels_get(split: str, name: str):
+        """A kép címkéi: {"boxes": [[osztály, cx, cy, w, h], …]} (0..1)."""
+        ut = _dataset_kep_ut(split, name)
+        cimke = (data_root() / "dataset" / "labels" / split
+                 / (Path(name).stem + ".txt"))
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        boxes = []
+        if cimke.exists():
+            for sor in cimke.read_text(encoding="utf-8").splitlines():
+                d = sor.split()
+                if len(d) != 5:
+                    continue
+                try:
+                    boxes.append([int(d[0])] + [float(x) for x in d[1:]])
+                except ValueError:
+                    continue
+        return {"boxes": boxes}
+
+    @app.post("/dataset/labels/{split}/{name}")
+    def dataset_labels_set(split: str, name: str, body: dict):
+        """A kép címkéinek mentése (a címkéző Mentés gombja).
+
+        Törzs: {"boxes": [[osztály, cx, cy, w, h], …]} — osztály 0
+        (játékos) vagy 1 (labda), a többi 0..1 közti normált érték.
+        A fájl szabványos YOLO-sor marad."""
+        ut = _dataset_kep_ut(split, name)
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        sorok = []
+        for b in (body.get("boxes") or []):
+            try:
+                cls = int(b[0])
+                cx, cy, w, h = (float(b[1]), float(b[2]),
+                                float(b[3]), float(b[4]))
+            except (TypeError, ValueError, IndexError):
+                raise HTTPException(status_code=400,
+                                    detail="boxes: [osztály,cx,cy,w,h] kell")
+            if cls not in (0, 1):
+                raise HTTPException(status_code=400,
+                                    detail="osztály: 0 (játékos) vagy 1 "
+                                           "(labda)")
+            if not all(0.0 <= v <= 1.0 for v in (cx, cy, w, h)) \
+                    or w <= 0 or h <= 0:
+                raise HTTPException(status_code=400,
+                                    detail="cx/cy/w/h: 0..1 közti érték")
+            sorok.append(f"{cls} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}")
+        cimke = (data_root() / "dataset" / "labels" / split
+                 / (Path(name).stem + ".txt"))
+        cimke.parent.mkdir(parents=True, exist_ok=True)
+        cimke.write_text("\n".join(sorok) + ("\n" if sorok else ""),
+                         encoding="utf-8")
+        return {"saved": len(sorok)}
+
+    def _gzip_elfogadva(fejlec: str) -> bool:
+        """Az Accept-Encoding fejléc kifejezetten elfogadja-e a gzip-et (a
+        "gzip;q=0" elutasítás — a puszta "gzip" részszöveg-keresés azt is
+        elfogadásnak vette)."""
+        for resz in fejlec.split(","):
+            nev, *param = [x.strip() for x in resz.split(";")]
+            if nev.lower() != "gzip":
+                continue
+            q = 1.0
+            for p_ in param:
+                if p_.lower().startswith("q="):
+                    try:
+                        q = float(p_[2:])
+                    except ValueError:
+                        q = 0.0
+            return q > 0
+        return False
+
+    def _html_gzip(oldal: str, request):
+        """HTML-válasz gzip-pel, ha a kliens kéri (Accept-Encoding): a 3D
+        oldal az egész meccs mozgását beágyazva viszi (10 perc ~1,3 MB, egy
+        teljes meccs ~8 MB) — tömörítve ötödére-hatodára megy át, a
+        VR-headset Wi-Fi-n tölti. Globális tömörítő helyett célzottan: a
+        videó- és zip-letöltések (Range-kérések) érintetlenek maradnak."""
+        import gzip
+
+        from fastapi import Response
+        from fastapi.responses import HTMLResponse
+        if _gzip_elfogadva(request.headers.get("accept-encoding") or "") \
+                and len(oldal) > 1024:
+            return Response(
+                content=gzip.compress(oldal.encode("utf-8"), compresslevel=6),
+                media_type="text/html; charset=utf-8",
+                headers={"Content-Encoding": "gzip",
+                         "Vary": "Accept-Encoding"})
+        return HTMLResponse(content=oldal)
+
+    # A three.js (0.160.0, MIT — handball/vendor/three) a motorból: a 3D/VR
+    # oldal így internet nélkül is betölt (edzőterem, klub-hálózat), és a
+    # csomagolt kiadás is viszi. Csak a két használt fájl; tömörítve (a
+    # three.module.js 1,3 MB — a headset Wi-Fi-n tölti), egyszer számolva.
+    _THREE_FAJLOK = ("build/three.module.js", "examples/jsm/webxr/VRButton.js")
+    _three_tar: dict = {}
+
+    def vendor_three(ut: str, request: Request):
+        """A three.js fájljai a 3D/VR oldalnak (a többi út 404)."""
+        import gzip
+
+        from fastapi import Response
+        if ut not in _THREE_FAJLOK:
+            raise HTTPException(status_code=404, detail="nincs ilyen fájl")
+        if ut not in _three_tar:
+            p = Path(__file__).resolve().parent.parent / "vendor" / "three" / ut
+            if not p.exists():
+                raise HTTPException(status_code=404,
+                                    detail="a three.js hiányzik a csomagból")
+            nyers = p.read_bytes()
+            _three_tar[ut] = (nyers, gzip.compress(nyers, compresslevel=6))
+        nyers, tomor = _three_tar[ut]
+        fej = {"Cache-Control": "public, max-age=31536000, immutable",
+               "Vary": "Accept-Encoding"}
+        if _gzip_elfogadva(request.headers.get("accept-encoding") or ""):
+            return Response(content=tomor, media_type="text/javascript",
+                            headers={**fej, "Content-Encoding": "gzip"})
+        return Response(content=nyers, media_type="text/javascript",
+                        headers=fej)
+
+    # (a modul halasztott annotációi miatt a Request-et kézzel adjuk meg —
+    # mint a /view3d-nél)
+    vendor_three.__annotations__["request"] = Request
+    app.get("/vendor/three@0.160.0/{ut:path}")(vendor_three)
+
+    def halozat(request: Request):
+        """A közös nézés hálózati csapat-linkjei: {"halozati": a motor a
+        hálózat felé is nyitva van-e, "linkek": a /kovet a gép hálózati
+        címeivel (azon a porton, amelyen ez a kérés jött — a motor
+        tartalék porton is futhat)}. Saját gépes módban a lista üres (a
+        headset USB-n, adb reverse-szel a localhost-ot éri el)."""
+        nyitott = halozati_nyitott()
+        port = request.url.port
+        utotag = "" if port in (None, 80) else f":{port}"
+        return {"halozati": nyitott,
+                "linkek": ([f"http://{c}{utotag}/kovet"
+                            for c in halozati_cimek()] if nyitott else [])}
+
+    halozat.__annotations__["request"] = Request
+    app.get("/halozat")(halozat)
+
+    def match_view3d(match_id: str, request: Request):
+        """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.
+
+        A kliens 3D füle a képernyős út; ez ugyanaz böngészőben — és a
+        jövőben VR-headseten: a WebXR biztonságos környezetet kér, a
+        localhost az (headsetről USB + adb reverse teszi elérhetővé).
+        A three.js a motorból jön (/vendor/three@…) — internet nem kell."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        # Az oldal TELJES építése egy hatókörben (kapus-jelölés, egyszeri
+        # rétegek) — a visszatérő figura is ugyanazt a meccs-állapotot
+        # látja, mint a beágyazott 3D adat.
+        from ..pipeline.primitive_cache import primitive_cache
+        with primitive_cache(match):
+            return _html_gzip(_view3d_oldal(match_id, match), request)
+
+    def _view3d_oldal(match_id: str, match) -> str:
+        """A /view3d oldal építése (a hívó hatókörében)."""
+        from ..pipeline.view3d_html import view3d_html
+        # A visszatérő figura a 3D-ben is ugorható/feliratos — hibatűrően.
+        try:
+            riasztasok = _figure_alerts_for(match)
+        except Exception:
+            riasztasok = []
+        # A feltörés és a megállítás a lemezes tárból (a /defence-
+        # timeline-nal közös kulcs): két teljes felderítés nem futhat le
+        # minden nyitásnál.
+        try:
+            kulcsok = _tactical_keys(match_id, match)
+            feltores, megallitas = kulcsok["breakpoints"], kulcsok["stoppers"]
+        except Exception:
+            feltores = megallitas = None
+        return view3d_html(match, riasztasok, feltores, megallitas)
+
+    # A `request` típusa kézzel (a modul `from __future__ import
+    # annotations` miatt), majd a regisztráció.
+    match_view3d.__annotations__["request"] = Request
+    app.get("/matches/{match_id}/view3d")(match_view3d)
+
+    # Az edző legutóbbi figurája (a saját gépről nyitva): a /kovet
+    # várólapja linkeli — a headseten a hosszú cím nem gépelhető.
+    _utolso_figura: dict = {}
+
+    def _figura_bemenet(u: str, l: str, meccs: str, vedo: str, vedok: int,
+                        melyseg: float, rendszer: str = "6-0"):
+        """A figura-linkek közös bemenete (/figura3d, /figura-lap): az utak
+        ("x,y,…;x,y,…"), a labdás-sor ("0,1,…") és a védelem — a `meccs`
+        `vedo` csapatából TANULT (a leggyakoribb rendszerében), különben a
+        kézi fal (`vedok`, `melyseg`, `rendszer`: 6-0, 5-1, 4-2, 3-2-1,
+        3-3). Visszaad: (utak, labda, modell, a védelem neve); 400 / 404
+        hibánál."""
+        from ..pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
+                                                FIGURA_3D_MAX_PONT)
+        try:
+            utak = []
+            for resz in u.split(";")[:FIGURA_3D_MAX_JATEKOS]:
+                sz = [float(x) for x in resz.split(",") if x.strip()]
+                if len(sz) < 2 or len(sz) % 2:
+                    raise ValueError(resz)
+                utak.append(list(zip(sz[0::2], sz[1::2]))[:FIGURA_3D_MAX_PONT])
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="hibás figura (u=x,y,…;x,y,…)")
+        try:
+            labda = [int(x) for x in l.split(",") if x.strip()][:FIGURA_3D_MAX_PONT]
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="hibás labdás-sor (l=0,1,…)")
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        return utak, labda, modell, vedo_nev
+
+    def _figura_vedelem(meccs: str, vedo: str, vedok: int, melyseg: float,
+                        rendszer: str = "6-0"):
+        """A figura-oldalak (/figura3d, /figura-lap, /figura-fuzet) fala: a
+        `meccs` `vedo` csapatából TANULT (a leggyakoribb rendszerében),
+        különben a kézi fal (`vedok`, `melyseg`, `rendszer`). Visszaad:
+        (modell, a védelem neve); 400 / 404 hibánál."""
+        from ..pipeline.play_simulation import (VEDEKEZESI_RENDSZEREK,
+                                                DefenseModel)
+        if rendszer not in VEDEKEZESI_RENDSZEREK:
+            raise HTTPException(
+                status_code=400,
+                detail="rendszer: " + ", ".join(VEDEKEZESI_RENDSZEREK))
+        if meccs:
+            match = _store.get(meccs)
+            if match is None:
+                raise HTTPException(status_code=404, detail="match not found")
+            try:
+                csapat = Team(vedo)
+            except ValueError:
+                raise HTTPException(status_code=400,
+                                    detail="vedo: 'home' vagy 'away'")
+            modell = DefenseModel.learn(match, csapat)
+            vedo_nev = "Tanult védelem — " + (
+                match.meta.home_team if csapat == Team.HOME
+                else match.meta.away_team) + (
+                f" ({modell.rendszer})" if modell.rendszer != "6-0" else "") + (
+                f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
+                if modell.press_rate >= 0.05 else "") + (
+                f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
+                if modell.lateral_gain != 0.5 else "") + (
+                f" · kettőz: {modell.double_rate * 100:.0f}%"
+                if modell.double_rate >= 0.05 else "")
+        else:
+            modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
+                                  line_depth_m=max(6.0, min(12.0, float(melyseg))),
+                                  rendszer=rendszer)
+            vedo_nev = ("Védelem (" + (f"{rendszer}, " if rendszer != "6-0" else "")
+                        + f"{modell.num_defenders} védő, "
+                        + f"{modell.line_depth_m:.1f} m)".replace(".", ","))
+        return modell, vedo_nev
+
+    def figura3d(request: Request, u: str = "", cim: str = "",
+                 meccs: str = "", vedo: str = "away", vedok: int = 6,
+                 melyseg: float = 6.0, l: str = "", rendszer: str = "6-0"):
+        """A figura-tervező figurája böngészős 3D-ben / VR-ben.
+
+        `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
+        a támadók ";"-vel elválasztva; `l`: kulcs-pozíciónként a labdás
+        támadó sorszáma ("0,1,2" — ahol változik, ott passz; alapból végig
+        az 1.); `cim` a figura neve (a `nev` az oldalon a követő neve). A
+        védelem
+        a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
+        meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
+        vonal, `rendszer`: 6-0, 5-1, 4-2, 3-2-1, 3-3). Valós tempóban, kapussal, ismétlődve játszik
+        (play_simulation.setplay_3d_match); a fejléc a kiértékelést mutatja."""
+        from ..pipeline import court3d as _c3
+        from ..pipeline.play_simulation import figura_nev, setplay_3d_match
+        from ..pipeline.view3d_html import view3d_html
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
+        try:
+            sim, ertekeles = setplay_3d_match(
+                utak, modell, ball=labda, name=figura_nev(cim) or None,
+                defense_name=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        # A saját gépről (az edző) nyitott figura a csapat várólapjára.
+        try:
+            import ipaddress
+            if ipaddress.ip_address(request.client.host).is_loopback:
+                _utolso_figura.update(
+                    url="/figura3d?" + request.url.query,
+                    nev=sim.meta.home_team, vedo=vedo_nev,
+                    ido=_c3.shared3d_ora())
+        except (AttributeError, ValueError):
+            pass
+        return _html_gzip(view3d_html(sim, figura=ertekeles), request)
+
+    figura3d.__annotations__["request"] = Request
+    app.get("/figura3d")(figura3d)
+
+    @app.get("/figura-fuzet")
+    def figura_fuzet(ids: str = "", meccs: str = "", vedo: str = "away",
+                     vedok: int = 6, melyseg: float = 6.0,
+                     rendszer: str = "6-0"):
+        """A csapat FIGURAFÜZETE: a mentett figurák egy nyomtatható
+        dokumentumban (böngészőből PDF) — tartalomjegyzék, utána
+        figuránként egy oldal (pipeline.figura_lap.figura_fuzet_html).
+        `ids` ("a,b,…"): csak ezek, ebben a sorrendben; alapból mind, név
+        szerint — tanult fal (`meccs`) ellen viszont a figura-ajánló
+        rangsorában, az ajánló mondattal (play_simulation.rank_playbook).
+        A fal a /figura-lap-é (tanult vagy kézi)."""
+        from fastapi.responses import HTMLResponse
+
+        from ..pipeline.figura_lap import FIGURA_FUZET_MAX, figura_fuzet_html
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        if ids.strip():
+            fajlok = [_play_path(x.strip()) for x in ids.split(",")
+                      if x.strip()][:FIGURA_FUZET_MAX]
+        else:
+            fajlok = sorted(_playbook_dir.glob("*.json"))
+        figurak = []
+        for f in fajlok:
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue  # hiányzó / sérült figura-fájl kimarad
+            if isinstance(d, dict):
+                figurak.append(d)
+        ajanlas = None
+        if not ids.strip():
+            figurak.sort(key=lambda d: (str(d.get("name") or "").lower(),
+                                        str(d.get("id") or "")))
+            if meccs:
+                from ..pipeline.play_simulation import rank_playbook
+                rang = rank_playbook(figurak, modell)
+                hely = {r["id"]: i for i, r in enumerate(rang["figurak"])}
+                # (a stabil rendezés a név-sorrendet tartja a rangsoron
+                # kívüli — hibás — figuráknál)
+                figurak.sort(key=lambda d: hely.get(d.get("id"), len(hely)))
+                ajanlas = rang["ajanlas"]
+        return HTMLResponse(figura_fuzet_html(figurak, modell,
+                                              vedo_nev=vedo_nev,
+                                              ajanlas=ajanlas))
+
+    def _vedekezesi_proba(match, csapat: Team, vedo_match, vedo_oldal: Team):
+        """Az `csapat` visszatérő figurái a `vedo_match` `vedo_oldal`
+        csapatából tanult fal ellen (play_simulation.defense_test), a
+        figurák /figura3d lekérdezésével ("link": a figura a tanult fal
+        ellen, 3D-ben bejárható)."""
+        from urllib.parse import quote
+
+        from ..pipeline.play_simulation import (defense_test,
+                                                figura_link_kod)
+        r = defense_test(match, csapat, DefenseModel.learn(vedo_match,
+                                                           vedo_oldal))
+        for f in r["figurak"]:
+            try:
+                f["link"] = (figura_link_kod(f["attackers"], f["labda"],
+                                             "Az ő figurájuk")
+                             + f"&meccs={quote(vedo_match.meta.match_id)}"
+                             + f"&vedo={vedo_oldal.value}")
+            except ValueError:
+                f["link"] = None
+        return r
+
+    @app.get("/matches/{match_id}/vedekezesi-proba")
+    def vedekezesi_proba(match_id: str, csapat: str = "away",
+                         vedo_meccs: str = "", vedo_oldal: str = ""):
+        """Védekezési próba: a `csapat` visszatérő figurái a MI tanult
+        falunk ellen — alapból a meccs másik oldaláé, vagy a `vedo_meccs`
+        `vedo_oldal` csapatáé (a saját meccsünkből). Visszaad: {"csapat",
+        "vedelem", "figurak" (a 3D-linkkel), "verdict"}."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = Team(csapat)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="csapat: 'home' vagy 'away'")
+        vm = _store.get(vedo_meccs) if vedo_meccs else match
+        if vm is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            vo = (Team(vedo_oldal) if vedo_oldal
+                  else Team.HOME if t == Team.AWAY else Team.AWAY)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="vedo_oldal: 'home' vagy 'away'")
+        r = _vedekezesi_proba(match, t, vm, vo)
+        return {"csapat": (match.meta.home_team if t == Team.HOME
+                           else match.meta.away_team),
+                "vedelem": (vm.meta.home_team if vo == Team.HOME
+                            else vm.meta.away_team), **r}
+
+    @app.get("/playbook-rangsor")
+    def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
+                         melyseg: float = 6.0, rendszer: str = "6-0"):
+        """Figura-ajánló: a mentett figurák rangsora a `meccs` `vedo`
+        csapatából TANULT fal ellen (vagy a kézi fal ellen — mint a
+        /figura-fuzet), az alap 6-0-hoz mért eltéréssel és egy magyar
+        ajánló mondattal (play_simulation.rank_playbook). Visszaad:
+        {"vedelem", "figurak", "ajanlas"}."""
+        from ..pipeline.play_simulation import rank_playbook
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        figurak = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue  # hiányzó / sérült figura-fájl kimarad
+            if isinstance(d, dict):
+                figurak.append(d)
+        return {"vedelem": vedo_nev, **rank_playbook(figurak, modell)}
+
+    # A figura-videók gyorsítótára (a várólapról többen is letöltik) és a
+    # rajzolás zárja (egyszerre egy — a többi kérés vár).
+    from collections import OrderedDict as _OD
+    import threading as _thr
+    _figura_video_tar: "_OD[tuple, bytes]" = _OD()
+    _figura_video_zar = _thr.Lock()
+
+    @app.get("/figura-video")
+    def figura_video_vegpont(u: str = "", cim: str = "", meccs: str = "",
+                             vedo: str = "away", vedok: int = 6,
+                             melyseg: float = 6.0, l: str = "",
+                             rendszer: str = "6-0", lepes: int = 0):
+        """A figura felülnézeti VIDEÓJA (MP4, letöltésre — elküldhető a
+        csapatnak; a 3D link csak a klub-hálózaton él): a 3D figura
+        kockáiból (valós tempó, a késő fal, a passzok), a támadó térfélre
+        vágva, mezszámokkal, a kulcs-pozíciók feliratával
+        (pipeline.figura_video). A bemenet a /figura3d-é; `lepes=1`: a
+        magyarázós videó (minden kulcs-pozíción megáll)."""
+        import tempfile
+        from pathlib import Path as _Path
+        from urllib.parse import quote
+
+        from fastapi import Response
+
+        from ..pipeline.figura_video import figura_video
+        from ..pipeline.play_simulation import figura_nev
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
+        from ..pipeline.figura_video import FIGURA_VIDEO_TAR_DB
+        nev = figura_nev(cim) or "Figura"
+        kulcs = (u, l, nev, meccs, vedo, int(vedok), float(melyseg),
+                 rendszer, bool(lepes))
+        with _figura_video_zar:
+            adat = _figura_video_tar.get(kulcs)
+            if adat is None:
+                with tempfile.TemporaryDirectory() as td:
+                    try:
+                        ut = figura_video(utak, labda, modell, nev=nev,
+                                          vedo_nev=vedo_nev,
+                                          cel=_Path(td) / "figura.mp4",
+                                          lepes=bool(lepes))
+                    except ValueError:
+                        raise HTTPException(status_code=400,
+                                            detail="a figurában nincs támadó")
+                    except RuntimeError as e:
+                        raise HTTPException(status_code=500, detail=str(e))
+                    adat = ut.read_bytes()
+                _figura_video_tar[kulcs] = adat
+                while len(_figura_video_tar) > FIGURA_VIDEO_TAR_DB:
+                    _figura_video_tar.popitem(last=False)
+            else:
+                _figura_video_tar.move_to_end(kulcs)
+        return Response(
+            content=adat, media_type="video/mp4",
+            headers={"Content-Disposition":
+                     "attachment; filename=\"figura.mp4\"; "
+                     f"filename*=UTF-8''{quote(nev + '.mp4', safe='')}"})
+
+    @app.get("/figura-lap")
+    def figura_lap(u: str = "", cim: str = "", meccs: str = "",
+                   vedo: str = "away", vedok: int = 6, melyseg: float = 6.0,
+                   l: str = "", rendszer: str = "6-0"):
+        """A figura KIOSZTHATÓ lapja (nyomtatható HTML — böngészőből PDF):
+        kulcs-pozíciónként felülnézeti ábra (a támadók, a fal, a labda, a
+        futás- és passz-nyilak) a lépések leírásával és a kiértékeléssel
+        (pipeline.figura_lap). A bemenet a /figura3d-é."""
+        from fastapi.responses import HTMLResponse
+
+        from ..pipeline.figura_lap import figura_lap_html
+        from ..pipeline.play_simulation import figura_nev
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
+        try:
+            oldal = figura_lap_html(utak, labda, modell,
+                                    nev=figura_nev(cim) or "Figura",
+                                    vedo_nev=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        return HTMLResponse(content=oldal)
+
+    @app.get("/matches/{match_id}/attack-figure")
+    def attack_figure_api(match_id: str, t: float = 0.0, pontok: int = 3):
+        """A `t` (mp) pillanatnál zajló szervezett támadás FIGURAKÉNT — a
+        Figura-tervezőbe (play_simulation.attack_figure: a támadó
+        mezőnyjátékosok kulcs-pozíciói, a labdás, +x irányba forgatva).
+        404: nincs ilyen meccs, vagy ennél a pillanatnál nincs elég hosszú
+        szervezett támadás."""
+        import math as _math
+
+        from ..pipeline.play_simulation import attack_figure
+        from ..pipeline.primitive_cache import primitive_cache
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        if not _math.isfinite(t):
+            raise HTTPException(status_code=400, detail="t: véges mp")
+        fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+        with primitive_cache(match):
+            fig = attack_figure(match, int(round(t * fps)), pontok=pontok)
+        if fig is None:
+            raise HTTPException(
+                status_code=404,
+                detail="ennél a pillanatnál nincs elég hosszú szervezett "
+                       "támadás — lapozz egy támadás közepére")
+        return {**fig, "match_id": match_id}
+
+    @app.get("/matches/{match_id}/defence-timeline")
+    def match_defence_timeline(match_id: str):
+        """A 3D pálya védekezés-panelje: ki védekezik, milyen falban.
+
+        {"rows": [{"t", "s", "defending", "label", "goal_x"}],
+        "formations": {név: [[mélység, y], …]}} — a sorok másodpercenként
+        (csak szervezett támadásban), a sablonok a bal kapu előtt
+        (a kliens tükrözi). A böngészős 3D ugyanezt beágyazva viszi."""
+        from ..pipeline.court3d import (FORMATION_TEMPLATES,
+                                        defence_timeline,
+                                        tactical_keys_by_team)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            sorok = _cached_result(match_id, "defence-timeline",
+                                   lambda: defence_timeline(match))
+        except Exception:
+            sorok = defence_timeline(match)
+        # Feltörés és megállítás csapatonként (a felderítés rangsorainak
+        # teteje, EGY felderítésből) — a panel a fal mellé írja; hibája
+        # nem viheti el a végpontot.
+        try:
+            kulcsok = _tactical_keys(match_id, match)
+        except Exception:
+            kulcsok = {"breakpoints": {"home": [], "away": []},
+                       "stoppers": {"home": [], "away": []}}
+        return {"rows": sorok,
+                "formations": {nev: [list(p) for p in pontok]
+                               for nev, pontok in FORMATION_TEMPLATES.items()},
+                "breakpoints": kulcsok["breakpoints"],
+                "stoppers": kulcsok["stoppers"]}
+
+    @app.get("/matches/{match_id}/decision-moments")
+    def match_decision_moments(match_id: str):
+        """A passz-döntések, ahol a modell szerint érdemben jobb opció is
+        volt (court3d.decision_moments) — a 3D pálya "Döntések" lapozója
+        ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import decision_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "decision-moments",
+                              lambda: decision_moments(match))
+
+    @app.get("/matches/{match_id}/free-shots")
+    def match_free_shots(match_id: str):
+        """A szabadon hagyott lövők pillanatai (court3d.free_shot_moments)
+        — a 3D pálya "Szabad lövők" lapozója ebből dolgozik.
+        Gyorsítótárazva."""
+        from ..pipeline.court3d import free_shot_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "free-shots",
+                              lambda: free_shot_moments(match))
+
+    @app.get("/matches/{match_id}/powerplay-moments")
+    def match_powerplay_moments(match_id: str):
+        """Az emberelőny-szakaszok (court3d.powerplay_moments) — a 3D
+        pálya élő emberelőny-jelzője és "Emberelőny" lapozója ebből
+        dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import powerplay_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "powerplay-moments",
+                              lambda: powerplay_moments(match))
+
+    @app.get("/matches/{match_id}/goal-build-ups")
+    def match_goal_build_ups(match_id: str):
+        """A gólok előkészítése (court3d.goal_build_ups): gólonként a
+        gólt megelőző saját passz-lánc — a 3D pálya "Gól-akciók"
+        lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import goal_build_ups
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "goal-build-ups",
+                              lambda: goal_build_ups(match))
+
+    @app.get("/matches/{match_id}/fast-break-moments")
+    def match_fast_break_moments(match_id: str):
+        """A lerohanások (court3d.fast_break_moments): a befejező útja az
+        indulástól a lövésig, az első ember / második hullám és az
+        elszökés a kontra-rétegek szabályával — a 3D pálya "Lerohanások"
+        lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import fast_break_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "fast-break-moments",
+                              lambda: fast_break_moments(match))
+
+    @app.get("/matches/{match_id}/key-scenes")
+    def match_key_scenes(match_id: str):
+        """A meccs videózandó jelenetei (court3d.key_scene_rows): a
+        jelentés "Videózandó jelenetek" szakaszának sorai — a kezdőlap
+        meccs-kártyája ebből mondja, hány jelenet vár, és a 3D pályát az
+        elsőn nyitja. Gyorsítótárazva."""
+        from ..pipeline.court3d import key_scene_rows
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "key-scenes",
+                              lambda: key_scene_rows(match))
+
+    @app.get("/matches/{match_id}/seven-meter-moments")
+    def match_seven_meter_moments(match_id: str):
+        """A hétméteresek (court3d.seven_meter_moments): a dobó, a 7 m-es
+        pont, a célzott kapu-harmad, a kimenet és a kapus helye — a 3D
+        pálya "Hétméteresek" lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import seven_meter_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "seven-meter-moments",
+                              lambda: seven_meter_moments(match))
+
+    @app.get("/matches/{match_id}/conceded-goals")
+    def match_conceded_goals(match_id: str):
+        """A kapott gólok (court3d.conceded_goal_moments): ki lőtte,
+        honnan, a legközelebbi védő, a kapus mélysége, xG — a 3D pálya
+        "Kapott gólok" lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import conceded_goal_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "conceded-goals",
+                              lambda: conceded_goal_moments(match))
+
+    @app.get("/matches/{match_id}/turnover-moments")
+    def match_turnover_moments(match_id: str):
+        """A labdavesztések pillanatai (court3d.turnover_moments) — a 3D
+        pálya "Labdavesztések" lapozója ebből dolgozik: ki, hol,
+        kipréselve vagy magától, és gól lett-e belőle. Gyorsítótárazva."""
+        from ..pipeline.court3d import turnover_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "turnover-moments",
+                              lambda: turnover_moments(match))
+
+    @app.get("/matches/{match_id}/diagnostics")
+    def match_diagnostics(match_id: str):
+        """Gép által olvasható diagnosztika-csomag EGY meccsről — a
+        fejlesztőnek szánt visszajelzéshez.
+
+        A képernyőkép lassú és veszteséges: ez a végpont mindent egy
+        JSON-ba gyűjt, amiből a hiba oka kiolvasható — minőség-jelentés
+        teendőkkel, esemény-számok, feldolgozás-beállítások, forrás-
+        térkép, felismert vs. valódi eredmény. VIDEÓT, képet vagy
+        személyes adatot nem tartalmaz."""
+        from .. import __version__ as verzio
+        from ..pipeline.calib_overlay import (
+            camera_path_summary as _camera_path_summary)
+        from ..pipeline.quality import (analysis_confidence,
+                                        compute_quality_report,
+                                        next_action)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+        ki: dict = {"app_version": verzio, "match_id": match_id,
+                    "num_frames": len(match.frames), "fps": match.meta.fps,
+                    "duration_s": round(len(match.frames) / fps_, 1),
+                    "stride": match.meta.stride,
+                    "calibrated": match.meta.calibrated,
+                    "partial": bool(match.meta.partial),
+                    "game_window_found": match.meta.game_window_found,
+                    # A pásztázás-követés horgonyzás-aránya (%): a
+                    # svenkelő kameránál ez mondja meg, mennyire
+                    # hihetők a helyek — a fejlesztőnek az első kérdés.
+                    "pan_anchor_pct": getattr(match.meta,
+                                              "pan_anchor_pct", None),
+                    # A kamera útja px-ben (mekkora svenk volt egyáltalán):
+                    # az alacsony horgonyzás-arány más, ha a kamera alig
+                    # mozdult, és más, ha 800 px-t fordult.
+                    "camera_path": _camera_path_summary(
+                        getattr(match.meta, "pan_keyframes", None)),
+                    # A feldolgozás alatt mért kalibráció-illeszkedés
+                    # (átlag, minimum, leggyengébb kocka) — a "tartja-e"
+                    # kérdés számszerű válasza a fejlesztőnek.
+                    "calib_fit": getattr(match.meta, "calib_fit", None),
+                    "source_segments": list(
+                        getattr(match.meta, "source_segments", None) or []),
+                    "event_overrides_count": len(
+                        getattr(match.meta, "event_overrides", None) or []),
+                    "real_goals_home": match.meta.real_goals_home,
+                    "real_goals_away": match.meta.real_goals_away}
+        try:
+            q = compute_quality_report(match)
+            q["confidence"] = analysis_confidence(match)
+            q["next_action"] = next_action(q.get("warnings") or [])
+            ki["quality"] = q
+        except Exception as e:  # a diagnosztika fél lábon is érjen célba
+            ki["quality_error"] = str(e)
+        try:
+            from ..pipeline.event_detection import detect_shots
+            from ..pipeline.primitive_cache import primitive_cache
+            szamok: dict = {}
+            with primitive_cache(match):
+                for e in detect_shots(match):
+                    kulcs = getattr(e.type, "value", str(e.type))
+                    szamok[kulcs] = szamok.get(kulcs, 0) + 1
+            ki["event_counts"] = szamok
+        except Exception as e:
+            ki["events_error"] = str(e)
+        osszegzes = _match_summary(match)
+        ki["goals_home"] = osszegzes.get("goals_home")
+        ki["goals_away"] = osszegzes.get("goals_away")
+        return ki
+
+    @app.get("/matches/{match_id}/game-window")
+    def game_window_suggestion(match_id: str):
+        """Javasolt vágás-ablak a TÁROLT követésből, játékidő-mp-ben.
+
+        A vágás-párbeszéd előtöltéséhez: a felismerés (detect_game_window)
+        a tárolt kockákon fut, tehát régi motorral feldolgozott meccsen
+        is ad javaslatot — a felhasználónak nem kell kézzel kikeresnie,
+        mikor kezdődött a meccs. Válasz: {"found": bool, és ha talált:
+        "start_s", "end_s", "head_s", "tail_s"}."""
+        from ..pipeline.game_window import suggest_game_window
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            gw = suggest_game_window(match)
+        except Exception as e:  # javaslat nélkül is működjön a vágás
+            return {"match_id": match_id, "found": False, "error": str(e)}
+        return {"match_id": match_id, "found": gw is not None,
+                **(gw or {})}
+
+    # A kocka-végpont nyitott videói (útvonal → [capture, zár, él-e,
+    # utolsó használat]): a 3D oldal másodpercenként több kockát kér — a
+    # fájl újranyitása lassú. A kidobott vagy tétlen bejegyzést a SAJÁT
+    # zárja alatt zárjuk be és jelöljük halottnak: aki közben megkapta,
+    # de még nem olvasott, újra kéri (nem a lezárt olvasóból olvas).
+    _kocka_capok: dict = {}
+    _kocka_capok_zar = _threading.Lock()
+    _kocka_takarito = []
+
+    def _kocka_zar(b) -> None:
+        """Egy bejegyzés lezárása a saját zárja alatt (a hívó a
+        globális zárat tartja; az olvasó csak a sajátot — nincs
+        holtpont)."""
+        with b[1]:
+            b[2] = False
+            try:
+                b[0].release()
+            except Exception:
+                pass
+
+    def _kocka_takaritas() -> None:
+        """Háttér-szál: a FRAME_CAP_IDLE_S óta tétlen videókat bezárja."""
+        import time as _time
+
+        from ..pipeline import video_frames as _vf
+        while True:
+            _time.sleep(max(1.0, _vf.FRAME_CAP_IDLE_S / 2))
+            with _kocka_capok_zar:
+                most = _time.monotonic()
+                for ut_ in [k for k, b in _kocka_capok.items()
+                            if most - b[3] > _vf.FRAME_CAP_IDLE_S]:
+                    _kocka_zar(_kocka_capok.pop(ut_))
+
+    @app.get("/matches/{match_id}/frame")
+    def match_frame(match_id: str, t: int, w: int = 480):
+        """A forrás-videó EGY kockája JPEG-ben a feldolgozott t. kockához
+        (összefűzött meccsnél a megfelelő szakasz videójából) — a böngészős
+        3D pálya "Videó" ablaka és kivetítője ebből mutatja a valódi
+        felvételt a lejátszással szinkronban. `w`: a kép szélessége
+        (160…1280 px, arányosan). 404: nincs ilyen meccs/kocka, vagy a
+        videó nem érhető el ezen a gépen. A kocka-leképezés és az olvasás a
+        jelentés jelenet-képeivel közös (pipeline/video_frames)."""
+        import time as _time
+
+        from fastapi import Response
+
+        from ..pipeline import video_frames as _vf
+        from ..pipeline.video_frames import read_jpeg, source_frame
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        hol = source_frame(match, t)
+        if hol is None:
+            raise HTTPException(status_code=404,
+                                detail="a videó nem érhető el ezen a gépen")
+        ut, kocka = hol
+        kep = None
+        for _proba in range(3):
+            with _kocka_capok_zar:
+                if not _kocka_takarito:
+                    _kocka_takarito.append(_threading.Thread(
+                        target=_kocka_takaritas, name="frame-cap-idle",
+                        daemon=True))
+                    _kocka_takarito[0].start()
+                b = _kocka_capok.get(ut)
+                if b is None:
+                    try:
+                        cap = open_capture(ut)
+                    except VideoOpenError as e:
+                        raise HTTPException(status_code=404, detail=str(e))
+                    # A plafon fölött a legrégebben HASZNÁLT megy.
+                    while len(_kocka_capok) >= max(1, _vf.FRAME_CAPS_MAX):
+                        regi = min(_kocka_capok,
+                                   key=lambda k: _kocka_capok[k][3])
+                        _kocka_zar(_kocka_capok.pop(regi))
+                    b = [cap, _threading.Lock(), True, 0.0]
+                    _kocka_capok[ut] = b
+                b[3] = _time.monotonic()
+            with b[1]:
+                if not b[2]:
+                    continue  # közben bezárták: újra kérjük
+                kep = read_jpeg(b[0], kocka, w)
+            break
+        if kep is None:
+            raise HTTPException(status_code=404, detail="frame not read")
+        # A kocka nem változik: a böngésző gyorsítótárazhatja (a visszatekerés
+        # így azonnali).
+        return Response(content=kep, media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=3600"})
+
+    # KÖZÖS NÉZÉS (3D): az edző (a vezető) a lejátszás állapotát küldi, a
+    # csapat headsetjei (a követők) ezt kérdezik — mindenki a saját helyéről
+    # nézi ugyanazt a pillanatot. Memóriában: élő edzés-eszköz, a motor
+    # újraindulásával elvész (a követők "nincs vezető"-t látnak).
+    _kozos: dict = {}
+    _kozos_zar = _threading.Lock()
+
+    @app.put("/matches/{match_id}/shared3d")
+    def shared3d_put(match_id: str, body: dict):
+        """A vezető állapota: {"t": játékidő-mp, "playing": bool, "speed":
+        0,25…8, "rajz": a 3D rajz kódja ("x1,y1,x2,y2,szín;…"), "hely": a
+        vezető kamerája [x, y, z, yaw] (jelenlét — court3d.shared3d_hely)}.
+        Válasz: {"rev": sorszám, "followers": a SHARED3D_FOLLOWER_S-en
+        belül kérdező követők száma, "csapat": a helyüket adó jelenlévő
+        követők [{"sz": a csatlakozás sorszáma, "nev", "hely"}]}. KVÍZ:
+        "kviz": {"n": a kör azonosítója, "mutat": a válaszok a csapatnak
+        is látszanak, "d": a döntés-pillanat ideje (mp), ha a kvíz annál
+        indult — ehhez mérik a válaszokat} (null: nincs kvíz) — a válasz
+        "csapat" soraiban az
+        aktuális körre adott válasz ("valasz": [x, y]). 400: rossz alakú
+        érték; 404: nincs ilyen meccs."""
+        import math as _math
+        import re as _re
+        import time as _time
+
+        from ..pipeline import court3d as _c3
+        from ..pipeline.play_simulation import (FIGURA_KOZOS_ID,
+                                                FIGURA_KOZOS_MAX)
+        # A figura közös nézése (/matches/figura/shared3d) nem könyvtári
+        # meccs: a vezető a figura paramétereit küldi ("figura" — a
+        # /figura3d lekérdezése), a /kovet erre irányít.
+        figura = None
+        if match_id == FIGURA_KOZOS_ID:
+            figura = str(body.get("figura") or "")
+            if (not figura or len(figura) > FIGURA_KOZOS_MAX
+                    or not _re.fullmatch(r"[A-Za-z0-9%=&.,;_+\-]+", figura)):
+                raise HTTPException(status_code=400, detail="rossz figura")
+        elif match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = float(body.get("t") or 0.0)
+            speed = float(body.get("speed") or 1.0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="t és speed szám legyen")
+        if not (_math.isfinite(t) and 0.25 <= speed <= 8.0):
+            raise HTTPException(status_code=400,
+                                detail="t véges, speed 0,25…8 legyen")
+        rajz = str(body.get("rajz") or "").strip()
+        if rajz and (len(rajz) > 1200
+                     or not _re.fullmatch(r"[0-9.,;\-]+", rajz)):
+            raise HTTPException(status_code=400, detail="rossz rajz-kód")
+        # A mutató: {"x", "y" (pálya-méter, a pálya ±5 m-es sávjában),
+        # "n" (a vezető azonosítója a mutatóhoz — új n = új mutatás)}.
+        mut = None
+        if body.get("mutato") is not None:
+            try:
+                m_ = body["mutato"]
+                mx, my, mn = float(m_["x"]), float(m_["y"]), float(m_["n"])
+            except (TypeError, ValueError, KeyError):
+                raise HTTPException(status_code=400, detail="rossz mutató")
+            if not all(_math.isfinite(v) for v in (mx, my, mn)):
+                raise HTTPException(status_code=400, detail="rossz mutató")
+            # A pályán túlnyúló pont a pálya ±5 m-es sávjába szorítva — a
+            # vezető minden küldéskor a legutóbbit küldi, egy elutasított
+            # mutató az egész közös nézést megállítaná.
+            mut = {"x": round(min(45.0, max(-5.0, mx)), 2),
+                   "y": round(min(25.0, max(-5.0, my)), 2), "n": mn}
+        # A nézőpont ("📍 Ide mindenki"): a vezető kamerájának helye
+        # (three-tér: x a pálya hossza, y a magasság, z a szélesség
+        # tükörképe; a csarnok ésszerű dobozában) és iránya (yaw, pitch),
+        # "n" a küldés azonosítója — mint a mutatónál.
+        nez = None
+        if body.get("nezopont") is not None:
+            try:
+                v_ = body["nezopont"]
+                nv = [float(v_[k]) for k in ("x", "y", "z", "yaw", "pitch", "n")]
+            except (TypeError, ValueError, KeyError):
+                raise HTTPException(status_code=400, detail="rossz nézőpont")
+            nx_, ny_, nz_, nyaw, npitch, nn = nv
+            if not all(_math.isfinite(v) for v in nv):
+                raise HTTPException(status_code=400, detail="rossz nézőpont")
+
+            def _sz(v, a, f):
+                return min(f, max(a, v))
+            # A csarnokon túlnyúló nézőpont (messzire húzott keringés,
+            # magasra repült kamera) a csarnok dobozába szorítva — mint a
+            # mutatónál.
+            (xa, xf), (ya, yf), (za, zf) = _c3.SHARED3D_HALL_BOX
+            nez = {"x": round(_sz(nx_, xa, xf), 2),
+                   "y": round(_sz(ny_, ya, yf), 2),
+                   "z": round(_sz(nz_, za, zf), 2),
+                   "yaw": round(nyaw, 4),
+                   "pitch": round(_sz(npitch, -1.6, 1.6), 4), "n": nn}
+        # A kvíz köre (a régi kör válaszai nem látszanak).
+        kviz = None
+        if body.get("kviz") is not None:
+            try:
+                kn = float(body["kviz"]["n"])
+                kmutat = bool(body["kviz"].get("mutat"))
+                kd = body["kviz"].get("d")
+                kd = None if kd is None else float(kd)
+            except (TypeError, ValueError, KeyError, AttributeError):
+                raise HTTPException(status_code=400, detail="rossz kvíz")
+            if not (_math.isfinite(kn)
+                    and (kd is None or _math.isfinite(kd))):
+                raise HTTPException(status_code=400, detail="rossz kvíz")
+            kviz = {"n": kn, "mutat": kmutat}
+            if kd is not None:
+                kviz["d"] = round(kd, 2)
+        # A vezető jelenléte (a követők arany fejként látják).
+        vhely = None
+        if body.get("hely") is not None:
+            vhely = _c3.shared3d_hely(body["hely"])
+            if vhely is None:
+                raise HTTPException(status_code=400, detail="rossz hely")
+        with _kozos_zar:
+            regi = _kozos.get(match_id) or {}
+            rev = regi.get("rev", 0) + 1
+            most = _c3.shared3d_ora()
+            # A mutató ideje csak ÚJ mutatásnál indul (a vezető minden
+            # küldéskor a legutóbbit küldi).
+            mut_ido = regi.get("mutato_ido")
+            if mut is not None and (regi.get("mutato") or {}).get("n") != mut["n"]:
+                mut_ido = most
+            nez_ido = regi.get("nezopont_ido")
+            if nez is not None and (regi.get("nezopont") or {}).get("n") != nez["n"]:
+                nez_ido = most
+            # A jelenlévő követők (a régiek kiesnek) — átvisszük.
+            kovetok = {k: v for k, v in (regi.get("kovetok") or {}).items()
+                       if most - v <= _c3.SHARED3D_FOLLOWER_S}
+            # A jelenlét: csak a jelenlévő követőké marad, a sorszámláló
+            # megy tovább (a visszatérő új sorszámot kap).
+            jelen = {k: v for k, v in (regi.get("jelen") or {}).items()
+                     if k in kovetok}
+            uj = {"t": max(0.0, t),
+                  "playing": bool(body.get("playing")),
+                  "speed": speed, "rajz": rajz, "rev": rev,
+                  "ido": most, "kovetok": kovetok,
+                  "mutato": mut,
+                  "mutato_ido": mut_ido if mut else None,
+                  "nezopont": nez,
+                  "nezopont_ido": nez_ido if nez else None,
+                  "vezeto_hely": vhely, "jelen": jelen,
+                  "jelen_sz": regi.get("jelen_sz", 0), "kviz": kviz,
+                  "figura": figura}
+            _kozos[match_id] = uj
+            csapat = _kz_csapat(uj, most, valaszok=True)
+        return {"rev": rev, "followers": len(kovetok), "csapat": csapat}
+
+    def _kz_csapat(a: dict, most: float, kihagy: str = "",
+                   valaszok: bool = False) -> list:
+        """A közös nézés jelenlévő (SHARED3D_FOLLOWER_S-en belül kérdező),
+        helyét adó követői a csatlakozás sorrendjében (a `kihagy` követő —
+        a kérdező maga — nélkül). `valaszok`: a sorokban az aktuális
+        kvíz-körre adott válasz is ("valasz": [x, y]). A _kozos_zar alatt
+        hívandó."""
+        from ..pipeline import court3d as _c3
+        kov = a.get("kovetok") or {}
+        kviz = a.get("kviz") if valaszok else None
+        ki = []
+        for k, b in sorted((a.get("jelen") or {}).items(),
+                           key=lambda kb: kb[1]["sz"]):
+            if (k == kihagy or b.get("hely") is None or k not in kov
+                    or most - kov[k] > _c3.SHARED3D_FOLLOWER_S):
+                continue
+            sor = {"sz": b["sz"], "nev": b.get("nev") or "", "hely": b["hely"]}
+            if b.get("kez"):
+                sor["kez"] = True
+            v = b.get("valasz")
+            if kviz and v and v[2] == kviz["n"]:
+                sor["valasz"] = v[:2]
+            ki.append(sor)
+        return ki
+
+    @app.get("/matches/{match_id}/shared3d")
+    def shared3d_get(match_id: str, kid: str = "", hely: str = "",
+                     nev: str = "", valasz: str = "", kez: str = ""):
+        """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
+        követő ebből becsli a vezető mostani idejét, az órák eltérése
+        nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
+        hallgat. `kid`: a követő véletlen azonosítója (betű/szám, legfeljebb
+        32 jel) — a vezető ebből tudja, hányan követik. JELENLÉT: `hely` a
+        követő kamerája ("x,y,z,yaw" — a rossz alakú nem számít), `nev` a
+        neve (court3d.shared3d_nev); a válasz "csapat"-a a TÖBBI jelenlévő
+        követő, "vezeto_hely"-e a vezetőé. KVÍZ: `valasz` a követő válasza
+        ("x,y,n" — court3d.shared3d_valasz); a többiek válasza csak a
+        vezető felfedése ("kviz": {"mutat": true}) után van a sorokban.
+        ✋ KÉRDÉSEM VAN: `kez` = "1" — a követő kérdezne; a jelenlét-sorában
+        ("csapat") "kez": true — a vezető és a többiek látják."""
+        import time as _time
+
+        from ..pipeline import court3d as _c3
+        with _kozos_zar:
+            a = _kozos.get(match_id)
+            csapat = []
+            if a is not None:
+                most = _c3.shared3d_ora()
+                if (kid and len(kid) <= 32 and kid.isalnum()
+                        and (kid in a.setdefault("kovetok", {})
+                             or len(a["kovetok"]) < 500)):
+                    a["kovetok"][kid] = most
+                    jelen = a.setdefault("jelen", {})
+                    b = jelen.get(kid)
+                    if b is None:
+                        a["jelen_sz"] = a.get("jelen_sz", 0) + 1
+                        b = jelen[kid] = {"sz": a["jelen_sz"]}
+                    b["hely"] = _c3.shared3d_hely(hely) if hely else None
+                    # (név nélküli kérdés a nevet nem törli)
+                    if nev or "nev" not in b:
+                        b["nev"] = _c3.shared3d_nev(nev)
+                    b["valasz"] = _c3.shared3d_valasz(valasz) if valasz else None
+                    b["kez"] = kez == "1"
+                csapat = _kz_csapat(
+                    a, most, kihagy=kid,
+                    valaszok=bool((a.get("kviz") or {}).get("mutat")))
+            a = dict(a or {})
+        if not a:
+            return {"active": False}
+        a.pop("kovetok", None)
+        a.pop("jelen", None)
+        a.pop("jelen_sz", None)
+        a["csapat"] = csapat
+        for kulcs_ in ("mutato", "nezopont"):
+            ido_ = a.pop(kulcs_ + "_ido", None)
+            if a.get(kulcs_) and ido_ is not None:
+                a[kulcs_] = {**a[kulcs_], "kor": round(
+                    max(0.0, _c3.shared3d_ora() - ido_), 3)}
+        kor = max(0.0, _c3.shared3d_ora() - a.pop("ido"))
+        return {**a, "kor": round(kor, 3),
+                "active": kor <= _c3.SHARED3D_STALE_S}
+
+    @app.delete("/matches/{match_id}/shared3d")
+    def shared3d_delete(match_id: str):
+        """A vezető leállt: a követők "nincs vezető"-t látnak."""
+        with _kozos_zar:
+            _kozos.pop(match_id, None)
+        return {"ok": True}
+
+    # ⏺ FELVÉTEL: a megbeszélés (a közös nézés vezetőjének állapotai) a
+    # meccs mellett, lemezen — a 3D oldalról visszajátszható (VR-ben is).
+    def _felvetel_mappa(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.felvetelek"
+
+    _felvetel_fejek: dict = {}
+
+    def _felvetel_fej(p: Path):
+        """Egy felvétel fejléce ({"id", "nev", "letrehozva", "hossz_s",
+        "hang"}) — a fájl módosítási ideje és mérete szerint
+        gyorsítótárazva: a teljes fájl (akár több MB állapot) csak
+        változáskor olvasódik újra (a /kovet várólapja 3 mp-enként
+        listáz). None: nincs vagy olvashatatlan."""
+        try:
+            st = p.stat()
+        except OSError:
+            return None
+        kulcs = (st.st_mtime_ns, st.st_size)
+        tar = _felvetel_fejek.get(str(p))
+        if tar is not None and tar[0] == kulcs:
+            return tar[1]
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+            fej = {"id": d["id"], "nev": d.get("nev") or "",
+                   "letrehozva": d.get("letrehozva") or "",
+                   "hossz_s": d.get("hossz_s") or 0,
+                   "hang": bool(d.get("hang")),
+                   "fejezetek": len(shared3d_felvetel_fejezetek(
+                       d.get("allapotok") or [])),
+                   "jelen": [str(x) for x in (d.get("jelen") or [])],
+                   # a figura-felvétel paraméterei (a /figura3d lekérdezése)
+                   **({"figura": str(d["figura"])} if d.get("figura") else {}),
+                   # a lemezen (az állapotok + a hang) — a takarításhoz
+                   "meret": st.st_size + int((d.get("hang") or {}).get(
+                       "meret") or 0)}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+        _felvetel_fejek[str(p)] = (kulcs, fej)
+        return fej
+
+    def _felvetel_nezok(p: Path) -> list:
+        """"Ki nézte meg?" — a felvétel megnézőinek neve (a `{rid}.nezok`
+        kísérőfájlból, a megnézés ideje szerint). Üres, ha nincs."""
+        try:
+            d = json.loads(p.with_suffix(".nezok").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        if not isinstance(d, dict):
+            return []
+        sorok = [v for v in d.values() if isinstance(v, dict) and v.get("nev")]
+        return [v["nev"] for v in sorted(sorok, key=lambda v: (
+            str(v.get("ido") or ""), str(v["nev"])))]
+
+    def _meccs_felvetelei(match_id: str) -> list:
+        """A meccs megbeszélés-felvételei a jelentéshez: a fejléc a
+        fejezetekkel ([[eltelt, t], …]) és a megnézőkkel — a legújabb
+        elöl. Hibatűrő (a sérült fájl kimarad)."""
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
+        ki = []
+        mappa = _felvetel_mappa(match_id)
+        if not mappa.is_dir():
+            return ki
+        for p in sorted(mappa.glob("*.json")):
+            fej = _felvetel_fej(p)
+            if fej is None:
+                continue
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                fz = shared3d_felvetel_fejezetek(d.get("allapotok") or [])
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                fz = []
+            ki.append({**fej, "fejezetek": fz, "nezok": _felvetel_nezok(p)})
+        ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
+        return ki
+
+    def _felvetel_ervenyes(match_id: str) -> bool:
+        """A felvétel gazdája: egy könyvtári meccs vagy a FIGURA közös
+        azonosítója (a figura-oldal felvételei — a figura paramétereivel)."""
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+        return match_id in _store or match_id == FIGURA_KOZOS_ID
+
+    def _figura_oldal_lekerdezesbol(figura: str) -> str:
+        """A figura-oldal (a /figura3d-é) a figura lekérdezéséből — a
+        figura-felvétel csomagjához. 404, ha nincs figura; 400 a hibásra
+        (mint a /figura3d)."""
+        from urllib.parse import parse_qs
+
+        from ..pipeline.play_simulation import figura_nev, setplay_3d_match
+        from ..pipeline.view3d_html import view3d_html
+        if not figura:
+            raise HTTPException(status_code=404,
+                                detail="a felvételhez nincs figura")
+        q = parse_qs(figura)
+
+        def g(k: str, alap: str = "") -> str:
+            return (q.get(k) or [alap])[0]
+        try:
+            vedok, melyseg = int(g("vedok", "6")), float(g("melyseg", "6"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="hibás figura")
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            g("u"), g("l"), g("meccs"), g("vedo", "away"), vedok, melyseg,
+            g("rendszer", "6-0"))
+        try:
+            sim, ertekeles = setplay_3d_match(
+                utak, modell, ball=labda, name=figura_nev(g("cim")) or None,
+                defense_name=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        return view3d_html(sim, figura=ertekeles)
+
+    def _figura_felvetel_meta(figura: str):
+        """A figura-felvétel "meccs-fejléce" a listákhoz: match_id a
+        FIGURA közös azonosító, home_team a figura neve (a cim
+        paraméterből), away_team üres."""
+        from types import SimpleNamespace
+        from urllib.parse import parse_qs
+
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID, figura_nev
+        cim = (parse_qs(figura or "").get("cim") or [""])[0]
+        return SimpleNamespace(match_id=FIGURA_KOZOS_ID,
+                               home_team=figura_nev(cim) or "Figura",
+                               away_team="")
+
+    def _legutobbi_felvetelek() -> list:
+        """A könyvtár MINDEN megbeszélés-felvétele [(fejléc, meta, út)]
+        alakban, a legújabb elöl (a /kovet várólapja és a
+        /library/recordings közös gyűjtése). A meccsek fejlécéből: a tár
+        nem vár a betöltésre, és a hideg meccseket nem tölti vissza."""
+        ki = []
+        for meta, _n in _store.summaries():
+            mappa = _felvetel_mappa(meta.match_id)
+            if not mappa.is_dir():
+                continue
+            for p in mappa.glob("*.json"):
+                fej = _felvetel_fej(p)
+                if fej is not None:
+                    ki.append((fej, meta, p))
+        # A figura-oldal felvételei (a figura neve a "meccs" helyén).
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+        mappa = _felvetel_mappa(FIGURA_KOZOS_ID)
+        if mappa.is_dir():
+            for p in mappa.glob("*.json"):
+                fej = _felvetel_fej(p)
+                if fej is not None and fej.get("figura"):
+                    ki.append((fej, _figura_felvetel_meta(fej["figura"]), p))
+        ki.sort(key=lambda s: (s[0]["letrehozva"], s[0]["id"]), reverse=True)
+        return ki
+
+    @app.post("/matches/{match_id}/felvetelek")
+    def felvetel_ment(match_id: str, body: dict):
+        """A megbeszélés felvételének mentése. Törzs: {"nev", "allapotok":
+        [[eltelt-mp, állapot], …]} (az állapot court3d.
+        shared3d_felvetel_allapot szerint megtisztítva; a rossz sor kimarad,
+        az eltelt idő szerint rendezve). Válasz: {"id", "nev", "hossz_s",
+        "db"}. 400: kevesebb mint két jó állapot, vagy több mint
+        SHARED3D_REC_MAX; 404: nincs ilyen meccs."""
+        import datetime
+        import math
+        import uuid
+
+        from ..pipeline.court3d import (SHARED3D_REC_MAX,
+                                        shared3d_felvetel_allapot,
+                                        shared3d_felvetel_jelen,
+                                        shared3d_felvetel_nev)
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        nyers = body.get("allapotok")
+        if not isinstance(nyers, list) or len(nyers) > SHARED3D_REC_MAX:
+            raise HTTPException(status_code=400,
+                                detail="az állapotok listája hiányzik vagy túl hosszú")
+        sorok = []
+        for e in nyers:
+            if not isinstance(e, (list, tuple)) or len(e) != 2:
+                continue
+            try:
+                eltelt = float(e[0])
+            except (TypeError, ValueError):
+                continue
+            a = shared3d_felvetel_allapot(e[1])
+            if a is None or not math.isfinite(eltelt) or eltelt < 0:
+                continue
+            sorok.append([round(eltelt, 2), a])
+        if len(sorok) < 2:
+            raise HTTPException(status_code=400,
+                                detail="a felvételben kevés a jó állapot")
+        sorok.sort(key=lambda s: s[0])
+        # A figura-felvétel a figura paramétereivel (mint a közös nézés).
+        from ..pipeline.play_simulation import (FIGURA_KOZOS_ID,
+                                                FIGURA_KOZOS_MAX)
+        figura = None
+        if match_id == FIGURA_KOZOS_ID:
+            import re as _re_f
+            figura = str(body.get("figura") or "")
+            if (not figura or len(figura) > FIGURA_KOZOS_MAX
+                    or not _re_f.fullmatch(r"[A-Za-z0-9%=&.,;_+\-]+", figura)):
+                raise HTTPException(status_code=400, detail="rossz figura")
+        nev = shared3d_felvetel_nev(body.get("nev"))
+        rid = uuid.uuid4().hex[:10]
+        adat = {"id": rid, "nev": nev or "Megbeszélés",
+                "letrehozva": datetime.datetime.now().isoformat(
+                    timespec="seconds"),
+                "hossz_s": sorok[-1][0], "allapotok": sorok,
+                # Kik követték élőben (a vezető a felvétel alatt a
+                # jelenlévő, névvel követők neveit gyűjti).
+                "jelen": shared3d_felvetel_jelen(body.get("jelen")),
+                **({"figura": figura} if figura else {})}
+        mappa = _felvetel_mappa(match_id)
+        mappa.mkdir(parents=True, exist_ok=True)
+        (mappa / f"{rid}.json").write_text(
+            json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8")
+        return {"id": rid, "nev": adat["nev"], "hossz_s": adat["hossz_s"],
+                "db": len(sorok)}
+
+    @app.get("/matches/{match_id}/felvetelek")
+    def felvetel_lista(match_id: str):
+        """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
+        "letrehozva", "hossz_s", "hang" (van-e hangja), "fejezetek" (a
+        fejezetek száma), "nezok" (ki nézte meg)}]} — a legújabb elöl."""
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        ki = []
+        mappa = _felvetel_mappa(match_id)
+        if mappa.is_dir():
+            for p in sorted(mappa.glob("*.json")):
+                fej = _felvetel_fej(p)
+                if fej is not None:
+                    ki.append({**fej, "nezok": _felvetel_nezok(p)})
+        ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
+        return {"felvetelek": ki}
+
+    @app.get("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_egy(match_id: str, rid: str):
+        """Egy felvétel teljes adata (a visszajátszáshoz), a fejezeteivel
+        ("fejezetek": court3d.shared3d_felvetel_fejezetek)."""
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        if not rid.isalnum():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["fejezetek"] = shared3d_felvetel_fejezetek(
+            adat.get("allapotok") or [])
+        return adat
+
+    @app.delete("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_torol(match_id: str, rid: str):
+        """Egy felvétel törlése."""
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        p.unlink()
+        p.with_suffix(".hang").unlink(missing_ok=True)
+        p.with_suffix(".nezok").unlink(missing_ok=True)
+        return {"ok": True}
+
+    @app.patch("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_atnevez(match_id: str, rid: str, body: dict):
+        """Egy felvétel átnevezése: {"nev"} (üresen "Megbeszélés"). Válasz:
+        {"id", "nev"}. A hálózati őr nem engedi (csak a saját gépről)."""
+        from ..pipeline.court3d import shared3d_felvetel_nev
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["nev"] = shared3d_felvetel_nev(body.get("nev")) or "Megbeszélés"
+        p.write_text(json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+                     encoding="utf-8")
+        return {"id": rid, "nev": adat["nev"]}
+
+    async def felvetel_hang_ment(match_id: str, rid: str, request: Request,
+                                 eltolas: float = 0.0):
+        """🎙 A felvétel hangja (a vezető mikrofonja — a böngésző
+        MediaRecorder-e): a törzs maga a hang (court3d.
+        SHARED3D_REC_AUDIO_TYPES), `eltolas`: a hang kezdete a felvétel
+        elejétől (mp — a mikrofon-engedély ideje; a felvétel hosszába
+        szorítva). A felvétel mellé, `{rid}.hang` néven. Válasz: {"id",
+        "hang": {"tipus", "eltolas", "meret"}}. 404: nincs ilyen felvétel;
+        415: nem hang; 413: SHARED3D_REC_AUDIO_MAX bájtnál nagyobb; 400:
+        üres."""
+        import math
+
+        from ..pipeline.court3d import (SHARED3D_REC_AUDIO_MAX,
+                                        SHARED3D_REC_AUDIO_TYPES)
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        tipus = (request.headers.get("content-type") or "").split(";")[0]
+        tipus = tipus.strip().lower()
+        if tipus not in SHARED3D_REC_AUDIO_TYPES:
+            raise HTTPException(status_code=415,
+                                detail="a hang típusa nem ismert")
+        try:
+            jelzett = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            jelzett = 0
+        if jelzett > SHARED3D_REC_AUDIO_MAX:
+            raise HTTPException(status_code=413, detail="a hang túl hosszú")
+        nyers = await request.body()
+        if len(nyers) > SHARED3D_REC_AUDIO_MAX:
+            raise HTTPException(status_code=413, detail="a hang túl hosszú")
+        if not nyers:
+            raise HTTPException(status_code=400, detail="üres hang")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        hossz = float(adat.get("hossz_s") or 0)
+        e = eltolas if math.isfinite(eltolas) else 0.0
+        e = min(max(e, 0.0), hossz)
+        p.with_suffix(".hang").write_bytes(nyers)
+        adat["hang"] = {"tipus": tipus, "eltolas": round(e, 2),
+                        "meret": len(nyers)}
+        p.write_text(json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+                     encoding="utf-8")
+        return {"id": rid, "hang": adat["hang"]}
+
+    felvetel_hang_ment.__annotations__["request"] = Request
+    app.put("/matches/{match_id}/felvetelek/{rid}/hang")(felvetel_hang_ment)
+
+    @app.get("/matches/{match_id}/felvetelek/{rid}/hang")
+    def felvetel_hang(match_id: str, rid: str):
+        """A felvétel hangja (a visszajátszáshoz; tekerhető — Range)."""
+        from fastapi.responses import FileResponse
+
+        from ..pipeline.court3d import SHARED3D_REC_AUDIO_TYPES
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        h = p.with_suffix(".hang")
+        if not rid.isalnum() or not p.exists() or not h.exists():
+            raise HTTPException(status_code=404, detail="nincs hang")
+        tipus = ((json.loads(p.read_text(encoding="utf-8")).get("hang") or {})
+                 .get("tipus"))
+        if tipus not in SHARED3D_REC_AUDIO_TYPES:
+            raise HTTPException(status_code=404, detail="nincs hang")
+        return FileResponse(str(h), media_type=tipus)
+
+    @app.get("/matches/{match_id}/felvetelek/{rid}/csomag")
+    def felvetel_csomag(match_id: str, rid: str):
+        """📦 A felvétel-csomag letöltésre: egyetlen HTML-fájl — a 3D oldal
+        a felvétellel (fejezetekkel) és a hangjával, a three.js-szel
+        beágyazva (view3d_html.view3d_csomag); motor és internet nélkül
+        is fut, a visszajátszás megnyitáskor indul. A játékos otthon is
+        megnézheti. A hálózati őr nem engedi (az edző a saját gépéről
+        tölti le)."""
+        import re
+        import unicodedata
+
+        from fastapi.responses import Response
+
+        from ..pipeline.court3d import (SHARED3D_REC_AUDIO_TYPES,
+                                        shared3d_felvetel_fejezetek)
+        from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+        from ..pipeline.primitive_cache import primitive_cache
+        from ..pipeline.view3d_html import view3d_csomag
+        # (a figura-felvétel csomagja a felvétel figurájából épül)
+        match = None
+        if match_id != FIGURA_KOZOS_ID:
+            match = _store.get(match_id)
+            if match is None:
+                raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["fejezetek"] = shared3d_felvetel_fejezetek(
+            adat.get("allapotok") or [])
+        hang = None
+        tipus = (adat.get("hang") or {}).get("tipus")
+        h = p.with_suffix(".hang")
+        if tipus in SHARED3D_REC_AUDIO_TYPES and h.exists():
+            hang = (h.read_bytes(), tipus)
+        if match is None:
+            oldal = _figura_oldal_lekerdezesbol(adat.get("figura") or "")
+        else:
+            with primitive_cache(match):
+                oldal = _view3d_oldal(match_id, match)
+        html = view3d_csomag(oldal, adat, hang)
+        alap = unicodedata.normalize("NFKD", str(adat.get("nev") or ""))
+        alap = re.sub(r"[^A-Za-z0-9]+", "_",
+                      alap.encode("ascii", "ignore").decode("ascii")).strip("_")
+        fajlnev = f"megbeszeles_{alap[:40] or rid}.html"
+        return Response(content=html.encode("utf-8"),
+                        media_type="text/html; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{fajlnev}"'})
+
+    @app.post("/matches/{match_id}/felvetelek/{rid}/megnezte")
+    def felvetel_megnezte(match_id: str, rid: str, body: dict):
+        """"Ki nézte meg?" — a néző jelzi, hogy a felvételt végignézte (a
+        böngésző a SHARED3D_REC_WATCHED_FRAC rész ténylegesen lejátszott
+        ideje után küldi). Törzs: {"nev"} (a "Ki vagy?" neve — court3d.
+        shared3d_nev szerint; a kulcs quiz_name_key: kis- és nagybetű,
+        szóköz nem számít, az újabb megnézés felülírja). Válasz:
+        {"nezok": [nevek]}. 400: név nélkül; 404: nincs ilyen felvétel. A
+        hálózati őr engedi (a headsetről jön)."""
+        import datetime
+
+        from ..pipeline.court3d import quiz_name_key, shared3d_nev
+        if not _felvetel_ervenyes(match_id):
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        nev = shared3d_nev(body.get("nev"))
+        if not nev:
+            raise HTTPException(status_code=400, detail="név nélkül nem számít")
+        n = p.with_suffix(".nezok")
+        try:
+            d = json.loads(n.read_text(encoding="utf-8"))
+            if not isinstance(d, dict):
+                d = {}
+        except (OSError, ValueError):
+            d = {}
+        d[quiz_name_key(nev)] = {"nev": nev, "ido": datetime.datetime.now()
+                                 .isoformat(timespec="seconds")}
+        n.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        return {"nezok": _felvetel_nezok(p)}
+
+    @app.get("/kovet")
+    def shared3d_rovid(nev: str = "", szem: str = ""):
+        """A rövid csapat-link: a MOST élő közös nézés követő-oldalára
+        irányít (a legutóbb küldő vezetőhöz — SHARED3D_STALE_S-en belül).
+        A headset billentyűzetén a "localhost:8000/kovet" begépelhető, a
+        hosszú meccs-azonosítós cím nem. Vezető nélkül egy 3 mp-enként
+        frissülő "várunk az edzőre" lap: amint az edző vezet, magától
+        továbblép — addig a legutóbbi felvételeket kínálja visszanézésre
+        (SHARED3D_WAIT_RECS, meccsektől függetlenül; aki kimaradt, innen
+        egy kattintással nézheti). `nev` (/kovet?nev=Peti): a követő neve
+        — a többiek a feje fölött látják; `szem` (szem=h3): a követő a
+        hazai 3-as SZEMÉVEL nézi (a figuránál: a saját futójában áll)."""
+        import html as _html
+        from urllib.parse import quote
+
+        from fastapi.responses import HTMLResponse, RedirectResponse
+
+        from ..pipeline import court3d as _c3
+        most = _c3.shared3d_ora()
+        with _kozos_zar:
+            elok = [(a["ido"], mid) for mid, a in _kozos.items()
+                    if most - a["ido"] <= _c3.SHARED3D_STALE_S]
+        if elok:
+            mid = max(elok)[1]
+            nev_ = _c3.shared3d_nev(nev)
+            nev_q = f"&nev={quote(nev_, safe='')}" if nev_ else ""
+            import re as _re_sz
+            if _re_sz.fullmatch(r"[hv][0-9]{1,2}", szem or ""):
+                nev_q += f"&szem={szem}"
+            # A figura közös nézése: ugyanarra a figurára (a vezető
+            # paramétereivel).
+            from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+            if mid == FIGURA_KOZOS_ID:
+                with _kozos_zar:
+                    fig = (_kozos.get(mid) or {}).get("figura")
+                if fig:
+                    return RedirectResponse(
+                        url=f"/figura3d?{fig}&kovet=1{nev_q}",
+                        status_code=307)
+            else:
+                return RedirectResponse(
+                    url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
+                         + nev_q),
+                    status_code=307)
+        # Addig: a legutóbbi felvételek. Névvel (/kovet?nev=Anna) a lap
+        # jelöli, melyiket látta már (élőben vagy felvételről), és a link
+        # a nevet is viszi (a visszanézés a nevére számít).
+        nev_ = _c3.shared3d_nev(nev)
+        # Az edző legutóbbi figurája (a tervezőből, 3D-ben nyitva) — a
+        # headset a saját útját járhatja be.
+        figura_ = ""
+        from ..pipeline.play_simulation import FIGURA_3D_KOVET_S
+        if (_utolso_figura.get("url")
+                and most - _utolso_figura["ido"] <= FIGURA_3D_KOVET_S):
+            figura_ = ('<p style="margin-top:2em"><a style="color:#ffc83d;'
+                       'font-size:1.3em" href="'
+                       + _html.escape(_utolso_figura["url"]) + '">▶ Figura: '
+                       + _html.escape(_utolso_figura["nev"]) + "</a><br>"
+                       '<span style="color:#93a0b4">'
+                       + _html.escape(_utolso_figura["vedo"])
+                       + " · járd be a saját utadat</span></p>")
+        # A figura-könyvtár (a tervezőben mentett figurák): a legutóbb
+        # mentettek — a játékos bármelyiket bejárhatja 3D-ben / VR-ben.
+        tar_ = ""
+        from ..pipeline.play_simulation import (FIGURA_TAR_KOVET,
+                                                figura_link_kod)
+        try:
+            fajlok = sorted(_playbook_dir.glob("*.json"),
+                            key=lambda f: (-f.stat().st_mtime, f.name))
+        except OSError:
+            fajlok = []
+        tar_sorok = []
+        for f in fajlok:
+            if len(tar_sorok) >= FIGURA_TAR_KOVET:
+                break
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                kod = figura_link_kod(d["attackers"], d.get("labda"),
+                                      d.get("name"))
+                passz = len({v for v in (d.get("labda") or [0])}) > 1
+                tar_sorok.append(
+                    '<li style="margin:.5em 0"><a style="color:#ffc83d;'
+                    'font-size:1.2em" href="/figura3d?'
+                    + _html.escape(kod) + '">▶ '
+                    + _html.escape(str(d.get("name") or "névtelen"))
+                    + '</a> <span style="color:#93a0b4">· '
+                    + f"{len(d['attackers'])} támadó"
+                    + (" · passzokkal" if passz else "") + "</span>"
+                    # (a telefonra: a figura videója, letöltésre)
+                    + ' · <a style="color:#93a0b4" href="/figura-video?'
+                    + _html.escape(kod) + '">⬇ videó</a></li>')
+            except (OSError, ValueError, KeyError, TypeError, IndexError):
+                continue  # sérült figura-fájlt kihagyunk
+        if tar_sorok:
+            tar_ = ('<h2 style="margin-top:2.5em">Mentett figurák — járd be '
+                    'bármelyiket</h2><ul style="list-style:none;padding:0">'
+                    + "".join(tar_sorok) + "</ul>")
+        kulcs_ = _c3.quiz_name_key(nev_) if nev_ else None
+        sorok = []
+        for fej, meta, p_ in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
+            mp = max(0, int(float(fej["hossz_s"] or 0)))
+            jel = ""
+            if kulcs_:
+                latta = kulcs_ in {_c3.quiz_name_key(x) for x in (
+                    list(fej.get("jelen") or []) + _felvetel_nezok(p_))}
+                jel = (' · <span style="color:#6e7b8f">✓ láttad</span>' if latta
+                       else ' · <b style="color:#ffc83d">• még nem láttad</b>')
+            if fej.get("figura"):
+                # (a figura-felvétel a figura-oldalt nyitja a felvétellel)
+                cel_ = ("/figura3d?" + fej["figura"] + "&felvetel="
+                        + quote(fej["id"], safe=""))
+                alcim_ = f"Figura: {meta.home_team}"
+            else:
+                cel_ = ("/matches/" + quote(meta.match_id, safe="")
+                        + "/view3d?felvetel=" + quote(fej["id"], safe=""))
+                alcim_ = f"{meta.home_team} – {meta.away_team}"
+            sorok.append(
+                '<li style="margin:.6em 0"><a style="color:#7ee0d2;'
+                'font-size:1.3em" href="'
+                + _html.escape(cel_ + ("&nev=" + quote(nev_, safe="")
+                                       if nev_ else ""))
+                + '">▶ ' + _html.escape(fej["nev"]) + "</a><br>"
+                + '<span style="color:#93a0b4">'
+                + _html.escape(alcim_)
+                + f" · {mp // 60}:{mp % 60:02d}"
+                + (" · 🎙" if fej["hang"] else "") + "</span>" + jel + "</li>")
+        lista = ("" if not sorok else
+                 '<h2 style="margin-top:2.5em">Addig: a legutóbbi '
+                 'megbeszélések</h2><ul style="list-style:none;padding:0">'
+                 + "".join(sorok) + "</ul>")
+        # Névvel a játékos saját mérlege (mint a Keret-lapon): a
+        # döntés-kvízek és a csapata felvett megbeszéléseiből a követettek.
+        sajat = ""
+        if kulcs_:
+            reszek = []
+            try:
+                # (a kvíz-mérleg a teljes könyvtárat kéri — a motor
+                # indulásakor a háttér-betöltésre várna: addig kimarad)
+                if not _store.loading:
+                    from ..pipeline.court3d import quiz_stats
+                    kv = next((r for r in quiz_stats(_jegyzetek_idorendben())
+                               if _c3.quiz_name_key(r["nev"]) == kulcs_), None)
+                    if kv and kv.get("itelt"):
+                        reszek.append(f"❓ kvíz {kv['jo']}/{kv['itelt']}")
+                csapatok = {cs_ for cs_, mezek_ in _load_players().items()
+                            for nv_ in (mezek_ or {}).values()
+                            if nv_ and _c3.quiz_name_key(
+                                _c3.shared3d_nev(nv_)) == kulcs_}
+                fv_ = [(fej, p_) for fej, meta, p_ in _legutobbi_felvetelek()
+                       if csapatok & {meta.home_team, meta.away_team}]
+                if fv_:
+                    kov_ = sum(1 for fej, p_ in fv_ if kulcs_ in {
+                        _c3.quiz_name_key(x) for x in
+                        list(fej.get("jelen") or []) + _felvetel_nezok(p_)})
+                    reszek.append(f"👁 megbeszélések {kov_}/{len(fv_)}")
+            except (OSError, ValueError, KeyError, TypeError):
+                reszek = []
+            if reszek:
+                sajat = ('<p style="font-size:1.25em;margin-top:1.5em">'
+                         + _html.escape(nev_) + ": " + " · ".join(reszek)
+                         + "</p>")
+        return HTMLResponse(
+            content=('<!DOCTYPE html><html lang="hu"><head>'
+                     '<meta charset="utf-8"><meta http-equiv="refresh" '
+                     'content="3"><title>Közös nézés</title></head>'
+                     '<body style="background:#0a0e14;color:#e6edf3;'
+                     'font-family:sans-serif;text-align:center;'
+                     'padding-top:12vh"><h1>👥 Várunk az edzőre…</h1>'
+                     '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
+                     'megnyomja, ez a lap magától továbblép.</p>'
+                     + sajat + figura_ + tar_ + lista + '</body></html>'),
+            headers={"Cache-Control": "no-store"})
+
+    @app.get("/matches/{match_id}/calib-overlay")
+    def calib_overlay(match_id: str, t: int = 0):
+        """KALIBRÁCIÓ-ELLENŐRZÉS: a videó t kockája a visszarajzolt
+        pályavonalakkal (JPEG). Ha a rajzolt vonal a valódira ül, a helyek
+        hihetők; ahol elcsúszik, ott a kalibráció vagy a pásztázás-követés
+        hibás. 400: nincs kalibráció-geometria (régi mentés vagy
+        kalibráció nélkül) vagy a videó nem érhető el; 404: nincs ilyen
+        meccs / kocka."""
+        import cv2
+        from fastapi import Response
+
+        from ..pipeline.calib_overlay import (draw_overlay, keyframe_at,
+                                              overlay_pixels)
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h0 = getattr(match.meta, "court_homography", None)
+        if not h0:
+            raise HTTPException(
+                status_code=400,
+                detail="ehhez a meccshez nincs kalibráció-geometria — "
+                       "régi mentés vagy kalibráció nélküli feldolgozás; "
+                       "újrafeldolgozás után elérhető")
+        vp = match.meta.video_path
+        if not vp or not Path(vp).exists():
+            raise HTTPException(status_code=400,
+                                detail="az eredeti videó nem érhető el "
+                                       "ezen a gépen")
+        try:
+            cap = open_capture(vp)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        t = max(0, int(t))
+        kocka = int(match.meta.start_frame or 0) + t * max(1, int(
+            match.meta.stride or 1))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, kocka)
+        ok, img = cap.read()
+        cap.release()
+        if not ok:
+            raise HTTPException(status_code=404, detail="frame not read")
+        H_, W_ = img.shape[:2]
+        g = keyframe_at(getattr(match.meta, "pan_keyframes", None), t)
+        for _h0, _reg in calib_pairs_of(match):
+            draw_overlay(img, overlay_pixels(_h0, g, W_, H_, _reg))
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return Response(content=buf.tobytes(), media_type="image/jpeg")
+
+    @app.get("/matches/{match_id}/calib-fit")
+    def calib_fit(match_id: str, n: int = 8):
+        """KALIBRÁCIÓ-ILLESZKEDÉS számokban: n egyenletesen elosztott
+        kockán megmérjük, mennyire ül a visszarajzolt vonal a kép valódi
+        vonalain (0..1). A szemmel-ellenőrzés géppel: ha az eleje jó, de a
+        közepe gyenge, a pásztázás-követés csúszott el. 400/404 mint a
+        calib-overlay végpontnál."""
+        import cv2
+
+        from ..pipeline.calib_overlay import (keyframe_at, line_fit_score,
+                                              overlay_pixels)
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h0 = getattr(match.meta, "court_homography", None)
+        if not h0:
+            raise HTTPException(
+                status_code=400,
+                detail="ehhez a meccshez nincs kalibráció-geometria — "
+                       "régi mentés vagy kalibráció nélküli feldolgozás")
+        vp = match.meta.video_path
+        if not vp or not Path(vp).exists():
+            raise HTTPException(status_code=400,
+                                detail="az eredeti videó nem érhető el "
+                                       "ezen a gépen")
+        if not match.frames:
+            raise HTTPException(status_code=400, detail="nincs kocka")
+        try:
+            cap = open_capture(vp)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        n = max(2, min(24, int(n)))
+        utolso = len(match.frames) - 1
+        pontok = []
+        start = int(match.meta.start_frame or 0)
+        stride = max(1, int(match.meta.stride or 1))
+        kf = getattr(match.meta, "pan_keyframes", None)
+        # FÉL-PÁLYÁS kalibrációnál csak a kalibrált térfél vonalait
+        # mérjük (a másik félen a homográfia extrapolál) — ugyanaz a
+        # szabály, mint a feldolgozás alatti mérésnél.
+        parok = calib_pairs_of(match)
+        try:
+            for i in range(n):
+                t = match.frames[round(i * utolso / (n - 1))].t
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start + t * stride)
+                ok, img = cap.read()
+                if not ok:
+                    continue
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                H_, W_ = gray.shape[:2]
+                o = {"fit": None, "samples": 0}
+                for _h0, _reg in parok:
+                    _o = line_fit_score(
+                        gray,
+                        overlay_pixels(_h0, keyframe_at(kf, t), W_, H_, _reg))
+                    if _o["fit"] is not None and (
+                            o["fit"] is None or _o["fit"] > o["fit"]):
+                        o = _o
+                pontok.append({"t": int(t), "fit": o["fit"],
+                               "samples": o["samples"]})
+        finally:
+            cap.release()
+        ertekek = [p["fit"] for p in pontok if p["fit"] is not None]
+        if not ertekek:
+            return {"match_id": match_id, "points": pontok, "mean_fit": None,
+                    "min_fit": None, "worst_t": None}
+        legrosszabb = min((p for p in pontok if p["fit"] is not None),
+                          key=lambda p: p["fit"])
+        return {"match_id": match_id, "points": pontok,
+                "mean_fit": round(sum(ertekek) / len(ertekek), 3),
+                "min_fit": legrosszabb["fit"], "worst_t": legrosszabb["t"]}
+
+    @app.post("/matches/{match_id}/trim")
+    def trim_match(match_id: str, body: dict):
+        """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli
+        rész eldobása az elemzésből.
+
+        A tipikus eset: a felvételen rajta a bemutatás/bemelegítés, az
+        automatikus meccs-ablak nem találta meg a kezdést, és a
+        felismerés a felállásból lövéseket-eladásokat gyártott. A
+        felhasználó viszont TUDJA, mikor kezdődött — eddig csak a
+        teljes újrafeldolgozás érvényesítette, ez a végpont utólag.
+
+        Törzs: {"from_s": mp, "to_s": mp|null}. A videófájlt nem
+        érinti; a kockák idő-címkéi maradnak (a jegyzetek, javítások,
+        kiállítások hivatkozásai nem csúsznak el). VÉGLEGES: a levágott
+        rész elemzése csak újrafeldolgozással jön vissza."""
+        from ..pipeline.game_window import trim_to_window
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            from_s = float(body.get("from_s") or 0.0)
+            to_s = (float(body["to_s"])
+                    if body.get("to_s") is not None else None)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="from_s/to_s: másodperc kell")
+        try:
+            info = trim_to_window(match, from_s, to_s)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        _drop_derived_caches(match_id)
+        osszegzes = _match_summary(match)
+        fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+        return {"match_id": match_id, **info,
+                "duration_s": len(match.frames) / fps_,
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
+
+    def _merge_and_store(ids: list, match_id_kert: str = "",
+                         home_team=None, away_team=None) -> dict:
+        """Az összefűzés TELJES munkája: meccs + az emberi munka átvétele.
+
+        Egy helyen, mert két hívója van (a /matches/merge végpont és a
+        köteg-utáni automatikus összefűzés) — egy másolt ág idővel
+        szétcsúszna, és pont az emberi munka átvétele maradna le róla.
+        ValueError-t dob, amit a végpont HTTP-hibára fordít.
+        """
+        import uuid
+
+        from ..pipeline.merge import merge_matches
+
+        if not isinstance(ids, list) or len(ids) < 2:
+            raise ValueError("legalabb ket meccs-azonosito kell")
+        parts = []
+        for mid in ids:
+            m = _store.get(str(mid))
+            if m is None:
+                raise ValueError(f"match not found: {mid}")
+            parts.append(m)
+        new_id = str(match_id_kert or "").strip() or (
+            "teljes-" + "+".join(str(i) for i in ids))
+        if new_id in _store:
+            new_id = f"{new_id}-{uuid.uuid4().hex[:6]}"
+        merged = merge_matches(
+            parts, new_id, home_team=home_team, away_team=away_team)
+        _put_match(merged)  # memóriába + lemezre (perzisztencia)
+
+        # A JEGYZETEK is EMBERI munka: amit az edző a klipek közben
+        # megjelölt, az összefűzött meccsen is meg kell lennie. A
+        # kockaszám a szakasz eltolásával mozog — enélkül a jegyzet egy
+        # MÁSIK pillanatra mutatna, és a "koppints a visszanézéshez"
+        # rossz helyre ugrana.
+        #
+        # A szakaszok eltolását a forrás-térképből olvassuk ki, hogy ne
+        # kelljen újraszámolni (és ne csússzon el a kettő).
+        try:
+            # A szakaszokat POZÍCIÓ szerint párosítjuk a részekhez, nem
+            # a videó útja szerint: két szakasz jöhet UGYANABBÓL a
+            # fájlból (megszakadt feldolgozás folytatása), és egy
+            # útvonal-kulcsú szótár összeolvasztaná őket — a második
+            # félidő jegyzetei az elsőre csúsznának.
+            #
+            # Az összefűzés arra a részre tesz szakaszt, amelynek van
+            # videó-útja ÉS adott kockát; itt ugyanezzel szűrünk.
+            terkepes = [r for r in parts if r.meta.video_path and r.frames]
+            szegmensek = merged.meta.source_segments or []
+            atvett: list = []
+            for resz, sz in zip(terkepes, szegmensek):
+                nulla = sz["t_from"]
+                for jegy in _load_notes(resz.meta.match_id):
+                    try:
+                        uj = dict(jegy)
+                        uj["frame"] = int(jegy.get("frame") or 0) + nulla
+                    except (TypeError, ValueError):
+                        continue
+                    atvett.append(uj)
+            if atvett:
+                atvett.sort(key=lambda j: j.get("frame", 0))
+                _notes_path(new_id).write_text(
+                    json.dumps({"notes": atvett}, ensure_ascii=False,
+                               indent=2),
+                    encoding="utf-8")
+        except Exception:
+            pass  # a jegyzet-átvétel hibája ne vigye el az összefűzést
+
+        # A KIÁLLÍTÁSOK is kézzel felvitt adat, és az emberelőny-rétegek
+        # (powerplay_*, shorthanded_attack, susp_earner_roles) EZEN
+        # állnak. Az idő a szakasz eltolásával mozog — másodpercben,
+        # mert a roster is másodpercben tárol.
+        try:
+            terkepes = [r for r in parts if r.meta.video_path and r.frames]
+            szegmensek = merged.meta.source_segments or []
+            fps_ = merged.meta.fps if merged.meta.fps > 0 else 25.0
+            kiallitasok: list = []
+            gk_home: list = []
+            gk_away: list = []
+            for resz, sz in zip(terkepes, szegmensek):
+                rp = _roster_path(resz.meta.match_id)
+                if not rp.exists():
+                    continue
+                try:
+                    adat = json.loads(rp.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                nulla_s = sz["t_from"] / fps_
+                for kia in (adat.get("suspensions") or []):
+                    try:
+                        kiallitasok.append({
+                            "team": kia["team"],
+                            "start_s": float(kia["start_s"]) + nulla_s,
+                            "duration_s": float(kia["duration_s"]),
+                        })
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                gk_home.append(bool(adat.get("gk_absent_home", False)))
+                gk_away.append(bool(adat.get("gk_absent_away", False)))
+            if kiallitasok:
+                kiallitasok.sort(key=lambda k: k["start_s"])
+                # A kapus-hiány EGÉSZ meccsre szóló jelzés, tehát
+                # szakaszonként ellentmondhat. Csak akkor állítjuk, ha
+                # MINDEN szakasz egyetért — ugyanaz az elv, mint a
+                # kalibráltságnál: amiről nem tudunk, arról nem
+                # állítunk semmit.
+                torzs = {"suspensions": kiallitasok}
+                if gk_home and all(gk_home):
+                    torzs["gk_absent_home"] = True
+                if gk_away and all(gk_away):
+                    torzs["gk_absent_away"] = True
+                # A SAJÁT végpontunkon át: így a becslés-újraszámítás és
+                # a mentés is pontosan ugyanaz, mint kézi felvitelnél.
+                set_roster(new_id, torzs)
+        except Exception:
+            pass  # a kiállítás-átvétel hibája ne vigye el az összefűzést
+
+        return {"match_id": new_id, "num_frames": len(merged.frames),
+                "parts": [p.meta.match_id for p in parts]}
+
     @app.post("/matches/merge")
     def merge_halves(body: dict):
         """Több feldolgozott felvétel (pl. 1. és 2. félidő) összefűzése EGY meccsé.
@@ -818,29 +5111,15 @@ def create_app():
                 "match_id": opcionális név, "home_team"/"away_team": opcionális}.
         Az eredmény új meccsként kerül a könyvtárba; az eredeti részek megmaradnak.
         """
-        import uuid
-
-        from ..pipeline.merge import merge_matches
-
-        ids = body.get("ids") or []
-        if not isinstance(ids, list) or len(ids) < 2:
-            raise HTTPException(status_code=400, detail="legalabb ket meccs-azonosito kell")
-        parts = []
-        for mid in ids:
-            m = _store.get(str(mid))
-            if m is None:
-                raise HTTPException(status_code=404, detail=f"match not found: {mid}")
-            parts.append(m)
-        new_id = str(body.get("match_id") or "").strip() or (
-            "teljes-" + "+".join(str(i) for i in ids))
-        if new_id in _store:
-            new_id = f"{new_id}-{uuid.uuid4().hex[:6]}"
-        merged = merge_matches(
-            parts, new_id,
-            home_team=body.get("home_team"), away_team=body.get("away_team"))
-        _put_match(merged)  # memóriába + lemezre (perzisztencia)
-        return {"match_id": new_id, "num_frames": len(merged.frames),
-                "parts": [p.meta.match_id for p in parts]}
+        try:
+            return _merge_and_store(
+                body.get("ids") or [], str(body.get("match_id") or ""),
+                home_team=body.get("home_team"),
+                away_team=body.get("away_team"))
+        except ValueError as e:
+            hiba = str(e)
+            raise HTTPException(status_code=404 if "not found" in hiba
+                                else 400, detail=hiba)
 
     def _calibration_path(video_path: str) -> Path:
         """A videóhoz tartozó kalibráció-fájl (kulcs: a videó fájlneve)."""
@@ -865,6 +5144,51 @@ def create_app():
                 pass
         return {"calibs": []}
 
+    @app.get("/calibration/saved")
+    def list_saved_calibrations(exclude_path: Optional[str] = None):
+        """A gépen MÁR ELMENTETT kalibrációk, átvételre.
+
+        Aki telefonnal vesz fel, darabokban kapja a meccset: hat klip
+        UGYANARRÓL a rögzített kameráról. A kalibráció a videó
+        FÁJLNEVÉHEZ van kötve, tehát eddig mind a hatot külön kellett
+        bejelölni — huszonnégy sarok-kattintás ugyanarra a pályára.
+
+        Az átvétel CSAK akkor helyes, ha a kamera nem mozdult a két
+        felvétel közt; ezt a felület mondja ki, mert a program nem
+        tudja eldönteni.
+
+        Válasz: {"items": [{"video", "calibs", "count", "modified"}]},
+        a legfrissebb elöl.
+        """
+        import re as _re
+
+        d = data_root() / "data" / "calibrations"
+        if not d.exists():
+            return {"items": []}
+        # A SAJÁT kalibrációját ne kínáljuk átvételre: a fájlnevet
+        # ugyanazzal a szabállyal tisztítjuk, mint a _calibration_path.
+        kizar = None
+        if exclude_path:
+            kizar = _re.sub(r"[^A-Za-z0-9._-]", "_",
+                            Path(exclude_path).name) or "video"
+        out = []
+        for f in d.glob("*.json"):
+            try:
+                adat = json.loads(f.read_text(encoding="utf-8"))
+                calibs = adat.get("calibs") or []
+            except Exception:
+                continue  # sérült fájl: kihagyjuk, nem hiba
+            if not isinstance(calibs, list) or not calibs:
+                continue
+            video = f.name[:-5] if f.name.endswith(".json") else f.name
+            if kizar and video == kizar:
+                continue
+            out.append({"video": video, "calibs": calibs,
+                        "count": len(calibs),
+                        "modified": f.stat().st_mtime})
+        out.sort(key=lambda r: -r["modified"])
+        return {"items": out}
+
     @app.post("/calibration")
     def save_calibration(body: dict):
         """Kalibrációk mentése a videóhoz. Törzs: {"path": ..., "calibs": [...]}."""
@@ -876,6 +5200,81 @@ def create_app():
             json.dumps({"calibs": calibs}, ensure_ascii=False, indent=2),
             encoding="utf-8")
         return {"saved": len(calibs)}
+
+    # --- Játékos-nevek (mezszám → név), KÖNYVTÁR-szinten -------------
+    #
+    # A mezszám a szezonban stabil, a track-azonosító nem — a neveket
+    # ezért nem meccsenként, hanem csapatonként tároljuk. Egy helyen
+    # felvitt név minden korábbi és későbbi meccsen is látszik.
+
+    def _players_path() -> Path:
+        # A meccs-mappa MELLÉ, nem bele: a betöltő minden ottani *.json-t
+        # meccsnek próbál olvasni (a kísérőfájlokat a nevük végéről
+        # ismeri fel), egy csapat-szintű névjegyzék pedig nem meccs.
+        # A könyvtár-mentés a data/ egészét viszi, tehát így is bekerül.
+        return _data_dir.parent / "players.json"
+
+    def _load_players() -> dict:
+        """{csapatnév: {mezszám(str): név}} — hibás fájlra üres szótár.
+
+        A név KÉNYELEM, nem adat: ha a fájl sérült, a program a
+        mezszámokkal ugyanúgy működik, ezért itt nem dobunk hibát.
+        """
+        p = _players_path()
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("players"), dict):
+                    return d["players"]
+            except Exception:
+                pass
+        return {}
+
+    def _player_name(team: str, jersey: int) -> Optional[str]:
+        return (_load_players().get(team) or {}).get(str(jersey))
+
+    @app.get("/library/players")
+    def get_library_players(team: Optional[str] = None):
+        """A felvitt játékos-nevek: {"players": {csapat: {mez: név}}}.
+
+        `team` megadásával csak az adott csapaté. A minden riportban
+        látszó "#7" helyett így "7 — Kovács" írható: az edző nem
+        számokban gondolkodik, a játékos pedig a saját nevét keresi.
+        """
+        mind = _load_players()
+        if team is None:
+            return {"players": mind}
+        return {"players": {team: mind.get(team) or {}}}
+
+    @app.post("/library/players")
+    def set_library_player(body: dict):
+        """Név hozzárendelése egy csapat mezszámához.
+
+        Törzs: {"team": ..., "jersey": 7, "name": "Kovács"} — ÜRES név
+        törli a hozzárendelést (a szám marad, csak névtelen lesz).
+        """
+        team = str(body.get("team") or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        try:
+            jersey = int(body.get("jersey"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="jersey required")
+        name = str(body.get("name") or "").strip()[:60]
+        mind = _load_players()
+        csapat = dict(mind.get(team) or {})
+        if name:
+            csapat[str(jersey)] = name
+        else:
+            csapat.pop(str(jersey), None)
+        if csapat:
+            mind[team] = csapat
+        else:
+            mind.pop(team, None)
+        _players_path().write_text(
+            json.dumps({"players": mind}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"team": team, "jersey": jersey, "name": name or None}
 
     def _roster_path(match_id: str) -> Path:
         import re
@@ -950,12 +5349,23 @@ def create_app():
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         del _store[match_id]
-        try:
-            _match_path(match_id).unlink(missing_ok=True)
-            _roster_path(match_id).unlink(missing_ok=True)
-            _params_path(match_id).unlink(missing_ok=True)
-        except Exception:
-            pass
+        # A származtatott kivonatok (memória + lemezes eredmény-tár).
+        _drop_derived_caches(match_id)
+        # A meccs MINDEN kísérőfájlja: eddig az esemény-javítás, a
+        # jegyzet, a kézi napló és a mezszám-tábla árván maradt — a
+        # könyvtár-mentés (zip) minden árva fájlt is elvitt és
+        # visszaállított, a lemezen pedig gyűltek.
+        for utvonal in (_match_path, _roster_path, _params_path,
+                        _overrides_path, _notes_path, _annotations_path,
+                        _jerseys_path):
+            try:
+                utvonal(match_id).unlink(missing_ok=True)
+            except Exception:
+                pass
+        # A megbeszélés-felvételek (és hangjuk) is — eddig árván maradtak.
+        import shutil
+        shutil.rmtree(_felvetel_mappa(match_id), ignore_errors=True)
+        _write_index()
         return {"deleted": match_id}
 
     @app.post("/matches/{match_id}/reprocess")
@@ -984,6 +5394,35 @@ def create_app():
                 status_code=400,
                 detail=f"az eredeti videó nem található: {path}")
         body["match_id"] = match_id  # ugyanarra a helyre dolgozunk
+
+        # FRISS KALIBRÁCIÓ: az újrafeldolgozás leggyakoribb oka éppen az,
+        # hogy a kalibráció rossz volt (a lelátó a pályára vetült, a
+        # pozíciók félrementek). A felhasználó ilyenkor újrakalibrál a
+        # varázslóban — az a VIDEÓHOZ mentődik —, majd itt indít
+        # újrafeldolgozást. Ha ilyenkor a job-paraméterek RÉGI
+        # kalibrációjával futnánk, pontosan ugyanazt a rossz eredményt
+        # kapná még egyszer, egy újabb óra árán. Ezért a videóhoz
+        # mentett kalibráció ELSŐBBSÉGET élvez.
+        try:
+            cf = _calibration_path(path)
+            if cf.exists():
+                friss = json.loads(cf.read_text(encoding="utf-8"))
+                calibs = friss.get("calibs")
+                if isinstance(calibs, list) and calibs:
+                    body["calibs"] = calibs
+                    # A régi egy-kalibrációs mezők félrevezetnének a
+                    # `calibs` mellett — a feldolgozó azokat is nézi.
+                    body.pop("calib", None)
+                    body.pop("calib_region", None)
+                    body.pop("calib_rotate", None)
+                    # A feldolgozás a legkorábbi kalibrált kockától indul.
+                    kockak = [int(c.get("frame", 0)) for c in calibs
+                              if isinstance(c, dict)]
+                    if kockak:
+                        body["start"] = min(kockak)
+        except Exception:
+            pass  # olvashatatlan kalibráció-fájl: marad a mentett beállítás
+
         return start_processing(body)
 
     @app.post("/matches/{match_id}/resume")
@@ -1051,6 +5490,317 @@ def create_app():
         notes.sort(key=lambda n: n.get("frame", 0))
         return {"notes": notes}
 
+    # --- Kézi elemzés (az edző saját esemény-naplója + taktikai táblák) --
+
+    def _annotations_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.annotations.json"
+
+    def _load_annotations(match_id: str) -> dict:
+        """A tárolt kézi elemzés; ha nincs (vagy sérült), az üres."""
+        from ..annotations import empty_annotations
+        p = _annotations_path(match_id)
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d, dict):
+                    d["match_id"] = match_id
+                    return d
+            except Exception:
+                pass
+        return empty_annotations(match_id)
+
+    @app.get("/matches/{match_id}/annotations")
+    def get_annotations(match_id: str):
+        """Az edző KÉZI elemzése a meccshez: esemény-napló + taktikai
+        táblák (mozgatható bábuk, passz-/futás-/lövés-nyilak). Ha még nem
+        kezdte el, az üres dokumentum jön (updated_at: null)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _load_annotations(match_id)
+
+    @app.put("/matches/{match_id}/annotations")
+    def put_annotations(match_id: str, body: dict):
+        """A kézi elemzés mentése (a TELJES dokumentum cseréje).
+
+        FÉLKÉSZEN is menthető ("status": "in_progress"), a kliens menet
+        közben automatikusan menti. A dokumentumot normalizáljuk (lásd
+        handball.annotations): szöveg-hosszak, pálya-koordináták és
+        darabszámok korlátozva, az események időrendben. Az írás
+        atomikus (ideiglenes fájl + csere), tehát egy megszakadt mentés
+        sem teszi tönkre az előzőt."""
+        from ..annotations import normalize_annotations
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            doc = normalize_annotations(body, match_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        p = _annotations_path(match_id)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1),
+                       encoding="utf-8")
+        tmp.replace(p)
+        return doc
+
+    @app.get("/matches/{match_id}/annotations/compare")
+    def compare_annotations(match_id: str, tol_s: Optional[float] = None):
+        """A kézi napló lövései/gólai a motor felismerésével összevetve
+        (precizitás / visszahívás, a kimaradt és a téves tételek
+        videó-idővel — a kliens ezekre ugrik a lejátszóban)."""
+        from ..annotations import ANN_CMP_TOL_S, compare_with_detection
+        from ..pipeline.primitive_cache import primitive_cache
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        tol = ANN_CMP_TOL_S
+        if tol_s is not None and 0.5 <= tol_s <= 15.0:
+            tol = float(tol_s)
+        doc = _load_annotations(match_id)
+        with primitive_cache(match):
+            osszevetes = compare_with_detection(match, doc, tol_s=tol)
+        # A gépi oldal a MÁR felvitt kézi javításokkal együtt értendő.
+        # (Nem "res" a neve: a réteg-őr a res[...] kulcsokat rétegnek nézi.)
+        osszevetes["overrides"] = len(getattr(match.meta, "event_overrides",
+                                              None) or [])
+        return osszevetes
+
+    @app.post("/matches/{match_id}/annotations/apply")
+    def apply_annotations(match_id: str, dry_run: bool = False):
+        """A kézi napló lövései/gólai JAVÍTÁSKÉNT a motorba: az eltérések
+        esemény-javítássá alakulnak (típus-csere / felvétel / törlés), és
+        a meglévő javítások mellé kerülnek — így az eredmény, az xG, a
+        lövő-listák és a felderítés is a napló szerint számol.
+        dry_run=true: csak a terv (mi változna), írás nélkül."""
+        from ..annotations import (ANN_CMP_TOL_S, compare_with_detection,
+                                   plan_overrides)
+        from ..pipeline.primitive_cache import primitive_cache
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        doc = _load_annotations(match_id)
+        with primitive_cache(match):
+            res = compare_with_detection(match, doc, tol_s=ANN_CMP_TOL_S)
+        from ..annotations import track_of_jersey
+        ops = plan_overrides(
+            res, match.meta.fps,
+            player_of=lambda csapat, t, mez: track_of_jersey(
+                match, csapat, t, mez))
+        osszeg = {k: sum(1 for o in ops if o["op"] == k)
+                  for k in ("set_type", "add", "remove")}
+        if dry_run or not ops:
+            return {"ops": ops, "counts": osszeg, "applied": False}
+        regi = _load_overrides(match_id)
+        latott = {(o.get("op"), o.get("t"), o.get("type"), o.get("team"))
+                  for o in regi}
+        uj = [o for o in ops
+              if (o["op"], o["t"], o["type"], o.get("team")) not in latott]
+        if len(regi) + len(uj) > 200:
+            raise HTTPException(
+                status_code=400,
+                detail="túl sok javítás (legfeljebb 200 fér el egy meccshez)")
+        set_event_overrides(match_id, {"overrides": regi + uj})
+        return {"ops": ops, "counts": osszeg, "applied": True}
+
+    @app.get("/matches/{match_id}/annotations.csv")
+    def export_annotations_csv(match_id: str):
+        """A kézi esemény-napló CSV-ben (Excelben nyitható; ez a program
+        kimenetével való összevetés alap-formátuma)."""
+        from fastapi.responses import Response
+        from ..annotations import annotations_csv
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        csv_text = annotations_csv(_load_annotations(match_id),
+                                   home=match.meta.home_team,
+                                   away=match.meta.away_team)
+        # BOM: az Excel így ismeri fel az UTF-8-at (ékezetek).
+        return Response(
+            content="﻿" + csv_text,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition":
+                     f'attachment; filename="kezi_elemzes_{match_id}.csv"'})
+
+    # --- Kézi esemény-javítások (a felismerés edzői korrekciója) ------
+
+    def _apply_overrides_to_match(match_id: str) -> None:
+        """A lemezen tárolt javítások ráolvasása a memóriabeli meccsre.
+
+        A felismerés a `match.meta.event_overrides` listát nézi, tehát a
+        javítás csak akkor él, ha ide betöltjük — indításkor és minden
+        módosításnál.
+        """
+        m = _store.get(match_id)
+        if m is not None:
+            m.meta.event_overrides = _load_overrides(match_id)
+            # A meccsből származtatott kivonatok elavulnak: az eredmény,
+            # a lövésszám és az edzés-fókusz is a javított eseményekből jön.
+            _drop_derived_caches(match_id)
+
+    @app.get("/matches/{match_id}/event-overrides")
+    def get_event_overrides(match_id: str):
+        """A meccshez felvitt KÉZI esemény-javítások."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"overrides": _load_overrides(match_id)}
+
+    @app.post("/matches/{match_id}/event-overrides")
+    def set_event_overrides(match_id: str, body: dict):
+        """A kézi esemény-javítások mentése (a TELJES lista cseréje).
+
+        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type"|"dismiss"
+        |"set_player", "t": kocka, "type": "goal"|"shot",
+        "team": "home"|"away", "player_id": track}]}.
+        A "dismiss" egy LEHETSÉGES GÓL elvetése (a középkezdés ideje):
+        az edző döntése, hogy ott nem volt gól. A "set_player" a lövő
+        javítása (a player_id kötelező).
+
+        Miért kell: a felismerés téved — gólt lövésnek lát, lövést nem
+        vesz észre. Az edző egy rossz eredményű jelentésnek EGYETLEN
+        számát sem hiszi el, akkor sem, ha a többi jó. A javítás a
+        lövés-felismerésbe épül be, tehát minden rétegen átüt
+        (eredmény, xG, lövő-listák, felderítés) — újrafeldolgozás
+        nélkül.
+        """
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        nyers = body.get("overrides")
+        if not isinstance(nyers, list):
+            raise HTTPException(status_code=400,
+                                detail="overrides list required")
+        tisztitott = []
+        for j in nyers[:200]:  # ésszerű plafon
+            if not isinstance(j, dict):
+                continue
+            op = str(j.get("op") or "")
+            if op not in ("add", "remove", "set_type", "dismiss",
+                          "set_player"):
+                continue
+            tipus = str(j.get("type") or "goal")
+            if tipus not in ("goal", "shot"):
+                continue
+            try:
+                t = max(0, int(j.get("t") or 0))
+            except (TypeError, ValueError):
+                continue
+            rec = {"op": op, "t": t, "type": tipus}
+            if op == "set_player":
+                # Lövő nélkül a lövő-javítás értelmetlen — nem tároljuk.
+                try:
+                    rec["player_id"] = int(j["player_id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+            if op == "add":
+                rec["team"] = ("home" if str(j.get("team")) == "home"
+                               else "away")
+            if op in ("add", "set_type"):
+                # A LÖVŐ opcionális: ha az edző kijelölt egy játékost,
+                # a kézzel felvett (vagy lövésből gólra javított) gól
+                # hozzá tartozik — enélkül a gól ott van az eredményben,
+                # de a lövő-listákból (góllövő, toplista) kimaradna.
+                try:
+                    if j.get("player_id") is not None:
+                        rec["player_id"] = int(j["player_id"])
+                except (TypeError, ValueError):
+                    pass
+            tisztitott.append(rec)
+        _overrides_path(match_id).write_text(
+            json.dumps({"overrides": tisztitott}, ensure_ascii=False,
+                       indent=2),
+            encoding="utf-8")
+        _apply_overrides_to_match(match_id)
+        return {"overrides": tisztitott}
+
+    @app.get("/library/notes")
+    def library_notes():
+        """Az ÖSSZES edzői jegyzet a könyvtárból, meccs-környezettel.
+
+        A jegyzetelés eddig egyirányú volt: a meccs közben meg lehetett
+        jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
+        lejátszójában lehetett megtalálni. Az edző fejében viszont a
+        jegyzetek egyetlen listát alkotnak ("amit vissza akarok
+        nézni"), meccsektől függetlenül — a hét közbeni munka ebből
+        indul.
+
+        Visszatérés: {"notes": [{"match_id", "home_team", "away_team",
+        "date", "id", "frame", "t_s", "text"}]} — meccsenként
+        képkocka-sorrendben, a meccsek a könyvtár sorrendjében. A t_s a
+        jegyzet játékideje másodpercben (a meccs fps-éből), hogy a
+        lista órát tudjon mutatni.
+        """
+        out = []
+        # A LEGÚJABB meccs jegyzetei elöl: a hét közbeni munka a
+        # legutóbbi meccsből indul, és húsz meccs jegyzetei közt a
+        # felvételi sorrend semmit nem mond. Meccsen belül marad az
+        # időrend (a jegyzetek a meccs menetét követik).
+        meccsek = sorted(_season_matches(),
+                         key=lambda m: ((m.meta.date or ""),
+                                        m.meta.match_id),
+                         reverse=True)
+        for m in meccsek:
+            fps = m.meta.fps if m.meta.fps > 0 else 25.0
+            jegyzetek = _load_notes(m.meta.match_id)
+            jegyzetek.sort(key=lambda n: n.get("frame", 0))
+            for n in jegyzetek:
+                frame = int(n.get("frame") or 0)
+                out.append({
+                    "match_id": m.meta.match_id,
+                    "home_team": m.meta.home_team,
+                    "away_team": m.meta.away_team,
+                    "date": getattr(m.meta, "date", None),
+                    "id": n.get("id"),
+                    "frame": frame,
+                    "t_s": round(frame / fps, 1),
+                    "text": n.get("text") or "",
+                    # A 3D pályán a jegyzettel mentett nyilak ("" = nincs).
+                    "rajz": n.get("rajz") or "",
+                })
+        return {"notes": out}
+
+    @app.get("/library/recordings")
+    def library_recordings(limit: int = 5):
+        """A LEGUTÓBBI MEGBESZÉLÉSEK (a kezdőlap kártyája): a 3D közös
+        nézés felvételei meccsektől függetlenül, a legújabb elöl —
+        {"felvetelek": [{"match_id", "home_team", "away_team", "id",
+        "nev", "letrehozva", "hossz_s", "hang", "fejezetek", "nezok"}],
+        "osszes": a felvételek száma}. `limit`: 1…50."""
+        limit = max(1, min(50, int(limit)))
+        mind = _legutobbi_felvetelek()
+        return {"felvetelek": [
+            {"match_id": meta.match_id, "home_team": meta.home_team,
+             "away_team": meta.away_team, **fej, "nezok": _felvetel_nezok(p)}
+            for fej, meta, p in mind[:limit]], "osszes": len(mind)}
+
+    @app.get("/library/quiz-stats")
+    def library_quiz_stats():
+        """KVÍZ-MÉRLEG a könyvtárból: a 3D közös nézés kvízeinek eredménye
+        (a kvíz-jegyzetek "kviz" sorai) játékosonként, meccseken át —
+        court3d.quiz_stats. Edzőileg: ki látja a jobb megoldást a
+        döntés-kvízekben. Visszatérés: {"players": [{"nev", "kvizek",
+        "itelt", "jo", "rossz", "arany"}], "min_answers":
+        QUIZ_STATS_MIN_ANSWERS} — a jegyzetek időrendben (a meccsek
+        dátuma, azon belül a kocka) mennek a számolásba."""
+        from ..pipeline.court3d import QUIZ_STATS_MIN_ANSWERS, quiz_stats
+        return {"players": quiz_stats(_jegyzetek_idorendben()),
+                "min_answers": QUIZ_STATS_MIN_ANSWERS}
+
+    def _jegyzetek_idorendben() -> list:
+        """A könyvtár összes jegyzete időrendben (a meccsek dátuma, azon
+        belül a kocka) — a kvíz-mérleg bemenete."""
+        meccsek = sorted(_season_matches(),
+                         key=lambda m: ((m.meta.date or ""),
+                                        m.meta.match_id))
+        jegyzetek = []
+        for m in meccsek:
+            ns = [n for n in _load_notes(m.meta.match_id)
+                  if isinstance(n, dict)]
+            ns.sort(key=lambda n: n.get("frame", 0))
+            jegyzetek.extend(ns)
+        return jegyzetek
+
     @app.post("/matches/{match_id}/notes")
     def add_note(match_id: str, body: dict):
         """Új edzői jegyzet. Törzs: {"frame": képkocka-index, "text": "..."}.
@@ -1066,6 +5816,31 @@ def create_app():
             "frame": max(0, int(body.get("frame") or 0)),
             "text": text[:500],  # ésszerű hossz-korlát
         }
+        # A 3D pálya rajza (nyilak a padlón) a jegyzettel — a böngésző
+        # "rajz" link-paraméterének alakja ("x1,y1,x2,y2,szín;…", legfeljebb
+        # 30 nyíl). Csak számot, pontot, vesszőt, pontosvesszőt és mínuszt
+        # fogadunk (a tár szöveg-mezője a jelentésbe és linkbe is kerül).
+        import re as _re
+        rajz = str(body.get("rajz") or "").strip()
+        if rajz and len(rajz) <= 1200 and _re.fullmatch(r"[0-9.,;\-]+", rajz):
+            note["rajz"] = rajz
+        # A kvíz eredménye szerkezetben (a 3D közös nézés kvíz-jegyzete —
+        # court3d.quiz_stats ebből számolja a kvíz-mérleget): [{"nev",
+        # "itelet": true/false/null}], legfeljebb 60 sor; a rossz alakú sor
+        # kimarad, a név megtisztítva.
+        kv = body.get("kviz")
+        if isinstance(kv, list):
+            from ..pipeline.court3d import shared3d_nev
+            sorok = []
+            for e in kv[:60]:
+                if not isinstance(e, dict):
+                    continue
+                it = e.get("itelet")
+                if it is not None and not isinstance(it, bool):
+                    continue
+                sorok.append({"nev": shared3d_nev(e.get("nev")), "itelet": it})
+            if sorok:
+                note["kviz"] = sorok
         notes = _load_notes(match_id)
         notes.append(note)
         _notes_path(match_id).write_text(
@@ -1087,6 +5862,51 @@ def create_app():
             encoding="utf-8")
         return {"deleted": note_id}
 
+    def _korabbi_pontszamok(match_id: str, limit: int = 3) -> list:
+        """A MÁSIK meccsek minőség-pontszáma, legfrissebb elöl.
+
+        A pontszám kiszámítása végigjárja a meccs összes kockáját,
+        ezért gyorsítótárazzuk (a kulcsban a kockaszám is benne van:
+        egy újrafeldolgozott meccs friss pontszámot kap).
+
+        Legfeljebb `limit` meccset nézünk: a kérdés nem az, hogy mi
+        volt fél éve, hanem hogy a LEGUTÓBBI próbálkozáshoz képest
+        javult-e.
+        """
+        from ..pipeline.quality import compute_quality_report
+
+        sorrend = sorted(
+            (m for m in _library_matches() if m.meta.match_id != match_id),
+            key=lambda m: (m.meta.date or "", m.meta.match_id),
+            reverse=True)
+        ki = []
+        def _pont_of(m):
+            kulcs = (m.meta.match_id, _kockaszam(m))
+            pont = _quality_score_cache.get(kulcs)
+            if pont is None:
+                pont = compute_quality_report(m).get("score")
+                if pont is not None:
+                    _quality_score_cache[kulcs] = pont
+            return pont
+
+        for m in sorrend[:limit]:
+            # A pontszám a LEMEZES eredmény-tárból is: eddig csak
+            # memóriában élt, és minden újraindítás után a korábbi
+            # meccseket a pontszámért vissza kellett tölteni.
+            try:
+                pont = _cached_result(m.meta.match_id, "quality-score",
+                                      lambda m=m: _pont_of(m))
+            except Exception:
+                continue
+            if pont is None:
+                continue
+            ki.append({"match_id": m.meta.match_id,
+                       "home_team": m.meta.home_team,
+                       "away_team": m.meta.away_team,
+                       "date": m.meta.date,
+                       "score": pont})
+        return ki
+
     @app.get("/matches/{match_id}/quality")
     def get_quality(match_id: str):
         """A feldolgozás minőség-jelentése: mennyire megbízható az elemzés
@@ -1096,12 +5916,32 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        res = compute_quality_report(match)
+        # A változó neve szándékosan NEM `res`: ez minőség-jelentés,
+        # nem elemzés-eredmény. Az /analyze `res["..."]` kulcsait
+        # őr-teszt köti a meccs-csomaghoz, és a minőség-mezőknek ott
+        # nincs helyük — a névválasztás tartja tisztán a határt.
+        jelentes = compute_quality_report(match)
         try:
-            res["confidence"] = analysis_confidence(match)
+            jelentes["confidence"] = analysis_confidence(match)
         except Exception:
             pass
-        return res
+        # KORÁBBI feldolgozások pontszáma: enélkül a felhasználó nem
+        # tudja, JAVÍTOTT-E, amit csinált. Aki újrakalibrál és újrafuttat,
+        # pont ezt a választ keresi — a puszta "72/100" önmagában nem
+        # mondja meg, hogy ez jó irány volt-e.
+        # A kulcsok MINDIG ott vannak (a delta None, ha nincs mihez
+        # viszonyítani) — a projekt szabálya: None ítélet, sose
+        # hallgatólagos hiány.
+        jelentes["previous"] = []
+        jelentes["score_delta"] = None
+        try:
+            jelentes["previous"] = _korabbi_pontszamok(match_id)
+            if jelentes["previous"] and jelentes.get("score") is not None:
+                jelentes["score_delta"] = (
+                    jelentes["score"] - jelentes["previous"][0]["score"])
+        except Exception:
+            pass
+        return jelentes
 
     @app.get("/matches/{match_id}/stats")
     def get_stats(match_id: str):
@@ -1175,7 +6015,8 @@ def create_app():
         except Exception:
             pass
 
-        lines = ["Játékos;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
+        from ..csv_cella import csv_cella
+        lines = ["Játékos;Név;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
                  "Mért kocka;Becsült kocka;Gól;Lövés;xG;Blokk;Poszt;"
@@ -1184,8 +6025,13 @@ def create_app():
             team = (match.meta.home_team if g["team"] == "home"
                     else match.meta.away_team)
             zones = g["zone_seconds"]
+            # A NÉV a névjegyzékből: a kimutatásban a név a lényeg, nem
+            # a szám — és a szezon-CSV már viszi, a meccs-CSV nem
+            # mondhat kevesebbet.
+            nev = (_player_name(team, g["jersey"])
+                   if g.get("jersey") is not None else None) or ""
             lines.append(";".join([
-                g["label"], team,
+                csv_cella(g["label"]), csv_cella(nev), csv_cella(team),
                 "+".join(str(t) for t in g["track_ids"]),
                 num(g["distance_m"]), num(g["avg_speed_ms"]),
                 num(g["top_speed_ms"] * 3.6), str(g["sprint_count"]),
@@ -1200,8 +6046,8 @@ def create_app():
                 num(sum(shooter_of.get(t, {}).get("xg", 0.0)
                         for t in g["track_ids"])),
                 str(sum(blocks_of.get(t, 0) for t in g["track_ids"])),
-                next((poszt_of[t] for t in g["track_ids"]
-                      if t in poszt_of), ""),
+                csv_cella(next((poszt_of[t] for t in g["track_ids"]
+                                if t in poszt_of), "")),
                 # Emberfogás: a track-csoport összes őrzés-kockája
                 # másodpercben + a súlyozott átlagtáv.
                 (lambda fr_, ds_: num(fr_ / fps) if fr_ else "")(
@@ -1230,6 +6076,577 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    # --- Figura-nevek (csapat + alak → név), KÖNYVTÁR-szinten -----------
+    #
+    # A könyvtár "bal oldal, a kapuelőtér előtt" néven ismeri a figurát;
+    # az edző "beúszós kereszt"-nek hívja. A név az ALAKHOZ tartozik (a
+    # könyvtári összevonás küszöbén belül), csapatonként — egyszer
+    # felvéve minden felületen (felderítés, összefoglaló, riasztás, klip)
+    # a saját neve látszik.
+
+    def _figures_path() -> Path:
+        return _data_dir.parent / "figures.json"
+
+    def _load_figures() -> dict:
+        """{csapatnév: [{"name", "shape"}]} — hibás fájlra üres szótár (a
+        név kényelem, nem adat: nélküle a zóna-név marad)."""
+        p = _figures_path()
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("figures"), dict):
+                    return d["figures"]
+            except Exception:
+                pass
+        return {}
+
+    def _figure_name_for(team: str, shape) -> Optional[str]:
+        """A csapat elnevezett alakjai közül a legközelebbi neve, ha a
+        könyvtári összevonás küszöbén (SPL_MERGE_THRESHOLD) belül van."""
+        from ..pipeline.setplays import SPL_MERGE_THRESHOLD, _distance
+        if not shape:
+            return None
+        legjobb, legjobb_d = None, SPL_MERGE_THRESHOLD
+        for f in _load_figures().get(team) or []:
+            try:
+                d = _distance(list(shape), list(f.get("shape") or []))
+            except Exception:
+                continue
+            if d <= legjobb_d:
+                legjobb, legjobb_d = f.get("name"), d
+        return legjobb
+
+    def _nevesit(team: str, rows) -> list:
+        """A figura-sorok "name" mezőt kapnak (None, ha nincs név)."""
+        ki = []
+        for r in rows or []:
+            ki.append({**r, "name": _figure_name_for(team, r.get("shape"))})
+        return ki
+
+    @app.get("/library/figure-library")
+    def get_library_figure_library(team: str):
+        """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
+        meccséből (névvel): {"team", "figures", "recurring", "verdict"} —
+        a Szezon képernyő "visszatérő figurák" szakasza. Egy meccsnél a
+        "recurring" üres."""
+        team = str(team or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        lib = _team_figure_library(team)
+        return {"team": team, **lib}
+
+    @app.get("/library/figures")
+    def get_library_figures(team: Optional[str] = None):
+        """Az elnevezett figurák: {"figures": {csapat: [{"name","shape"}]}}."""
+        mind = _load_figures()
+        if team is None:
+            return {"figures": mind}
+        return {"figures": {team: mind.get(team) or []}}
+
+    @app.post("/library/figures")
+    def set_library_figure(body: dict):
+        """Név hozzárendelése egy csapat figura-alakjához.
+
+        Törzs: {"team": ..., "shape": [18 szám], "name": "Beúszós kereszt"}.
+        Ha a csapatnak már van a küszöbön belüli elnevezett alakja, azt
+        nevezzük át (nem duplázunk); ÜRES név törli a nevet.
+        """
+        from ..pipeline.setplays import SPL_MERGE_THRESHOLD, _distance
+        team = str(body.get("team") or "").strip()
+        shape = body.get("shape")
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        if not isinstance(shape, list) or len(shape) != 18:
+            raise HTTPException(status_code=400,
+                                detail="shape: 18 szám (6x3 rács)")
+        try:
+            shape = [float(v) for v in shape]
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="shape: számok")
+        name = str(body.get("name") or "").strip()[:60]
+        mind = _load_figures()
+        sorok = [dict(f) for f in (mind.get(team) or [])]
+        # A küszöbön belüli meglévő alak: azt írjuk át / töröljük.
+        talalt = None
+        for f in sorok:
+            try:
+                if _distance(shape, list(f.get("shape") or [])) <= SPL_MERGE_THRESHOLD:
+                    talalt = f
+                    break
+            except Exception:
+                continue
+        if name:
+            if talalt is not None:
+                talalt["name"] = name
+            else:
+                sorok.append({"name": name, "shape": shape})
+        elif talalt is not None:
+            sorok.remove(talalt)
+        if sorok:
+            mind[team] = sorok
+        else:
+            mind.pop(team, None)
+        _figures_path().parent.mkdir(parents=True, exist_ok=True)
+        _figures_path().write_text(
+            json.dumps({"figures": mind}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"team": team, "figures": sorok}
+
+    # A figura-alakok meccsenkénti gyorsítótára: (meccs-azonosító, kocka-
+    # szám) → setplay_shapes eredménye. A primitív-gyorsítótár HATÓKÖRÖS
+    # (egy összeállításra él), ez a könyvtár viszont MINDEN elemzett
+    # meccsen újraszámolná a támadás-szegmentálást és a lövés-felismerést
+    # minden élő-nézet indításnál és klip-számlálásnál — húsz meccsnél az
+    # tíz másodperc. A kockaszám a kulcsban: az újrafeldolgozott (más
+    # hosszú) meccs nem olvas elavult alakot.
+    _shapes_cache: dict = {}
+
+    def _lib_nevekkel(rep) -> None:
+        """A ScoutingReport figura-könyvtárának sorai névvel — a
+        nyomtatható jelentés a jelentés-objektumból épül."""
+        try:
+            lib = rep.setplay_library or {}
+            if lib:
+                lib["figures"] = _nevesit(rep.team_name, lib.get("figures"))
+                lib["recurring"] = _nevesit(rep.team_name, lib.get("recurring"))
+        except Exception:
+            pass
+
+    def _report_nevekkel(d: dict) -> dict:
+        """A felderítés-szótár figura-könyvtárának sorai névvel (a
+        felderített csapat elnevezett alakjai szerint)."""
+        try:
+            lib = d.get("setplay_library") or {}
+            nev = str(d.get("team_name") or "")
+            if lib and nev:
+                lib["figures"] = _nevesit(nev, lib.get("figures"))
+                lib["recurring"] = _nevesit(nev, lib.get("recurring"))
+        except Exception:
+            pass
+        return d
+
+    def _shapes_of(m) -> dict:
+        """EGY meccs figura-alakjai (setplays.setplay_shapes), memóriában
+        is megjegyezve — a lemezes tár tartaléka (pl. lemezen nem lévő
+        meccsnél)."""
+        from ..pipeline.primitive_cache import primitive_cache
+        from ..pipeline.setplays import setplay_shapes
+        kulcs = (m.meta.match_id, _kockaszam(m))
+        alakok = _shapes_cache.get(kulcs)
+        if alakok is None:
+            with primitive_cache(m):
+                alakok = setplay_shapes(m)
+            _shapes_cache[kulcs] = alakok
+        return alakok
+
+    def _team_figure_library(team_name: str) -> dict:
+        """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
+        meccséből (setplays.setplay_library): mi tér vissza meccsről
+        meccsre. A klip-export és az élő figura-riasztás közös alapja."""
+        from ..pipeline.setplays import setplay_library
+        sorok = []
+        for m_ in _season_matches():
+            oldal = ("home" if m_.meta.home_team == team_name
+                     else "away" if m_.meta.away_team == team_name
+                     else None)
+            if oldal is None:
+                continue
+            # A meccs figura-alakjai a LEMEZES eredmény-tárból: eddig csak
+            # memóriában éltek, így minden újraindítás után a
+            # figura-könyvtár (és az élő figura-riasztás) a könyvtár
+            # összes hideg meccsét visszatöltötte és újraszámolta.
+            try:
+                alakok = _cached_result(m_.meta.match_id, "setplay-shapes",
+                                        lambda m_=m_: _shapes_of(m_))
+            except Exception:
+                alakok = _shapes_of(m_)
+            sorok += [{**r, "match_id": m_.meta.match_id}
+                      for r in alakok[oldal]]
+        lib = setplay_library(sorok)
+        lib["figures"] = _nevesit(team_name, lib.get("figures"))
+        lib["recurring"] = _nevesit(team_name, lib.get("recurring"))
+        return lib
+
+    def _clip_events(match, match_id: str, types: set) -> list:
+        """A klip-események a rétegek közös hatókörében (primitive_cache):
+        csak a hatókör nyitása jelöli a kapusokat, és a rétegek így
+        meccsenként egyszer számolnak. A vágás háttérszálon fut (üres
+        hatókörrel indul) — enélkül a lemezről visszatöltött meccsen a
+        kapus-függő csomagok (nagy védés, kihagyott ziccer, videózandó
+        jelenetek) MÁST adhattak, mint a becslés (/clips/players), a
+        jelentés és a 3D pálya, és minden csomag újraszámolta az
+        alap-méréseket. Újra-belépő: a becslés külső hatóköre marad."""
+        from ..pipeline.primitive_cache import primitive_cache
+        with primitive_cache(match):
+            return _clip_events_hatokorben(match, match_id, types)
+
+    def _clip_events_hatokorben(match, match_id: str, types: set) -> list:
+        """A klipvágás esemény-listája a kért típusokra — EGY helyen.
+
+        Két hívója van: a klipvágó munkás és a /clip-players számláló
+        (a "kinek vágjuk" lista + a becsült klipszám). Korábban a
+        számláló csak az alap-eseményeket (gól/lövés/eladás) látta,
+        ezért a bővített csomagokra (nagy védés, kulcs-pillanat,
+        jegyzet, ...) NULLÁT becsült — a felület pedig azt mondta,
+        "üres csomagot adna", miközben a vágás klipeket adott volna.
+        Egy közös építővel a kettő nem tud széttartani.
+        """
+        events = detect_events(match)
+        # A player_id KELL: enélkül a mezszám-szűrés némán
+        # üres csomagot adna (az esemény nem tudná, kihez
+        # tartozik).
+        ev = [{"t": e.t, "type": e.type.value,
+               "team": e.team.value, "player_id": e.player_id}
+              for e in events]
+        # Az új elemző rétegek jelenetei is kérhetők klipnek:
+        # hétméteres, időkérés (a leálláshoz vezető jelenet) és
+        # cserehullám — hibatűrően, rétegenként.
+        if "seven_meter" in types:
+            try:
+                from ..pipeline.rules import seven_meter_outcomes
+                ev += [{"t": sm["t"], "type": "seven_meter",
+                        "team": sm["team"]}
+                       for sm in seven_meter_outcomes(match)]
+            except Exception:
+                pass
+        if "timeout" in types:
+            try:
+                from ..pipeline.stoppages import detect_stoppages
+                ev += [{"t": st["start_frame"], "type": "timeout",
+                        "team": st["likely_team"] or "home"}
+                       for st in detect_stoppages(match)
+                       if st["kind"] == "időkérés"]
+            except Exception:
+                pass
+        if "substitution" in types:
+            try:
+                from ..pipeline.substitutions import (
+                    detect_substitutions)
+                ev += [{"t": sw["t"], "type": "substitution",
+                        "team": sw["team"]}
+                       for sw in detect_substitutions(match)]
+            except Exception:
+                pass
+        if "missed_chance" in types:
+            # Kihagyott ziccer: nagy értékű (xG >= 0,5) helyzet,
+            # ami nem lett gól — a leginkább visszanézendő jelenetek.
+            try:
+                from ..pipeline.xg import missed_big_chances
+                ev += [{"t": mc["t"], "type": "missed_chance",
+                        "team": mc["team"]}
+                       for mc in missed_big_chances(match)]
+            except Exception:
+                pass
+        if "big_save" in types:
+            # Bravúr-védés: ziccert fogott a kapus — a védő csapathoz
+            # írjuk, és a SZOLGÁLATBAN LÉVŐ kapus track-jéhez kötjük:
+            # enélkül a kapus mezszám-szűrője ("Klipjeim") némán üres
+            # csomagot adna, pedig pont az ő jelenetei ezek.
+            try:
+                from ..pipeline.goalkeeper import goalkeeper_timeline
+                from ..pipeline.xg import big_saves
+                _fps_bs = (match.meta.fps if match.meta.fps > 0
+                           else 25.0)
+                _stints = goalkeeper_timeline(match)
+
+                def _kapus(oldal, t):
+                    for st_ in ((_stints.get(oldal) or {}).get("stints")
+                                or []):
+                        if st_["from_s"] <= t / _fps_bs <= st_["to_s"]:
+                            return st_["track_id"]
+                    return None
+
+                for bs in big_saves(match):
+                    vedo = "away" if bs["team"] == "home" else "home"
+                    ev.append({"t": bs["t"], "type": "big_save",
+                               "team": vedo,
+                               "player_id": _kapus(vedo, bs["t"])})
+            except Exception:
+                pass
+        if "block" in types:
+            # Blokkolt lövések: a fal munkája — a blokkoló
+            # csapathoz írva.
+            try:
+                from ..pipeline.defense import detect_blocks
+                blk = detect_blocks(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_["t"], "type": "block",
+                            "team": side}
+                           for e_ in blk[side].get("events", [])]
+            except Exception:
+                pass
+        if "free_shot" in types:
+            # Fedezés-hibák: a szabadon hagyott lövők jelenetei
+            # — a VÉDEKEZŐ oldal tanuló-anyaga.
+            try:
+                from ..pipeline.defense import defense_analysis
+                _da = defense_analysis(match)
+                for side in ("home", "away"):
+                    ev += [{"t": sh_["t"], "type": "free_shot",
+                            "team": side,
+                            "label": sh_.get("zone") or ""}
+                           for sh_ in _da[side].get("shots", [])
+                           if sh_.get("free") is True]
+            except Exception:
+                pass
+        if "best_figure" in types:
+            # A legjobb (leggólerősebb) figura támadásai
+            # csapatonként — "tanuld meg felismerni" csomag.
+            try:
+                from ..pipeline.setplays import setplay_efficiency
+                eff_bf = setplay_efficiency(match)
+                for side in ("home", "away"):
+                    rows_bf = eff_bf.get(side) or []
+                    best_bf = max(rows_bf,
+                                  key=lambda r: r["goals"],
+                                  default=None)
+                    if best_bf is None or best_bf["goals"] < 1:
+                        continue
+                    ev += [{"t": t_bf, "type": "best_figure",
+                            "team": side,
+                            "label": (f"{best_bf['figure'] + 1}. "
+                                      "figura")}
+                           for t_bf in best_bf.get("starts", [])]
+            except Exception:
+                pass
+        if "recurring_figure" in types:
+            # A VISSZATÉRŐ figura: a csapat könyvtárából (az összes
+            # elemzett meccséből) a meccsről meccsre visszatérő fő
+            # figura, és e meccs azon támadásai, amelyek ezt játsszák —
+            # "ezt hozzák mindig", videón. Egy meccsből nincs könyvtár.
+            try:
+                from ..pipeline.setplays import recurring_figure_starts
+                for side in ("home", "away"):
+                    nev_rf = (match.meta.home_team if side == "home"
+                              else match.meta.away_team)
+                    rec_rf = (_team_figure_library(nev_rf)
+                              .get("recurring") or [])
+                    if not rec_rf:
+                        continue
+                    fo_rf = rec_rf[0]
+                    ev += [{"t": t_rf, "type": "recurring_figure",
+                            "team": side,
+                            "label": ("visszatérő figura: "
+                                      f"{fo_rf.get('name') or fo_rf['zone']}")}
+                           for t_rf in recurring_figure_starts(
+                               match, fo_rf["shape"],
+                               Team.HOME if side == "home" else Team.AWAY)]
+            except Exception:
+                pass
+        if "pivot_goal" in types:
+            # Beállós gólok: a beállón átfutó, gólra váltott
+            # támadások — a beadás-játék videós visszanézése.
+            try:
+                from ..pipeline.attack_types import pivot_usage
+                pu_cl = pivot_usage(match)
+                for side in ("home", "away"):
+                    ev += [{"t": t_pg, "type": "pivot_goal",
+                            "team": side, "label": "beállós gól"}
+                           for t_pg in
+                           pu_cl[side]["pivot_goal_ts"]]
+            except Exception:
+                pass
+        if "breakthrough" in types:
+            # Betörések: az ellenfél belépései a 9 m-en belülre
+            # — a sáv a fájlnévben, védekezés-videózáshoz.
+            try:
+                from ..pipeline.defense import breakthrough_lanes
+                bl_cl = breakthrough_lanes(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_bt["t"],
+                            "type": "breakthrough",
+                            "team": side,
+                            "label": e_bt["lane"]}
+                           for e_bt in
+                           bl_cl[side]["entries_ts"]]
+            except Exception:
+                pass
+        if "steal" in types:
+            # Labdaszerzések: a birtokos-váltás pillanatai — a
+            # védekezés motorjának videós visszanézése.
+            try:
+                from ..pipeline.defense import ball_winners
+                bw_cl = ball_winners(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_bw["t"], "type": "steal",
+                            "team": side,
+                            "label": "labdaszerzés"}
+                           for e_bw in bw_cl[side]["ts"]]
+            except Exception:
+                pass
+        if "costly_turnover" in types:
+            # Drága eladások: a labdavesztések, amelyekből fél percen
+            # belül kapott gól lett (court3d.turnover_moments — a 3D
+            # "Labdavesztések" lapozó ugyanezeket mutatja) — a vesztő
+            # csapathoz és játékoshoz írva, a pálya-harmad a címkében.
+            try:
+                from ..pipeline.court3d import turnover_moments
+                ev += [{"t": m_["t"], "type": "costly_turnover",
+                        "team": m_["team"], "player_id": m_["player_id"],
+                        "label": m_["zone"] or ""}
+                       for m_ in turnover_moments(match)["moments"]
+                       if m_["punished"]]
+            except Exception:
+                pass
+        if "bad_decision" in types:
+            # Döntés-hibák: a passz-döntések, ahol érdemben jobb opció is
+            # volt (court3d.decision_moments — a 3D "Döntések" lapozója)
+            # — a passzolóhoz írva; a címke a jobb opció.
+            try:
+                from ..pipeline.court3d import decision_moments
+                ev += [{"t": d_["t"], "type": "bad_decision",
+                        "team": d_["team"], "player_id": d_["player_id"],
+                        "label": ("loves-kellett" if d_["best_kind"] == "shoot"
+                                  else "jobb-passz")}
+                       for d_ in decision_moments(match)["moments"]]
+            except Exception:
+                pass
+        if "fast_break" in types or "conceded_fast_break" in types:
+            # Lerohanások (court3d.fast_break_moments — a 3D "Lerohanások"
+            # lapozója ugyanezeket mutatja): a támadó csapat csomagja a
+            # befejezőhöz írva ("a #7 lerohanásai" szűréshez), a kapott
+            # lerohanás a VÉDEKEZŐ csapaté (nem egy védő hibája: nincs
+            # player_id); a címke a kimenet. A klip a befejezés kockája
+            # köré kerül, így a felfutás is benne van.
+            try:
+                from ..pipeline.court3d import fast_break_moments
+                _kimenet = {"goal": "gol", "shot": "loves",
+                            None: "loves-nelkul"}
+                for k_ in fast_break_moments(match)["moments"]:
+                    if "fast_break" in types:
+                        ev.append({"t": k_["t"], "type": "fast_break",
+                                   "team": k_["team"],
+                                   "player_id": k_["shooter_id"],
+                                   "label": _kimenet[k_["outcome"]]})
+                    if "conceded_fast_break" in types:
+                        ev.append({"t": k_["t"],
+                                   "type": "conceded_fast_break",
+                                   "team": k_["defending"],
+                                   "label": _kimenet[k_["outcome"]]})
+            except Exception:
+                pass
+        if "key_scene" in types:
+            # Videózandó jelenetek (court3d.key_scene_rows — a nyomtatott
+            # jelentés, a kezdőlap kártyája és a 3D vetítés válogatása):
+            # egy csomag, időrendben sorszámozva — az edzés előtt sorban
+            # levetíthető. A csapat a HIBÁZÓ csapat (a sor "side"-ja), a
+            # címke a jelenet fajtája.
+            try:
+                from ..pipeline.court3d import (fast_break_moments,
+                                                key_scene_rows)
+                fps_ks = match.meta.fps if match.meta.fps > 0 else 25.0
+                # A kapott lerohanás sora az INDULÁS ideje — a klip a
+                # befejezés kockája köré kerül (mint a kapott-lerohanás
+                # csomagban), különben a gól lemarad (court3d.
+                # scene_anchor_t — a jelentés kockája is ide néz).
+                from ..pipeline.court3d import scene_anchor_t
+
+                def _horgony(r_):
+                    return scene_anchor_t(match, r_)
+                _fajta = {"d": "dontes-hiba", "sz": "szabad-lovo",
+                          "e": "draga-eladas", "k": "kapott-lerohanas",
+                          "kg": "kapott-gol"}
+                for r_ in key_scene_rows(match)["rows"]:
+                    ev.append({"t": _horgony(r_),
+                               "type": "key_scene",
+                               "team": r_.get("side") or "home",
+                               "label": _fajta.get(r_["tipus"],
+                                                   r_["tipus"])})
+            except Exception:
+                pass
+        if "goal_candidate" in types:
+            # Lehetséges gólok (event_detection.throw_off_candidates): a
+            # becsült gól-pillanat — a gól nélküli meccs gyanús
+            # középkezdései videón gyorsabban ellenőrizhetők, mint a
+            # lejátszóban egyenként.
+            try:
+                from ..pipeline.event_detection import throw_off_candidates
+                ev += [{"t": c_["goal_t"], "type": "goal_candidate",
+                        "team": c_["team"]}
+                       for c_ in throw_off_candidates(match)]
+            except Exception:
+                pass
+        if "key_moment" in types:
+            # A meccs gerince videóban: a key_moments réteg
+            # pillanataiból egy-egy klip, a címkével a
+            # fájlnévben.
+            try:
+                from ..pipeline.momentum import key_moments
+                ev += [{"t": km["t"], "type": "key_moment",
+                        "team": "home", "label": km["label"]}
+                       for km in key_moments(match)]
+            except Exception:
+                pass
+        if "turning_point" in types:
+            # A meccs fordulópontja: a győzelmi esély legnagyobb
+            # billenésének pillanata (ha volt legalább 2 gól).
+            try:
+                from ..pipeline.momentum import win_probability
+                tp = win_probability(match).get("turning_point")
+                if tp is not None:
+                    fps_tp = (match.meta.fps
+                              if match.meta.fps > 0 else 25.0)
+                    ev.append({
+                        "t": round(tp["t_s"] * fps_tp),
+                        "type": "turning_point",
+                        "team": ("home" if tp["to_p"] > tp["from_p"]
+                                 else "away"),
+                    })
+            except Exception:
+                pass
+        if "empty_net" in types:
+            # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
+            # — a saját végrehajtás és az ellenfél szokásainak
+            # visszanézéséhez.
+            try:
+                from ..pipeline.goalkeeper import detect_empty_net
+                ev += [{"t": w["start_frame"], "type": "empty_net",
+                        "team": w["team"]}
+                       for w in detect_empty_net(match)]
+            except Exception:
+                pass
+        if "top_shooter" in types:
+            # A fő lövő lövései: csapatonként a legtöbbet lövő
+            # azonosított játékos minden lövése — felderítési
+            # videó-csomag ("készülj a fő lövőre").
+            try:
+                from ..pipeline.xg import match_xg
+                shots = [s_ for s_ in
+                         match_xg(match).get("shots", [])
+                         if s_.get("player_id") is not None]
+                for side in ("home", "away"):
+                    per: dict = {}
+                    for s_ in shots:
+                        if s_["team"] == side:
+                            per[s_["player_id"]] = (
+                                per.get(s_["player_id"], 0) + 1)
+                    if not per:
+                        continue
+                    top = max(per.items(),
+                              key=lambda kv: kv[1])[0]
+                    ev += [{"t": s_["t"], "type": "top_shooter",
+                            "team": side}
+                           for s_ in shots
+                           if s_["team"] == side
+                           and s_["player_id"] == top]
+            except Exception:
+                pass
+        if "note" in types:
+            # Az edző saját jegyzetei — a megjelölt pillanat
+            # jelenete, a jegyzet szövegével a fájlnévben.
+            try:
+                ev += [{"t": int(n.get("frame", 0)), "type": "note",
+                        "team": "home",
+                        "label": str(n.get("text", ""))[:40],
+                        # A 3D pályán a jegyzettel mentett nyilak: a klip
+                        # a videóra rajzolja őket (kalibrációval).
+                        "rajz": n.get("rajz")}
+                       for n in _load_notes(match_id)]
+            except Exception:
+                pass
+
+        return ev
+
     @app.post("/matches/{match_id}/clips/export")
     def start_clip_export(match_id: str, body: dict):
         """Videóklip-export indítása HÁTTÉRSZÁLON: a kiválasztott típusú
@@ -1237,8 +6654,10 @@ def create_app():
         GET /jobs/{job_id} végponton követhető; a kész zip a
         GET /matches/{id}/clips/download címen tölthető le.
 
-        Törzs: {"types": ["goal", "shot", "turnover"]} — üres/hiányzó
-        lista esetén csak a gólok."""
+        Törzs: {"types": ["goal", "shot", "turnover"],
+                "jerseys": [7, 9]} — üres/hiányzó típuslista esetén
+        csak a gólok; a `jerseys` megadásával a csomag EGY (vagy
+        néhány) játékos jeleneteire szűkül."""
         import time
         import uuid
         from ..pipeline.clips import export_event_clips
@@ -1247,6 +6666,15 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         types = set(body.get("types") or ["goal"])
+        # Mezszám-szűrés: a játékos SAJÁT válogatása. A szemetet itt
+        # szűrjük ki, hogy egy elgépelt érték ne némán ürítse a
+        # csomagot.
+        jerseys = set()
+        for j in (body.get("jerseys") or []):
+            try:
+                jerseys.add(int(j))
+            except (TypeError, ValueError):
+                continue
 
         job_id = uuid.uuid4().hex[:12]
         job = {"job_id": job_id, "match_id": match_id, "status": "running",
@@ -1259,234 +6687,66 @@ def create_app():
 
         def _work():
             try:
-                events = detect_events(match)
-                ev = [{"t": e.t, "type": e.type.value, "team": e.team.value}
-                      for e in events]
-                # Az új elemző rétegek jelenetei is kérhetők klipnek:
-                # hétméteres, időkérés (a leálláshoz vezető jelenet) és
-                # cserehullám — hibatűrően, rétegenként.
-                if "seven_meter" in types:
-                    try:
-                        from ..pipeline.rules import seven_meter_outcomes
-                        ev += [{"t": sm["t"], "type": "seven_meter",
-                                "team": sm["team"]}
-                               for sm in seven_meter_outcomes(match)]
-                    except Exception:
-                        pass
-                if "timeout" in types:
-                    try:
-                        from ..pipeline.stoppages import detect_stoppages
-                        ev += [{"t": st["start_frame"], "type": "timeout",
-                                "team": st["likely_team"] or "home"}
-                               for st in detect_stoppages(match)
-                               if st["kind"] == "időkérés"]
-                    except Exception:
-                        pass
-                if "substitution" in types:
-                    try:
-                        from ..pipeline.substitutions import (
-                            detect_substitutions)
-                        ev += [{"t": sw["t"], "type": "substitution",
-                                "team": sw["team"]}
-                               for sw in detect_substitutions(match)]
-                    except Exception:
-                        pass
-                if "missed_chance" in types:
-                    # Kihagyott ziccer: nagy értékű (xG >= 0,5) helyzet,
-                    # ami nem lett gól — a leginkább visszanézendő jelenetek.
-                    try:
-                        from ..pipeline.xg import missed_big_chances
-                        ev += [{"t": mc["t"], "type": "missed_chance",
-                                "team": mc["team"]}
-                               for mc in missed_big_chances(match)]
-                    except Exception:
-                        pass
-                if "big_save" in types:
-                    # Bravúr-védés: ziccert fogott a kapus — a védő
-                    # csapathoz írjuk (az ő kapusának jelenete).
-                    try:
-                        from ..pipeline.xg import big_saves
-                        ev += [{"t": bs["t"], "type": "big_save",
-                                "team": ("away" if bs["team"] == "home"
-                                         else "home")}
-                               for bs in big_saves(match)]
-                    except Exception:
-                        pass
-                if "block" in types:
-                    # Blokkolt lövések: a fal munkája — a blokkoló
-                    # csapathoz írva.
-                    try:
-                        from ..pipeline.defense import detect_blocks
-                        blk = detect_blocks(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_["t"], "type": "block",
-                                    "team": side}
-                                   for e_ in blk[side].get("events", [])]
-                    except Exception:
-                        pass
-                if "free_shot" in types:
-                    # Fedezés-hibák: a szabadon hagyott lövők jelenetei
-                    # — a VÉDEKEZŐ oldal tanuló-anyaga.
-                    try:
-                        from ..pipeline.defense import defense_analysis
-                        _da = defense_analysis(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": sh_["t"], "type": "free_shot",
-                                    "team": side,
-                                    "label": sh_.get("zone") or ""}
-                                   for sh_ in _da[side].get("shots", [])
-                                   if sh_.get("free") is True]
-                    except Exception:
-                        pass
-                if "best_figure" in types:
-                    # A legjobb (leggólerősebb) figura támadásai
-                    # csapatonként — "tanuld meg felismerni" csomag.
-                    try:
-                        from ..pipeline.setplays import setplay_efficiency
-                        eff_bf = setplay_efficiency(match)
-                        for side in ("home", "away"):
-                            rows_bf = eff_bf.get(side) or []
-                            best_bf = max(rows_bf,
-                                          key=lambda r: r["goals"],
-                                          default=None)
-                            if best_bf is None or best_bf["goals"] < 1:
-                                continue
-                            ev += [{"t": t_bf, "type": "best_figure",
-                                    "team": side,
-                                    "label": (f"{best_bf['figure'] + 1}. "
-                                              "figura")}
-                                   for t_bf in best_bf.get("starts", [])]
-                    except Exception:
-                        pass
-                if "pivot_goal" in types:
-                    # Beállós gólok: a beállón átfutó, gólra váltott
-                    # támadások — a beadás-játék videós visszanézése.
-                    try:
-                        from ..pipeline.attack_types import pivot_usage
-                        pu_cl = pivot_usage(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": t_pg, "type": "pivot_goal",
-                                    "team": side, "label": "beállós gól"}
-                                   for t_pg in
-                                   pu_cl[side]["pivot_goal_ts"]]
-                    except Exception:
-                        pass
-                if "breakthrough" in types:
-                    # Betörések: az ellenfél belépései a 9 m-en belülre
-                    # — a sáv a fájlnévben, védekezés-videózáshoz.
-                    try:
-                        from ..pipeline.defense import breakthrough_lanes
-                        bl_cl = breakthrough_lanes(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_bt["t"],
-                                    "type": "breakthrough",
-                                    "team": side,
-                                    "label": e_bt["lane"]}
-                                   for e_bt in
-                                   bl_cl[side]["entries_ts"]]
-                    except Exception:
-                        pass
-                if "steal" in types:
-                    # Labdaszerzések: a birtokos-váltás pillanatai — a
-                    # védekezés motorjának videós visszanézése.
-                    try:
-                        from ..pipeline.defense import ball_winners
-                        bw_cl = ball_winners(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_bw["t"], "type": "steal",
-                                    "team": side,
-                                    "label": "labdaszerzés"}
-                                   for e_bw in bw_cl[side]["ts"]]
-                    except Exception:
-                        pass
-                if "key_moment" in types:
-                    # A meccs gerince videóban: a key_moments réteg
-                    # pillanataiból egy-egy klip, a címkével a
-                    # fájlnévben.
-                    try:
-                        from ..pipeline.momentum import key_moments
-                        ev += [{"t": km["t"], "type": "key_moment",
-                                "team": "home", "label": km["label"]}
-                               for km in key_moments(match)]
-                    except Exception:
-                        pass
-                if "turning_point" in types:
-                    # A meccs fordulópontja: a győzelmi esély legnagyobb
-                    # billenésének pillanata (ha volt legalább 2 gól).
-                    try:
-                        from ..pipeline.momentum import win_probability
-                        tp = win_probability(match).get("turning_point")
-                        if tp is not None:
-                            fps_tp = (match.meta.fps
-                                      if match.meta.fps > 0 else 25.0)
-                            ev.append({
-                                "t": round(tp["t_s"] * fps_tp),
-                                "type": "turning_point",
-                                "team": ("home" if tp["to_p"] > tp["from_p"]
-                                         else "away"),
-                            })
-                    except Exception:
-                        pass
-                if "empty_net" in types:
-                    # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
-                    # — a saját végrehajtás és az ellenfél szokásainak
-                    # visszanézéséhez.
-                    try:
-                        from ..pipeline.goalkeeper import detect_empty_net
-                        ev += [{"t": w["start_frame"], "type": "empty_net",
-                                "team": w["team"]}
-                               for w in detect_empty_net(match)]
-                    except Exception:
-                        pass
-                if "top_shooter" in types:
-                    # A fő lövő lövései: csapatonként a legtöbbet lövő
-                    # azonosított játékos minden lövése — felderítési
-                    # videó-csomag ("készülj a fő lövőre").
-                    try:
-                        from ..pipeline.xg import match_xg
-                        shots = [s_ for s_ in
-                                 match_xg(match).get("shots", [])
-                                 if s_.get("player_id") is not None]
-                        for side in ("home", "away"):
-                            per: dict = {}
-                            for s_ in shots:
-                                if s_["team"] == side:
-                                    per[s_["player_id"]] = (
-                                        per.get(s_["player_id"], 0) + 1)
-                            if not per:
-                                continue
-                            top = max(per.items(),
-                                      key=lambda kv: kv[1])[0]
-                            ev += [{"t": s_["t"], "type": "top_shooter",
-                                    "team": side}
-                                   for s_ in shots
-                                   if s_["team"] == side
-                                   and s_["player_id"] == top]
-                    except Exception:
-                        pass
-                if "note" in types:
-                    # Az edző saját jegyzetei — a megjelölt pillanat
-                    # jelenete, a jegyzet szövegével a fájlnévben.
-                    try:
-                        ev += [{"t": int(n.get("frame", 0)), "type": "note",
-                                "team": "home",
-                                "label": str(n.get("text", ""))[:40]}
-                               for n in _load_notes(match_id)]
-                    except Exception:
-                        pass
+                ev = _clip_events(match, match_id, types)
 
                 def cb(done, total, msg):
                     job["progress"] = round(done / max(1, total), 3)
                     job["message"] = msg
 
+                # A klipek MELLÉ a játékos SAJÁT meccs-lapja: az edző
+                # egy fájlt visz a beszélgetésre, nem kettőt — a videó
+                # és a "mit gyakorolj" ugyanabban a mappában van.
+                # Hibatűrően: egy lap hiánya nem viheti el a videót.
+                lapok: dict = {}
+                if jerseys:
+                    try:
+                        from ..pipeline.clips import _jersey_of_track
+                        from ..pipeline.report_html import player_report_html
+                        mez_of = _jersey_of_track(match)
+                        elso: dict = {}
+                        for track, mez_ in mez_of.items():
+                            if mez_ in jerseys and mez_ not in elso:
+                                elso[mez_] = track
+                        for mez_, track in elso.items():
+                            try:
+                                mappa = f"#{mez_}/" if len(jerseys) > 1 else ""
+                                lapok[f"{mappa}jatekos_lap_{mez_}.html"] = (
+                                    player_report_html(match, track))
+                            except Exception:
+                                continue
+                    except Exception:
+                        lapok = {}
+                else:
+                    # CSAPAT-szintű csomag: az edzői összefoglaló megy
+                    # a klipek mellé. A videó megmutatja, MI történt;
+                    # az összefoglaló azt, mit jelent — az edzés előtt
+                    # a kettő együtt ér valamit. Hibatűrően: az
+                    # összefoglaló hiánya nem viheti el a videót.
+                    try:
+                        from ..pipeline.coach_summary import (
+                            coach_summary_text)
+                        lapok["edzoi_osszefoglalo.txt"] = (
+                            coach_summary_text(match))
+                    except Exception:
+                        lapok = {}
+
                 res = export_event_clips(match, ev, types, out_dir,
-                                         progress_cb=cb)
+                                         progress_cb=cb, jerseys=jerseys,
+                                         extra_files=lapok)
                 job["status"] = "done"
                 job["progress"] = 1.0
-                job["message"] = (f"kész: {res.count} klip"
-                                  + (f" ({res.skipped} jelenet kimaradt "
-                                     "— ismétlés vagy limit)"
-                                     if res.skipped else ""))
+                # A NÉMÁN üres csomagokat is megnevezzük: aki hat
+                # csomagot kér és egy zip-et kap, nem tudja, hogy
+                # kettőhöz nem volt jelenet, vagy elromlott valami.
+                job["message"] = (
+                    f"kész: {res.count} klip"
+                    + (" · mezszám: "
+                       + ", ".join(f"#{j}" for j in res.jerseys)
+                       if res.jerseys else "")
+                    + (f" ({res.skipped} jelenet kimaradt "
+                       "— ismétlés vagy limit)" if res.skipped else "")
+                    + (f" · nem volt jelenet: {', '.join(res.empty)}"
+                       if res.empty else ""))
             except Exception as e:
                 job["status"] = "error"
                 job["error"] = str(e)
@@ -1500,6 +6760,140 @@ def create_app():
         import re
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return data_root() / "clips" / safe
+
+    @app.post("/players/season-clips/export")
+    def start_season_clips(body: dict):
+        """SZEZON-VÁLOGATÁS egy játékosról: az összes meccséből, egy zip.
+
+        A meccsenkénti klipcsomag megvan — de a játékos a SZEZONJÁT
+        akarja látni: "az összes gólom egy helyen". Eddig meccsenként
+        kellett vágatni és a zipeket kézzel összeszedni.
+
+        Törzs: {"team": ..., "jersey": 7,
+                "types": ["goal", ...] — üres/hiányzó = gólok}.
+        Meccsenkénti mappákba rendez (dátum + ellenfél); a videó
+        nélküli meccsek kimaradnak, és az üzenet megmondja, hány.
+        A haladás a GET /jobs/{id} végponton követhető; a kész zip a
+        GET /players/season-clips/download címen tölthető le.
+        """
+        import time
+        import uuid
+        import zipfile as _zipfile
+
+        from ..pipeline.clips import export_event_clips
+
+        team = str(body.get("team") or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        try:
+            jersey = int(body.get("jersey"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="jersey required")
+        types = set(body.get("types") or ["goal"])
+
+        # A játékos meccsei, időrendben — a darab-szűréssel (a szezon
+        # nem duplázhat itt sem).
+        sajat = []
+        for m in _season_matches():
+            if team not in (m.meta.home_team, m.meta.away_team):
+                continue
+            sajat.append(m)
+        sajat.sort(key=lambda m: ((m.meta.date or ""), m.meta.match_id))
+        if not sajat:
+            raise HTTPException(status_code=404,
+                                detail="nincs meccse ennek a csapatnak")
+
+        job_id = uuid.uuid4().hex[:12]
+        job = {"job_id": job_id, "match_id": f"szezon-{jersey}",
+               "status": "running", "stage": "K", "progress": 0.0,
+               "message": "szezon-válogatás indítása", "error": None,
+               "created": time.time(), "video": f"#{jersey} {team}"}
+        _jobs[job_id] = job
+
+        import re as _re
+        safe = _re.sub(r"[^A-Za-z0-9._-]", "_", f"{team}_{jersey}")
+        out_root = data_root() / "clips" / f"szezon_{safe}"
+
+        def _work():
+            try:
+                out_root.mkdir(parents=True, exist_ok=True)
+                mester = out_root / "szezon_valogatas.zip"
+                keszult = 0
+                kihagyott_video = 0
+                ures = 0
+                with _zipfile.ZipFile(mester, "w",
+                                      _zipfile.ZIP_STORED) as mz:
+                    for i, m in enumerate(sajat):
+                        job["progress"] = i / max(1, len(sajat))
+                        ellenfel = (m.meta.away_team
+                                    if m.meta.home_team == team
+                                    else m.meta.home_team)
+                        job["message"] = (f"vágás: {ellenfel} "
+                                          f"({i + 1}/{len(sajat)})")
+                        if not m.meta.video_path and not getattr(
+                                m.meta, "source_segments", None):
+                            kihagyott_video += 1
+                            continue
+                        mid = m.meta.match_id
+                        aldir = out_root / _re.sub(r"[^A-Za-z0-9._-]",
+                                                   "_", mid)
+                        try:
+                            ev = _clip_events(m, mid, types)
+                            res = export_event_clips(
+                                m, ev, types, aldir, jerseys={jersey})
+                        except RuntimeError:
+                            # Nincs jelenete ezen a meccsen, vagy a
+                            # videó nem érhető el — a válogatás a
+                            # TÖBBI meccsből így is összeáll.
+                            ures += 1
+                            continue
+                        mappa = _re.sub(
+                            r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ.-]+", "_",
+                            f"{m.meta.date or mid}_{ellenfel}")
+                        with _zipfile.ZipFile(res.zip_path) as rz:
+                            for nev in rz.namelist():
+                                mz.writestr(f"{mappa}/{nev}",
+                                            rz.read(nev))
+                                keszult += 1
+                if keszult == 0:
+                    job["status"] = "error"
+                    job["error"] = (
+                        "Egyetlen jelenet sem vágható: vagy nincs a "
+                        f"#{jersey} mezszámhoz kért esemény, vagy a "
+                        "meccsek videói nem érhetők el ezen a gépen.")
+                    job["message"] = f"hiba: {job['error']}"
+                    return
+                job["status"] = "done"
+                job["progress"] = 1.0
+                job["message"] = (
+                    f"kész: {keszult} klip, {len(sajat)} meccsből"
+                    + (f" ({kihagyott_video} meccs videó nélkül kimaradt)"
+                       if kihagyott_video else "")
+                    + (f" ({ures} meccsen nem volt jelenete)"
+                       if ures else ""))
+            except Exception as e:
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["message"] = f"hiba: {e}"
+            _log_job(job)
+
+        _threading.Thread(target=_work, daemon=True).start()
+        return {"job_id": job_id}
+
+    @app.get("/players/season-clips/download")
+    def download_season_clips(team: str, jersey: int):
+        """A legutóbb elkészült szezon-válogatás letöltése."""
+        import re as _re
+
+        from fastapi.responses import FileResponse
+        safe = _re.sub(r"[^A-Za-z0-9._-]", "_", f"{team}_{jersey}")
+        zip_path = (data_root() / "clips" / f"szezon_{safe}"
+                    / "szezon_valogatas.zip")
+        if not zip_path.exists():
+            raise HTTPException(status_code=404,
+                                detail="nincs kész szezon-válogatás")
+        return FileResponse(str(zip_path), media_type="application/zip",
+                            filename=f"szezon_valogatas_{safe}.zip")
 
     @app.get("/matches/{match_id}/clips/download")
     def download_clips(match_id: str):
@@ -1526,6 +6920,114 @@ def create_app():
                 key = str(p.track_id)
                 if key in mapping:
                     p.jersey_number = mapping[key]
+
+    # A klip-számláló eredmény-gyorsítótára (match_id → (kulcs, válasz)).
+    _clip_players_cache: dict = {}
+
+    @app.get("/matches/{match_id}/clip-players")
+    def clip_players(match_id: str):
+        """KIHEZ köthető jelenet ezen a meccsen — mezszám szerint.
+
+        A klip-válogatás mezszámra szűkíthető ("a #7 saját gólvideója"),
+        de a képernyő nem találgathat: ha egy mezszám nincs kiosztva,
+        vagy nincs hozzá esemény, a szűrés némán üres csomagot adna. Ez
+        a végpont ezért megmondja, kihez hány jelenet tartozik — a
+        felület csak a MŰKÖDŐ választásokat kínálja fel.
+
+        Válasz: {"players": [{"jersey", "team", "team_name", "name",
+        "counts": {típus: db}, "total"}]} — csökkenő darabszám szerint;
+        "totals": {típus: db}, "samples": {típus: [kocka-t, …]} (a
+        csomag-csempe minta-kockái, clips.preview_samples), "max_clips".
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.clips import MAX_CLIPS, _jersey_of_track
+
+        mez_of = _jersey_of_track(match)
+        # track → csapat (az első ismert érték), hogy a névjegyzékből a
+        # helyes csapat nevét kereshessük ki.
+        team_of: dict = {}
+        for f in match.frames:
+            for pl in f.players:
+                if pl.track_id not in team_of:
+                    team_of[pl.track_id] = getattr(pl.team, "value", pl.team)
+
+        soronkent: dict = {}
+        osszesen: dict = {}
+        mintak: dict = {}
+        try:
+            from ..pipeline.clips import _TYPE_HU, preview_samples
+            from ..pipeline.primitive_cache import primitive_cache
+
+            # EREDMÉNY-gyorsítótár: a teljes esemény-készlet felépítése
+            # egy hosszú meccsen másodpercekbe telik, és a Klipek lap
+            # minden megnyitása lekéri. A kulcsban ott van minden, ami
+            # az eseményeket vagy a mezszám-képet változtatja: a
+            # kockaszám (újrafeldolgozás), a jegyzetek, a kézi
+            # javítások és a mezszám-kiosztás fájl-ideje.
+            def _mtime(path_):
+                try:
+                    return path_.stat().st_mtime
+                except OSError:
+                    return 0.0
+            kulcs_cp = (len(match.frames),
+                        _mtime(_notes_path(match_id)),
+                        _mtime(_overrides_path(match_id)),
+                        _mtime(_jerseys_path(match_id)))
+            cached_cp = _clip_players_cache.get(match_id)
+            if cached_cp is not None and cached_cp[0] == kulcs_cp:
+                return cached_cp[1]
+
+            # A TELJES típus-készlettel építünk, a KÖZÖS építővel: a
+            # becslés és a vágás így nem tud széttartani. Korábban itt
+            # csak az alap-események (gól/lövés/eladás) számolódtak, a
+            # bővített csomagokra (nagy védés, kulcs-pillanat, jegyzet)
+            # a becslő NULLÁT mondott — "üres csomagot adna" —,
+            # miközben a vágás klipeket adott volna. A primitive_cache
+            # hatókörrel a rétegek meccsenként egyszer számolódnak.
+            with primitive_cache(match):
+                esemenyek = _clip_events(match, match_id, set(_TYPE_HU))
+            mintak = preview_samples(esemenyek)
+            # A számolt típusok mind a válaszban (a nullások is): a
+            # felület így a TÉNYLEG üres csomagot szürkíti, a nem számoltat
+            # (pl. a több meccses visszatérő figurát) nem.
+            for tip_ in _TYPE_HU:
+                osszesen.setdefault(tip_, 0)
+            for e in esemenyek:
+                tip_ = e.get("type")
+                # A TELJES darabszám a mezszám-nélküli jeleneteket is
+                # viszi: a csapat-szintű becslés különben alábecsülne,
+                # és az edző azt hinné, kevesebb klipet kap.
+                osszesen[tip_] = osszesen.get(tip_, 0) + 1
+                mez = mez_of.get(e.get("player_id"))
+                if mez is None:
+                    continue
+                oldal = team_of.get(e.get("player_id")) or e.get("team")
+                kulcs = (int(mez), str(oldal))
+                rec = soronkent.setdefault(
+                    kulcs, {"jersey": int(mez), "team": str(oldal),
+                            "counts": {}, "total": 0})
+                rec["counts"][tip_] = rec["counts"].get(tip_, 0) + 1
+                rec["total"] += 1
+        except Exception:
+            return {"players": [], "totals": {}, "samples": {},
+                    "max_clips": MAX_CLIPS}
+
+        out = []
+        for rec in soronkent.values():
+            csapat = (match.meta.home_team if rec["team"] == "home"
+                      else match.meta.away_team)
+            rec["team_name"] = csapat
+            rec["name"] = _player_name(csapat, rec["jersey"])
+            out.append(rec)
+        out.sort(key=lambda r: (-r["total"], r["jersey"]))
+        # A `totals` és a plafon a BECSLÉSHEZ kell: a vágás percekbe
+        # telik, és a rossz kijelölés csak a végén derülne ki.
+        valasz = {"players": out, "totals": osszesen,
+                  "samples": mintak, "max_clips": MAX_CLIPS}
+        _clip_players_cache[match_id] = (kulcs_cp, valasz)
+        return valasz
 
     @app.get("/matches/{match_id}/jerseys")
     def get_jerseys(match_id: str):
@@ -1598,8 +7100,13 @@ def create_app():
         n = 0
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(root.rglob("*")):
+                rel = f.relative_to(root).as_posix()
+                # A számolt eredmények gyorsítótára újraépül (nem mentjük),
+                # a félbe maradt ideiglenes írás pedig nem adat.
+                if rel.startswith("cache/") or f.suffix == ".tmp":
+                    continue
                 if f.is_file():
-                    z.write(f, f.relative_to(root).as_posix())
+                    z.write(f, rel)
                     n += 1
         if n == 0:
             raise HTTPException(status_code=404, detail="nincs még adat")
@@ -1613,6 +7120,9 @@ def create_app():
         """
         import io
         import zipfile
+        _nyers_tipus_ellenor(request, ("application/zip",
+                                       "application/x-zip-compressed",
+                                       "application/octet-stream"))
         body = bytearray()
         async for chunk in request.stream():
             body.extend(chunk)
@@ -1628,8 +7138,20 @@ def create_app():
             if info.is_dir():
                 continue
             dest = (root / info.filename).resolve()
-            if not str(dest).startswith(str(root)):
-                continue  # kitörési kísérlet (../ vagy abszolút út) — kihagyjuk
+            # Kitörési kísérlet (../ vagy abszolút út) — kihagyjuk. A
+            # FELOLDOTT úton, útvonal-szinten nézzük: a szöveges előtag-
+            # összevetés a "data-masik/" testvér-mappát is a "data" alá
+            # valónak hitte.
+            try:
+                rel = dest.relative_to(root)
+            except ValueError:
+                continue
+            # A számolt eredmények tára a zipből SOSEM jön (újraépül): egy
+            # kívülről kapott mentés ne írhasson a gyorsítótárba — a
+            # feloldott úton nézve, hogy a "matches/../cache/..." se
+            # kerülje meg.
+            if not rel.parts or rel.parts[0] == "cache":
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(z.read(info))
             restored += 1
@@ -1639,6 +7161,138 @@ def create_app():
     import_library.__annotations__["request"] = Request
     app.post("/library/import")(import_library)
 
+    class _LazyMatch:
+        """Meccs-KILINCS a könyvtár-szintű bejárásokhoz: a fejléc (meta,
+        kockaszám) azonnal megvan, a teljes meccs (a kockák) csak akkor
+        töltődik be, ha valaki hozzányúl.
+
+        A szezon-végpontok a könyvtár MINDEN meccsét végigjárják, de a
+        meccsenkénti eredmény a lemezes tárban van, tehát a legtöbb
+        meccshez a kockák nem is kellenek. A memória-plafon miatt a
+        hideg meccs visszatöltése ~10 mp — ha a bejárás mindig mindent
+        visszatöltene, a kezdőlap egy húsz meccses könyvtárnál percekig
+        nyílna. A kilincs a `meta` és a `num_frames` mezőt betöltés
+        nélkül adja; a `frames` és minden más tulajdonság a valódi
+        meccshez nyúl (és a betöltött példányt megtartja, hogy a bejárás
+        alatt ne cserélődjön)."""
+        __slots__ = ("meta", "num_frames", "_mid", "_m")
+
+        def __init__(self, meta, num_frames: int):
+            self.meta = meta
+            self.num_frames = int(num_frames)
+            self._mid = meta.match_id
+            self._m = None
+
+        def _real(self):
+            m = self._m
+            if m is None:
+                m = _store.get(self._mid)
+                if m is None:
+                    raise KeyError(self._mid)  # közben eltűnt a lemezről
+                self._m = m
+                self.meta = m.meta
+                self.num_frames = len(m.frames)
+            return m
+
+        @property
+        def frames(self):
+            return self._real().frames
+
+        def __getattr__(self, name):
+            return getattr(self._real(), name)
+
+    def _kockaszam(m) -> int:
+        """A meccs kockaszáma — kilincsnél betöltés nélkül."""
+        n = getattr(m, "num_frames", None) if isinstance(m, _LazyMatch) else None
+        return int(n) if n is not None else len(m.frames)
+
+    def _library_matches() -> list:
+        """A könyvtár MINDEN meccse kilincsként (a darabokkal együtt) —
+        megvárja a háttér-betöltés végét, de a hideg meccseket nem tölti
+        vissza."""
+        _store.keys()  # vár a betöltés végére
+        return [_LazyMatch(meta, n) for meta, n in _store.summaries()]
+
+    def _season_matches() -> list:
+        """A könyvtár meccsei SZEZON-számoláshoz: az összefűzött meccsek
+        DARABJAI nélkül — kilincsként (lásd _LazyMatch).
+
+        Összefűzés után a darabok és az egész is a könyvtárban van (a
+        darab szándékosan megmarad: törölhető, újrafeldolgozható). A
+        szezon-szintű összesítés viszont így ugyanazt a meccset KÉTSZER
+        számolná — a góllövő-lista, a szezon-mérleg, az egymás-elleni
+        és a jegyzet-lista is duplázna. Ez a szűrő veszi ki a
+        darabokat; a könyvtár-LISTA (a kezelő nézet) továbbra is
+        mindent mutat.
+        """
+        osszes = _library_matches()
+        reszek: set = set()
+        for m in osszes:
+            for rid in (getattr(m.meta, "merged_from", None) or []):
+                reszek.add(str(rid))
+        return [m for m in osszes if m.meta.match_id not in reszek]
+
+    def _idorendben(meccsek: list) -> list:
+        """Meccsek dátum szerint NÖVEKVŐ sorrendben (dátum nélküli elöl,
+        azonos dátumnál azonosító szerint) — ahol "az utolsó a
+        legutóbbi" a szabály (pl. a visszatérő gyengeség indoka)."""
+        return sorted(meccsek,
+                      key=lambda m: ((m.meta.date or ""), m.meta.match_id))
+
+    # A keret-viszonyítás küszöbei: ennyi játékidő alatt valaki nem
+    # "játszott" (a fél percre beálló csere lehúzná az átlagot), és
+    # ennyi ember alatt nincs értelmes keret-átlag.
+    SQUAD_MIN_PLAY_S = 120.0
+    SQUAD_MIN_PLAYERS = 5
+
+    # A FORMA-IRÁNY küszöbei: ennyi meccs kell az utolsó és az azt
+    # megelőző szakasz összevetéséhez (szakaszonként), és ennyi
+    # százalék alatt a változás nem irány, hanem zaj. Két-két meccsből
+    # nem szabad "javulsz"-t mondani: egy jó meccs bármikor jön.
+    TREND_WINDOW = 3
+    TREND_MIN_PCT = 10.0
+
+    def _forma_irany(points: list) -> dict:
+        """Javul vagy romlik? Az utolsó TREND_WINDOW meccs az azt
+        megelőző TREND_WINDOW-hoz mérve.
+
+        A görbe eddig SZÁMOKAT mutatott meccsről meccsre — a játékos
+        viszont egyetlen dolgot akar tudni: jó irányba megy-e. Azt
+        pedig egy pontsorból kinézni nem lehet, mert minden második
+        meccs jobb az előzőnél.
+
+        Mutatónként {"recent", "before", "change_pct", "verdict"};
+        verdict None, ha kevés a meccs vagy a változás a zajsávon
+        belül van. Sose hallgatólagos "változatlan": ha nem tudjuk,
+        nem mondunk semmit.
+        """
+        # (mezőnév, magasabb-a-jobb?) — az irány jelentése mutatónként
+        # más: a méter/percnél a több nem "jobb", csak több, ezért a
+        # futómunka szándékosan NINCS a listán.
+        mutatok = [("shot_pct", True), ("xg_diff", True),
+                   ("goals", True)]
+        ki: dict = {}
+        for mezo, tobb_jobb in mutatok:
+            ertekek = [p[mezo] for p in points if p.get(mezo) is not None]
+            if len(ertekek) < 2 * TREND_WINDOW:
+                continue
+            uj = ertekek[-TREND_WINDOW:]
+            regi = ertekek[-2 * TREND_WINDOW:-TREND_WINDOW]
+            a_uj = sum(uj) / len(uj)
+            a_regi = sum(regi) / len(regi)
+            if a_regi == 0:
+                continue
+            valtozas = 100.0 * (a_uj - a_regi) / abs(a_regi)
+            iteles = None
+            if abs(valtozas) >= TREND_MIN_PCT:
+                jobb = (valtozas > 0) == tobb_jobb
+                iteles = "javul" if jobb else "romlik"
+            ki[mezo] = {"recent": round(a_uj, 2),
+                        "before": round(a_regi, 2),
+                        "change_pct": round(valtozas, 1),
+                        "verdict": iteles}
+        return ki
+
     @app.get("/players/trend")
     def get_player_trend(team: str, jersey: int):
         """Egy játékos fejlődése MECCSRŐL MECCSRE, mezszám alapján.
@@ -1647,9 +7301,22 @@ def create_app():
         mutatói minden tárolt meccsből, időrendben. Ha egy meccsen több
         track viseli ugyanazt a számot (megszakadt követés), összegzünk —
         pont ezért éri meg mezszámot rendelni a játékosokhoz.
+
+        A döntés-minőség (a játékos-modellből): "dec_n" a besorolt
+        helyzetekben hozott döntések száma, "dec_best" közülük a legjobb
+        opciót választók; "dec_press"/"dec_press_best" ugyanez a
+        szorított döntésekre — None, ha a meccsen nem volt ilyen döntése.
+
+        A döntés-kvíz (a 3D közös nézés kvíz-jegyzetei a meccsen, a
+        keret-név szerint — mint a keret-lapon): "quiz_answers" (ítélt
+        válaszok) és "quiz_correct" (a jobb opcióra mutatott); None, ha a
+        meccsen nem volt kvízben.
         """
+        from ..pipeline.court3d import quiz_name_key, quiz_stats, shared3d_nev
+        _kv_nev = _player_name(team, jersey)
+        _kv_kulcs = quiz_name_key(shared3d_nev(_kv_nev)) if _kv_nev else None
         points = []
-        for match in _store.values():
+        for match in _season_matches():
             side = None
             if match.meta.home_team == team:
                 side = Team.HOME
@@ -1724,9 +7391,95 @@ def create_app():
                     mark_dist = round(ds_tr / fr_tr, 2)
             except Exception:
                 pass
+            # Döntés-minőség ezen a meccsen (a játékos-modellből): a
+            # besorolt helyzetekben (kilépnek rá / szabad a 6 m-es társ /
+            # szabad lőhely) hozott döntései és közülük a legjobb
+            # opciót választók, valamint a szorított döntései — a
+            # "jobban dönt-e meccsről meccsre" trend alapja.
+            dec_n = dec_best = dec_press = dec_press_best = None
+            try:
+                from ..pipeline.decisions import (
+                    pressure_decision_quality, situational_decisions)
+                sd_tr = [r_ for r_ in situational_decisions(match)[
+                    side.value]["players"] if r_["player_id"] in tracks]
+                if sd_tr:
+                    dec_n = sum(s_["decisions"] for r_ in sd_tr
+                                for s_ in r_["situations"].values())
+                    dec_best = sum(s_["match"] for r_ in sd_tr
+                                   for s_ in r_["situations"].values())
+                pq_tr = [r_ for r_ in pressure_decision_quality(match)[
+                    side.value]["players"] if r_["player_id"] in tracks]
+                if pq_tr:
+                    dec_press = sum(r_["press"] for r_ in pq_tr)
+                    dec_press_best = sum(r_["press_best"] for r_ in pq_tr)
+            except Exception:
+                pass
+            # HOL TARTOK A CSAPATON BELÜL — a játékos legelső kérdése.
+            # A nyers "4,2 km" magában semmit nem mond: sokat futott
+            # vagy keveset? A keret-átlaghoz és a helyezéshez viszonyítva
+            # már döntés lesz belőle. MEZSZÁM szerint összegzünk (nem
+            # trackenként), különben a megszakadt követés két embernek
+            # látszana, és lenyomná az átlagot.
+            csapat_tav: dict = {}
+            csapat_perc: dict = {}
+            csapat_sprint: dict = {}
+            for fr in match.frames:
+                for pl in fr.players:
+                    if pl.team != side or pl.jersey_number is None:
+                        continue
+                    csapat_tav.setdefault(pl.jersey_number, set()).add(
+                        pl.track_id)
+            for mez, trs in csapat_tav.items():
+                csapat_perc[mez] = sum(
+                    stats[t].measured_frames for t in trs if t in stats)
+                csapat_sprint[mez] = sum(
+                    stats[t].sprint_count for t in trs if t in stats)
+                csapat_tav[mez] = sum(
+                    stats[t].distance_m for t in trs if t in stats)
+            # Csak az ÉRDEMBEN játszott emberek: a fél percet pályán
+            # töltő csere lehúzná az átlagot, és a helyezés is hazudna.
+            jatszott = [m_ for m_, f_ in csapat_perc.items()
+                        if f_ / fps >= SQUAD_MIN_PLAY_S]
+            team_dist = team_sprint = None
+            dist_rank = squad_size = None
+            if len(jatszott) >= SQUAD_MIN_PLAYERS:
+                squad_size = len(jatszott)
+                # Percre vetítve hasonlítunk: a 60 percet játszó irányító
+                # és a 15 percet játszó szélső nyers métere nem
+                # összemérhető.
+                percre = {m_: csapat_tav[m_] / max(1e-9,
+                                                   csapat_perc[m_] / fps / 60.0)
+                          for m_ in jatszott}
+                team_dist = round(
+                    sum(percre.values()) / len(percre), 1)
+                team_sprint = round(
+                    sum(csapat_sprint[m_] for m_ in jatszott)
+                    / len(jatszott), 1)
+                if jersey in percre:
+                    dist_rank = 1 + sum(1 for m_ in jatszott
+                                        if percre[m_] > percre[jersey])
+            sajat_percre = (round(distance / max(1e-9, frames / fps / 60.0), 1)
+                            if frames else None)
+            # A döntés-kvíz ezen a meccsen (hibatűrően).
+            kv_itelt = kv_jo = None
+            if _kv_kulcs:
+                try:
+                    for r_ in quiz_stats(_load_notes(match.meta.match_id)):
+                        if quiz_name_key(r_["nev"]) == _kv_kulcs and r_["itelt"]:
+                            kv_itelt, kv_jo = r_["itelt"], r_["jo"]
+                except Exception:
+                    pass
+
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
+                # A keret-viszonyítás: saját méter/perc, keret-átlag,
+                # helyezés és keret-létszám. None, ha kevés a mezszám.
+                "distance_per_min": sajat_percre,
+                "team_distance_per_min": team_dist,
+                "team_sprint_avg": team_sprint,
+                "distance_rank": dist_rank,
+                "squad_size": squad_size,
                 "opponent": (match.meta.away_team if side == Team.HOME
                              else match.meta.home_team),
                 "gk_on_target": gk_on,
@@ -1743,9 +7496,19 @@ def create_app():
                 "shot_pct": round(100.0 * goals / shots, 1) if shots else None,
                 "xg": xg,
                 "xg_diff": round(goals - xg, 2) if xg is not None else None,
+                "quiz_answers": kv_itelt,
+                "quiz_correct": kv_jo,
+                "dec_n": dec_n,
+                "dec_best": dec_best,
+                "dec_press": dec_press,
+                "dec_press_best": dec_press_best,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
-        return {"team": team, "jersey": jersey, "points": points}
+        return {"team": team, "jersey": jersey,
+                "name": _player_name(team, jersey), "points": points,
+                # Javul vagy romlik — a görbe magától nem mondja meg.
+                "trend": _forma_irany(points),
+                "trend_window": TREND_WINDOW}
 
     @app.get("/head-to-head/report")
     def get_h2h_report(team_a: str, team_b: str):
@@ -1754,7 +7517,7 @@ def create_app():
         from fastapi.responses import HTMLResponse
         pair = {team_a, team_b}
         entries = []
-        for m in _store.values():
+        for m in _season_matches():
             if {m.meta.home_team, m.meta.away_team} != pair:
                 continue
             entries.append((m.meta.date or "", m))
@@ -1787,29 +7550,20 @@ def create_app():
         # csapatonként (mezszám-alapú összegzés) — hibatűrően.
         scorers = None
         try:
+            # A meccsenkénti gól-tally a lemezes eredmény-tárból (ugyanaz,
+            # amiből a szezon-toplista él): csapatnév, mezszám, gól. Eddig
+            # a riport minden hívásnál a közös meccsek minden kockáját
+            # bejárta a mezszámokért — és ehhez a hideg meccseket
+            # visszatöltötte.
             sc_acc: dict = {}
             for date_, m_ in entries:
-                jersey_of: dict = {}
-                team_of: dict = {}
-                for fr in m_.frames:
-                    for p in fr.players:
-                        if p.jersey_number is not None:
-                            jersey_of.setdefault(p.track_id,
-                                                 p.jersey_number)
-                        team_of.setdefault(
-                            p.track_id, getattr(p.team, "value", p.team))
-                tn_ = {"home": m_.meta.home_team,
-                       "away": m_.meta.away_team}
-                from ..pipeline.xg import match_xg
-                for r_ in match_xg(m_).get("shooters", []):
-                    if not r_["goals"]:
-                        continue
-                    j_ = jersey_of.get(r_["player_id"])
-                    t_ = tn_.get(team_of.get(r_["player_id"]))
-                    if j_ is None or not t_:
-                        continue
-                    sc_acc[(t_, j_)] = (sc_acc.get((t_, j_), 0)
-                                        + r_["goals"])
+                try:
+                    rec_t = _cached_result(m_.meta.match_id, "player-tallies",
+                                           lambda m_=m_: _player_tally_of(m_))
+                except Exception:
+                    rec_t = _player_tally_of(m_)
+                for t_, j_, n_ in rec_t.get("goals") or []:
+                    sc_acc[(t_, j_)] = sc_acc.get((t_, j_), 0) + n_
             if sc_acc:
                 scorers = {}
                 for tname in (team_a, team_b):
@@ -1833,14 +7587,83 @@ def create_app():
                       else Team.AWAY)
             side_b = Team.AWAY if side_a == Team.HOME else Team.HOME
             matchup = matchup_plan(
-                scout_team(m_last, side_a, TacticsConfig()),
-                scout_team(m_last, side_b, TacticsConfig())) or None
+                _scout_cached(m_last, side_a),
+                _scout_cached(m_last, side_b)) or None
         except Exception:
             matchup = None
         from ..pipeline.report_html import h2h_report_html
         return HTMLResponse(content=h2h_report_html(
             team_a, team_b, stats, timeline, matchup=matchup,
             scorers=scorers))
+
+    def _season_halves(team: str):
+        """A csapat szezon-meccsei időrendben, két félre vágva.
+
+        Visszatérés: (entries, older_items, newer_items) — az entries
+        (dátum, meccs-azonosító, oldal) hármasok rendezve, a két items-
+        lista a _combined_report törzs-alakjában. Egy meccsnél a
+        "régebbi" fél az az egy meccs, az "újabb" üres."""
+        entries = []
+        for m in _season_matches():
+            side = ("home" if m.meta.home_team == team
+                    else "away" if m.meta.away_team == team else None)
+            if side is None:
+                continue
+            entries.append((m.meta.date or "", m.meta.match_id, side))
+        entries.sort()
+        cut = max(1, len(entries) // 2)
+        older_items = [{"match_id": e[1], "team": e[2]}
+                       for e in entries[:cut]]
+        newer_items = [{"match_id": e[1], "team": e[2]}
+                       for e in entries[cut:]]
+        return entries, older_items, newer_items
+
+    def _repertoire_change(team: str, rep_older, rep_newer) -> dict:
+        """A figura-repertoár változása a két fél felderítéséből, névvel."""
+        from ..pipeline.setplays import figure_repertoire_change
+        rep = figure_repertoire_change(rep_older.setplay_shapes,
+                                       rep_newer.setplay_shapes)
+        for k in ("kept", "new", "dropped"):
+            rep[k] = _nevesit(team, rep.get(k))
+        return rep
+
+    def _items_repertoire(team_name: str, items) -> Optional[dict]:
+        """Repertoár-változás egy KIJELÖLT meccs-listából (a /scouting
+        items-alakja): a meccsek dátum szerint rendezve két félre vágva,
+        a két fél felderítéséből a változás, névvel. Két meccsnél
+        kevesebbnél None."""
+        if not items or len(items) < 2:
+            return None
+        def _kulcs(it):
+            m = _store.get(it.get("match_id"))
+            return ((m.meta.date or "") if m is not None else "",
+                    str(it.get("match_id")))
+        rendezett = sorted(items, key=_kulcs)
+        cut = max(1, len(rendezett) // 2)
+        rep_older = _combined_report({"items": rendezett[:cut]})
+        rep_newer = _combined_report({"items": rendezett[cut:]})
+        return _repertoire_change(team_name, rep_older, rep_newer)
+
+    @app.get("/library/figure-repertoire")
+    def get_library_figure_repertoire(team: str):
+        """Egy csapat REPERTOÁR-VÁLTOZÁSA a szezon két fele között:
+        {"team", "matches", "older_matches", "newer_matches", "kept",
+        "new", "dropped", "verdict"} — a Szezon képernyő szakasza. Két
+        meccsnél kevesebbnél a listák üresek, az ítélet None (nincs
+        hiba: a képernyő csendben kihagyja)."""
+        team = str(team or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        entries, older_items, newer_items = _season_halves(team)
+        ures = {"team": team, "matches": len(entries),
+                "older_matches": len(older_items),
+                "newer_matches": len(newer_items),
+                "kept": [], "new": [], "dropped": [], "verdict": None}
+        if len(entries) < 2:
+            return ures
+        rep_older = _combined_report({"items": older_items})
+        rep_newer = _combined_report({"items": newer_items})
+        return {**ures, **_repertoire_change(team, rep_older, rep_newer)}
 
     @app.get("/season/report")
     def get_season_report(team: str):
@@ -1849,24 +7672,20 @@ def create_app():
         fókuszok — nyomtatható HTML-ben. 404, ha 2-nél kevesebb meccs
         van a csapattól."""
         from fastapi.responses import HTMLResponse
-        entries = []
-        for m in _store.values():
-            side = ("home" if m.meta.home_team == team
-                    else "away" if m.meta.away_team == team else None)
-            if side is None:
-                continue
-            entries.append((m.meta.date or "", m.meta.match_id, side))
-        entries.sort()
+        entries, older_items, newer_items = _season_halves(team)
         if len(entries) < 2:
             raise HTTPException(status_code=404,
                                 detail="too few matches for team")
-        cut = max(1, len(entries) // 2)
-        older_items = [{"match_id": e[1], "team": e[2]}
-                       for e in entries[:cut]]
-        newer_items = [{"match_id": e[1], "team": e[2]}
-                       for e in entries[cut:]]
-        tr = trend_report(_combined_report({"items": older_items}),
-                          _combined_report({"items": newer_items}))
+        rep_older = _combined_report({"items": older_items})
+        rep_newer = _combined_report({"items": newer_items})
+        tr = trend_report(rep_older, rep_newer)
+        # Repertoár-változás: mi jött be és mi tűnt el a két fél között
+        # — hibatűrően, névvel.
+        repertoire = None
+        try:
+            repertoire = _repertoire_change(team, rep_older, rep_newer)
+        except Exception:
+            repertoire = None
         focuses = []
         try:
             focuses = (library_training_focus().get("teams", {})
@@ -1960,10 +7779,23 @@ def create_app():
                 leaders = None
         except Exception:
             leaders = None
+        # A saját figura-könyvtár a szezon ÖSSZES meccséből: mi az, amit
+        # meccsről meccsre hozunk, és mennyit ér — hibatűrően.
+        figure_library = None
+        try:
+            figure_library = _combined_report(
+                {"items": older_items + newer_items}).setplay_library
+            figure_library["figures"] = _nevesit(
+                team, figure_library.get("figures"))
+            figure_library["recurring"] = _nevesit(
+                team, figure_library.get("recurring"))
+        except Exception:
+            figure_library = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
-            venue=venue, leaders=leaders, opponents=opponents))
+            venue=venue, leaders=leaders, opponents=opponents,
+            figure_library=figure_library, repertoire=repertoire))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
@@ -1977,13 +7809,123 @@ def create_app():
                                 detail="no data for player")
         from ..pipeline.report_html import player_season_html
         return HTMLResponse(content=player_season_html(
-            team, jersey, data["points"]))
+            team, jersey, data["points"], data.get("name"),
+            _season_player_focus(team, jersey),
+            # A lapot a játékos TESZI EL: ha a képernyő megmondja, hogy
+            # javul, a nyomtatvány pedig nem, a papír kevesebbet ér,
+            # mint a program.
+            trend=data.get("trend"),
+            trend_window=data.get("trend_window", TREND_WINDOW)))
+
+    # Egyéni edzés-fókusz gyorsítótár (match_id → (kulcs, eredmény)).
+    # A szezon-szintű összegzés MINDEN meccsre lefuttatja a réteget, és
+    # az minden forrás-mérését újraszámolná: egy húsz meccses
+    # könyvtárnál ez percekben mérhető. A kulcs a kockaszám és a
+    # csapatnevek — újrafeldolgozásnál és átnevezésnél magától frissül,
+    # a kézi esemény-javítás pedig kifejezetten dobja (lásd
+    # _apply_overrides_to_match).
+    _ptf_cache: dict = {}
+
+    def _training_of(m) -> dict:
+        """Egy meccs TELJES edzés-fókusza (csapat + "players") a KÖZÖS,
+        lemezre is írt eredmény-tárból: a meccs-nézet, a szezon-fókusz és
+        az egyéni szezon-fókusz ugyanazt az egy számolást használja (egy
+        60 perces meccsen ~30 mp — húsz meccsnél ez eddig minden indítás
+        után tíz perc volt)."""
+        mid = m.meta.match_id
+        return _cached_result(mid, "training", lambda: _get_training_raw(mid))
+
+    def _player_focus_of(m) -> dict:
+        """Egy meccs egyéni edzés-fókusza, a lemezes eredmény-tárból
+        (saját bejegyzés: csak az egyéni réteget futtatja, a csapat-
+        fókuszt nem)."""
+        mid = m.meta.match_id
+        try:
+            return _cached_result(mid, "player-focus",
+                                  lambda: _player_focus_of_mem(m))
+        except Exception:
+            return _player_focus_of_mem(m)
+
+    def _player_focus_of_mem(m) -> dict:
+        """Tartalék: memóriabeli tár (a tár nem használható)."""
+        from ..pipeline.training import player_training_focus
+        kulcs = (len(m.frames), m.meta.home_team, m.meta.away_team)
+        cached = _ptf_cache.get(m.meta.match_id)
+        if cached is not None and cached[0] == kulcs:
+            return cached[1]
+        try:
+            rec = player_training_focus(m)
+        except Exception:
+            rec = {"home": {"players": []}, "away": {"players": []}}
+        _ptf_cache[m.meta.match_id] = (kulcs, rec)
+        return rec
+
+    def _season_player_focus(team: str, jersey: int) -> list:
+        """Egyéni edzés-fókusz a SZEZONBÓL, egy mezszámra.
+
+        Minden meccs fókuszait összegyűjtjük, és a többször visszatérőt
+        tesszük előre: ami több meccsen előjön, az nem napi forma,
+        hanem fejlesztendő terület. Meccsenként hibatűrően — egy rossz
+        meccs nem viheti el a listát.
+        """
+        fokusz: dict = {}
+        try:
+            # Dátum szerint növekvően, hogy a beírt indok a legutóbbié legyen.
+            for m_ in _idorendben(_season_matches()):
+                if m_.meta.home_team == team:
+                    oldal = "home"
+                elif m_.meta.away_team == team:
+                    oldal = "away"
+                else:
+                    continue
+                ptf = _player_focus_of(m_)
+                for p_ in (ptf.get(oldal) or {}).get("players") or []:
+                    if p_.get("jersey") != jersey:
+                        continue
+                    for it in p_["items"]:
+                        rec = fokusz.setdefault(
+                            it["title"], {**it, "count": 0})
+                        rec["count"] += 1
+                        rec["why"] = it["why"]  # a legutóbbi meccs indoka
+        except Exception:
+            return []
+        return sorted(fokusz.values(), key=lambda r: -r["count"])[:3]
+
+    @app.get("/players/focus")
+    def get_player_focus(team: str, jersey: int):
+        """Egy játékos SZEZON-szintű edzés-fókusza (mit gyakoroljon).
+
+        Ugyanaz, ami a nyomtatható szezon-lap "Mit gyakorolj"
+        szakaszában áll — a képernyőn is látszania kell, mert a
+        játékos ott nézi meg a saját görbéjét.
+
+        Visszatérés: {"team", "jersey", "name", "focus": [{"title",
+        "area", "why", "drill", "count", "clips"}]} — a count azt
+        mondja meg, hány meccsen jött elő ugyanaz, a "clips" pedig
+        azokat a klip-típusokat, amelyeken a hiba LÁTSZIK (üres, ha a
+        területet egyetlen jelenet sem mutatja meg). A gyakorlat
+        elmondja, mit kell csinálni; a felvétel azt, miért.
+        """
+        return {"team": team, "jersey": jersey,
+                "name": _player_name(team, jersey),
+                "focus": _season_player_focus(team, jersey)}
 
     # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
     # kulcs érvényessége — újrafeldolgozásnál magától frissül.
     _summary_cache: dict = {}
 
     def _match_summary(m) -> dict:
+        """A meccs szezon-kivonata a lemezes eredmény-tárból (a
+        kezdőlap minden indításkor az egész könyvtárra kéri — meccsenként
+        ~4 mp volt, újraindítás után mindig elölről)."""
+        mid = m.meta.match_id
+        try:
+            return _cached_result(mid, "library-summary",
+                                  lambda: _match_summary_mem(m))
+        except Exception:
+            return _match_summary_mem(m)
+
+    def _match_summary_mem(m) -> dict:
         # Érvényesség: frame-szám + csapatnevek + dátum — átnevezés vagy
         # újrafeldolgozás után a kivonat újraszámolódik.
         key = (len(m.frames), m.meta.home_team, m.meta.away_team, m.meta.date)
@@ -1993,9 +7935,15 @@ def create_app():
         from ..pipeline.event_detection import EventType, detect_shots
         fps = m.meta.fps if m.meta.fps > 0 else 25.0
         goals_home = goals_away = shots = saves = 0
+        # A gól utáni középkezdésből KÖVETKEZTETETT gólok (nem a
+        # gólvonalon látottak) — a kártya jelzi, ha az eredmény részben
+        # ilyen.
+        goals_inferred = 0
         try:
             for e in detect_shots(m):
                 if e.type == EventType.GOAL:
+                    if (e.detail or {}).get("goal_source") == "középkezdés":
+                        goals_inferred += 1
                     if e.team == Team.HOME:
                         goals_home += 1
                     else:
@@ -2006,6 +7954,15 @@ def create_app():
                         saves += 1
         except Exception:
             pass  # sérült/üres meccsnél a többi mutató még érték
+        # Lehetséges gólok (a labda középkezdés-szerűen a középen állt,
+        # előtte a kapu előtt járt, közöttük nincs gól): a kártya jelzi,
+        # hogy a meccs-nézetben egy kattintással felvehetők.
+        goal_candidates = 0
+        try:
+            from ..pipeline.event_detection import throw_off_candidates
+            goal_candidates = len(throw_off_candidates(m))
+        except Exception:
+            pass
         distance_m = 0.0
         sprints = 0
         try:
@@ -2164,6 +8121,8 @@ def create_app():
             "duration_s": round(len(m.frames) / fps, 1),
             "goals_home": goals_home,
             "goals_away": goals_away,
+            "goals_inferred": goals_inferred,
+            "goal_candidates": goal_candidates,
             "shots": shots,
             "saves": saves,
             "distance_m": round(distance_m, 1),
@@ -2203,8 +8162,18 @@ def create_app():
         A meccsenkénti számítás gyorsítótárazott (frame-szám az érvényesség),
         így a kezdőlap újranyitása nagy könyvtárnál is azonnali.
         """
-        per = [_match_summary(m) for m in _store.values()]
+        # A valódi (jegyzőkönyvi) eredmény a meta-ból, NEM a
+        # gyorsítótárazott kivonatból: az edző utólag adja meg (✎), a
+        # kockák közben nem változnak.
+        per = []
+        for m in _season_matches():
+            d = dict(_match_summary(m))
+            d["real_goals_home"] = getattr(m.meta, "real_goals_home", None)
+            d["real_goals_away"] = getattr(m.meta, "real_goals_away", None)
+            per.append(d)
         per.sort(key=lambda d: (d.get("date") or "", d["match_id"]))
+        valodi = [d for d in per if d["real_goals_home"] is not None
+                  and d["real_goals_away"] is not None]
         teams = sorted({t for d in per
                         for t in (d["home_team"], d["away_team"]) if t})
         return {
@@ -2212,6 +8181,10 @@ def create_app():
             "total_duration_s": round(sum(d["duration_s"] for d in per), 1),
             "teams": teams,
             "goals": sum(d["goals_home"] + d["goals_away"] for d in per),
+            # a megadott valódi eredmények összege és a meccsek száma
+            "real_goals": sum(d["real_goals_home"] + d["real_goals_away"]
+                              for d in valodi),
+            "real_matches": len(valodi),
             "shots": sum(d["shots"] for d in per),
             "saves": sum(d.get("saves", 0) for d in per),
             "sprints": sum(d["sprints"] for d in per),
@@ -2219,103 +8192,278 @@ def create_app():
             "per_match": per,
         }
 
+    _TALLY_CATS = ("goals", "assists", "blocks", "steals", "saves",
+                   "matches")
+
+    def _player_tally_of(m) -> dict:
+        """EGY meccs hozzájárulása a szezon-összegekhez:
+        {kategória: [[csapatnév, mezszám, darab], …]} — JSON-barát alak,
+        hogy a lemezes eredmény-tárba kerülhessen (a toplista eddig MINDEN
+        hívásnál végigjárta az összes meccs összes kockáját)."""
+        goals_t: dict = {}
+        blocks_t: dict = {}
+        steals_t: dict = {}
+        saves_t: dict = {}
+        assists_t: dict = {}
+        matches_t: dict = {}
+        jersey_of: dict = {}
+        team_name = {"home": m.meta.home_team,
+                     "away": m.meta.away_team}
+        for fr in m.frames:
+            for p in fr.players:
+                if p.jersey_number is not None:
+                    jersey_of.setdefault(p.track_id,
+                                         p.jersey_number)
+        team_of: dict = {}
+        for fr in m.frames:
+            for p in fr.players:
+                team_of.setdefault(p.track_id,
+                                   getattr(p.team, "value", p.team))
+
+        def _key(tid):
+            j = jersey_of.get(tid)
+            if j is None:
+                return None
+            tname = team_name.get(team_of.get(tid))
+            if not tname:
+                return None
+            return (tname, j)
+
+        # Hány meccsen szerepelt: a keret-lapon ez mondja meg, hogy
+        # egy alacsony gólszám kevés játékot vagy gyenge formát
+        # takar-e. (Meccsenként egyszer, akkor is, ha a követés
+        # megszakadt és több track viselte ugyanazt a számot.)
+        for _tid in set(jersey_of):
+            k_m = _key(_tid)
+            if k_m:
+                matches_t[k_m] = matches_t.get(k_m, 0) + 1
+
+        try:
+            from ..pipeline.xg import match_xg
+            for r_ in match_xg(m).get("shooters", []):
+                k = _key(r_["player_id"])
+                if k and r_["goals"]:
+                    goals_t[k] = goals_t.get(k, 0) + r_["goals"]
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import detect_blocks
+            blk = detect_blocks(m)
+            for side in ("home", "away"):
+                for e_ in blk[side].get("events", []):
+                    k = _key(e_.get("player_id"))
+                    if k:
+                        blocks_t[k] = blocks_t.get(k, 0) + 1
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import ball_winners
+            bw = ball_winners(m)
+            for side in ("home", "away"):
+                for w_ in bw[side]["players"]:
+                    k = _key(w_["player_id"])
+                    if k:
+                        steals_t[k] = (steals_t.get(k, 0)
+                                       + w_["steals"])
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import goalkeeper_timeline
+            tl = goalkeeper_timeline(m)
+            for side in ("home", "away"):
+                pk = (tl.get(side) or {}).get("per_keeper", {})
+                for tid, rec in pk.items():
+                    k = _key(tid)
+                    if k and rec.get("saves"):
+                        saves_t[k] = (saves_t.get(k, 0)
+                                      + rec["saves"])
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import (EventType,
+                                                    detect_events)
+            for e_ in detect_events(m):
+                if e_.type != EventType.GOAL:
+                    continue
+                aid = (e_.detail or {}).get("assist_id")
+                k = _key(aid) if aid is not None else None
+                if k:
+                    assists_t[k] = assists_t.get(k, 0) + 1
+        except Exception:
+            pass
+
+        ki = {"goals": goals_t, "assists": assists_t, "blocks": blocks_t,
+              "steals": steals_t, "saves": saves_t, "matches": matches_t}
+        return {cat: [[k[0], k[1], v] for k, v in d.items()]
+                for cat, d in ki.items()}
+
+    def _library_player_tallies() -> dict:
+        """Játékosonkénti szezon-összegek a teljes könyvtárból.
+
+        Kulcs: (csapatnév, mezszám) — a mezszám nélküli trackek
+        kimaradnak, mert meccsek közt nincs stabil azonosítójuk.
+        Visszatérés: {"goals", "assists", "blocks", "steals", "saves",
+        "matches"} — mind {(csapat, mez): darab} alakú.
+
+        Két végpont eszi: a toplisták (top 5) és a keret-lap (a csapat
+        TELJES sora). Egy helyen számoljuk, hogy a kettő ne tudjon
+        széttartani.
+        """
+        osszes: dict = {cat: {} for cat in _TALLY_CATS}
+        for m in _season_matches():
+            mid = m.meta.match_id
+            try:
+                rec = _cached_result(mid, "player-tallies",
+                                     lambda m=m: _player_tally_of(m))
+            except Exception:
+                rec = _player_tally_of(m)
+            for cat in _TALLY_CATS:
+                d = osszes[cat]
+                for sor in rec.get(cat) or []:
+                    k = (sor[0], sor[1])
+                    d[k] = d.get(k, 0) + sor[2]
+        return osszes
+
+
     @app.get("/library/leaders")
     def library_leaders():
         """Szezon-toplisták a teljes könyvtárból: gól, blokk,
         labdaszerzés és védés vezérei — mezszám alapján összegezve
         (a mezszám nélküli trackek kimaradnak: meccsek közt nincs
         stabil azonosítójuk). Minden lista a top 5-öt adja."""
-        goals_t: dict = {}
-        blocks_t: dict = {}
-        steals_t: dict = {}
-        saves_t: dict = {}
-        assists_t: dict = {}
-        for m in _store.values():
-            jersey_of: dict = {}
-            team_name = {"home": m.meta.home_team,
-                         "away": m.meta.away_team}
-            for fr in m.frames:
-                for p in fr.players:
-                    if p.jersey_number is not None:
-                        jersey_of.setdefault(p.track_id,
-                                             p.jersey_number)
-            team_of: dict = {}
-            for fr in m.frames:
-                for p in fr.players:
-                    team_of.setdefault(p.track_id,
-                                       getattr(p.team, "value", p.team))
-
-            def _key(tid):
-                j = jersey_of.get(tid)
-                if j is None:
-                    return None
-                tname = team_name.get(team_of.get(tid))
-                if not tname:
-                    return None
-                return (tname, j)
-
-            try:
-                from ..pipeline.xg import match_xg
-                for r_ in match_xg(m).get("shooters", []):
-                    k = _key(r_["player_id"])
-                    if k and r_["goals"]:
-                        goals_t[k] = goals_t.get(k, 0) + r_["goals"]
-            except Exception:
-                pass
-            try:
-                from ..pipeline.defense import detect_blocks
-                blk = detect_blocks(m)
-                for side in ("home", "away"):
-                    for e_ in blk[side].get("events", []):
-                        k = _key(e_.get("player_id"))
-                        if k:
-                            blocks_t[k] = blocks_t.get(k, 0) + 1
-            except Exception:
-                pass
-            try:
-                from ..pipeline.defense import ball_winners
-                bw = ball_winners(m)
-                for side in ("home", "away"):
-                    for w_ in bw[side]["players"]:
-                        k = _key(w_["player_id"])
-                        if k:
-                            steals_t[k] = (steals_t.get(k, 0)
-                                           + w_["steals"])
-            except Exception:
-                pass
-            try:
-                from ..pipeline.goalkeeper import goalkeeper_timeline
-                tl = goalkeeper_timeline(m)
-                for side in ("home", "away"):
-                    pk = (tl.get(side) or {}).get("per_keeper", {})
-                    for tid, rec in pk.items():
-                        k = _key(tid)
-                        if k and rec.get("saves"):
-                            saves_t[k] = (saves_t.get(k, 0)
-                                          + rec["saves"])
-            except Exception:
-                pass
-            try:
-                from ..pipeline.event_detection import (EventType,
-                                                        detect_events)
-                for e_ in detect_events(m):
-                    if e_.type != EventType.GOAL:
-                        continue
-                    aid = (e_.detail or {}).get("assist_id")
-                    k = _key(aid) if aid is not None else None
-                    if k:
-                        assists_t[k] = assists_t.get(k, 0) + 1
-            except Exception:
-                pass
+        t = _library_player_tallies()
 
         def _top(tally):
-            return [{"team": k[0], "jersey": k[1], "value": v}
+            return [{"team": k[0], "jersey": k[1],
+                     "name": _player_name(k[0], k[1]), "value": v}
                     for k, v in sorted(tally.items(),
                                        key=lambda kv: -kv[1])[:5]]
 
-        return {"goals": _top(goals_t), "blocks": _top(blocks_t),
-                "steals": _top(steals_t), "saves": _top(saves_t),
-                "assists": _top(assists_t)}
+        return {"goals": _top(t["goals"]), "blocks": _top(t["blocks"]),
+                "steals": _top(t["steals"]), "saves": _top(t["saves"]),
+                "assists": _top(t["assists"])}
+
+    @app.get("/library/roster")
+    def library_roster(team: str):
+        """Keret-lap: a csapat ÖSSZES ismert mezszáma egy táblában.
+
+        A toplisták az öt legjobbat adják — a keret-lap MINDENKIT, aki
+        a könyvtárban mezszámmal szerepel. Ez a játékos szemszöge: nem
+        az, hogy ki a szezon gólkirálya, hanem hogy a SAJÁT sora hol
+        tart; és az edzőé, amikor a teljes keretet nézi végig, nem a
+        kiugró neveket.
+
+        A "matches" a meccsek száma, amelyeken a szám szerepelt: enélkül
+        egy alacsony gólszám félrevezet (kevés játék vagy gyenge forma?
+        — két külön kérdés, két külön teendő).
+
+        Visszatérés: {"team", "players": [{"jersey", "matches",
+        "goals", "assists", "blocks", "steals", "saves"}]} — mezszám
+        szerint növekvő sorrendben. A mezszám nélkül játszókról nem
+        tudunk sort adni, ezt a "note" mondja ki.
+        """
+        t = _library_player_tallies()
+        mezek = sorted({k[1] for k in t["matches"] if k[0] == team})
+        # A kvíz-mérleg a NÉV szerint (a 3D közös nézés követője a keret
+        # nevei közül választ) — hibatűrően: a hibája a keretet nem viszi el.
+        try:
+            from ..pipeline.court3d import (quiz_name_key, quiz_stats,
+                                            shared3d_nev)
+            kvizek = {quiz_name_key(r["nev"]): r
+                      for r in quiz_stats(_jegyzetek_idorendben())}
+        except Exception:
+            kvizek = {}
+        # A megnézés-mérleg: a csapat meccseinek megbeszélés-felvételei
+        # közül hányat nézett végig ("Ki nézte meg?") — a név szerint;
+        # hibatűrően, mint a kvíz-mérleg.
+        try:
+            fv_csapat = [(fej, p) for fej, meta, p in _legutobbi_felvetelek()
+                         if team in (meta.home_team, meta.away_team)]
+            megnezett: dict = {}
+            elo: dict = {}
+            kovette: dict = {}
+            for fej, p in fv_csapat:
+                nez = {quiz_name_key(x) for x in _felvetel_nezok(p)}
+                jel = {quiz_name_key(x) for x in fej.get("jelen") or []}
+                for d_, kulcsok in ((megnezett, nez), (elo, jel),
+                                    (kovette, nez | jel)):
+                    for kulcs in kulcsok:
+                        d_[kulcs] = d_.get(kulcs, 0) + 1
+        except Exception:
+            fv_csapat, megnezett, elo, kovette = [], {}, {}, {}
+        sorok = []
+        for j in mezek:
+            k = (team, j)
+            nev = _player_name(team, j)
+            # (a követő neve legfeljebb SHARED3D_NAME_MAX jel — a hosszú
+            # keret-nevet ugyanúgy vágjuk, hogy párosuljon)
+            nkulcs = quiz_name_key(shared3d_nev(nev)) if nev else None
+            kv = kvizek.get(nkulcs) if nkulcs else None
+            sorok.append({
+                "jersey": j,
+                "name": nev,
+                "matches": t["matches"].get(k, 0),
+                "goals": t["goals"].get(k, 0),
+                "assists": t["assists"].get(k, 0),
+                "blocks": t["blocks"].get(k, 0),
+                "steals": t["steals"].get(k, 0),
+                "saves": t["saves"].get(k, 0),
+                # A döntés-kvízek mérlege (null: nem volt kvízben).
+                "kviz": ({"kvizek": kv["kvizek"], "itelt": kv["itelt"],
+                          "jo": kv["jo"], "arany": kv["arany"]}
+                         if kv else None),
+                # A megnézés-mérleg (null: a csapatnak nincs felvétele,
+                # vagy a játékosnak nincs neve).
+                # (kovette: élőben ott volt VAGY végignézte a felvételt)
+                "megnezes": ({"megnezett": megnezett.get(nkulcs, 0),
+                              "elo": elo.get(nkulcs, 0),
+                              "kovette": kovette.get(nkulcs, 0),
+                              "osszes": len(fv_csapat)}
+                             if fv_csapat and nkulcs else None),
+            })
+        return {
+            "team": team,
+            "players": sorok,
+            "note": ("A lista MEZSZÁM alapján épül: akihez egyetlen "
+                     "meccsen sem rendeltek számot, nem szerepel benne "
+                     "— a számokat a meccs-elemzőben lehet kiosztani, "
+                     "és onnantól a korábbi meccsek is beszámítanak."),
+        }
+
+    @app.get("/library/roster.csv")
+    def library_roster_csv(team: str):
+        """A keret-lap CSV-ben — a vezetőségi/szövetségi kimutatáshoz.
+
+        A meccs-szintű játékos-CSV megvan; a SZEZON-szintű eddig
+        hiányzott, pedig a hét végi kimutatás tipikus edzői feladat:
+        "küldd el Excelben, ki hány gólnál jár". A képernyőről ezt
+        eddig kézzel kellett kimásolni.
+
+        Ugyanabból a számolásból él, mint a Keret-lap (a kettő nem
+        tarthat szét), és ugyanazért Excel-barát, amiért a meccs-CSV:
+        pontosvessző és BOM, mert a magyar Excel vesszőt tizedesjelnek
+        olvasna.
+        """
+        import re
+
+        from fastapi.responses import Response
+
+        from ..csv_cella import csv_cella
+        adat = library_roster(team)
+        sorok_csv = ["mezszam;nev;meccsek;golok;golpasszok;blokkok;"
+                     "labdaszerzesek;vedesek"]
+        for r in adat["players"]:
+            sorok_csv.append(
+                f"{r['jersey']};{csv_cella(r['name'] or '')};{r['matches']};"
+                f"{r['goals']};{r['assists']};{r['blocks']};"
+                f"{r['steals']};{r['saves']}")
+        tartalom = "\ufeff" + "\r\n".join(sorok_csv) + "\r\n"
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", team) or "csapat"
+        return Response(
+            content=tartalom.encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition":
+                     f'attachment; filename="szezon_{safe}.csv"'})
 
     # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
     # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.
@@ -2334,16 +8482,23 @@ def create_app():
         from ..pipeline.training import training_focus
         agg: dict = {}
         counts: dict = {}
-        for m in _store.values():
-            key = (len(m.frames), m.meta.home_team, m.meta.away_team)
+        # Dátum szerint növekvően: az utoljára beírt indok ("a legutóbbi
+        # meccs indoka") csak így a legutóbbi meccsé — a könyvtár
+        # természetes sorrendje a fájl frissessége (a legfrissebb ELÖL),
+        # abban az utolsó a legrégebbi lett volna.
+        for m in _idorendben(_season_matches()):
+            key = (_kockaszam(m), m.meta.home_team, m.meta.away_team)
             cached = _training_cache.get(m.meta.match_id)
             if cached is not None and cached[0] == key:
                 tf = cached[1]
             else:
                 try:
-                    tf = training_focus(m)
+                    tf = _training_of(m)       # a közös, lemezes tárból
                 except Exception:
-                    tf = {"home": [], "away": []}
+                    try:
+                        tf = training_focus(m)
+                    except Exception:
+                        tf = {"home": [], "away": []}
                 _training_cache[m.meta.match_id] = (key, tf)
             for side, name in (("home", m.meta.home_team),
                                ("away", m.meta.away_team)):
@@ -2363,6 +8518,71 @@ def create_app():
             if recurring:
                 teams[name] = recurring
         return {"teams": teams, "matches": counts}
+
+    @app.get("/library/training-focus/export")
+    def library_training_focus_export(team: str):
+        """A heti EDZÉSTERV nyomtatható HTML-ben, egy csapatra.
+
+        A képernyőn ugyanez él, de a pályán nincs képernyő: ezt a lapot
+        le lehet vinni az edzésre, ki lehet tenni az öltözőben. A
+        csapat visszatérő gyakorlandói mellett az EGYÉNI feladatok is
+        rajta vannak, mezszám (és ha van, név) szerint.
+        """
+        from fastapi.responses import HTMLResponse
+
+        from ..pipeline.report_html import training_plan_html
+
+        lib = library_training_focus()
+        csapat_fokusz = (lib.get("teams") or {}).get(team) or []
+        meccsek = (lib.get("matches") or {}).get(team) or 0
+        return HTMLResponse(content=training_plan_html(
+            team, meccsek, csapat_fokusz, _team_player_plan(team)))
+
+    def _team_player_plan(team: str) -> list:
+        """A csapat EGYÉNI edzés-terve: minden ismert mezszámra a
+        szezon-szintű fókusz (ami több meccsen visszatér, elöl).
+
+        A mezszám nélkül játszókról nem tudunk sort adni — meccsek közt
+        csak a szám köti össze a játékost. Elöl, akinek több
+        gyakorlandója van: az edző ott kezdi a hetet.
+        """
+        # A mezszámok a GYORSÍTÓTÁRAZOTT játékos-fókuszból jönnek, nem a
+        # meccsek minden kockájának bejárásából: az utóbbi a könyvtár
+        # összes hideg meccsét visszatöltötte (húsz meccsnél percekig
+        # nyílt az edzés-terv), miközben csak annak van sora, akinek
+        # fókusz-tétele van — az pedig a tárolt eredményben ott a mezszám.
+        mezek: set = set()
+        for m_ in _season_matches():
+            if m_.meta.home_team == team:
+                oldal = "home"
+            elif m_.meta.away_team == team:
+                oldal = "away"
+            else:
+                continue
+            ptf = _player_focus_of(m_)
+            for p_ in (ptf.get(oldal) or {}).get("players") or []:
+                if p_.get("jersey") is not None:
+                    mezek.add(int(p_["jersey"]))
+        emberek = []
+        for j in sorted(mezek):
+            tetelek = _season_player_focus(team, j)
+            if tetelek:
+                emberek.append({"jersey": j,
+                                "name": _player_name(team, j),
+                                "items": tetelek})
+        emberek.sort(key=lambda r: (-len(r["items"]), r["jersey"]))
+        return emberek
+
+    @app.get("/library/training-focus/players")
+    def library_player_training_plan(team: str):
+        """A csapat EGYÉNI edzés-terve (a nyomtatható lap képernyős
+        párja): {"team", "players": [{"jersey", "name", "items"}]}.
+
+        Ugyanabból a számolásból él, mint a nyomtatható edzésterv —
+        ha a kettő széttartana, az edző azt venné észre, hogy a papír
+        mást mond, mint a képernyő.
+        """
+        return {"team": team, "players": _team_player_plan(team)}
 
     @app.get("/matches/{match_id}/positions")
     def get_positions(match_id: str):
@@ -2448,6 +8668,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/attacks")
     def get_attacks(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "attacks",
+                              lambda: _get_attacks_raw(match_id))
+
+    def _get_attacks_raw(match_id: str):
         """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /
         felállt / 7 a 6) + csapatonkénti támadás-mix százalékban."""
         match = _store.get(match_id)
@@ -2484,6 +8712,41 @@ def create_app():
         try:
             from ..pipeline.roles import role_shot_power
             res["role_shot_power"] = role_shot_power(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import role_shooting_hand
+            res["role_shooting_hand"] = role_shooting_hand(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import role_goal_placement
+            res["role_goal_placement"] = role_goal_placement(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import role_pressure_finish
+            res["role_pressure_finish"] = role_pressure_finish(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_finishers
+            res["setplay_finishers"] = setplay_finishers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_openers
+            res["setplay_openers"] = setplay_openers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import role_fast_breaks
+            res["role_fast_breaks"] = role_fast_breaks(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import role_assist_sources
+            res["role_assist_sources"] = role_assist_sources(match)
         except Exception:
             pass
         try:
@@ -2542,6 +8805,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import kickout_target_roles
+            res["kickout_target_roles"] = kickout_target_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import pivot_usage
             res["pivot"] = pivot_usage(match)
         except Exception:
@@ -2592,6 +8860,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import second_chance_roles
+            res["second_chance_roles"] = second_chance_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.event_detection import shot_speed_fade
             res["shot_speed_fade"] = shot_speed_fade(match)
         except Exception:
@@ -2614,6 +8887,21 @@ def create_app():
         try:
             from ..pipeline.defense import defensive_width
             res["defensive_width"] = defensive_width(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defensive_gaps
+            res["defensive_gaps"] = defensive_gaps(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import gap_fade
+            res["gap_fade"] = gap_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defensive_formation
+            res["defensive_formation"] = defensive_formation(match)
         except Exception:
             pass
         try:
@@ -2644,6 +8932,41 @@ def create_app():
         try:
             from ..pipeline.defense import pressure_fade
             res["pressure_fade"] = pressure_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import line_height_fade
+            res["line_height_fade"] = line_height_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import retreat_fade
+            res["retreat_fade"] = retreat_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import wing_involvement_fade
+            res["wing_involvement_fade"] = wing_involvement_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import pivot_usage_fade
+            res["pivot_usage_fade"] = pivot_usage_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import attack_depth_fade
+            res["attack_depth_fade"] = attack_depth_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.priorities import fatigue_profile
+            res["fatigue_profile"] = fatigue_profile(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.training import player_training_focus
+            res["player_training_focus"] = player_training_focus(match)
         except Exception:
             pass
         try:
@@ -2734,6 +9057,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import finishing_balance
+            res["finishing_balance"] = finishing_balance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import shot_accuracy
             res["shot_accuracy"] = shot_accuracy(match)
         except Exception:
@@ -2766,6 +9094,22 @@ def create_app():
         try:
             from ..pipeline.decisions import pass_security_under_pressure
             res["pass_security"] = pass_security_under_pressure(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import shot_choice_quality
+            res["shot_choice_quality"] = shot_choice_quality(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import pressure_decision_quality
+            res["pressure_decision_quality"] = \
+                pressure_decision_quality(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import situational_decisions
+            res["situational_decisions"] = situational_decisions(match)
         except Exception:
             pass
         try:
@@ -2954,6 +9298,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import ball_carry_players
+            res["ball_carry_players"] = ball_carry_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.substitutions import substitution_blocks
             res["substitution_blocks"] = substitution_blocks(match)
         except Exception:
@@ -2999,6 +9348,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_saves_by_hand
+            res["gk_saves_by_hand"] = gk_saves_by_hand(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import attack_outcomes
             res["attack_outcomes"] = attack_outcomes(match)
         except Exception:
@@ -3024,8 +9378,18 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_conceder_roles
+            res["seven_conceder_roles"] = seven_conceder_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import pivot_feeders
             res["pivot_feeders"] = pivot_feeders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import pivot_feeder_roles
+            res["pivot_feeder_roles"] = pivot_feeder_roles(match)
         except Exception:
             pass
         try:
@@ -3139,6 +9503,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_shooter_roles
+            res["powerplay_shooter_roles"] = powerplay_shooter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import gk_shorthanded_saves
             res["gk_shorthanded_saves"] = gk_shorthanded_saves(match)
         except Exception:
@@ -3154,6 +9523,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import substitution_phase
+            res["substitution_phase"] = substitution_phase(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.momentum import clutch_turnover_players
             res["clutch_turnover_players"] = clutch_turnover_players(match)
         except Exception:
@@ -3161,6 +9535,12 @@ def create_app():
         try:
             from ..pipeline.rules import shorthanded_shooters
             res["shorthanded_shooters"] = shorthanded_shooters(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import shorthanded_shooter_roles
+            res["shorthanded_shooter_roles"] = (
+                shorthanded_shooter_roles(match))
         except Exception:
             pass
         try:
@@ -3174,13 +9554,43 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import screen_setter_roles
+            res["screen_setter_roles"] = screen_setter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import iron_man_roles
+            res["iron_man_roles"] = iron_man_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import iron_men
+            res["iron_men"] = iron_men(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.priorities import key_post
+            res["key_post"] = key_post(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import risky_passers
             res["risky_passers"] = risky_passers(match)
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import risky_passer_roles
+            res["risky_passer_roles"] = risky_passer_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_first_attack
             res["timeout_first_attack"] = timeout_first_attack(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stoppages import timeout_finisher
+            res["timeout_finisher"] = timeout_finisher(match)
         except Exception:
             pass
         try:
@@ -3367,6 +9777,539 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_scorer_roles
+            res["clutch_scorer_roles"] = clutch_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import comeback_carrier_roles
+            res["comeback_carrier_roles"] = comeback_carrier_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import wasteful_shooter_roles
+            res["wasteful_shooter_roles"] = wasteful_shooter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import big_chance_roles
+            res["big_chance_roles"] = big_chance_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import hold_time_roles
+            res["hold_time_roles"] = hold_time_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import press_sensitive_roles
+            res["press_sensitive_roles"] = press_sensitive_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import drought_breaker_roles
+            res["drought_breaker_roles"] = drought_breaker_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import fading_scorer_roles
+            res["fading_scorer_roles"] = fading_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import clutch_turnover_roles
+            res["clutch_turnover_roles"] = clutch_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import hot_hand_roles
+            res["hot_hand_roles"] = hot_hand_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import restart_taker_roles
+            res["restart_taker_roles"] = restart_taker_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import sprint_threat_roles
+            res["sprint_threat_roles"] = sprint_threat_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import soft_pass_roles
+            res["soft_pass_roles"] = soft_pass_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import clutch_hog_roles
+            res["clutch_hog_roles"] = clutch_hog_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import assisted_scorer_roles
+            res["assisted_scorer_roles"] = assisted_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import opening_scorer_roles
+            res["opening_scorer_roles"] = opening_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import passive_holder_roles
+            res["passive_holder_roles"] = passive_holder_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import fatigue_roles
+            res["fatigue_roles"] = fatigue_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import doubled_target_roles
+            res["doubled_target_roles"] = doubled_target_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import screened_defender_roles
+            res["screened_defender_roles"] = \
+                screened_defender_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import second_start_roles
+            res["second_start_roles"] = second_start_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_taker_roles
+            res["seven_taker_roles"] = seven_taker_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import blocked_shooter_roles
+            res["blocked_shooter_roles"] = blocked_shooter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import missed_chance_roles
+            res["missed_chance_roles"] = missed_chance_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import advanced_defender_roles
+            res["advanced_defender_roles"] = \
+                advanced_defender_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import pivot_guard_roles
+            res["pivot_guard_roles"] = pivot_guard_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import attack_starter_roles
+            res["attack_starter_roles"] = attack_starter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import last_pass_roles
+            res["last_pass_roles"] = last_pass_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import lead_scorer_roles
+            res["lead_scorer_roles"] = lead_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import ball_carrier_roles
+            res["ball_carrier_roles"] = ball_carrier_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import backward_pass_roles
+            res["backward_pass_roles"] = backward_pass_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import tired_turnover_roles
+            res["tired_turnover_roles"] = tired_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import tired_shooter_roles
+            res["tired_shooter_roles"] = tired_shooter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import tired_conceder_roles
+            res["tired_conceder_roles"] = tired_conceder_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.substitutions import substituted_roles
+            res["substituted_roles"] = substituted_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.substitutions import sub_in_roles
+            res["sub_in_roles"] = sub_in_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import costly_turnover_roles
+            res["costly_turnover_roles"] = costly_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import breakthrough_roles
+            res["breakthrough_roles"] = breakthrough_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import fading_defender_roles
+            res["fading_defender_roles"] = fading_defender_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import covered_shooter_roles
+            res["covered_shooter_roles"] = covered_shooter_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import targeted_defender_roles
+            res["targeted_defender_roles"] = \
+                targeted_defender_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import high_steal_roles
+            res["high_steal_roles"] = high_steal_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.tactics import static_attacker_roles
+            res["static_attacker_roles"] = static_attacker_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import screen_pair_roles
+            res["screen_pair_roles"] = screen_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.substitutions import swap_style
+            res["swap_style"] = swap_style(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_pair_roles
+            res["seven_pair_roles"] = seven_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import fast_break_pair_roles
+            res["fast_break_pair_roles"] = \
+                fast_break_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import assist_pair_roles
+            res["assist_pair_roles"] = assist_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import doubling_pair_roles
+            res["doubling_pair_roles"] = doubling_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import rebound_pair_roles
+            res["rebound_pair_roles"] = rebound_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.priorities import key_pair
+            res["key_pair"] = key_pair(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.priorities import key_player
+            res["key_player"] = key_player(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import specialist_roles
+            res["specialist_roles"] = specialist_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import powerplay_pair_roles
+            res["powerplay_pair_roles"] = powerplay_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import response_scorer_roles
+            res["response_scorer_roles"] = \
+                response_scorer_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import recovery_roles
+            res["recovery_roles"] = recovery_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import lane_switch_roles
+            res["lane_switch_roles"] = lane_switch_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stoppages import timeout_pair_roles
+            res["timeout_pair_roles"] = timeout_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import press_outlet_roles
+            res["press_outlet_roles"] = press_outlet_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import last_holder_roles
+            res["last_holder_roles"] = last_holder_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import big_chance_feeder_roles
+            res["big_chance_feeder_roles"] = \
+                big_chance_feeder_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_miss_roles
+            res["seven_miss_roles"] = seven_miss_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import big_chance_pair_roles
+            res["big_chance_pair_roles"] = big_chance_pair_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import powerplay_turnover_roles
+            res["powerplay_turnover_roles"] = \
+                powerplay_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import response_turnover_roles
+            res["response_turnover_roles"] = \
+                response_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stoppages import timeout_turnover_roles
+            res["timeout_turnover_roles"] = \
+                timeout_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import retreat_time
+            res["retreat_time"] = retreat_time(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import post_goal_rush
+            res["post_goal_rush"] = post_goal_rush(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import shorthanded_turnover_roles
+            res["shorthanded_turnover_roles"] = \
+                shorthanded_turnover_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import gk_clutch_saves
+            res["gk_clutch_saves"] = gk_clutch_saves(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_concentration
+            res["setplay_concentration"] = setplay_concentration(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_shapes
+            res["setplay_shapes"] = setplay_shapes(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import figure_vs_formation
+            res["figure_vs_formation"] = figure_vs_formation(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_repeat_choice
+            res["setplay_repeat_choice"] = setplay_repeat_choice(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defense_shapes
+            res["defense_shapes"] = defense_shapes(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_by_score
+            res["setplay_by_score"] = setplay_by_score(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import powerplay_setplay
+            res["powerplay_setplay"] = powerplay_setplay(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import clutch_setplay
+            res["clutch_setplay"] = clutch_setplay(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import clutch_defense_shape
+            res["clutch_defense_shape"] = clutch_defense_shape(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import empty_net_setplay
+            res["empty_net_setplay"] = empty_net_setplay(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defensive_rebound_roles
+            res["defensive_rebound_roles"] = \
+                defensive_rebound_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import retreat_punishment
+            res["retreat_punishment"] = retreat_punishment(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import rebound_punishment
+            res["rebound_punishment"] = rebound_punishment(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import clock_management
+            res["clock_management"] = clock_management(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import sprint_fade
+            res["sprint_fade"] = sprint_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_miss_players
+            res["seven_miss_players"] = seven_miss_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import suspension_chain_roles
+            res["suspension_chain_roles"] = \
+                suspension_chain_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defensive_rebound_players
+            res["defensive_rebound_players"] = \
+                defensive_rebound_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import marking_shift
+            res["marking_shift"] = marking_shift(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import suspension_cost
+            res["suspension_cost"] = suspension_cost(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import powerplay_turnover_players
+            res["powerplay_turnover_players"] = \
+                powerplay_turnover_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import shorthanded_turnover_players
+            res["shorthanded_turnover_players"] = \
+                shorthanded_turnover_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import breakthrough_yield
+            res["breakthrough_yield"] = breakthrough_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_taker_players
+            res["seven_taker_players"] = seven_taker_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stoppages import timeout_turnover_players
+            res["timeout_turnover_players"] = \
+                timeout_turnover_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import response_turnover_players
+            res["response_turnover_players"] = \
+                response_turnover_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import big_chance_feeders
+            res["big_chance_feeders"] = big_chance_feeders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import last_holders
+            res["last_holders"] = last_holders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import press_outlets
+            res["press_outlets"] = press_outlets(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import lane_switchers
+            res["lane_switchers"] = lane_switchers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import ball_carriers
+            res["ball_carriers"] = ball_carriers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import backward_passers
+            res["backward_passers"] = backward_passers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import tired_turnover_players
+            res["tired_turnover_players"] = \
+                tired_turnover_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -3500,6 +10443,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import suspended_roles
+            res["suspended_roles"] = suspended_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import blocked_by_role
             res["blocked_by_role"] = blocked_by_role(match)
         except Exception:
@@ -3525,8 +10473,18 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import doubling_defender_roles
+            res["doubling_defender_roles"] = doubling_defender_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import beaten_defenders
             res["beaten_defenders"] = beaten_defenders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import beaten_defender_roles
+            res["beaten_defender_roles"] = beaten_defender_roles(match)
         except Exception:
             pass
         try:
@@ -3585,8 +10543,18 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import outlet_hunter_roles
+            res["outlet_hunter_roles"] = outlet_hunter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.tactics import slow_attack_cost
             res["slow_attack_cost"] = slow_attack_cost(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.tactics import attack_tempo_variety
+            res["attack_tempo_variety"] = attack_tempo_variety(match)
         except Exception:
             pass
         try:
@@ -3605,6 +10573,21 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_shot_directions
+            res["seven_shot_directions"] = seven_shot_directions(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_taker_corners
+            res["seven_taker_corners"] = seven_taker_corners(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_taker_repeat
+            res["seven_taker_repeat"] = seven_taker_repeat(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import breaks_by_score
             res["breaks_by_score"] = breaks_by_score(match)
         except Exception:
@@ -3612,6 +10595,11 @@ def create_app():
         try:
             from ..pipeline.goalkeeper import empty_net_by_score
             res["empty_net_by_score"] = empty_net_by_score(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import seven_six_finisher_roles
+            res["seven_six_finisher_roles"] = seven_six_finisher_roles(match)
         except Exception:
             pass
         try:
@@ -3885,6 +10873,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/defense")
     def get_defense(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "defense",
+                              lambda: _get_defense_raw(match_id))
+
+    def _get_defense_raw(match_id: str):
         """Védekezés-elemzés: kapott lövések — szabadon hagyott lövők,
         zóna-lyukak, kapott xG (csapatonként, a védekező szemszögéből)."""
         from ..pipeline.defense import (defense_analysis,
@@ -3935,8 +10931,283 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import role_steal_sources
+            res["role_steal_sources"] = role_steal_sources(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import role_block_sources
+            res["role_block_sources"] = role_block_sources(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import slow_retreat_roles
+            res["slow_retreat_roles"] = slow_retreat_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import slow_retreat_players
+            res["slow_retreat_players"] = slow_retreat_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import tired_conceder_players
+            res["tired_conceder_players"] = tired_conceder_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import outlet_hunters
+            res["outlet_hunters"] = outlet_hunters(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import empty_net_turnovers
+            res["empty_net_turnovers"] = empty_net_turnovers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.roles import assisted_scorers
+            res["assisted_scorers"] = assisted_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import suspension_collectors
+            res["suspension_collectors"] = suspension_collectors(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import outlet_targets
+            res["outlet_targets"] = outlet_targets(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import screen_yield
+            res["screen_yield"] = screen_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import screen_fade
+            res["screen_fade"] = screen_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import block_fade
+            res["block_fade"] = block_fade(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import powerplay_yield
+            res["powerplay_yield"] = powerplay_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_yield
+            res["seven_yield"] = seven_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import passive_risk
+            res["passive_risk"] = passive_risk(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.substitutions import substitution_yield
+            res["substitution_yield"] = substitution_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import doubled_targets
+            res["doubled_targets"] = doubled_targets(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import keeper_return
+            res["keeper_return"] = keeper_return(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.priorities import counter_plan
+            res["counter_plan"] = counter_plan(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.setplays import setplay_decay
+            res["setplay_decay"] = setplay_decay(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import running_load_balance
+            res["running_load_balance"] = running_load_balance(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import gk_after_goal
+            res["gk_after_goal"] = gk_after_goal(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import seven_sources
+            res["seven_sources"] = seven_sources(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import control_timeline
+            res["control_timeline"] = control_timeline(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import missed_chance_players
+            res["missed_chance_players"] = missed_chance_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.xg import tired_shooters
+            res["tired_shooters"] = tired_shooters(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import soft_passers
+            res["soft_passers"] = soft_passers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import passive_holders
+            res["passive_holders"] = passive_holders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import last_passers
+            res["last_passers"] = last_passers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import response_scorers
+            res["response_scorers"] = response_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import opening_scorers
+            res["opening_scorers"] = opening_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import second_start_scorers
+            res["second_start_scorers"] = second_start_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import lead_scorers
+            res["lead_scorers"] = lead_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import screened_defenders
+            res["screened_defenders"] = screened_defenders(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import wing_runners
+            res["wing_runners"] = wing_runners(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import crossing_runners
+            res["crossing_runners"] = crossing_runners(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import pivot_runners
+            res["pivot_runners"] = pivot_runners(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import second_wave_finishers
+            res["second_wave_finishers"] = second_wave_finishers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.attack_types import second_wave_roles
+            res["second_wave_roles"] = second_wave_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import parity_break_scorers
+            res["parity_break_scorers"] = parity_break_scorers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import shooting_hand
+            res["shooting_hand"] = shooting_hand(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import seven_six_finishers
+            res["seven_six_finishers"] = seven_six_finishers(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import assist_duos
+            res["assist_duos"] = assist_duos(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import pre_assists
+            res["pre_assists"] = pre_assists(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import pre_assist_roles
+            res["pre_assist_roles"] = pre_assist_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import super_sub
+            res["super_sub"] = super_sub(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import super_sub_roles
+            res["super_sub_roles"] = super_sub_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import parity_break_roles
+            res["parity_break_roles"] = parity_break_roles(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import super_sub
+            res["super_sub"] = super_sub(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stoppages import timeout_yield
+            res["timeout_yield"] = timeout_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import gk_change_yield
+            res["gk_change_yield"] = gk_change_yield(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.rules import shorthanded_survival
+            res["shorthanded_survival"] = shorthanded_survival(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.momentum import restart_yield
+            res["restart_yield"] = restart_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import pressured_turnovers
+            res["pressured_turnovers"] = pressured_turnovers(match)
         except Exception:
             pass
         try:
@@ -3994,16 +11265,43 @@ def create_app():
 
     @app.get("/matches/{match_id}/training")
     def get_training(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "training",
+                              lambda: _get_training_raw(match_id))
+
+    def _get_training_raw(match_id: str):
         """Edzés-fókusz javaslatok a meccs gyengeségeiből, csapatonként
         rangsorolva (terület, fókusz, indoklás, gyakorlat-típus)."""
-        from ..pipeline.training import training_focus
+        from ..pipeline.training import (player_training_focus,
+                                         training_focus)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return training_focus(match)
+        # A csapat-lista mellett az EGYÉNI fókusz is: az edző emberre
+        # bontva osztja ki a hét feladatait, a játékos pedig a saját
+        # nevét keresi. (Külön kulcs, hogy a csapat-oldalak alakja ne
+        # változzon.)
+        ki = dict(training_focus(match))
+        try:
+            ki["players"] = player_training_focus(match)
+        except Exception:
+            ki["players"] = {"home": {"players": []},
+                             "away": {"players": []}}
+        return ki
 
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "coach-summary",
+                              lambda: _get_coach_summary_raw(match_id))
+
+    def _get_coach_summary_raw(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
         mi volt feltűnő, mire érdemes ránézni. Sablon-alapú (minden mondat
         mögött kiszámolt szám áll), determinisztikus."""
@@ -4084,7 +11382,8 @@ def create_app():
                 html = match_report_html(
                     match, team_style_profile(match), events, quality,
                     heatmaps=heatmaps, player_stats=player_stats,
-                    notes=_load_notes(match_id))
+                    notes=_load_notes(match_id),
+                    felvetelek=_meccs_felvetelei(match_id))
                 # 2) CSV.
                 job["progress"] = 0.2
                 job["message"] = "statisztika (CSV)"
@@ -4094,12 +11393,18 @@ def create_app():
                 # edzői összefoglaló sima szövegként — rétegenként hibatűrően.
                 job["message"] = "elemzések (JSON)"
                 analyses: dict = {}
+                # Ha egy réteg mégis elhasal, a védelem elnyeli a hibát
+                # (helyesen: egy réteg nem viheti el a többit) — de a
+                # kulcs NYOM NÉLKÜL eltűnik, és a felhasználó azt hiszi,
+                # az az elemzés nem is létezik. Jegyezzük fel, hogy
+                # legyen mit megnézni.
+                hibas_retegek: list = []
 
                 def _layer(name, fn):
                     try:
                         analyses[name] = fn()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        hibas_retegek.append(f"{name}: {type(e).__name__}")
 
                 from ..pipeline.coach_summary import coach_summary
                 from ..pipeline.defense import defense_analysis
@@ -4151,6 +11456,9 @@ def create_app():
                 _layer("assist_sources", lambda: assist_sources(match))
                 from ..pipeline.attack_types import second_chance
                 _layer("second_chance", lambda: second_chance(match))
+                from ..pipeline.attack_types import second_chance_roles
+                _layer("second_chance_roles",
+                       lambda: second_chance_roles(match))
                 from ..pipeline.event_detection import shot_speed_fade
                 _layer("shot_speed_fade", lambda: shot_speed_fade(match))
                 from ..pipeline.event_detection import goal_concentration
@@ -4163,6 +11471,13 @@ def create_app():
                 _layer("field_tilt", lambda: field_tilt(match))
                 from ..pipeline.defense import defensive_width
                 _layer("defensive_width", lambda: defensive_width(match))
+                from ..pipeline.defense import defensive_gaps
+                _layer("defensive_gaps", lambda: defensive_gaps(match))
+                from ..pipeline.defense import gap_fade
+                _layer("gap_fade", lambda: gap_fade(match))
+                from ..pipeline.defense import defensive_formation
+                _layer("defensive_formation",
+                       lambda: defensive_formation(match))
                 from ..pipeline.tactics import pass_tempo
                 _layer("pass_tempo", lambda: pass_tempo(match))
                 from ..pipeline.defense import blocked_shot_rate
@@ -4176,6 +11491,19 @@ def create_app():
                 _layer("shot_timing", lambda: shot_timing(match))
                 from ..pipeline.defense import pressure_fade
                 _layer("pressure_fade", lambda: pressure_fade(match))
+                from ..pipeline.defense import line_height_fade
+                _layer("line_height_fade", lambda: line_height_fade(match))
+                from ..pipeline.defense import retreat_fade
+                _layer("retreat_fade", lambda: retreat_fade(match))
+                from ..pipeline.attack_types import wing_involvement_fade
+                _layer("wing_involvement_fade",
+                       lambda: wing_involvement_fade(match))
+                from ..pipeline.attack_types import pivot_usage_fade
+                _layer("pivot_usage_fade", lambda: pivot_usage_fade(match))
+                from ..pipeline.attack_types import attack_depth_fade
+                _layer("attack_depth_fade", lambda: attack_depth_fade(match))
+                from ..pipeline.priorities import fatigue_profile
+                _layer("fatigue_profile", lambda: fatigue_profile(match))
                 from ..pipeline.stoppages import timeout_record
                 _layer("timeout_record", lambda: timeout_record(match))
                 from ..pipeline.defense import turnover_fade
@@ -4216,6 +11544,9 @@ def create_app():
                        lambda: big_save_momentum(match))
                 from ..pipeline.xg import finish_fade
                 _layer("finish_fade", lambda: finish_fade(match))
+                from ..pipeline.xg import finishing_balance
+                _layer("finishing_balance",
+                       lambda: finishing_balance(match))
                 from ..pipeline.xg import shot_accuracy
                 _layer("shot_accuracy", lambda: shot_accuracy(match))
                 from ..pipeline.attack_types import attack_side_bias
@@ -4235,6 +11566,15 @@ def create_app():
                     pass_security_under_pressure
                 _layer("pass_security",
                        lambda: pass_security_under_pressure(match))
+                from ..pipeline.decisions import shot_choice_quality
+                _layer("shot_choice_quality",
+                       lambda: shot_choice_quality(match))
+                from ..pipeline.decisions import pressure_decision_quality
+                _layer("pressure_decision_quality",
+                       lambda: pressure_decision_quality(match))
+                from ..pipeline.decisions import situational_decisions
+                _layer("situational_decisions",
+                       lambda: situational_decisions(match))
                 from ..pipeline.defense import second_chance_allowed
                 _layer("second_chance_allowed",
                        lambda: second_chance_allowed(match))
@@ -4330,6 +11670,9 @@ def create_app():
                 from ..pipeline.decisions import hold_time_players
                 _layer("hold_time_players",
                        lambda: hold_time_players(match))
+                from ..pipeline.decisions import ball_carry_players
+                _layer("ball_carry_players",
+                       lambda: ball_carry_players(match))
                 from ..pipeline.substitutions import substitution_blocks
                 _layer("substitution_blocks",
                        lambda: substitution_blocks(match))
@@ -4351,6 +11694,9 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_saves_by_role
                 _layer("gk_saves_by_role",
                        lambda: gk_saves_by_role(match))
+                from ..pipeline.goalkeeper import gk_saves_by_hand
+                _layer("gk_saves_by_hand",
+                       lambda: gk_saves_by_hand(match))
                 from ..pipeline.attack_types import attack_outcomes
                 _layer("attack_outcomes", lambda: attack_outcomes(match))
                 from ..pipeline.defense import line_height_by_score
@@ -4364,8 +11710,14 @@ def create_app():
                 from ..pipeline.rules import seven_meter_conceders
                 _layer("seven_meter_conceders",
                        lambda: seven_meter_conceders(match))
+                from ..pipeline.rules import seven_conceder_roles
+                _layer("seven_conceder_roles",
+                       lambda: seven_conceder_roles(match))
                 from ..pipeline.attack_types import pivot_feeders
                 _layer("pivot_feeders", lambda: pivot_feeders(match))
+                from ..pipeline.attack_types import pivot_feeder_roles
+                _layer("pivot_feeder_roles",
+                       lambda: pivot_feeder_roles(match))
                 from ..pipeline.decisions import pass_speed
                 _layer("pass_speed", lambda: pass_speed(match))
                 from ..pipeline.defense import defensive_shift_lag
@@ -4428,6 +11780,9 @@ def create_app():
                 from ..pipeline.rules import powerplay_shooters
                 _layer("powerplay_shooters",
                        lambda: powerplay_shooters(match))
+                from ..pipeline.rules import powerplay_shooter_roles
+                _layer("powerplay_shooter_roles",
+                       lambda: powerplay_shooter_roles(match))
                 from ..pipeline.goalkeeper import gk_shorthanded_saves
                 _layer("gk_shorthanded_saves",
                        lambda: gk_shorthanded_saves(match))
@@ -4438,21 +11793,38 @@ def create_app():
                     substitution_triggers)
                 _layer("substitution_triggers",
                        lambda: substitution_triggers(match))
+                from ..pipeline.substitutions import substitution_phase
+                _layer("substitution_phase",
+                       lambda: substitution_phase(match))
                 from ..pipeline.momentum import clutch_turnover_players
                 _layer("clutch_turnover_players",
                        lambda: clutch_turnover_players(match))
                 from ..pipeline.rules import shorthanded_shooters
                 _layer("shorthanded_shooters",
                        lambda: shorthanded_shooters(match))
+                from ..pipeline.rules import shorthanded_shooter_roles
+                _layer("shorthanded_shooter_roles",
+                       lambda: shorthanded_shooter_roles(match))
                 from ..pipeline.goalkeeper import gk_early_saves
                 _layer("gk_early_saves", lambda: gk_early_saves(match))
                 from ..pipeline.attack_types import screen_setters
                 _layer("screen_setters", lambda: screen_setters(match))
+                from ..pipeline.attack_types import screen_setter_roles
+                _layer("screen_setter_roles",
+                       lambda: screen_setter_roles(match))
+                from ..pipeline.priorities import key_post
+                _layer("key_post", lambda: key_post(match))
                 from ..pipeline.attack_types import risky_passers
                 _layer("risky_passers", lambda: risky_passers(match))
+                from ..pipeline.attack_types import risky_passer_roles
+                _layer("risky_passer_roles",
+                       lambda: risky_passer_roles(match))
                 from ..pipeline.stoppages import timeout_first_attack
                 _layer("timeout_first_attack",
                        lambda: timeout_first_attack(match))
+                from ..pipeline.stoppages import timeout_finisher
+                _layer("timeout_finisher",
+                       lambda: timeout_finisher(match))
                 from ..pipeline.rules import seven_earner_roles
                 _layer("seven_earner_roles",
                        lambda: seven_earner_roles(match))
@@ -4631,6 +12003,9 @@ def create_app():
                 from ..pipeline.rules import susp_earner_roles
                 _layer("susp_earner_roles",
                        lambda: susp_earner_roles(match))
+                from ..pipeline.rules import suspended_roles
+                _layer("suspended_roles",
+                       lambda: suspended_roles(match))
                 from ..pipeline.defense import blocked_by_role
                 _layer("blocked_by_role",
                        lambda: blocked_by_role(match))
@@ -4647,8 +12022,14 @@ def create_app():
                 _layer("doubling_defenders",
                        lambda: doubling_defenders(match))
                 from ..pipeline.defense import beaten_defenders
+                from ..pipeline.defense import doubling_defender_roles
+                _layer("doubling_defender_roles",
+                       lambda: doubling_defender_roles(match))
                 _layer("beaten_defenders",
                        lambda: beaten_defenders(match))
+                from ..pipeline.defense import beaten_defender_roles
+                _layer("beaten_defender_roles",
+                       lambda: beaten_defender_roles(match))
                 from ..pipeline.defense import unpressured_assists
                 _layer("unpressured_assists",
                        lambda: unpressured_assists(match))
@@ -4682,9 +12063,15 @@ def create_app():
                 from ..pipeline.goalkeeper import outlet_punishment
                 _layer("outlet_punishment",
                        lambda: outlet_punishment(match))
+                from ..pipeline.goalkeeper import outlet_hunter_roles
+                _layer("outlet_hunter_roles",
+                       lambda: outlet_hunter_roles(match))
                 from ..pipeline.tactics import slow_attack_cost
                 _layer("slow_attack_cost",
                        lambda: slow_attack_cost(match))
+                from ..pipeline.tactics import attack_tempo_variety
+                _layer("attack_tempo_variety",
+                       lambda: attack_tempo_variety(match))
                 from ..pipeline.attack_types import balls_out
                 _layer("balls_out", lambda: balls_out(match))
                 from ..pipeline.rules import suspensions_by_score
@@ -4693,6 +12080,15 @@ def create_app():
                 from ..pipeline.rules import sevens_by_score
                 _layer("sevens_by_score",
                        lambda: sevens_by_score(match))
+                from ..pipeline.rules import seven_shot_directions
+                _layer("seven_shot_directions",
+                       lambda: seven_shot_directions(match))
+                from ..pipeline.rules import seven_taker_corners
+                _layer("seven_taker_corners",
+                       lambda: seven_taker_corners(match))
+                from ..pipeline.rules import seven_taker_repeat
+                _layer("seven_taker_repeat",
+                       lambda: seven_taker_repeat(match))
                 from ..pipeline.attack_types import breaks_by_score
                 _layer("breaks_by_score",
                        lambda: breaks_by_score(match))
@@ -4772,10 +12168,146 @@ def create_app():
                        lambda: outlet_pace_by_score(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
+                from ..pipeline.stats import iron_man_roles
+                _layer("iron_man_roles",
+                       lambda: iron_man_roles(match))
+                from ..pipeline.stats import iron_men
+                _layer("iron_men", lambda: iron_men(match))
                 from ..pipeline.defense import ball_winners
                 _layer("ball_winners", lambda: ball_winners(match))
+                from ..pipeline.defense import role_steal_sources
+                _layer("role_steal_sources",
+                       lambda: role_steal_sources(match))
+                from ..pipeline.defense import role_block_sources
+                _layer("role_block_sources",
+                       lambda: role_block_sources(match))
+                from ..pipeline.defense import slow_retreat_roles
+                _layer("slow_retreat_roles",
+                       lambda: slow_retreat_roles(match))
+                from ..pipeline.defense import slow_retreat_players
+                _layer("slow_retreat_players",
+                       lambda: slow_retreat_players(match))
+                from ..pipeline.defense import tired_conceder_players
+                _layer("tired_conceder_players",
+                       lambda: tired_conceder_players(match))
+                from ..pipeline.goalkeeper import outlet_hunters
+                _layer("outlet_hunters", lambda: outlet_hunters(match))
+                from ..pipeline.goalkeeper import empty_net_turnovers
+                _layer("empty_net_turnovers",
+                       lambda: empty_net_turnovers(match))
+                from ..pipeline.roles import assisted_scorers
+                _layer("assisted_scorers", lambda: assisted_scorers(match))
+                from ..pipeline.rules import suspension_collectors
+                _layer("suspension_collectors",
+                       lambda: suspension_collectors(match))
+                from ..pipeline.goalkeeper import outlet_targets
+                _layer("outlet_targets", lambda: outlet_targets(match))
+                from ..pipeline.attack_types import screen_yield
+                _layer("screen_yield", lambda: screen_yield(match))
+                from ..pipeline.attack_types import screen_fade
+                _layer("screen_fade", lambda: screen_fade(match))
+                from ..pipeline.defense import block_fade
+                _layer("block_fade", lambda: block_fade(match))
+                from ..pipeline.rules import powerplay_yield
+                _layer("powerplay_yield", lambda: powerplay_yield(match))
+                from ..pipeline.rules import seven_yield
+                _layer("seven_yield", lambda: seven_yield(match))
+                from ..pipeline.rules import passive_risk
+                _layer("passive_risk", lambda: passive_risk(match))
+                from ..pipeline.substitutions import substitution_yield
+                _layer("substitution_yield",
+                       lambda: substitution_yield(match))
+                from ..pipeline.defense import doubled_targets
+                _layer("doubled_targets", lambda: doubled_targets(match))
+                from ..pipeline.goalkeeper import keeper_return
+                _layer("keeper_return", lambda: keeper_return(match))
+                from ..pipeline.priorities import counter_plan
+                _layer("counter_plan", lambda: counter_plan(match))
+                from ..pipeline.setplays import setplay_decay
+                _layer("setplay_decay", lambda: setplay_decay(match))
+                from ..pipeline.stats import running_load_balance
+                _layer("running_load_balance",
+                       lambda: running_load_balance(match))
+                from ..pipeline.goalkeeper import gk_after_goal
+                _layer("gk_after_goal", lambda: gk_after_goal(match))
+                from ..pipeline.rules import seven_sources
+                _layer("seven_sources", lambda: seven_sources(match))
+                from ..pipeline.momentum import control_timeline
+                _layer("control_timeline",
+                       lambda: control_timeline(match))
+                from ..pipeline.xg import missed_chance_players
+                _layer("missed_chance_players",
+                       lambda: missed_chance_players(match))
+                from ..pipeline.xg import tired_shooters
+                _layer("tired_shooters", lambda: tired_shooters(match))
+                from ..pipeline.decisions import soft_passers
+                _layer("soft_passers", lambda: soft_passers(match))
+                from ..pipeline.rules import passive_holders
+                _layer("passive_holders", lambda: passive_holders(match))
+                from ..pipeline.attack_types import last_passers
+                _layer("last_passers", lambda: last_passers(match))
+                from ..pipeline.momentum import response_scorers
+                _layer("response_scorers",
+                       lambda: response_scorers(match))
+                from ..pipeline.momentum import opening_scorers
+                _layer("opening_scorers", lambda: opening_scorers(match))
+                from ..pipeline.momentum import second_start_scorers
+                _layer("second_start_scorers",
+                       lambda: second_start_scorers(match))
+                from ..pipeline.momentum import lead_scorers
+                _layer("lead_scorers", lambda: lead_scorers(match))
+                from ..pipeline.defense import screened_defenders
+                _layer("screened_defenders",
+                       lambda: screened_defenders(match))
+                from ..pipeline.attack_types import wing_runners
+                _layer("wing_runners", lambda: wing_runners(match))
+                from ..pipeline.attack_types import crossing_runners
+                _layer("crossing_runners",
+                       lambda: crossing_runners(match))
+                from ..pipeline.attack_types import pivot_runners
+                _layer("pivot_runners", lambda: pivot_runners(match))
+                from ..pipeline.attack_types import second_wave_finishers
+                _layer("second_wave_finishers",
+                       lambda: second_wave_finishers(match))
+                from ..pipeline.attack_types import second_wave_roles
+                _layer("second_wave_roles",
+                       lambda: second_wave_roles(match))
+                from ..pipeline.momentum import parity_break_scorers
+                _layer("parity_break_scorers",
+                       lambda: parity_break_scorers(match))
+                from ..pipeline.event_detection import shooting_hand
+                _layer("shooting_hand", lambda: shooting_hand(match))
+                from ..pipeline.goalkeeper import seven_six_finishers
+                _layer("seven_six_finishers",
+                       lambda: seven_six_finishers(match))
+                from ..pipeline.event_detection import assist_duos
+                _layer("assist_duos", lambda: assist_duos(match))
+                from ..pipeline.event_detection import pre_assists
+                _layer("pre_assists", lambda: pre_assists(match))
+                from ..pipeline.event_detection import pre_assist_roles
+                _layer("pre_assist_roles",
+                       lambda: pre_assist_roles(match))
+                from ..pipeline.momentum import super_sub
+                _layer("super_sub", lambda: super_sub(match))
+                from ..pipeline.momentum import super_sub_roles
+                _layer("super_sub_roles", lambda: super_sub_roles(match))
+                from ..pipeline.momentum import parity_break_roles
+                _layer("parity_break_roles",
+                       lambda: parity_break_roles(match))
+                from ..pipeline.stoppages import timeout_yield
+                _layer("timeout_yield", lambda: timeout_yield(match))
+                from ..pipeline.goalkeeper import gk_change_yield
+                _layer("gk_change_yield", lambda: gk_change_yield(match))
+                from ..pipeline.rules import shorthanded_survival
+                _layer("shorthanded_survival",
+                       lambda: shorthanded_survival(match))
+                from ..pipeline.momentum import restart_yield
+                _layer("restart_yield", lambda: restart_yield(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
+                from ..pipeline.defense import pressured_turnovers
+                _layer("pressured_turnovers",
+                       lambda: pressured_turnovers(match))
                 from ..pipeline.goalkeeper import gk_positioning
                 _layer("gk_positioning", lambda: gk_positioning(match))
                 from ..pipeline.tactics import attack_sides
@@ -4791,6 +12323,304 @@ def create_app():
                 _layer("clutch", lambda: clutch_performance(match))
                 from ..pipeline.momentum import clutch_scorers
                 _layer("clutch_scorers", lambda: clutch_scorers(match))
+                from ..pipeline.momentum import clutch_scorer_roles
+                _layer("clutch_scorer_roles",
+                       lambda: clutch_scorer_roles(match))
+                from ..pipeline.momentum import comeback_carrier_roles
+                _layer("comeback_carrier_roles",
+                       lambda: comeback_carrier_roles(match))
+                from ..pipeline.xg import wasteful_shooter_roles
+                _layer("wasteful_shooter_roles",
+                       lambda: wasteful_shooter_roles(match))
+                from ..pipeline.xg import big_chance_roles
+                _layer("big_chance_roles",
+                       lambda: big_chance_roles(match))
+                from ..pipeline.decisions import hold_time_roles
+                _layer("hold_time_roles",
+                       lambda: hold_time_roles(match))
+                from ..pipeline.decisions import press_sensitive_roles
+                _layer("press_sensitive_roles",
+                       lambda: press_sensitive_roles(match))
+                from ..pipeline.momentum import drought_breaker_roles
+                _layer("drought_breaker_roles",
+                       lambda: drought_breaker_roles(match))
+                from ..pipeline.momentum import fading_scorer_roles
+                _layer("fading_scorer_roles",
+                       lambda: fading_scorer_roles(match))
+                from ..pipeline.momentum import clutch_turnover_roles
+                _layer("clutch_turnover_roles",
+                       lambda: clutch_turnover_roles(match))
+                from ..pipeline.momentum import hot_hand_roles
+                _layer("hot_hand_roles",
+                       lambda: hot_hand_roles(match))
+                from ..pipeline.momentum import restart_taker_roles
+                _layer("restart_taker_roles",
+                       lambda: restart_taker_roles(match))
+                from ..pipeline.stats import sprint_threat_roles
+                _layer("sprint_threat_roles",
+                       lambda: sprint_threat_roles(match))
+                from ..pipeline.decisions import soft_pass_roles
+                _layer("soft_pass_roles",
+                       lambda: soft_pass_roles(match))
+                from ..pipeline.momentum import clutch_hog_roles
+                _layer("clutch_hog_roles",
+                       lambda: clutch_hog_roles(match))
+                from ..pipeline.roles import assisted_scorer_roles
+                _layer("assisted_scorer_roles",
+                       lambda: assisted_scorer_roles(match))
+                from ..pipeline.momentum import opening_scorer_roles
+                _layer("opening_scorer_roles",
+                       lambda: opening_scorer_roles(match))
+                from ..pipeline.rules import passive_holder_roles
+                _layer("passive_holder_roles",
+                       lambda: passive_holder_roles(match))
+                from ..pipeline.stats import fatigue_roles
+                _layer("fatigue_roles",
+                       lambda: fatigue_roles(match))
+                from ..pipeline.defense import doubled_target_roles
+                _layer("doubled_target_roles",
+                       lambda: doubled_target_roles(match))
+                from ..pipeline.defense import screened_defender_roles
+                _layer("screened_defender_roles",
+                       lambda: screened_defender_roles(match))
+                from ..pipeline.momentum import second_start_roles
+                _layer("second_start_roles",
+                       lambda: second_start_roles(match))
+                from ..pipeline.rules import seven_taker_roles
+                _layer("seven_taker_roles",
+                       lambda: seven_taker_roles(match))
+                from ..pipeline.defense import blocked_shooter_roles
+                _layer("blocked_shooter_roles",
+                       lambda: blocked_shooter_roles(match))
+                from ..pipeline.xg import missed_chance_roles
+                _layer("missed_chance_roles",
+                       lambda: missed_chance_roles(match))
+                from ..pipeline.defense import advanced_defender_roles
+                _layer("advanced_defender_roles",
+                       lambda: advanced_defender_roles(match))
+                from ..pipeline.defense import pivot_guard_roles
+                _layer("pivot_guard_roles",
+                       lambda: pivot_guard_roles(match))
+                from ..pipeline.roles import attack_starter_roles
+                _layer("attack_starter_roles",
+                       lambda: attack_starter_roles(match))
+                from ..pipeline.attack_types import last_pass_roles
+                _layer("last_pass_roles",
+                       lambda: last_pass_roles(match))
+                from ..pipeline.momentum import lead_scorer_roles
+                _layer("lead_scorer_roles",
+                       lambda: lead_scorer_roles(match))
+                from ..pipeline.decisions import ball_carrier_roles
+                _layer("ball_carrier_roles",
+                       lambda: ball_carrier_roles(match))
+                from ..pipeline.attack_types import backward_pass_roles
+                _layer("backward_pass_roles",
+                       lambda: backward_pass_roles(match))
+                from ..pipeline.decisions import tired_turnover_roles
+                _layer("tired_turnover_roles",
+                       lambda: tired_turnover_roles(match))
+                from ..pipeline.xg import tired_shooter_roles
+                _layer("tired_shooter_roles",
+                       lambda: tired_shooter_roles(match))
+                from ..pipeline.defense import tired_conceder_roles
+                _layer("tired_conceder_roles",
+                       lambda: tired_conceder_roles(match))
+                from ..pipeline.substitutions import substituted_roles
+                _layer("substituted_roles",
+                       lambda: substituted_roles(match))
+                from ..pipeline.substitutions import sub_in_roles
+                _layer("sub_in_roles",
+                       lambda: sub_in_roles(match))
+                from ..pipeline.defense import costly_turnover_roles
+                _layer("costly_turnover_roles",
+                       lambda: costly_turnover_roles(match))
+                from ..pipeline.attack_types import breakthrough_roles
+                _layer("breakthrough_roles",
+                       lambda: breakthrough_roles(match))
+                from ..pipeline.defense import fading_defender_roles
+                _layer("fading_defender_roles",
+                       lambda: fading_defender_roles(match))
+                from ..pipeline.defense import covered_shooter_roles
+                _layer("covered_shooter_roles",
+                       lambda: covered_shooter_roles(match))
+                from ..pipeline.defense import targeted_defender_roles
+                _layer("targeted_defender_roles",
+                       lambda: targeted_defender_roles(match))
+                from ..pipeline.defense import high_steal_roles
+                _layer("high_steal_roles",
+                       lambda: high_steal_roles(match))
+                from ..pipeline.tactics import static_attacker_roles
+                _layer("static_attacker_roles",
+                       lambda: static_attacker_roles(match))
+                from ..pipeline.attack_types import screen_pair_roles
+                _layer("screen_pair_roles",
+                       lambda: screen_pair_roles(match))
+                from ..pipeline.substitutions import swap_style
+                _layer("swap_style",
+                       lambda: swap_style(match))
+                from ..pipeline.rules import seven_pair_roles
+                _layer("seven_pair_roles",
+                       lambda: seven_pair_roles(match))
+                from ..pipeline.attack_types import \
+                    fast_break_pair_roles
+                _layer("fast_break_pair_roles",
+                       lambda: fast_break_pair_roles(match))
+                from ..pipeline.roles import assist_pair_roles
+                _layer("assist_pair_roles",
+                       lambda: assist_pair_roles(match))
+                from ..pipeline.defense import doubling_pair_roles
+                _layer("doubling_pair_roles",
+                       lambda: doubling_pair_roles(match))
+                from ..pipeline.attack_types import rebound_pair_roles
+                _layer("rebound_pair_roles",
+                       lambda: rebound_pair_roles(match))
+                from ..pipeline.priorities import key_pair
+                _layer("key_pair", lambda: key_pair(match))
+                from ..pipeline.priorities import key_player
+                _layer("key_player", lambda: key_player(match))
+                from ..pipeline.roles import specialist_roles
+                _layer("specialist_roles",
+                       lambda: specialist_roles(match))
+                from ..pipeline.rules import powerplay_pair_roles
+                _layer("powerplay_pair_roles",
+                       lambda: powerplay_pair_roles(match))
+                from ..pipeline.momentum import response_scorer_roles
+                _layer("response_scorer_roles",
+                       lambda: response_scorer_roles(match))
+                from ..pipeline.defense import recovery_roles
+                _layer("recovery_roles",
+                       lambda: recovery_roles(match))
+                from ..pipeline.attack_types import lane_switch_roles
+                _layer("lane_switch_roles",
+                       lambda: lane_switch_roles(match))
+                from ..pipeline.stoppages import timeout_pair_roles
+                _layer("timeout_pair_roles",
+                       lambda: timeout_pair_roles(match))
+                from ..pipeline.decisions import press_outlet_roles
+                _layer("press_outlet_roles",
+                       lambda: press_outlet_roles(match))
+                from ..pipeline.attack_types import last_holder_roles
+                _layer("last_holder_roles",
+                       lambda: last_holder_roles(match))
+                from ..pipeline.xg import big_chance_feeder_roles
+                _layer("big_chance_feeder_roles",
+                       lambda: big_chance_feeder_roles(match))
+                from ..pipeline.rules import seven_miss_roles
+                _layer("seven_miss_roles",
+                       lambda: seven_miss_roles(match))
+                from ..pipeline.xg import big_chance_pair_roles
+                _layer("big_chance_pair_roles",
+                       lambda: big_chance_pair_roles(match))
+                from ..pipeline.rules import powerplay_turnover_roles
+                _layer("powerplay_turnover_roles",
+                       lambda: powerplay_turnover_roles(match))
+                from ..pipeline.momentum import response_turnover_roles
+                _layer("response_turnover_roles",
+                       lambda: response_turnover_roles(match))
+                from ..pipeline.stoppages import timeout_turnover_roles
+                _layer("timeout_turnover_roles",
+                       lambda: timeout_turnover_roles(match))
+                from ..pipeline.defense import retreat_time
+                _layer("retreat_time", lambda: retreat_time(match))
+                from ..pipeline.attack_types import post_goal_rush
+                _layer("post_goal_rush",
+                       lambda: post_goal_rush(match))
+                from ..pipeline.rules import shorthanded_turnover_roles
+                _layer("shorthanded_turnover_roles",
+                       lambda: shorthanded_turnover_roles(match))
+                from ..pipeline.goalkeeper import gk_clutch_saves
+                _layer("gk_clutch_saves",
+                       lambda: gk_clutch_saves(match))
+                from ..pipeline.setplays import setplay_concentration
+                _layer("setplay_concentration",
+                       lambda: setplay_concentration(match))
+                from ..pipeline.setplays import setplay_shapes
+                _layer("setplay_shapes", lambda: setplay_shapes(match))
+                from ..pipeline.setplays import figure_vs_formation
+                _layer("figure_vs_formation",
+                       lambda: figure_vs_formation(match))
+                from ..pipeline.setplays import setplay_repeat_choice
+                _layer("setplay_repeat_choice",
+                       lambda: setplay_repeat_choice(match))
+                from ..pipeline.defense import defense_shapes
+                _layer("defense_shapes", lambda: defense_shapes(match))
+                from ..pipeline.setplays import setplay_by_score
+                _layer("setplay_by_score", lambda: setplay_by_score(match))
+                from ..pipeline.setplays import powerplay_setplay
+                _layer("powerplay_setplay",
+                       lambda: powerplay_setplay(match))
+                from ..pipeline.setplays import clutch_setplay
+                _layer("clutch_setplay", lambda: clutch_setplay(match))
+                from ..pipeline.defense import clutch_defense_shape
+                _layer("clutch_defense_shape",
+                       lambda: clutch_defense_shape(match))
+                from ..pipeline.setplays import empty_net_setplay
+                _layer("empty_net_setplay",
+                       lambda: empty_net_setplay(match))
+                from ..pipeline.defense import defensive_rebound_roles
+                _layer("defensive_rebound_roles",
+                       lambda: defensive_rebound_roles(match))
+                from ..pipeline.defense import retreat_punishment
+                _layer("retreat_punishment",
+                       lambda: retreat_punishment(match))
+                from ..pipeline.goalkeeper import rebound_punishment
+                _layer("rebound_punishment",
+                       lambda: rebound_punishment(match))
+                from ..pipeline.momentum import clock_management
+                _layer("clock_management",
+                       lambda: clock_management(match))
+                from ..pipeline.stats import sprint_fade
+                _layer("sprint_fade", lambda: sprint_fade(match))
+                from ..pipeline.rules import seven_miss_players
+                _layer("seven_miss_players",
+                       lambda: seven_miss_players(match))
+                from ..pipeline.rules import suspension_chain_roles
+                _layer("suspension_chain_roles",
+                       lambda: suspension_chain_roles(match))
+                from ..pipeline.defense import defensive_rebound_players
+                _layer("defensive_rebound_players",
+                       lambda: defensive_rebound_players(match))
+                from ..pipeline.defense import marking_shift
+                _layer("marking_shift", lambda: marking_shift(match))
+                from ..pipeline.rules import suspension_cost
+                _layer("suspension_cost",
+                       lambda: suspension_cost(match))
+                from ..pipeline.rules import powerplay_turnover_players
+                _layer("powerplay_turnover_players",
+                       lambda: powerplay_turnover_players(match))
+                from ..pipeline.rules import shorthanded_turnover_players
+                _layer("shorthanded_turnover_players",
+                       lambda: shorthanded_turnover_players(match))
+                from ..pipeline.attack_types import breakthrough_yield
+                _layer("breakthrough_yield",
+                       lambda: breakthrough_yield(match))
+                from ..pipeline.rules import seven_taker_players
+                _layer("seven_taker_players",
+                       lambda: seven_taker_players(match))
+                from ..pipeline.stoppages import timeout_turnover_players
+                _layer("timeout_turnover_players",
+                       lambda: timeout_turnover_players(match))
+                from ..pipeline.momentum import response_turnover_players
+                _layer("response_turnover_players",
+                       lambda: response_turnover_players(match))
+                from ..pipeline.xg import big_chance_feeders
+                _layer("big_chance_feeders",
+                       lambda: big_chance_feeders(match))
+                from ..pipeline.attack_types import last_holders
+                _layer("last_holders", lambda: last_holders(match))
+                from ..pipeline.decisions import press_outlets
+                _layer("press_outlets", lambda: press_outlets(match))
+                from ..pipeline.attack_types import lane_switchers
+                _layer("lane_switchers",
+                       lambda: lane_switchers(match))
+                from ..pipeline.decisions import ball_carriers
+                _layer("ball_carriers", lambda: ball_carriers(match))
+                from ..pipeline.attack_types import backward_passers
+                _layer("backward_passers",
+                       lambda: backward_passers(match))
+                from ..pipeline.decisions import tired_turnover_players
+                _layer("tired_turnover_players",
+                       lambda: tired_turnover_players(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score
@@ -4826,13 +12656,17 @@ def create_app():
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
                 _layer("training", lambda: training_focus(match))
+                from ..pipeline.training import player_training_focus
+                _layer("player_training_focus",
+                       lambda: player_training_focus(match))
                 # Újabb rétegek: kapus-indítás, 7 a 6 mérleg/időzítés,
                 # kontra-befejezők, kulcsemberek, tempó, késő cserék.
                 from ..pipeline.attack_types import (fast_break_finishers,
                                                      match_pace)
                 from ..pipeline.goalkeeper import (empty_net_context,
                                                    empty_net_goals,
-                                                   outlet_speed)
+                                                   outlet_speed,
+                                                   seven_six_finisher_roles)
                 from ..pipeline.scouting import match_key_players
                 from ..pipeline.substitutions import late_sub_flags
                 from ..pipeline.xg import big_saves, missed_big_chances
@@ -4840,6 +12674,8 @@ def create_app():
                 _layer("empty_net_goals", lambda: empty_net_goals(match))
                 _layer("empty_net_context",
                        lambda: empty_net_context(match))
+                _layer("seven_six_finisher_roles",
+                       lambda: seven_six_finisher_roles(match))
                 _layer("fast_break_finishers",
                        lambda: fast_break_finishers(match))
                 _layer("key_players", lambda: match_key_players(match))
@@ -4878,6 +12714,9 @@ def create_app():
                 _layer("attack_width", lambda: attack_width(match))
                 from ..pipeline.attack_types import kickout_targets
                 _layer("kickout_targets", lambda: kickout_targets(match))
+                from ..pipeline.attack_types import kickout_target_roles
+                _layer("kickout_target_roles",
+                       lambda: kickout_target_roles(match))
                 from ..pipeline.roles import shot_efficiency_by_role
                 _layer("shot_efficiency_by_role",
                        lambda: shot_efficiency_by_role(match))
@@ -4915,6 +12754,36 @@ def create_app():
                 from ..pipeline.roles import role_shot_power
                 _layer("role_shot_power",
                        lambda: role_shot_power(match))
+                from ..pipeline.roles import role_shooting_hand
+                _layer("role_shooting_hand",
+                       lambda: role_shooting_hand(match))
+                from ..pipeline.roles import role_goal_placement
+                _layer("role_goal_placement",
+                       lambda: role_goal_placement(match))
+                from ..pipeline.roles import role_pressure_finish
+                _layer("role_pressure_finish",
+                       lambda: role_pressure_finish(match))
+                from ..pipeline.setplays import setplay_finishers
+                _layer("setplay_finishers",
+                       lambda: setplay_finishers(match))
+                from ..pipeline.setplays import setplay_openers
+                _layer("setplay_openers",
+                       lambda: setplay_openers(match))
+                from ..pipeline.roles import role_fast_breaks
+                _layer("role_fast_breaks",
+                       lambda: role_fast_breaks(match))
+                from ..pipeline.roles import role_assist_sources
+                _layer("role_assist_sources",
+                       lambda: role_assist_sources(match))
+                # Az elhasalt rétegek NEVE bekerül a csomagba és a
+                # munka-naplóba. Aláhúzás-prefixszel, hogy ne
+                # keveredjen az elemzés-kulcsokkal; üres listánál is
+                # kiírjuk, mert a "nem hasalt el semmi" is állítás.
+                analyses["_hibas_retegek"] = sorted(hibas_retegek)
+                if hibas_retegek:
+                    job["message"] = (
+                        f"elemzések (JSON) — {len(hibas_retegek)} réteg "
+                        "nem készült el, a nevük a csomagban")
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
@@ -4927,6 +12796,14 @@ def create_app():
                 if cs.get("highlights"):
                     lines += ["Mire nézz rá:"]
                     lines += [f"- {h}" for h in cs["highlights"]]
+                # Ha egy réteg elhasalt, a szöveges lap is mondja ki: ezt
+                # nyitja meg elsőként, aki a csomagot megkapja, és a
+                # hiányzó elemzés máskülönben nyom nélkül maradna el.
+                if hibas_retegek:
+                    lines += ["", f"FIGYELEM: {len(hibas_retegek)} elemzés "
+                              "nem készült el ezen a meccsen "
+                              "(a nevük az elemzesek.json fájlban, a "
+                              "_hibas_retegek kulcs alatt)."]
                 summary_txt = "\n".join(lines)
                 # 3) Klipek (ha kérték és van videó) — a hiba nem végzetes.
                 clips_zip = None
@@ -5027,10 +12904,8 @@ def create_app():
                     try:
                         from ..pipeline.scouting import (matchup_plan,
                                                          scout_team)
-                        rep_h = scout_team(match, Team.HOME,
-                                           TacticsConfig())
-                        rep_a = scout_team(match, Team.AWAY,
-                                           TacticsConfig())
+                        rep_h = _scout_cached(match, Team.HOME)
+                        rep_a = _scout_cached(match, Team.AWAY)
                         mt_lines = []
                         plan_h = matchup_plan(rep_h, rep_a)
                         if plan_h:
@@ -5070,6 +12945,31 @@ def create_app():
                                 f"  miért: {it.get('why', '')}")
                             tl_lines.append(
                                 f"  gyakorlat: {it.get('drill', '')}")
+                        tl_lines.append("")
+                    # Az EGYÉNI feladatok is a lapra: az edző emberre
+                    # bontva osztja ki a hét munkáját, és a csomagot
+                    # sokszor épp ezért nyitja meg.
+                    ptf_pkg = analyses.get("player_training_focus") or {}
+                    for side, name in (("home", match.meta.home_team),
+                                       ("away", match.meta.away_team)):
+                        sorok = (ptf_pkg.get(side) or {}).get("players") or []
+                        if not sorok:
+                            continue
+                        cim = f"{name} — egyéni feladatok"
+                        tl_lines += [cim, "=" * len(cim)]
+                        for p_ in sorok:
+                            ki = (f"#{p_['jersey']}"
+                                  if p_.get("jersey") is not None
+                                  else f"{p_.get('player_id')}. játékos")
+                            tl_lines.append(ki)
+                            for it in p_.get("items") or []:
+                                tl_lines.append(
+                                    f"- {it.get('title', '')} "
+                                    f"({it.get('area', '')})")
+                                tl_lines.append(
+                                    f"  miért: {it.get('why', '')}")
+                                tl_lines.append(
+                                    f"  gyakorlat: {it.get('drill', '')}")
                         tl_lines.append("")
                     if tl_lines:
                         z.writestr("edzesterv.txt",
@@ -5120,6 +13020,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/team-stats")
     def get_team_stats(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "team-stats",
+                              lambda: _get_team_stats_raw(match_id))
+
+    def _get_team_stats_raw(match_id: str):
         """Mindkét csapat összegzése (súlypont, kiterjedés)."""
         match = _store.get(match_id)
         if match is None:
@@ -5188,8 +13096,7 @@ def create_app():
             pass
         return res
 
-    @app.get("/matches/{match_id}/report/export")
-    def export_match_report(match_id: str):
+    def export_match_report(match_id: str, request: Request):
         """A meccs egyoldalas edzői jelentése NYOMTATHATÓ HTML-ként.
 
         Tartalma: mutatók, esemény-összesítő (gól/lövés/labdaeladás),
@@ -5218,8 +13125,20 @@ def create_app():
             player_stats = None
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
-                                 notes=_load_notes(match_id))
+                                 notes=_load_notes(match_id),
+                                 felvetelek=_meccs_felvetelei(match_id),
+                                 figure_namer=_figure_name_for,
+                                 # A kérés címe: ezen éri el a kliens a
+                                 # motort — a jelentés "3D ↗" linkjei ide
+                                 # mutatnak (önálló fájlból is).
+                                 base_url=str(request.base_url))
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    # A `request` típusát KÉZZEL állítjuk be (a modul `from __future__
+    # import annotations` miatt a sztring-annotáció nem oldódna fel), majd
+    # regisztráljuk az útvonalat — így a FastAPI a nyers Request-et adja.
+    export_match_report.__annotations__["request"] = Request
+    app.get("/matches/{match_id}/report/export")(export_match_report)
 
     @app.get("/matches/{match_id}/scouting")
     def get_scouting(match_id: str, team: str = "away"):
@@ -5235,7 +13154,8 @@ def create_app():
             t = Team(team)
         except ValueError:
             raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
-        return report_to_dict(scout_team(match, t, TacticsConfig()))
+        return _report_nevekkel(
+            report_to_dict(_scout_cached(match, t)))
 
     @app.get("/matches/{match_id}/scouting/export")
     def export_scouting(match_id: str, team: str = "away"):
@@ -5260,20 +13180,129 @@ def create_app():
             except Exception:
                 continue
         pm = match_attacks_to_playbook(match, plays, TacticsConfig(), team=t) if plays else None
-        rep_sc = scout_team(match, t, TacticsConfig())
+        rep_sc = _scout_cached(match, t)
         # Meccsterv-illesztés a másik oldallal (mint a képernyő
         # MECCSTERV kártyája) — hibatűrően, enélkül is teljes.
         matchup = None
+        own_t = Team.HOME if t == Team.AWAY else Team.AWAY
         try:
             from ..pipeline.scouting import matchup_plan
-            own_t = Team.HOME if t == Team.AWAY else Team.AWAY
             matchup = matchup_plan(
-                scout_team(match, own_t, TacticsConfig()), rep_sc) or None
+                _scout_cached(match, own_t), rep_sc) or None
         except Exception:
             matchup = None
+        # Figura-ajánló: a SAJÁT mentett figuráink a tanult faluk ellen
+        # (a felderített csapat a védekező) — hibatűrően.
+        ajanlo = None
+        if plays:
+            try:
+                from ..pipeline.play_simulation import rank_playbook
+                ajanlo = rank_playbook(plays, DefenseModel.learn(match, t))
+            except Exception:
+                ajanlo = None
+        # Védekezési próba: az ő visszatérő figuráik a MI falunk (a meccs
+        # másik oldala — mint a meccsterv) ellen, 3D-linkkel.
+        proba = None
+        try:
+            proba = _vedekezesi_proba(match, t, match, own_t)
+        except Exception:
+            proba = None
+        _lib_nevekkel(rep_sc)
         html = scouting_report_html(rep_sc, playbook_match=pm,
-                                    matchup=matchup)
+                                    matchup=matchup, figura_ajanlo=ajanlo,
+                                    vedekezesi_proba=proba)
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    # A felderítő jelentések gyorsítótára: (meccs, csapat) → ScoutingReport.
+    # Egy jelentés ötszáz réteget futtat egy meccsen; a meccsterv, az
+    # egyesített felderítés, a szezon-riport és a figura-könyvtár ugyanazt
+    # a meccset újra és újra felderítette (tíz meccsnél percek). A kulcs
+    # a meccs azonosságát ÉS tartalmát viszi (objektum, kockaszám,
+    # csapatnevek — a csere is —, esemény-felülírások): újrafeldolgozott,
+    # levágott vagy felülírt meccs nem olvas elavult jelentést. A hívó
+    # mindig MÁSOLATOT kap: a névesítés és a meccsterv helyben módosít.
+    _scout_cache: dict = {}
+    app.state.scout_cache = _scout_cache
+    # A felderítés memória-tárának plafonja (bejegyzés = meccs × oldal).
+    SCOUT_CACHE_MAX = 64
+
+    def _scout_cached(match, team):
+        import copy
+        try:
+            ov = json.dumps(getattr(match.meta, "event_overrides", None) or [],
+                            sort_keys=True, default=str)
+        except Exception:
+            ov = ""
+        # A kulcsban NINCS az objektum-azonosító: a szezon-végpontok
+        # kilinccsel (_LazyMatch) hívnak, ami minden kérésnél új objektum
+        # — az `id(match)` mellett minden hívás új bejegyzést tett le, a
+        # tár korlátlanul nőtt (egymás-elleni lapnál hívásonként kettő),
+        # és a memória-tár sosem talált. A kockaszám, a csapatnevek és az
+        # esemény-felülírások lenyomata elég a frissesség-ellenőrzéshez;
+        # a lemezes tár ujjlenyomata a fájl-változást is nézi.
+        kulcs = (match.meta.match_id, team.value, _kockaszam(match),
+                 match.meta.home_team, match.meta.away_team, hash(ov))
+        rep = _scout_cache.get(kulcs)
+        if rep is None:
+            rep = _scout_from_disk(match.meta.match_id, team)
+            if rep is None:
+                rep = scout_team(match, team, TacticsConfig())
+                _scout_to_disk(match.meta.match_id, team, rep)
+            # Korlátos tár: a legrégebbi bejegyzés kiesik a plafon fölött
+            # (egy jelentés ~ezer mező; húsz meccs két oldala bőven belefér).
+            while len(_scout_cache) >= SCOUT_CACHE_MAX:
+                _scout_cache.pop(next(iter(_scout_cache)))
+            _scout_cache[kulcs] = rep
+        return copy.deepcopy(rep)
+
+    # A felderítő jelentés a LEMEZEN is megmarad (egy 60 perces meccsen
+    # csapatonként ~50 mp, újraindítás után eddig mindig elölről; öt
+    # meccs egyesített felderítése így percekig tartott). Ugyanaz az
+    # ujjlenyomat, mint az eredmény-táré. SZÁNDÉKOSAN JSON, nem pickle: a
+    # könyvtár-visszaállítás kívülről kapott zipet csomagol ki az
+    # adatmappába — egy pickle-fájl ott kódot futtathatna.
+    def _scout_file(match_id: str, team) -> Path:
+        return _result_dir(match_id) / f"scout-{team.value}.json"
+
+    def _scout_from_disk(match_id: str, team):
+        import dataclasses
+        from ..pipeline.scouting import ScoutingReport
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return None
+        try:
+            d = json.loads(_scout_file(match_id, team).read_text(
+                encoding="utf-8"))
+            if not isinstance(d, dict) or d.get("fp") != fp:
+                return None
+            mezok = {f.name for f in dataclasses.fields(ScoutingReport)}
+            adat = typed_json_decode(d["report"])
+            return ScoutingReport(**{k: v for k, v in adat.items()
+                                     if k in mezok})
+        except Exception:
+            return None
+
+    def _scout_to_disk(match_id: str, team, rep) -> None:
+        import dataclasses
+        from ..pipeline.scouting import ScoutingReport
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return
+        try:
+            adat = {f.name: getattr(rep, f.name)
+                    for f in dataclasses.fields(rep)}
+            szoveg = json.dumps({"fp": fp, "report": typed_json_encode(adat)},
+                                ensure_ascii=False)
+            # Csak a PONTOSAN visszaolvasható jelentést tároljuk.
+            if ScoutingReport(**typed_json_decode(json.loads(szoveg)["report"])) != rep:
+                return
+            f = _scout_file(match_id, team)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(szoveg, encoding="utf-8")
+            tmp.replace(f)
+        except Exception:
+            pass
 
     def _combined_report(body: dict):
         """Közös segéd: a törzs items-eiből egyesített ScoutingReport-ot épít."""
@@ -5289,7 +13318,7 @@ def create_app():
                 t = Team(it.get("team", "away"))
             except ValueError:
                 raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
-            reports.append(scout_team(m, t, TacticsConfig()))
+            reports.append(_scout_cached(m, t))
         return combine_reports(reports)
 
     @app.post("/scouting")
@@ -5299,7 +13328,7 @@ def create_app():
         Törzs: {"items": [{"match_id": "...", "team": "home"|"away"}, ...]}.
         Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
         """
-        return report_to_dict(_combined_report(body))
+        return _report_nevekkel(report_to_dict(_combined_report(body)))
 
     @app.post("/scouting/trend")
     def scouting_trend(body: dict):
@@ -5347,8 +13376,28 @@ def create_app():
         from ..pipeline.scouting import matchup_plan
         own = _combined_report(own_body)
         opp = _combined_report(opp_body)
+        from ..pipeline.scouting import style_distance
+        # A két csapat meccsről meccsre visszatérő figurái (névvel): a
+        # meccsterv képernyő rajzolja — "erre készüljetek" / "ezt hozzuk".
+        def _rec(rep):
+            try:
+                return _nevesit(rep.team_name,
+                                (rep.setplay_library or {}).get("recurring"))
+            except Exception:
+                return []
+        # Az ellenfél REPERTOÁR-VÁLTOZÁSA a kijelölt meccsei két fele
+        # között: az utóbbi meccseken bejött új figura az, amire a régi
+        # felderítés nem készít fel — hibatűrően, None, ha egy meccs.
+        opp_rep = None
+        try:
+            opp_rep = _items_repertoire(opp.team_name, opp_body.get("items"))
+        except Exception:
+            opp_rep = None
         return {"plan": matchup_plan(own, opp),
-                "own_team": own.team_name, "opp_team": opp.team_name}
+                "style": style_distance(own, opp),
+                "own_team": own.team_name, "opp_team": opp.team_name,
+                "opp_figures": _rec(opp), "own_figures": _rec(own),
+                "opp_repertoire": opp_rep}
 
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):
@@ -5365,6 +13414,7 @@ def create_app():
                 matchup = matchup_plan(_combined_report(own_body), rep)
             except Exception:
                 matchup = None
+        _lib_nevekkel(rep)
         html = scouting_report_html(rep, matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
@@ -5385,6 +13435,57 @@ def create_app():
         sugg = suggest_for_frame(match.frames[t], cfg, prev_frame=prev, fps=fps)
         return {"t": t, "suggestions": [vars(s) for s in sugg]}
 
+    def _figure_alerts_for(match) -> list:
+        """A figura-riasztások listája egy meccsre (lásd get_figure_alerts)
+        — a végpont és a böngészős 3D nézet közös alapja."""
+        from ..pipeline.setplays import recurring_figure_segments
+        alerts = []
+        for side in ("home", "away"):
+            nev = (match.meta.home_team if side == "home"
+                   else match.meta.away_team)
+            masik = (match.meta.away_team if side == "home"
+                     else match.meta.home_team)
+            try:
+                rec = _team_figure_library(nev).get("recurring") or []
+            except Exception:
+                rec = []
+            if not rec:
+                continue
+            fo = rec[0]
+            for a, b in recurring_figure_segments(
+                    match, fo["shape"],
+                    Team.HOME if side == "home" else Team.AWAY):
+                cimke = (f"\u201e{fo['name']}\u201d" if fo.get("name")
+                         else fo["zone"])
+                alerts.append({
+                    "t": a, "t_end": b, "team": side, "team_name": nev,
+                    "zone": fo["zone"], "name": fo.get("name"),
+                    "text": (f"Ismert figura: {nev} a visszatérő figuráját "
+                             f"játssza ({cimke}, {fo['matches']} "
+                             f"meccsen {fo['goals']} gól) — {masik}: "
+                             "kettőzés a súlypontnál, kilépés a lövőre!")})
+        alerts.sort(key=lambda r: r["t"])
+        return alerts
+
+    @app.get("/matches/{match_id}/figure-alerts")
+    def get_figure_alerts(match_id: str):
+        """ÉLŐ figura-riasztás: mikor játssza valamelyik csapat a
+        meccsről meccsre visszatérő figuráját ezen a meccsen.
+
+        A csapat könyvtára a könyvtár ÖSSZES elemzett meccséből épül
+        (több meccs kell hozzá; egy meccsből nincs visszatérő figura),
+        és ennek a meccsnek azok a támadás-szakaszai kerülnek a listába,
+        amelyek a fő visszatérő alakot játsszák. Az élő nézet a szakasz
+        kezdetén szól: "ismert figura jön — kettőzés a súlypontnál".
+
+        Válasz: {"alerts": [{"t", "t_end", "team", "team_name", "zone",
+        "text"}]} — t szerint növekvő. 404: nincs ilyen meccs.
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"alerts": _figure_alerts_for(match)}
+
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):
         """Figura-felismerés: hány visszatérő figurát játszottak és milyen
@@ -5393,14 +13494,25 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         r = discover_setplays(match, threshold=threshold)
-        from ..pipeline.setplays import setplay_efficiency
-        return {
+        from ..pipeline.setplays import setplay_efficiency, setplay_shapes
+        ki = {
             "attacks": r.attacks,
             "num_figures": r.num_figures,
             "figure_sizes": r.figure_sizes,
             "labels": r.labels,
             "efficiency": setplay_efficiency(match, threshold=threshold),
         }
+        # A figurák ALAKJA is (irány-normált rács + edzői név): a
+        # meccs-összefoglaló ebből rajzolja a mini-pályákat.
+        try:
+            alak = setplay_shapes(match, threshold=threshold)
+            ki["shapes"] = {
+                "home": _nevesit(match.meta.home_team, alak.get("home")),
+                "away": _nevesit(match.meta.away_team, alak.get("away")),
+            }
+        except Exception:
+            ki["shapes"] = None
+        return ki
 
     @app.get("/matches/{match_id}/events")
     def get_events(match_id: str):
@@ -5423,20 +13535,88 @@ def create_app():
             ],
         }
 
+    @app.get("/matches/{match_id}/goal-candidates")
+    def get_goal_candidates(match_id: str):
+        """Lehetséges gólok (event_detection.throw_off_candidates): a labda
+        a középen állt, előtte a kapu előtt járt, és közöttük nincs gól.
+        Az edző a meccs-nézetben egy kattintással felveheti őket (kézi
+        javítás). Eredmény-gyorsítótárral — a kézi javítás a kulcs része,
+        tehát egy megerősítés után a lista frissül."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.event_detection import throw_off_candidates
+        return _cached_result(
+            match_id, "goal-candidates",
+            lambda: {"candidates": throw_off_candidates(match)})
+
+    @app.get("/matches/{match_id}/decision-alerts")
+    def match_decision_alerts(match_id: str):
+        """Élő döntés-figyelő (decisions.live_decision_alerts): időrendben,
+        előre nézés nélkül, mikor válik láthatóvá egy csapat rossz
+        döntési szokása egy helyzetben — az élő képernyő időzített
+        jelzései közé kerül."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.decisions import live_decision_alerts
+        return _cached_result(match_id, "decision-alerts",
+                              lambda: live_decision_alerts(match))
+
     @app.get("/matches/{match_id}/players/{player_id}/decisions")
     def get_player_decisions(match_id: str, player_id: int):
-        """Egy játékos passz-döntései: kihez passzol és mennyire optimálisan."""
+        """Egy játékos döntései: kihez passzol és mennyire optimálisan —
+        és a játékos-modell helyzetenkénti képe.
+
+        "situations": helyzetenként (kilépnek rá / szabad a 6 m-es társ /
+        szabad lőhely) a döntések száma, a választások darabszáma és a
+        legjobb-opciósak száma (decisions.situational_decisions);
+        "pressure": a szorított döntései és közülük a legjobb-opciósak,
+        a csapat szabad döntéseinek legjobb-arányával (decisions.
+        pressure_decision_quality), vagy None, ha nem volt szorított
+        döntése. A két réteg meccs-szintű eredménye gyorsítótárazott: a
+        játékos-váltás nem számol újra."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         r = analyze_player_decisions(match, player_id)
-        return {
+        out = {
             "player_id": r.player_id,
             "passes": r.passes,
             "pass_distribution": r.pass_distribution,
             "optimal_rate": r.optimal_rate,
             "avg_value_gap": r.avg_value_gap,
+            "situations": {},
+            "pressure": None,
         }
+        try:
+            from ..pipeline.decisions import situational_decisions
+            sit = _cached_result(match_id, "situational-decisions",
+                                 lambda: situational_decisions(match))
+            for side in ("home", "away"):
+                row = next((p for p in (sit.get(side) or {}).get(
+                    "players") or [] if p["player_id"] == player_id), None)
+                if row:
+                    out["situations"] = row["situations"]
+                    break
+        except Exception:
+            pass
+        try:
+            from ..pipeline.decisions import pressure_decision_quality
+            pdq = _cached_result(match_id, "pressure-decisions",
+                                 lambda: pressure_decision_quality(match))
+            for side in ("home", "away"):
+                rec = pdq.get(side) or {}
+                row = next((p for p in rec.get("players") or []
+                            if p["player_id"] == player_id), None)
+                if row:
+                    out["pressure"] = {"press": row["press"],
+                                       "press_best": row["press_best"],
+                                       "team_free_pct": rec.get("free_pct")}
+                    break
+        except Exception:
+            pass
+        return out
 
     @app.post("/matches/{match_id}/simulate-setplay")
     def simulate(match_id: str, body: dict, defending: str = "away"):
@@ -5535,10 +13715,13 @@ def create_app():
 
     @app.post("/playbook")
     def save_play(body: dict):
-        """Figura mentése. Törzs: {"name": ..., "attackers": [[[x,y],[x,y]],...]}.
+        """Figura mentése. Törzs: {"name": ..., "attackers": [[[x,y],[x,y]],...],
+        "labda": [0, 1, …] (opcionális — kulcs-pozíciónként a labdás
+        sorszáma; ahol változik, ott passz)}.
 
         Validáció: 1..7 játékos, játékosonként legalább 2 kulcs-pozíció, minden
-        koordináta szám. Visszaadja a generált azonosítót."""
+        koordináta szám; a labdás sorszám létező játékos. Visszaadja a
+        generált azonosítót."""
         import uuid
         name = str(body.get("name") or "").strip()
         attackers = body.get("attackers")
@@ -5550,11 +13733,28 @@ def create_app():
             attackers = [[[float(p[0]), float(p[1])] for p in path] for path in attackers]
         except (TypeError, IndexError, ValueError):
             raise HTTPException(status_code=400, detail="invalid coordinates")
+        # NaN / végtelen: a JSON átengedi, a figura-linkek nem (400).
+        import math as _m
+        if not all(_m.isfinite(v) for path in attackers for p in path for v in p):
+            raise HTTPException(status_code=400, detail="invalid coordinates")
         if any(len(path) < 2 for path in attackers):
             raise HTTPException(status_code=400, detail="each player needs >=2 keyframes")
+        labda = body.get("labda")
+        if labda is not None:
+            try:
+                labda = [int(v) for v in labda]
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400,
+                                    detail="labda: a labdás sorszámai (egész)")
+            if (len(labda) > max(len(path) for path in attackers)
+                    or any(not 0 <= v < len(attackers) for v in labda)):
+                raise HTTPException(status_code=400,
+                                    detail="labda: nem létező játékos vagy pont")
 
         play_id = uuid.uuid4().hex[:10]
         data = {"id": play_id, "name": name, "attackers": attackers}
+        if labda:
+            data["labda"] = labda
         _play_path(play_id).write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"id": play_id, "name": name}
@@ -5632,12 +13832,12 @@ def create_app():
         fused = fuse_matches(views)
         new_id = payload.get("match_id") or ("fuzio-" + "-".join(ids)[:40])
         fused.meta.match_id = new_id
-        _store[new_id] = fused
-        try:
-            _match_path(new_id).write_text(fused.to_json(indent=2),
-                                           encoding="utf-8")
-        except Exception:
-            pass
+        # A közös tár-írás: atomikus fájl-csere, fejléc-index, és a
+        # származtatott kivonatok eldobása. Eddig közvetlen (nem
+        # atomikus) írás volt: a fúzió kimaradt az indexből (a következő
+        # indulás teljesen beolvasta), és az azonos néven ÚJRA fűzött
+        # meccsre a memória-tár (felderítés, kivonat) a régit adta.
+        _put_match(fused)
         from ..pipeline.fusion import fusion_gain
         return {"match_id": new_id, "n_views": len(ids),
                 "offsets": offsets, "frames": len(fused.frames),
@@ -5645,12 +13845,46 @@ def create_app():
 
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:
+        """Memóriába tesz ÉS lemezre tükröz.
+
+        TÖMÖR JSON-nal (behúzás nélkül): egy teljes meccs behúzva 114 MB
+        és 11 mp volt (a behúzásos kiírás a lassú, tisztán Python kódolón
+        megy), tömören 71 MB és 1,5 mp — a betöltés is ennyivel gyorsabb.
+        Az írás ATOMIKUS (ideiglenes fájl + csere): egy megszakadt mentés
+        (a gép alvása, a program bezárása) nem hagy félig írt, betölthetetlen
+        meccs-fájlt maga után.
+
+        Minden tár-írás a meccs SZÁRMAZTATOTT kivonatait is eldobja: a
+        csapatcsere, a kockák javítása vagy az azonos kockaszámú
+        újrafeldolgozás után a kockaszám/csapatnév szerint kulcsolt
+        memória-tárak (kivonat, fókusz, felderítés, figura-alakok,
+        minőség-pont) a RÉGI eredményt adták volna — a lemezes tár
+        ujjlenyomata ezt csak a lemezen vette észre, a memóriában nem."""
+        _drop_derived_caches(match.meta.match_id)
+        # A kapusok jelölése a tárba lépéskor (mint a lemezről
+        # visszatöltésnél) — a hatókörön kívüli végpontokhoz is.
+        try:
+            from ..pipeline.primitive_cache import mark_goalkeepers
+            mark_goalkeepers(match)
+        except Exception:
+            pass
         _store[match.meta.match_id] = match
         try:
-            _match_path(match.meta.match_id).write_text(
-                match.to_json(indent=2), encoding="utf-8")
+            p = _match_path(match.meta.match_id)
+            tmp = p.with_suffix(".json.tmp")
+            tmp.write_text(match.to_json(), encoding="utf-8")
+            tmp.replace(p)
         except Exception:
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
+        _write_index()
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
+    app.state.store = _store  # (teszt: a memória-plafon viselkedése)
+    app.state.warm_results = _warm_results  # (teszt: előszámolás)
+    # A forma-irány számolója: a küszöbei ÍTÉLETET hoznak a játékosról
+    # ("javulsz"/"romlasz"), ezért közvetlenül is tesztelhetőnek kell
+    # lennie — hat meccsnyi valódi lövés-adatot előállítani ehhez
+    # aránytalan lenne, és a lényeget (mikor NEM mondunk ítéletet)
+    # úgysem az adat dönti el, hanem ez a függvény.
+    app.state.forma_irany = _forma_irany
     return app

@@ -19,6 +19,7 @@ import statistics
 from dataclasses import dataclass
 
 from ..models.tracking import Match, Team, PositionSource
+from .primitive_cache import copy_deep, memoize_primitive
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 
 
@@ -103,6 +104,9 @@ class TeamSummary:
     frames_counted: int
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("compute_team_summary", copy=copy_deep)
 def compute_team_summary(match: Match, team: Team,
                          include_estimated: bool = False) -> TeamSummary:
     """A csapat súlypont- és kiterjedés-átlaga a meccsen.

@@ -40,6 +40,172 @@ def test_defense_model_learns_depth_and_count():
     assert abs(model.line_depth_m - 6.0) < 1e-6
 
 
+def _press_match(nyom: bool, n: int = 60):
+    """A hazai 1-es labdás 9 m-en (31; 13,3); a vendég fal a hatoson,
+    `nyom` esetén a legközelebbi védő 1,2 m-re rálép."""
+    frames = []
+    for t in range(n):
+        players = [_pl(1, Team.HOME, 31.0, 13.3), _pl(2, Team.HOME, 28.0, 8.0)]
+        ys = (3, 6, 9, 11, 14, 17)
+        for i, y in enumerate(ys):
+            x, yy = 34.0, float(y)
+            if nyom and y == 14:
+                x, yy = 32.0, 14.2
+            players.append(_pl(100 + i, Team.AWAY, x, yy))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=31.0, y=13.3, confidence=1.0)))
+    return Match(MatchMeta(match_id="p", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_kilepesi_hajlamot():
+    """Ha a védő rendre rálép a lőtávolságon belüli labdásra, a modell
+    kilépési hajlama magas; zárt falnál 0; kevés mintából (50 kocka alatt)
+    nem tanul — 0 marad."""
+    from handball.pipeline.play_simulation import PRESS_LEARN_MIN_FRAMES
+
+    assert DefenseModel.learn(_press_match(True), Team.AWAY).press_rate == 1.0
+    assert DefenseModel.learn(_press_match(False), Team.AWAY).press_rate == 0.0
+    keves = _press_match(True, n=PRESS_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).press_rate == 0.0
+
+
+def _kovet_match(gain: float, n: int = 60, labda_ys=(5, 7, 10, 13, 15)):
+    """A hazai labdás 12 m-re a kaputól, a labda y-ja `labda_ys` szerint
+    körbejár; a vendég fal a hatoson a labda oldal-eltérésének `gain`
+    részével tolódik el."""
+    frames = []
+    for t in range(n):
+        by = float(labda_ys[t % len(labda_ys)])
+        players = [_pl(1, Team.HOME, 28.0, by), _pl(2, Team.HOME, 27.0, 5.0),
+                   _pl(3, Team.HOME, 27.0, 15.0)]
+        for i, y in enumerate((4, 7, 9, 11, 13, 16)):
+            players.append(_pl(100 + i, Team.AWAY, 34.0,
+                               y + gain * (by - 10.0)))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0, y=by, confidence=1.0)))
+    return Match(MatchMeta(match_id="k", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_labdakovetest():
+    """A labdával 60%-ban együtt tolódó fal → 0,6; a helyben álló fal →
+    0; középen álló labdából (nincs oldal-mozgás) és kevés mintából (50
+    kocka alatt) nem tanul — az alapérték (0,5) marad. A tanult modell a
+    szimulációban is ennyit tolódik."""
+    import statistics
+
+    from handball.pipeline.play_simulation import LATERAL_LEARN_MIN_FRAMES
+
+    tanult = DefenseModel.learn(_kovet_match(0.6), Team.AWAY)
+    assert abs(tanult.lateral_gain - 0.6) < 1e-9
+    assert DefenseModel.learn(_kovet_match(0.0), Team.AWAY).lateral_gain == 0.0
+    kozep = _kovet_match(0.6, labda_ys=(10,))
+    assert DefenseModel.learn(kozep, Team.AWAY).lateral_gain == 0.5
+    keves = _kovet_match(0.6, n=LATERAL_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).lateral_gain == 0.5
+
+    def fal_kozep(model, by):
+        return statistics.fmean(y for _, y in model.respond(
+            Ball(x=24.0, y=by, confidence=1.0), goal_x=40.0))
+
+    eltolas = fal_kozep(tanult, 13.0) - fal_kozep(tanult, 10.0)
+    assert abs(eltolas - 0.6 * 3.0) < 1e-6
+
+
+def _dupla_match(dupla: bool, n: int = 60):
+    """A hazai 1-es labdás 9 m-en (31; 13,3); a vendég fal a hatoson,
+    egy védő mindig 1,2 m-re rálép, `dupla` esetén egy második is 2 m-re
+    mellé áll."""
+    frames = []
+    for t in range(n):
+        players = [_pl(1, Team.HOME, 31.0, 13.3), _pl(2, Team.HOME, 28.0, 8.0)]
+        for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+            x, yy = 34.0, float(y)
+            if y == 14:
+                x, yy = 32.0, 14.2
+            if dupla and y == 11:
+                x, yy = 32.5, 11.9
+            players.append(_pl(100 + i, Team.AWAY, x, yy))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=31.0, y=13.3, confidence=1.0)))
+    return Match(MatchMeta(match_id="d", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_vedekezes_modell_megtanulja_a_kettozest():
+    """Ha két védő is rendre a labdás mellett áll, a kettőzési hajlam
+    magas; egy rálépő védőnél 0 (az csak kilépés); kevés mintából nem
+    tanul. A szimulációban a második legközelebbi védő a labdás felé lép,
+    és 1,2 m-re megáll tőle; a többi a falban marad."""
+    import math
+
+    from handball.pipeline.play_simulation import (DOUBLE_GAP_M,
+                                                   PRESS_LEARN_MIN_FRAMES)
+
+    assert DefenseModel.learn(_dupla_match(True), Team.AWAY).double_rate == 1.0
+    assert DefenseModel.learn(_dupla_match(False), Team.AWAY).double_rate == 0.0
+    keves = _dupla_match(True, n=PRESS_LEARN_MIN_FRAMES - 1)
+    assert DefenseModel.learn(keves, Team.AWAY).double_rate == 0.0
+
+    labda = Ball(x=31.0, y=13.3, confidence=1.0)
+    egy = DefenseModel(press_rate=1.0).respond(labda, goal_x=40.0)
+    ketto = DefenseModel(press_rate=1.0, double_rate=1.0).respond(
+        labda, goal_x=40.0)
+    valtozott = [i for i, (a, b) in enumerate(zip(egy, ketto)) if a != b]
+    assert len(valtozott) == 1, (egy, ketto)
+    x, y = ketto[valtozott[0]]
+    assert abs(math.hypot(x - 31.0, y - 13.3) - DOUBLE_GAP_M) < 1e-6
+    # távoli labdánál senki nem kettőz
+    tavol = Ball(x=24.0, y=10.0, confidence=1.0)
+    assert (DefenseModel(double_rate=1.0).respond(tavol, goal_x=40.0)
+            == DefenseModel().respond(tavol, goal_x=40.0))
+
+
+def test_a_figura3d_fejlece_mutatja_a_tanult_falat(tmp_path,
+                                                          monkeypatch):
+    """A meccsből tanult fal fejléce kiírja a labdakövetést (ha nem az
+    alapérték), a kilépést és a kettőzést (5% felett)."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_kovet_match(0.6))
+    r = TestClient(app).get("/figura3d", params={
+        "u": "30,5,32,8;30,15,31,12", "meccs": "k", "vedo": "away"})
+    assert r.status_code == 200
+    assert "követi a labdát: 60%" in r.text
+    app.state.put_match(_dupla_match(True))
+    r = TestClient(app).get("/figura3d", params={
+        "u": "30,5,32,8;30,15,31,12", "meccs": "d", "vedo": "away"})
+    assert r.status_code == 200
+    assert "kilép a labdásra: 100%" in r.text and "kettőz: 100%" in r.text
+
+
+def test_a_kilepo_vedo_a_labdas_ele_lep_a_szimulacioban():
+    """press_rate=1: lőtávolságon belüli labdánál a labdáshoz legközelebbi
+    védő a labdás és a kapu-közép vonalán 1 m-re áll meg előtte; a többi
+    védő a falban marad. press_rate=0: a fal változatlan. Távoli labdánál
+    senki nem lép ki."""
+    import math
+
+    from handball.pipeline.play_simulation import PRESS_GAP_M
+
+    labda = Ball(x=31.0, y=13.3, confidence=1.0)
+    zart = DefenseModel().respond(labda, goal_x=40.0)
+    kilep = DefenseModel(press_rate=1.0).respond(labda, goal_x=40.0)
+    valtozott = [i for i, (a, b) in enumerate(zip(zart, kilep)) if a != b]
+    assert len(valtozott) == 1, (zart, kilep)
+    x, y = kilep[valtozott[0]]
+    assert abs(math.hypot(x - 31.0, y - 13.3) - PRESS_GAP_M) < 1e-6
+    assert x > 31.0  # a labdás és a kapu között
+    tavol = Ball(x=24.0, y=10.0, confidence=1.0)
+    assert (DefenseModel(press_rate=1.0).respond(tavol, goal_x=40.0)
+            == DefenseModel().respond(tavol, goal_x=40.0))
+
+
 def test_defense_respond_wall_outside_area_and_shift():
     """A 6-os fal a hatoson KÍVÜL áll (egy védő sincs a kapuelőtérben),
     középen a hatos előtt fél méterrel, a széleken az ívre simulva — és a
@@ -110,3 +276,60 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0):
+    """A hazai (Ők) ugyanazt a beálló-figurát `ismetles`-szer játssza: az
+    1-es középen előre, a 2-es a szélről befut; a támadások közt a labda
+    a saját térfelükön (átmenet). A vendég (Mi) 6-0 fala `fal_x`-en."""
+    frames = []
+    t = 0
+    for _ in range(ismetles):
+        n = int(3 * fps)
+        for s in range(n):
+            u = s / (n - 1)
+            a1 = (25 + 5 * u, 10.0)
+            players = [_pl(1, Team.HOME, *a1),
+                       _pl(2, Team.HOME, 30 + 4 * u, 2 + 6 * u),
+                       _pl(3, Team.HOME, 27.0, 15.0)]
+            for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+                players.append(_pl(100 + i, Team.AWAY, fal_x, float(y)))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=a1[0], y=a1[1], confidence=1.0)))
+            t += 1
+        for _s in range(int(fps)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 15.0, 10.0)],
+                                ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="pr", home_team="Ők", away_team="Mi",
+                           fps=fps), frames)
+
+
+def test_a_vedekezesi_proba_az_o_figurajukat_a_mi_falunk_ellen_jatssza():
+    """A háromszor ismételt figurájuk egy sorként jön (3×), a mi falunk
+    és az alap 6-0 elleni lövőhelyzettel; a ritka (négyvédős) fal ellen
+    a próba kimondja a különbséget. Egyszeri támadás nem visszatérő
+    figura; a nem támadó csapatnál nincs mit próbálni."""
+    from handball.pipeline.play_simulation import (AJANLO_ELTERES_PP,
+                                                   PROBA_MIN_ISMETLES,
+                                                   defense_test)
+
+    r = defense_test(_proba_match(), Team.HOME, DefenseModel())
+    assert len(r["figurak"]) == 1
+    f = r["figurak"][0]
+    assert f["ismetles"] == 3 and f["elteres_pp"] == 0.0
+    assert f["attackers"] and len(f["labda"]) == len(f["attackers"][0])
+    assert r["verdict"].startswith(
+        "a legveszélyesebb visszatérő figurájuk (3×, pl. ")
+    assert "százalékponttal" not in r["verdict"]
+
+    ritka = defense_test(_proba_match(), Team.HOME,
+                         DefenseModel(num_defenders=2))
+    assert ritka["figurak"][0]["elteres_pp"] >= AJANLO_ELTERES_PP
+    assert "be kell gyakorolni" in ritka["verdict"]
+
+    egyszeri = _proba_match(ismetles=PROBA_MIN_ISMETLES - 1)
+    assert defense_test(egyszeri, Team.HOME, DefenseModel()) == {
+        "figurak": [], "verdict": None}
+    assert defense_test(_proba_match(), Team.AWAY, DefenseModel()) == {
+        "figurak": [], "verdict": None}
