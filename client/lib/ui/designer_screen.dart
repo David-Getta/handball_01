@@ -460,6 +460,87 @@ class _DesignerScreenState extends State<DesignerScreen> {
                     "csapat a /kovet várólapon is eléri (▶ Figura).")));
   }
 
+  /// AI-finomító: a szerver a figura kulcs-pozícióit kis lépésekben
+  /// módosítja a mostani fal ellen; az eredmény egy javaslat-ablakban
+  /// jön (mit változtatna, mennyit ér), és az edző veszi át — vagy nem.
+  Future<void> _aiFinomitas() async {
+    Map<String, dynamic> r;
+    try {
+      r = await _api.refineSetplay(
+          [
+            for (final a in _attackers) [for (final p in a) [p.dx, p.dy]]
+          ],
+          _labda,
+          _vedelemParams());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Az AI-finomítás nem sikerült: ${humanError(e)}")));
+      return;
+    }
+    if (!mounted) return;
+    final valtozasok =
+        ((r["valtozasok"] as List?) ?? const []).cast<String>();
+    final atvesz = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("AI-finomítás"),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("${r["vedelem"] ?? ""}",
+                  style: AppText.label.copyWith(fontSize: 11)),
+              const SizedBox(height: 6),
+              Text("${r["verdict"] ?? ""}", style: AppText.label),
+              for (final v in valtozasok)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text("• $v",
+                      style: AppText.value.copyWith(fontSize: 13)),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Maradok a sajátomnál")),
+          if (valtozasok.isNotEmpty)
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Átveszem"),
+            ),
+        ],
+      ),
+    );
+    if (atvesz != true || !mounted) return;
+    try {
+      final utak = [
+        for (final a in (r["attackers"] as List))
+          [
+            for (final p in a as List)
+              Offset(((p as List)[0] as num).toDouble(),
+                  (p[1] as num).toDouble())
+          ]
+      ];
+      final k = _attackers.isEmpty ? 3 : _attackers.first.length;
+      setState(() {
+        _attackers = [for (final u in utak) resamplePath(u, k)];
+        _sim = null;
+        _eval = null;
+      });
+    } catch (_) {
+      // hibás válasz: a saját figura marad
+    }
+  }
+
   /// A fal link-paraméterei (a figura-oldalaknak): a legutóbbi tanult
   /// védelem (meccs + oldal), különben a kézi fal (védőszám, mélység,
   /// rendszer).
@@ -1110,6 +1191,21 @@ class _DesignerScreenState extends State<DesignerScreen> {
                         backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
                     icon: const Icon(Icons.psychology_outlined),
                     label: const Text("Egy CSAPAT tanult védelme ellen"),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // AI-finomító: a kulcs-pozíciók kis módosításai, amelyek
+                  // a mostani fal ellen nagyobb lövőhelyzetet teremtenek.
+                  Tooltip(
+                    message: "Az AI néhány méterrel arrébb próbálja a "
+                        "futások pontjait (a kezdő felállás marad), és "
+                        "megmondja, melyik változat teremt nagyobb "
+                        "lövőhelyzetet a legutóbbi tanult védelem (különben "
+                        "a fenti fal) ellen. Javaslat — te döntesz, átveszed-e.",
+                    child: OutlinedButton.icon(
+                      onPressed: _aiFinomitas,
+                      icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
+                      label: const Text("AI-finomítás"),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   // A figura 3D-ben / VR-ben (a böngészőben, bejárható).

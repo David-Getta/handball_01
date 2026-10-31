@@ -333,3 +333,51 @@ def test_a_vedekezesi_proba_az_o_figurajukat_a_mi_falunk_ellen_jatssza():
         "figurak": [], "verdict": None}
     assert defense_test(_proba_match(), Team.AWAY, DefenseModel()) == {
         "figurak": [], "verdict": None}
+
+
+_FINOMITO_FIGURA = [[[26, 10], [29, 10], [31.5, 10]], [[26, 4], [26, 4], [26, 4]],
+                    [[30, 2], [33, 2], [36, 1.5]], [[27, 15], [28, 15], [29, 15]]]
+
+
+def test_az_ai_finomito_javit_a_figuran_a_tanult_fal_ellen():
+    """5-1 fal ellen a finomító a kulcs-pozíciók kis módosításával
+    nagyobb lövőhelyzetet talál; a kezdő felállás nem változik, egy
+    támadó sem lép a hatosba vagy a saját térfelére; a változásokat
+    magyarul mondja ki. A finomított figura a fal ellen tényleg annyit
+    ér, amennyit a finomító állít."""
+    import math
+
+    from handball.pipeline.play_simulation import (
+        FINOMITO_MIN_JAVULAS_PP, GOAL_AREA_RADIUS_M, refine_setplay,
+        setplay_3d_match)
+
+    fal = DefenseModel(rendszer="5-1", press_rate=0.4, lateral_gain=0.8)
+    r = refine_setplay(_FINOMITO_FIGURA, fal, ball=[0, 0, 1])
+    assert r["javulas_pp"] >= FINOMITO_MIN_JAVULAS_PP
+    assert r["pont_utana"] > r["pont_elotte"]
+    assert [u[0] for u in r["attackers"]] == [p[0] for p in _FINOMITO_FIGURA]
+    for u in r["attackers"]:
+        for x, y in u:
+            fa_y = min(11.5, max(8.5, y))
+            assert math.hypot(x - 40.0, y - fa_y) >= GOAL_AREA_RADIUS_M
+            assert x >= 20.0
+    assert r["valtozasok"] and "támadó „Vég” pontja" in r["valtozasok"][0]
+    assert r["verdict"].startswith("A modell szerint ")
+    _, e = setplay_3d_match(r["attackers"], fal, ball=r["labda"])
+    assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
+
+
+def test_az_ai_finomito_nem_valtoztat_ha_nincs_jobb():
+    """Az alap fal ellen ez a figura helyi optimum: a finomító változatlanul
+    hagyja, és ezt ki is mondja; üres figurára ValueError."""
+    import pytest
+
+    from handball.pipeline.play_simulation import refine_setplay
+
+    r = refine_setplay(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1])
+    assert r["valtozasok"] == [] and r["javulas_pp"] == 0.0
+    assert r["attackers"] == [[[float(x), float(y)] for x, y in u]
+                              for u in _FINOMITO_FIGURA]
+    assert r["verdict"].startswith("A modell nem talált jobb változatot")
+    with pytest.raises(ValueError):
+        refine_setplay([], DefenseModel())

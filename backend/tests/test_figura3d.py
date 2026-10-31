@@ -1085,3 +1085,25 @@ def test_a_vedekezesi_proba_vegpont_es_a_felderito_lap(tmp_path, monkeypatch):
     assert c.get("/matches/nincs/vedekezesi-proba").status_code == 404
     assert c.get("/matches/pr/vedekezesi-proba",
                  params={"vedo_meccs": "nincs"}).status_code == 404
+
+
+def test_az_ai_finomitas_vegpont(tmp_path, monkeypatch):
+    """POST /figura-finomitas: a kézi 5-1 fal ellen javaslatot ad (a
+    javult lövőhelyzettel és a változásokkal), a fal nevével; hibás
+    figurára 400, ismeretlen meccsre 404."""
+    c = TestClient(_app(tmp_path, monkeypatch))
+    figura = [[[26, 10], [29, 10], [31.5, 10]], [[26, 4], [26, 4], [26, 4]],
+              [[30, 2], [33, 2], [36, 1.5]], [[27, 15], [28, 15], [29, 15]]]
+    r = c.post("/figura-finomitas", json={
+        "attackers": figura, "labda": [0, 0, 1], "rendszer": "5-1"})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["vedelem"].startswith("Védelem (5-1")
+    assert j["pont_utana"] > j["pont_elotte"] and j["valtozasok"]
+    assert len(j["attackers"]) == 4
+    assert c.post("/figura-finomitas",
+                  json={"attackers": []}).status_code == 400
+    assert c.post("/figura-finomitas",
+                  json={"attackers": [[["a", 1]]]}).status_code == 400
+    assert c.post("/figura-finomitas", json={
+        "attackers": figura, "meccs": "nincs"}).status_code == 404

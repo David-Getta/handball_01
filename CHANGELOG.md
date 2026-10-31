@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.187 óta)
+
+- **AI-finomító a figura-tervezőben** (motor + figura-tervező): az új
+  "AI-finomítás" gomb a megrajzolt figura futásainak pontjait néhány
+  méterrel arrébb próbálja (a kezdő felállás marad, a hatosba és a
+  saját térfélre senki nem lép), mindegyik változatot lejátssza a
+  legutóbbi tanult védelem (különben a kézi fal) ellen, és a legjobban
+  javító lépéseket tartja meg. A javaslat-ablak megmondja, mit
+  változtatna és mennyit ér ("A modell szerint 17 százalékponttal
+  nagyobb lövőhelyzet (38% → 55%), ha a 2. támadó „Vég” pontja 1,8 m-rel
+  a kapu felé és kifelé") — az edző dönti el, átveszi-e. Új végpont:
+  /figura-finomitas.
+
 ## v0.1.187 — kiadva (2026-10-29)
 
 > Kiadás-jegyzet: TANULT ELLENFÉL-MODELL, FIGURA-AJÁNLÓ ÉS VÉDEKEZÉSI

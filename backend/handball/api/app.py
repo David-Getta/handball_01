@@ -3531,6 +3531,39 @@ def create_app():
                 "vedelem": (vm.meta.home_team if vo == Team.HOME
                             else vm.meta.away_team), **r}
 
+    @app.post("/figura-finomitas")
+    def figura_finomitas(body: dict):
+        """AI-finomító: a tervező figurájának kis módosításai, amelyek a
+        fal ellen nagyobb lövőhelyzetet teremtenek
+        (play_simulation.refine_setplay). Törzs: {"attackers": támadónként
+        a kulcs-pozíciók [[x, y], …], "labda": [sorszám, …] (opcionális),
+        és a fal: "meccs" + "vedo" (tanult) vagy "vedok", "melyseg",
+        "rendszer" (kézi — mint a /figura3d)}. Visszaad: {"vedelem",
+        "attackers", "labda", "pont_elotte", "pont_utana", "javulas_pp",
+        "valtozasok", "verdict"}; 400 a hibás figurára."""
+        from ..pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
+                                                FIGURA_3D_MAX_PONT,
+                                                refine_setplay)
+        try:
+            utak = [[(float(p[0]), float(p[1]))
+                     for p in list(u)[:FIGURA_3D_MAX_PONT]]
+                    for u in list(body.get("attackers") or [])
+                    [:FIGURA_3D_MAX_JATEKOS]]
+            labda = [int(v) for v in (body.get("labda") or [])]
+            vedok = int(body.get("vedok", 6))
+            melyseg = float(body.get("melyseg", 6.0))
+        except (TypeError, ValueError, IndexError):
+            raise HTTPException(status_code=400, detail="hibás figura")
+        modell, vedo_nev = _figura_vedelem(
+            str(body.get("meccs") or ""), str(body.get("vedo") or "away"),
+            vedok, melyseg, str(body.get("rendszer") or "6-0"))
+        try:
+            r = refine_setplay(utak, modell, ball=labda)
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="a figurában nincs támadó")
+        return {"vedelem": vedo_nev, **r}
+
     @app.get("/playbook-rangsor")
     def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
                          melyseg: float = 6.0, rendszer: str = "6-0"):

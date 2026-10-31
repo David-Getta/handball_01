@@ -263,6 +263,25 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// AI-finomító (POST /figura-finomitas): a figura kis módosításai a
+  /// fal ellen (`vedelem`: "meccs" + "vedo", vagy "vedok", "melyseg",
+  /// "rendszer") — {vedelem, attackers, labda, pont_elotte, pont_utana,
+  /// javulas_pp, valtozasok, verdict}.
+  Future<Map<String, dynamic>> refineSetplay(
+      List<List<List<double>>> attackers, List<int> labda,
+      Map<String, String> vedelem) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/figura-finomitas"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(
+                {"attackers": attackers, "labda": labda, ...vedelem}))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az AI-finomítás", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy mentett figura betöltése (attackers: játékosonként [[x,y],[x,y]]).
   Future<Map<String, dynamic>> fetchPlay(String playId) async {
     final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));

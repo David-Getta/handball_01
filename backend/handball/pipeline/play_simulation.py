@@ -965,3 +965,131 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
                         "százalékponttal többet enged, mint egy alap 6-0: "
                         "ezt a figurát a meccs előtt be kell gyakorolni")
     return {"figurak": sorok, "verdict": verdict}
+
+
+# ---- AI-finomító: a figura kis módosításai a tanult fal ellen -------------
+# Egy lépés ennyi méter egy kulcs-pozíción (nyolc irányban); legfeljebb
+# ennyi javító kör fut; ennél kisebb javulás (százalékpont) nem lépés —
+# az értékmodell zaja. A támadó a hatoson kívül legalább ennyivel áll
+# (a kapuelőtérbe nem léphet), és a pálya szélétől is ennyire.
+FINOMITO_LEPES_M = 1.0
+FINOMITO_KOROK = 6
+FINOMITO_MIN_JAVULAS_PP = 1.0
+FINOMITO_RAHAGYAS_M = 0.3
+
+
+def _pont_nev(i: int, k: int) -> str:
+    """A kulcs-pozíció neve (mint a tervezőben és a figura-lapon)."""
+    if k == 3:
+        return ("Kezdő", "Közép", "Vég")[i]
+    if k == 2:
+        return ("Kezdő", "Vég")[i]
+    return f"{i + 1}."
+
+
+def refine_setplay(keypoints: list, defense: DefenseModel, *,
+                   ball: list | None = None,
+                   config: TacticsConfig | None = None) -> dict:
+    """AI-finomító: a figura kulcs-pozícióinak kis módosításai, amelyek a
+    `defense` fal ellen nagyobb lövőhelyzetet teremtenek.
+
+    Hegymászás: minden körben minden támadó minden kulcs-pozícióját (a
+    KEZDŐ felállás kivételével — az az edzőé) nyolc irányba
+    FINOMITO_LEPES_M-rel elmozdítjuk, a figurát a fal ellen lejátsszuk
+    (setplay_3d_match), és a legjobb javító lépést megtartjuk — amíg a
+    javulás FINOMITO_MIN_JAVULAS_PP alatt nem marad, legfeljebb
+    FINOMITO_KOROK körig. A támadó a hatosba és a saját térfelére nem
+    léphet.
+
+    Edzőileg: "hol nyit rést ez a fal a figurámon?" — a modell a fal
+    tanult szokásai (kilépés, kettőzés, labdakövetés) ellen keresi meg,
+    melyik futás végpontja ér többet néhány méterrel arrébb. Javaslat,
+    nem ítélet: az edző dönti el, átveszi-e.
+
+    Visszaad: {"attackers" (a finomított kulcs-pozíciók), "labda",
+    "pont_elotte", "pont_utana", "javulas_pp", "valtozasok" (magyar
+    mondatok támadónként és pontonként), "verdict"}. ValueError, ha
+    nincs érvényes támadó."""
+    config = config or TacticsConfig()
+    goal_x = config.attacks_toward_x(Team.HOME)
+    _, e0 = setplay_3d_match(keypoints, defense, ball=ball, config=config)
+    utak = [[list(p) for p in u] for u in e0["utak"]]
+    labda = list(e0["labda"])
+    kozep = COURT_WIDTH_M / 2.0
+
+    def ervenyes(x: float, y: float) -> bool:
+        r = FINOMITO_RAHAGYAS_M
+        if not (r <= x <= COURT_LENGTH_M - r and r <= y <= COURT_WIDTH_M - r):
+            return False
+        if abs(x - goal_x) > COURT_LENGTH_M / 2.0:
+            return False      # a saját térfelére nem fut vissza
+        hx, hy = _hatoson_kivulre(x, y, goal_x)
+        if (hx, hy) != (x, y):
+            return False      # a hatoson belül
+        fa_y = min(kozep + _GOAL_HALF_W, max(kozep - _GOAL_HALF_W, y))
+        return math.hypot(x - goal_x, y - fa_y) >= GOAL_AREA_RADIUS_M + r
+
+    def pont(u) -> float:
+        _, e = setplay_3d_match(u, defense, ball=labda, config=config)
+        return e["best_shot_value"]
+
+    alap = e0["best_shot_value"]
+    most = alap
+    lepes = FINOMITO_LEPES_M
+    iranyok = [(lepes * math.cos(a), lepes * math.sin(a))
+               for a in (k * math.pi / 4 for k in range(8))]
+    for _ in range(FINOMITO_KOROK):
+        legjobb = None
+        for i, u in enumerate(utak):
+            for k in range(1, len(u)):
+                for dx, dy in iranyok:
+                    x, y = u[k][0] + dx, u[k][1] + dy
+                    if not ervenyes(x, y):
+                        continue
+                    proba = [list(map(list, v)) for v in utak]
+                    proba[i][k] = [x, y]
+                    p = pont(proba)
+                    if legjobb is None or p > legjobb[0] + 1e-12:
+                        legjobb = (p, proba)
+        if legjobb is None \
+                or 100.0 * (legjobb[0] - most) < FINOMITO_MIN_JAVULAS_PP:
+            break
+        most, utak = legjobb
+
+    valtozasok = []
+    for i, (regi, uj) in enumerate(zip(e0["utak"], utak)):
+        for k, (a, b) in enumerate(zip(regi, uj)):
+            d = math.hypot(b[0] - a[0], b[1] - a[1])
+            if d < 0.05:
+                continue
+            reszek = []
+            if abs(b[0] - a[0]) >= 0.3:
+                reszek.append("a kapu felé" if abs(b[0] - goal_x)
+                              < abs(a[0] - goal_x) else "hátrébb")
+            if abs(b[1] - a[1]) >= 0.3:
+                reszek.append("befelé" if abs(b[1] - kozep)
+                              < abs(a[1] - kozep) else "kifelé")
+            nevelo = "az" if i + 1 in (1, 5) else "a"
+            m = f"{d:.1f}".replace(".", ",")
+            valtozasok.append(
+                f"{nevelo[0].upper()}{nevelo[1:]} {i + 1}. támadó "
+                f"„{_pont_nev(k, len(uj))}” pontja {m} m-rel "
+                + " és ".join(reszek or ["arrébb"]))
+    javulas = round(100.0 * (most - alap), 1)
+    if valtozasok:
+        verdict = (f"A modell szerint {javulas:.0f} százalékponttal "
+                   f"nagyobb lövőhelyzet ({100 * alap:.0f}% → "
+                   f"{100 * most:.0f}%), ha "
+                   + "; ".join(v[:1].lower() + v[1:] for v in valtozasok)
+                   + ".")
+    else:
+        verdict = ("A modell nem talált jobb változatot: ez a figura "
+                   "ennél a falnál a kis módosításoknál nem javul.")
+    return {"attackers": [[[round(x, 1), round(y, 1)] for x, y in u]
+                          for u in utak],
+            "labda": labda,
+            "pont_elotte": round(100.0 * alap, 1),
+            "pont_utana": round(100.0 * most, 1),
+            "javulas_pp": javulas,
+            "valtozasok": valtozasok,
+            "verdict": verdict}
