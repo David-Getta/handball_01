@@ -81,6 +81,31 @@ LATERAL_MIN_SPREAD_M = 2.0
 DOUBLE_CLOSE_M = 2.5
 DOUBLE_GAP_M = 1.2
 
+# Tanult kapus: a kaputra érkező lövések gól-aránya lövő-távolság szerint
+# (a gk_save_ranges sávjai), a kézilabdában szokásos arány felé húzva —
+# KAPUS_SULY "képzelt" lövés az alap aránnyal, mert egy meccs sávonként
+# kevés lövést ad. A sáv szorzója a tanult és az alap gól-arány
+# hányadosa, ebbe a sávba szorítva; a sávhoz legalább KAPUS_MIN_LOVES
+# kaputra érkező lövés kell (alatta nincs szorzó — nem találgatunk).
+KAPUS_ALAP_GOL = {"close": 0.70, "mid": 0.55, "far": 0.40}
+KAPUS_SULY = 6
+KAPUS_MIN_LOVES = 3
+KAPUS_SZORZO_MIN = 0.7
+KAPUS_SZORZO_MAX = 1.3
+# A sávok a felületek mondataiban ("távolról 1,2× annyi gólt kap").
+KAPUS_SAV_NEV = {"close": "közelről", "mid": "közepes távolságból",
+                 "far": "távolról"}
+
+
+def kapus_sav(x: float, y: float, goal_x: float) -> str:
+    """A lövőhely távolság-sávja a kaputól (a gk_save_ranges-é: közeli
+    SHOT_RANGE_CLOSE_M-ig, közép SHOT_RANGE_MID_M-ig, utána távoli)."""
+    from .attack_types import SHOT_RANGE_CLOSE_M, SHOT_RANGE_MID_M
+    d = math.hypot(x - goal_x, y - COURT_WIDTH_M / 2.0)
+    if d <= SHOT_RANGE_CLOSE_M:
+        return "close"
+    return "mid" if d <= SHOT_RANGE_MID_M else "far"
+
 
 # ---- Tanult védekezési modell ---------------------------------------------
 
@@ -103,6 +128,11 @@ class DefenseModel:
                      kockák mekkora részén állt KÉT védő is a labdáshoz
                      DOUBLE_CLOSE_M-en belül. A szimulációban ennyire lép
                      a második legközelebbi védő is a labdásra.
+    - kapus:         a tanult kapus sávonkénti szorzója ({"close" / "mid"
+                     / "far": szorzó}): 1 felett az a sáv ellene többet ér
+                     (többet enged be a szokásosnál), 1 alatt kevesebbet.
+                     A figura-értékelés a lövőhely sávjának szorzójával
+                     számol; üres = átlagos kapus.
     """
     num_defenders: int = 6
     line_depth_m: float = 6.0
@@ -110,6 +140,7 @@ class DefenseModel:
     rendszer: str = "6-0"
     press_rate: float = 0.0
     double_rate: float = 0.0
+    kapus: dict = field(default_factory=dict)
 
     @classmethod
     def learn(cls, match: Match, defending_team: Team,
@@ -131,7 +162,10 @@ class DefenseModel:
         alatt, vagy ha a labda (négyzetes közép) oldal-eltérése
         LATERAL_MIN_SPREAD_M alatti, az alapérték (0,5) marad. A kettőzési hajlam a kilépéséhez
         hasonlóan: a lőtávolságon belüli labdás kockák közül azok aránya,
-        ahol két mezőnyvédő is DOUBLE_CLOSE_M-en belül állt.
+        ahol két mezőnyvédő is DOUBLE_CLOSE_M-en belül állt. A kapus: a
+        csapat kapusára kaputra érkező lövések sávonkénti gól-aránya
+        (goalkeeper.gk_save_ranges), KAPUS_SULY képzelt alap-lövéssel
+        simítva, a KAPUS_ALAP_GOL-hoz mérve.
         """
         from .decisions import ball_holder
         from .tactics import _BACK_MAX, detect_formation
@@ -195,7 +229,12 @@ class DefenseModel:
                         if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
             double_rate=(round(kettoztek / lovo_kockak, 3)
                          if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
+            kapus=_kapus_tanul(match, defending_team, config),
         )
+
+    def kapus_szorzo(self, x: float, y: float, goal_x: float) -> float:
+        """A lövőhely sávjának tanult kapus-szorzója (1, ha nincs)."""
+        return float(self.kapus.get(kapus_sav(x, y, goal_x), 1.0))
 
     def respond(self, ball: Ball, goal_x: float) -> list[tuple[float, float]]:
         """A védők pozíciói a labdára reagálva (y-ban a labda felé eltolva).
@@ -282,6 +321,40 @@ class DefenseModel:
                        ball.y + dy / d * DOUBLE_GAP_M)
                 out[j] = lep(out[j], cel, min(1.0, self.double_rate))
         return out
+
+
+def _kapus_tanul(match: Match, defending_team: Team,
+                 config: TacticsConfig) -> dict:
+    """A `defending_team` kapusának sávonkénti szorzója (lásd
+    DefenseModel.kapus) — KAPUS_MIN_LOVES alatti sáv kimarad."""
+    from .goalkeeper import gk_save_ranges
+    rng = gk_save_ranges(match, config).get(defending_team.value) or {}
+    out = {}
+    for sav, alap in KAPUS_ALAP_GOL.items():
+        rec = rng.get(sav) or {}
+        faced = int(rec.get("faced") or 0)
+        if faced < KAPUS_MIN_LOVES:
+            continue
+        golok = faced - int(rec.get("saves") or 0)
+        arany = (golok + KAPUS_SULY * alap) / (faced + KAPUS_SULY)
+        out[sav] = round(max(KAPUS_SZORZO_MIN,
+                             min(KAPUS_SZORZO_MAX, arany / alap)), 3)
+    return out
+
+
+def kapus_felirat(kapus: dict) -> str:
+    """A tanult kapus egy sorban ("a kapus távolról 1,2×, közelről 0,8×
+    annyi gólt kap, mint az átlag") — csak a 0,1-nél jobban eltérő sávok;
+    üres, ha nincs ilyen."""
+    reszek = []
+    for sav in ("far", "mid", "close"):
+        v = kapus.get(sav)
+        if v is None or abs(v - 1.0) < 0.1:
+            continue
+        reszek.append(f"{KAPUS_SAV_NEV[sav]} "
+                      + f"{v:.1f}".replace(".", ",") + "×")
+    return ("a kapus " + ", ".join(reszek)
+            + " annyi gólt kap, mint az átlag") if reszek else ""
 
 
 # ---- A figura (set play) és a szimuláció ----------------------------------
@@ -617,7 +690,7 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                 uj.append(replace(p))
         utolso = Frame(t=utolso.t + 1, players=uj, ball=utolso.ball)
         sim.frames.append(utolso)
-    ertekeles = evaluate_setplay(sim, config=config)
+    ertekeles = evaluate_setplay(sim, config=config, defense=defense)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
     # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is
     # nézhető a figura.
@@ -776,11 +849,14 @@ def attack_figure(match: Match, t: int, *, pontok: int = 3,
     }
 
 
-def evaluate_setplay(match: Match, config: TacticsConfig | None = None) -> dict:
+def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
+                     defense: DefenseModel | None = None) -> dict:
     """Pontozza a szimulált figurát: a teremtett legjobb lövőhelyzet.
 
     Minden lépésben minden támadóra: lövésérték * "szabadság" (a legközelebbi védő
     távolsága alapján — 4 m-en belül fedezett). A legjobb érték a figura pontszáma.
+    A `defense` tanult kapusa (DefenseModel.kapus) a lövőhely sávjának
+    szorzójával súlyoz — a kapus gyenge sávjából jövő helyzet többet ér.
     """
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(Team.HOME)
@@ -797,6 +873,8 @@ def evaluate_setplay(match: Match, config: TacticsConfig | None = None) -> dict:
                 nd = 99.0
             openness = max(0.0, min(1.0, nd / 4.0))  # 4 m-en belül fedezett
             score = sv * openness
+            if defense is not None and defense.kapus:
+                score *= defense.kapus_szorzo(a.x, a.y, goal_x)
             if score > best["best_shot_value"]:
                 best = {"best_shot_value": score, "step": f.t, "attacker_id": a.track_id}
     return best

@@ -104,6 +104,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultKilep = null;
     _tanultKovet = null;
     _tanultKettoz = null;
+    _tanultKapus = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -148,6 +149,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // A tanult fal kettőzési hajlama (defense_model.double_rate): a labdás
   // lőtávolságon belül ennyi részében állt két védő is mellette.
   double? _tanultKettoz;
+  // A tanult kapus egy mondatban (a szimuláció kapus_felirat-ja; üres,
+  // ha átlagos).
+  String? _tanultKapus;
   String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
@@ -205,6 +209,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
         _tanultKilep = null;
         _tanultKovet = null;
         _tanultKettoz = null;
+        _tanultKapus = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -387,7 +392,14 @@ class _DesignerScreenState extends State<DesignerScreen> {
         defending: side,
       );
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
-      final eval = evaluateSetPlay(sim);
+      // A szerver kiértékelése (a tanult kapus sávonkénti szorzójával);
+      // ha hiányzik, a helyi.
+      final ev = (resp["evaluation"] as Map?)?.cast<String, dynamic>();
+      final eval = ev != null && ev["best_shot_value"] is num
+          ? SetPlayEvaluation((ev["best_shot_value"] as num).toDouble(),
+              (ev["step"] as num?)?.toInt() ?? -1,
+              (ev["attacker_id"] as num?)?.toInt())
+          : evaluateSetPlay(sim);
       if (!mounted) return;
       _tanultMeccs = matchId;
       _tanultOldal = side;
@@ -399,6 +411,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ((resp["defense_model"] as Map?)?["lateral_gain"] as num?)?.toDouble();
       _tanultKettoz =
           ((resp["defense_model"] as Map?)?["double_rate"] as num?)?.toDouble();
+      _tanultKapus = resp["kapus_felirat"] as String?;
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -1315,6 +1328,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 "a tanult védelem kettőz: "
                 "${((_tanultKettoz ?? 0) * 100).round()}% — a második "
                 "védő is a labdásra lép, mellette valaki szabadul",
+                style: AppText.label.copyWith(fontSize: 11)),
+          // A tanult kapus: a kiértékelés a lövőhely sávjának szorzójával
+          // számol (a kapus gyenge sávjából jövő helyzet többet ér).
+          if (_tanultMeccs != null && (_tanultKapus ?? "").isNotEmpty)
+            Text("$_tanultKapus — a pontszám ezzel számol",
                 style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),

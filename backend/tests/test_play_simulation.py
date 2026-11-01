@@ -408,3 +408,56 @@ def test_az_ai_finomito_passzt_is_javasol():
                               pa[1] - pb[1]) <= FINOMITO_PASSZ_MAX_M
     _, e = setplay_3d_match(r["attackers"], fal, ball=r["labda"])
     assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
+
+
+def test_a_tanult_kapus_szorzoja_simitott_es_szoritott(monkeypatch):
+    """A kapus sávonkénti szorzója a gól-arány a KAPUS_SULY képzelt
+    alap-lövéssel simítva, az alaphoz mérve, a KAPUS_SZORZO sávba
+    szorítva; KAPUS_MIN_LOVES alatti sáv kimarad."""
+    import handball.pipeline.goalkeeper as gk
+    from handball.pipeline.play_simulation import (
+        KAPUS_ALAP_GOL, KAPUS_SULY, KAPUS_SZORZO_MIN, _kapus_tanul)
+
+    def ranges(match, config=None):
+        return {"away": {"far": {"faced": 10, "saves": 8},
+                         "mid": {"faced": 10, "saves": 3},
+                         "close": {"faced": 2, "saves": 0}},
+                "home": {}}
+
+    monkeypatch.setattr(gk, "gk_save_ranges", ranges)
+    k = _kapus_tanul(None, Team.AWAY, TacticsConfig())
+    assert set(k) == {"far", "mid"}
+    assert k["far"] == KAPUS_SZORZO_MIN          # 2 gól 10-ből: erős kapus
+    vart = (7 + KAPUS_SULY * KAPUS_ALAP_GOL["mid"]) / (10 + KAPUS_SULY)
+    assert abs(k["mid"] - round(vart / KAPUS_ALAP_GOL["mid"], 3)) < 1e-9
+    assert _kapus_tanul(None, Team.HOME, TacticsConfig()) == {}
+
+
+def test_a_tanult_kapus_valodi_lovesekbol_es_a_kiertekelesben():
+    """A valódi forrás-láncon (szimulált meccs lövésekkel → match_xg →
+    gk_save_ranges): a lövéseket kapó kapus sávjai szorzót kapnak, a
+    lövést nem kapó csapaté üres. A kiértékelés a lövőhely sávjának
+    szorzójával súlyoz, és a felirat kimondja."""
+    from handball.pipeline.play_simulation import (kapus_felirat,
+                                                   kapus_sav)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    kapott = DefenseModel.learn(m, Team.AWAY).kapus
+    assert kapott and all(v > 1.0 for v in kapott.values())
+    assert kapus_felirat(kapott).startswith("a kapus ")
+    assert DefenseModel.learn(m, Team.HOME).kapus == {}
+
+    # Egy szabad, távoli lövőhely: a szorzó egy az egyben a pontszámba megy.
+    egy = Match(MatchMeta(match_id="e", home_team="A", away_team="B",
+                          fps=25), [Frame(t=0, players=[
+                              _pl(1, Team.HOME, 28.0, 10.0),
+                              _pl(100, Team.AWAY, 34.0, 3.0)],
+                              ball=Ball(x=28.0, y=10.0, confidence=1.0))])
+    assert kapus_sav(28.0, 10.0, 40.0) == "far"
+    alap = evaluate_setplay(egy)["best_shot_value"]
+    tanult = evaluate_setplay(egy, defense=DefenseModel(
+        kapus={"far": 1.3}))["best_shot_value"]
+    assert abs(tanult - 1.3 * alap) < 1e-9
+    assert kapus_felirat({"far": 1.05}) == ""

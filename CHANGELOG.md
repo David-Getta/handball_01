@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **Tanult kapus a figura-értékelésben** (motor + figura-tervező): a
+  figura pontszáma eddig átlagos kapust feltételezett. Most a tanult
+  védelem a kapusukat is megtanulja: a kaputra érkező lövések gól-aránya
+  távolság szerint (közeli / közép / távoli — a kapus-távolság réteg
+  sávjai), a szokásos arány felé húzva, mert egy meccs sávonként kevés
+  lövést ad. A gyenge sávból jövő helyzet többet ér (legfeljebb 1,3×),
+  az erősből kevesebbet — így a figura-ajánló, a védekezési próba és az
+  AI-finomító is azt a figurát emeli ki, amelyik a kapus gyenge
+  távolságából fejez be. A tervező eredmény-kártyája és a 3D fejléce
+  kiírja: "a kapus távolról 1,3× annyi gólt kap, mint az átlag".
+
 - **Az AI-finomító a passzokat is javasolja** (motor + figura-tervező):
   a finomító eddig csak a futások pontjait mozgatta. Most azt is
   kipróbálja, kinél legyen a labda egy kulcs-pozíciótól kezdve (legfeljebb

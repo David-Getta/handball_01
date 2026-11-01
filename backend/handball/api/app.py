@@ -55,7 +55,8 @@ from ..pipeline.report_html import scouting_report_html
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
-from ..pipeline.play_simulation import DefenseModel, SetPlay, simulate_setplay, evaluate_setplay
+from ..pipeline.play_simulation import (DefenseModel, SetPlay, simulate_setplay,
+                                        evaluate_setplay, kapus_felirat)
 
 
 def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
@@ -3385,7 +3386,9 @@ def create_app():
                 f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
                 if modell.lateral_gain != 0.5 else "") + (
                 f" · kettőz: {modell.double_rate * 100:.0f}%"
-                if modell.double_rate >= 0.05 else "")
+                if modell.double_rate >= 0.05 else "") + (
+                f" · {kapus_felirat(modell.kapus)}"
+                if kapus_felirat(modell.kapus) else "")
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))),
@@ -13677,7 +13680,10 @@ def create_app():
         sim = simulate_setplay(setplay, model)
         return {
             "defense_model": vars(model),
-            "evaluation": evaluate_setplay(sim),
+            "evaluation": evaluate_setplay(sim, defense=model),
+            # A tanult kapus egy mondatban (üres, ha átlagos) — a tervező
+            # eredmény-kártyája.
+            "kapus_felirat": kapus_felirat(model.kapus),
             "tracking": sim.to_dict(),
         }
 

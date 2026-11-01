@@ -1107,3 +1107,27 @@ def test_az_ai_finomitas_vegpont(tmp_path, monkeypatch):
                   json={"attackers": [[["a", 1]]]}).status_code == 400
     assert c.post("/figura-finomitas", json={
         "attackers": figura, "meccs": "nincs"}).status_code == 404
+
+
+def test_a_tanult_kapus_a_szimulacioban_es_a_3d_fejlecben(tmp_path,
+                                                         monkeypatch):
+    """A /simulate-setplay a tanult kapus szorzójával értékel, és egy
+    mondatban visszaadja; a 3D fejléce is kiírja. A kapus a valódi
+    forrás-láncból (lövéses szimulált meccs)."""
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    m.meta.match_id = "lov"
+    app.state.put_match(m)
+    c = TestClient(app)
+    r = c.post("/matches/lov/simulate-setplay", params={"defending": "away"},
+               json={"attackers": [[[28, 10], [30, 10]], [[26, 4], [27, 4]]],
+                     "ball_carrier": [0, 0]})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["defense_model"]["kapus"]
+    assert j["kapus_felirat"].startswith("a kapus ")
+    r = c.get("/figura3d", params={"u": U, "meccs": "lov", "vedo": "away"})
+    assert r.status_code == 200 and "a kapus " in r.text
