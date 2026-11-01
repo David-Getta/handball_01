@@ -22,6 +22,25 @@ double shotValue(double px, double py, double goalX) {
   return (base * angleFactor).clamp(0.02, 0.95);
 }
 
+/// A termék xG-modellje a helyből (a backend xg.xg_of_position tükre,
+/// azonos konstansokkal): távolság-görbe (6 m-ről ~0,60, 9 m-ről ~0,37,
+/// 12 m-ről ~0,15) a látott kapuszöggel súlyozva, 0,05..0,90 közé vágva,
+/// három tizedre kerekítve. A figura-kiértékelés ezt használja.
+double xgOfPosition(double x, double y, double goalX) {
+  const goalHalfW = 1.5;
+  const distBase = 1.05, distSlope = 0.075, angleFullRad = 0.9;
+  const xgMin = 0.05, xgMax = 0.90;
+  final dx = math.max(0.5, (x - goalX).abs());
+  final dist = math.sqrt(math.pow(x - goalX, 2) + math.pow(y - _goalY, 2));
+  final a1 = math.atan2(y - (_goalY - goalHalfW), dx);
+  final a2 = math.atan2(y - (_goalY + goalHalfW), dx);
+  final angle = (a1 - a2).abs();
+  final pDist = math.min(math.max(distBase - distSlope * dist, 0.08), 0.85);
+  final angNorm = math.min(math.max(angle / angleFullRad, 0.0), 1.0);
+  final xg = pDist * (0.55 + 0.45 * angNorm);
+  return (math.min(math.max(xg, xgMin), xgMax) * 1000).roundToDouble() / 1000;
+}
+
 double _pointSegmentDistance(
     double px, double py, double ax, double ay, double bx, double by) {
   final dx = bx - ax, dy = by - ay;

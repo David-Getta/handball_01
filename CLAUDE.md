@@ -105,7 +105,7 @@ Sorrendben (kb. 200–280 sor összesen):
      a ti erősségetek) — a KÖVETKEZŐ szám: 470,
    - `combine_reports`: a mezők összegzése.
 5. **Edzés-fókusz** (`pipeline/training.py`, `training_focus`) — új
-   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 489.
+   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 490.
    A blokk alakja: `# N) …` komment, alatta `_szabaly = N`, aztán a
    `try:`. A sorszám a rangsor kulcsa (`rank_focus`: területek között
    forog, területen belül a kisebb sorszám — az alap-szabály — előre);

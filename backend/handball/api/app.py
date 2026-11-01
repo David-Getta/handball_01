@@ -3513,34 +3513,42 @@ def create_app():
                                               vedo_nev=vedo_nev,
                                               ajanlas=ajanlas))
 
-    def _vedekezesi_proba(match, csapat: Team, vedo_match, vedo_oldal: Team):
+    def _vedekezesi_proba(match, csapat: Team, vedo_match, vedo_oldal: Team,
+                          fal=None):
         """Az `csapat` visszatérő figurái a `vedo_match` `vedo_oldal`
         csapatából tanult fal ellen (play_simulation.defense_test), a
         figurák /figura3d lekérdezésével ("link": a figura a tanult fal
-        ellen, 3D-ben bejárható)."""
+        ellen, 3D-ben bejárható). `fal`: kész modell (a szezon-fal) — a
+        link ilyenkor a csapat nevével (`csapat=`) nyit."""
         from urllib.parse import quote
 
         from ..pipeline.play_simulation import (defense_test,
                                                 figura_link_kod)
-        r = defense_test(match, csapat, DefenseModel.learn(vedo_match,
-                                                           vedo_oldal))
+        vedo_nev = (vedo_match.meta.home_team if vedo_oldal == Team.HOME
+                    else vedo_match.meta.away_team)
+        r = defense_test(match, csapat, fal if fal is not None
+                         else DefenseModel.learn(vedo_match, vedo_oldal))
         for f in r["figurak"]:
             try:
                 f["link"] = (figura_link_kod(f["attackers"], f["labda"],
                                              "Az ő figurájuk")
-                             + f"&meccs={quote(vedo_match.meta.match_id)}"
-                             + f"&vedo={vedo_oldal.value}")
+                             + (f"&csapat={quote(vedo_nev)}" if fal is not None
+                                else f"&meccs={quote(vedo_match.meta.match_id)}"
+                                     f"&vedo={vedo_oldal.value}"))
             except ValueError:
                 f["link"] = None
         return r
 
     @app.get("/matches/{match_id}/vedekezesi-proba")
     def vedekezesi_proba(match_id: str, csapat: str = "away",
-                         vedo_meccs: str = "", vedo_oldal: str = ""):
+                         vedo_meccs: str = "", vedo_oldal: str = "",
+                         szezon: int = 0):
         """Védekezési próba: a `csapat` visszatérő figurái a MI tanult
         falunk ellen — alapból a meccs másik oldaláé, vagy a `vedo_meccs`
-        `vedo_oldal` csapatáé (a saját meccsünkből). Visszaad: {"csapat",
-        "vedelem", "figurak" (a 3D-linkkel), "verdict"}."""
+        `vedo_oldal` csapatáé (a saját meccsünkből). `szezon=1`: a védő
+        csapat fala a könyvtár ÖSSZES meccséből tanul (learn_many), nem
+        csak ebből. Visszaad: {"csapat", "vedelem", "meccsek" (hány
+        meccsből a fal), "figurak" (a 3D-linkkel), "verdict"}."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -3558,11 +3566,19 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400,
                                 detail="vedo_oldal: 'home' vagy 'away'")
-        r = _vedekezesi_proba(match, t, vm, vo)
+        vedo_nev = (vm.meta.home_team if vo == Team.HOME
+                    else vm.meta.away_team)
+        if szezon:
+            meccsek = _csapat_meccsei(vedo_nev)
+            r = _vedekezesi_proba(match, t, vm, vo,
+                                  fal=DefenseModel.learn_many(meccsek))
+            r["link_csapat"] = vedo_nev
+        else:
+            meccsek = [(vm, vo)]
+            r = _vedekezesi_proba(match, t, vm, vo)
         return {"csapat": (match.meta.home_team if t == Team.HOME
                            else match.meta.away_team),
-                "vedelem": (vm.meta.home_team if vo == Team.HOME
-                            else vm.meta.away_team), **r}
+                "vedelem": vedo_nev, "meccsek": len(meccsek), **r}
 
     @app.post("/figura-finomitas")
     def figura_finomitas(body: dict):
@@ -3601,13 +3617,27 @@ def create_app():
     @app.get("/playbook-rangsor")
     def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
                          melyseg: float = 6.0, rendszer: str = "6-0",
-                         csapat: str = ""):
+                         csapat: str = "", szezon: int = 0):
         """Figura-ajánló: a mentett figurák rangsora a `meccs` `vedo`
         csapatából TANULT fal ellen (vagy a kézi fal ellen — mint a
         /figura-fuzet), az alap 6-0-hoz mért eltéréssel és egy magyar
         ajánló mondattal (play_simulation.rank_playbook). Visszaad:
         {"vedelem", "figurak", "ajanlas"}."""
         from ..pipeline.play_simulation import rank_playbook
+        # szezon=1 a meccs+oldal mellett: a csapat neve a meccsből, a fal
+        # az összes meccséből (mint csapat=<név>).
+        if szezon and meccs and not csapat:
+            vm = _store.get(meccs)
+            if vm is None:
+                raise HTTPException(status_code=404, detail="match not found")
+            try:
+                vo = Team(vedo)
+            except ValueError:
+                raise HTTPException(status_code=400,
+                                    detail="vedo: 'home' vagy 'away'")
+            csapat = (vm.meta.home_team if vo == Team.HOME
+                      else vm.meta.away_team)
+        from ..pipeline.play_simulation import ALAP_FIGURAK
         modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
                                            rendszer, csapat=csapat)
         figurak = []
@@ -3618,7 +3648,13 @@ def create_app():
                 continue  # hiányzó / sérült figura-fájl kimarad
             if isinstance(d, dict):
                 figurak.append(d)
-        return {"vedelem": vedo_nev, **rank_playbook(figurak, modell)}
+        # Mentett figura nélkül az alap-figurák (sablonok) rangsora — a
+        # válasz "sablon" mezője jelzi.
+        sablon = not figurak
+        if sablon:
+            figurak = [dict(d) for d in ALAP_FIGURAK]
+        return {"vedelem": vedo_nev, "sablon": sablon,
+                **rank_playbook(figurak, modell)}
 
     # A figura-videók gyorsítótára (a várólapról többen is letöltik) és a
     # rajzolás zárja (egyszerre egy — a többi kérés vár).
@@ -13266,14 +13302,29 @@ def create_app():
         if plays:
             try:
                 from ..pipeline.play_simulation import rank_playbook
-                ajanlo = rank_playbook(plays, DefenseModel.learn(match, t))
+                # A faluk a könyvtár ÖSSZES meccséből (szezon-fal); ha
+                # bármi hiba, ebből az egy meccsből.
+                try:
+                    fal = DefenseModel.learn_many(_csapat_meccsei(
+                        match.meta.home_team if t == Team.HOME
+                        else match.meta.away_team))
+                except Exception:
+                    fal = DefenseModel.learn(match, t)
+                ajanlo = rank_playbook(plays, fal)
             except Exception:
                 ajanlo = None
         # Védekezési próba: az ő visszatérő figuráik a MI falunk (a meccs
         # másik oldala — mint a meccsterv) ellen, 3D-linkkel.
         proba = None
         try:
-            proba = _vedekezesi_proba(match, t, match, own_t)
+            # A mi falunk a szezon összes meccséből; hiba esetén ebből.
+            try:
+                sajat_fal = DefenseModel.learn_many(_csapat_meccsei(
+                    match.meta.home_team if own_t == Team.HOME
+                    else match.meta.away_team))
+            except Exception:
+                sajat_fal = None
+            proba = _vedekezesi_proba(match, t, match, own_t, fal=sajat_fal)
         except Exception:
             proba = None
         _lib_nevekkel(rep_sc)
@@ -13812,7 +13863,13 @@ def create_app():
 
     @app.get("/playbook/{play_id}")
     def get_play(play_id: str):
-        """Egy mentett figura teljes tartalma (a tervező ezt tölti vissza)."""
+        """Egy mentett figura teljes tartalma (a tervező ezt tölti vissza).
+        A "sablon-…" azonosító az alap-figura (play_simulation.ALAP_FIGURAK)
+        — betölthető, átrajzolható, mentve sajáttá válik."""
+        from ..pipeline.play_simulation import ALAP_FIGURAK
+        for d in ALAP_FIGURAK:
+            if d["id"] == play_id:
+                return dict(d)
         p = _play_path(play_id)
         if not p.exists():
             raise HTTPException(status_code=404, detail="play not found")

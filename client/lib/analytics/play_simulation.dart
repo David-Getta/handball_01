@@ -10,7 +10,7 @@ import "dart:ui";
 
 import "../models/tracking.dart";
 import "../ui/court_geometry.dart";
-import "decisions.dart" show shotValue;
+import "decisions.dart" show xgOfPosition;
 import "tactics.dart";
 
 /// A fal védekezési rendszerei — a backend
@@ -219,7 +219,8 @@ SetPlayEvaluation evaluateSetPlay(Match match, {TacticsConfig config = const Tac
     final attackers = f.players.where((p) => p.team == Team.home);
     final defenders = f.players.where((p) => p.team == Team.away).toList();
     for (final a in attackers) {
-      final sv = shotValue(a.x, a.y, goalX);
+      // A termék xG-je (xgOfPosition) — mint a backend evaluate_setplay.
+      final sv = xgOfPosition(a.x, a.y, goalX);
       double nd = 99.0;
       for (final d in defenders) {
         final dd = math.sqrt(math.pow(a.x - d.x, 2) + math.pow(a.y - d.y, 2));

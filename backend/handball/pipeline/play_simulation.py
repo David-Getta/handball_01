@@ -10,7 +10,7 @@ A vízió "edző kipróbálja a kitalált figuráit egy adott csapat ellen" rés
    a védők a TANULT modell szerint reagálnak. Kimenet egy Match (Tracking), amit a
    kliens ugyanúgy ki tud rajzolni, mint egy valódi meccset.
 4. evaluate_setplay(...) — pontozza a figurát: teremtett-e szabad, közeli
-   lövőhelyzetet (a legjobb lövésérték * "szabadság" a védőktől).
+   lövőhelyzetet (a legjobb várható gól * "szabadság" a védőktől).
 
 Tiszta Python, videó nélkül tesztelhető. A védekezési modell egyszerű, de VALÓDI
 adatból tanult paraméterekre épül — később finomabb (tanult) modellre cserélhető.
@@ -27,7 +27,6 @@ from ..models.tracking import (
 )
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig, classify_phase, Phase
-from .decisions import shot_value
 
 
 # A 6 m-es kapuelőtér geometriája: a fal SOHA nem léphet a hatoson
@@ -772,7 +771,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                 uj.append(replace(p))
         utolso = Frame(t=utolso.t + 1, players=uj, ball=utolso.ball)
         sim.frames.append(utolso)
-    ertekeles = evaluate_setplay(sim, config=config, defense=defense)
+    # A kezdő állókép nélkül: a figura azt kapja, amit a MOZGÁS teremt.
+    ertekeles = evaluate_setplay(sim, config=config, defense=defense,
+                                 from_t=allas)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
     # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is
     # nézhető a figura.
@@ -932,23 +933,37 @@ def attack_figure(match: Match, t: int, *, pontok: int = 3,
 
 
 def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
-                     defense: DefenseModel | None = None) -> dict:
+                     defense: DefenseModel | None = None,
+                     from_t: int = 0) -> dict:
     """Pontozza a szimulált figurát: a teremtett legjobb lövőhelyzet.
 
-    Minden lépésben minden támadóra: lövésérték * "szabadság" (a legközelebbi védő
-    távolsága alapján — 4 m-en belül fedezett). A legjobb érték a figura pontszáma.
+    Minden lépésben minden támadóra: várható gól (xg.xg_of_position — a
+    termék xG-modellje: 6 m-ről ~0,6, 9 m-ről ~0,37, 12 m-ről ~0,15) *
+    "szabadság" (a legközelebbi védő távolsága alapján — 4 m-en belül
+    fedezett). A legjobb érték a figura pontszáma. A döntés-elemzés
+    egyszerű lövésértéke (decisions.shot_value) a 13 m-es szabad lövést
+    a fedezett 6 m-es fölé tette — a figura-ajánló és az AI-finomító így
+    hátrébb tolta volna a támadókat.
     A `defense` tanult kapusa (DefenseModel.kapus) a lövőhely sávjának
     szorzójával súlyoz — a kapus gyenge sávjából jövő helyzet többet ér.
+    `from_t`: ettől a kockától pontoz — a 3D figura a kezdő állóképet
+    kihagyja (a felállás nem a figura által teremtett helyzet: a mozgás
+    előtt a labdás 13 m-ről "szabad", és minden figura ugyanazt a
+    pontot kapná).
     """
+    from .xg import xg_of_position
+
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(Team.HOME)
     best = {"best_shot_value": 0.0, "step": -1, "attacker_id": None}
 
     for f in match.frames:
+        if f.t < from_t:
+            continue
         attackers = [p for p in f.players if p.team == Team.HOME]
         defenders = [p for p in f.players if p.team == Team.AWAY]
         for a in attackers:
-            sv = shot_value(a.x, a.y, goal_x)
+            sv = xg_of_position(a.x, a.y, goal_x)
             if defenders:
                 nd = min(math.hypot(a.x - d.x, a.y - d.y) for d in defenders)
             else:
@@ -970,6 +985,48 @@ def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
 # értékelünk (a könyvtár mérete — egy kérés ne fusson percekig).
 AJANLO_ELTERES_PP = 5.0
 AJANLO_MAX = 60
+
+
+# Alap-figurák (sablonok): mentett figura nélkül is van mit rangsorolni a
+# tanult fal ellen — a kézilabda öt alapfigurája, a tervező alakjában
+# (támadónként Kezdő / Közép / Vég kulcs-pozíció méterben, a +x kapura;
+# "labda": kulcs-pozíciónként a labdás sorszáma). Az edző a tervezőben
+# betöltheti és átrajzolhatja; a mentett figura a sablont kiszorítja.
+ALAP_FIGURAK = [
+    {"id": "sablon-kereszt", "name": "Keresztezés jobbra, beálló-leválás",
+     "sablon": True, "labda": [0, 1, 1],
+     "attackers": [[[28, 10], [30, 12], [31.5, 13.5]],
+                   [[29, 14], [30, 11], [32, 9.5]],
+                   [[33, 10], [33.5, 12], [34, 13]],
+                   [[28, 5], [28, 5], [29, 6]]]},
+    {"id": "sablon-pick", "name": "Pick & roll középen",
+     "sablon": True, "labda": [0, 0, 1],
+     "attackers": [[[27, 10], [30, 10], [32, 10.5]],
+                   [[33, 10], [31.5, 9], [33.5, 11]],
+                   [[28, 15], [29, 14], [30, 13]],
+                   [[28, 5], [29, 5], [30, 6]]]},
+    {"id": "sablon-szelso", "name": "Szélső beindulás második beállónak",
+     "sablon": True, "labda": [1, 1, 0],
+     "attackers": [[[32, 18.5], [33, 15], [34, 12]],
+                   [[27, 10], [29, 10], [30, 10]],
+                   [[33, 9], [33, 8], [33, 7]],
+                   [[28, 15], [30, 14], [31, 13]]]},
+    {"id": "sablon-atloves", "name": "Átlövés 9 m-ről, beálló-zárással",
+     "sablon": True, "labda": [0, 1, 1],
+     "attackers": [[[27, 10], [28, 11], [29, 12]],
+                   [[27, 15], [29, 14], [30.5, 12.5]],
+                   [[33, 11], [32.5, 12.5], [32, 13.5]],
+                   [[28, 5], [29, 5], [30, 5.5]]]},
+    {"id": "sablon-7a6", "name": "Hét a hat ellen, két beállóval",
+     "sablon": True, "labda": [0, 0, 3],
+     "attackers": [[[27, 10], [29, 10], [30, 10]],
+                   [[27, 5], [29, 5], [30, 5.5]],
+                   [[27, 15], [29, 15], [30, 14.5]],
+                   [[33, 8], [33.5, 7.5], [34, 7]],
+                   [[33, 12], [33.5, 12.5], [34, 13]],
+                   [[32, 1.5], [33, 2], [34, 3]],
+                   [[32, 18.5], [33, 18], [34, 17]]]},
+]
 
 
 def rank_playbook(figurak: list, defense: DefenseModel, *,
@@ -1009,6 +1066,7 @@ def rank_playbook(figurak: list, defense: DefenseModel, *,
         sorok.append({
             "id": d.get("id"),
             "name": figura_nev(d.get("name")) or "névtelen",
+            "sablon": bool(d.get("sablon")),
             "pont_pct": round(100.0 * pont, 1),
             "alap_pct": round(100.0 * ap, 1),
             "elteres_pp": round(100.0 * (pont - ap), 1),

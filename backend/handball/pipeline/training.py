@@ -1562,6 +1562,51 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 489) Védekezési próba: az ellenfél visszatérő figurája a MI tanult
+    # falunk ellen nagyobb lövőhelyzetet teremt, mint egy alap 6-0 ellen
+    # — a falunk szokása (a kilépés, a kettőzés, a labdakövetés) maga
+    # nyitja a rést. Ezt a figurát a meccs előtt a saját hibánkkal
+    # együtt kell begyakorolni.
+    _szabaly = 489
+    try:
+        from .play_simulation import (AJANLO_ELTERES_PP, DefenseModel,
+                                      defense_test)
+        for side, masik in (("home", "away"), ("away", "home")):
+            ved489 = DefenseModel.learn(
+                match, Team.HOME if side == "home" else Team.AWAY, config)
+            pr489 = defense_test(
+                match, Team.HOME if masik == "home" else Team.AWAY,
+                ved489, config=config)
+            if not pr489["figurak"]:
+                continue
+            f489 = pr489["figurak"][0]
+            if f489["elteres_pp"] < AJANLO_ELTERES_PP:
+                continue
+            szok489 = []
+            if ved489.press_rate >= 0.3:
+                szok489.append("a kilépésünk")
+            if ved489.double_rate >= 0.2:
+                szok489.append("a kettőzésünk")
+            if ved489.lateral_gain >= 0.7:
+                szok489.append("a labdakövetésünk")
+            ok489 = (" — " + " és ".join(szok489) + " nyitja a rést"
+                     if szok489 else " — a falunk alakja nyitja a rést")
+            perc489 = int(f489["t0_s"] // 60)
+            mp489 = int(f489["t0_s"] % 60)
+            add(side, "védekezés", "Felkészülés a figurájukra",
+                f"az ellenfél visszatérő figurája ({f489['ismetles']}×, "
+                f"pl. {perc489}:{mp489:02d}-kor) a falunk ellen "
+                f"{f489['pont_pct']:.0f}% lövőhelyzetet teremt, "
+                f"{f489['elteres_pp']:.0f} százalékponttal többet, mint "
+                f"egy alap 6-0 ellen{ok489}",
+                "a figurájuk 6 a 6 ellen, a tanult falunkkal: kilépés "
+                "csak a lövő-karra és azonnali visszazárás, a kettőzés "
+                "után a beálló átadva, a fal a labdával csak a hatos "
+                "ívén csúszik; a figura a Figura-tervezőben a falunk "
+                "ellen végigjátszva, a résnél megállítva")
+    except Exception:
+        pass
+
     # 488) Rossz szokásunk egy helyzetben: a döntés-modell szerint egy
     # visszatérő helyzetben (kilépnek ránk, szabad a 6 m-es társ, szabad
     # lőhely) rendre nem a legjobb megoldást választjuk — ez nem

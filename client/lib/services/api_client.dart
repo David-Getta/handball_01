@@ -253,13 +253,15 @@ class ApiClient {
   /// `meccs` `vedo` csapatából tanult fal ellen — {vedelem, figurak:
   /// [{id, name, pont_pct, alap_pct, elteres_pp, t_s, tamado}], ajanlas}.
   Future<Map<String, dynamic>> rankPlaybook(String meccs,
-      {String vedo = "away", String csapat = ""}) async {
-    // `csapat` (név): a fal a csapat összes könyvtári meccséből.
+      {String vedo = "away", String csapat = "", bool szezon = false}) async {
+    // `csapat` (név) vagy `szezon`: a fal a csapat összes könyvtári
+    // meccséből (a név a meccsből, ha csak szezon).
     final uri = Uri.parse("$baseUrl/playbook-rangsor").replace(
         queryParameters: {
       "meccs": meccs,
       "vedo": vedo,
       if (csapat.isNotEmpty) "csapat": csapat,
+      if (szezon) "szezon": "1",
     });
     final resp = await http.get(uri).timeout(const Duration(seconds: 20));
     if (resp.statusCode != 200) {
@@ -457,10 +459,14 @@ class ApiClient {
   /// {csapat, vedelem, figurak: [{t0_s, t1_s, ismetles, pont_pct, alap_pct,
   /// elteres_pp, attackers, labda, link}], verdict}.
   Future<Map<String, dynamic>> fetchDefenseTest(String matchId,
-      String csapat) async {
+      String csapat, {bool szezon = false}) async {
+    // `szezon`: a mi falunk a könyvtár összes meccséből (learn_many).
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/vedekezesi-proba")
-            .replace(queryParameters: {"csapat": csapat}))
+            .replace(queryParameters: {
+          "csapat": csapat,
+          if (szezon) "szezon": "1",
+        }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült a védekezési próba", resp));

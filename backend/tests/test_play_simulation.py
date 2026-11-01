@@ -278,10 +278,12 @@ if __name__ == "__main__":
     raise SystemExit(1 if failures else 0)
 
 
-def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0):
+def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0,
+                 vedok: int = 6):
     """A hazai (Ők) ugyanazt a beálló-figurát `ismetles`-szer játssza: az
     1-es középen előre, a 2-es a szélről befut; a támadások közt a labda
-    a saját térfelükön (átmenet). A vendég (Mi) 6-0 fala `fal_x`-en."""
+    a saját térfelükön (átmenet). A vendég (Mi) fala `fal_x`-en, `vedok`
+    védővel (6: zárt 6-0; kevesebb: ritka fal)."""
     frames = []
     t = 0
     for _ in range(ismetles):
@@ -292,7 +294,7 @@ def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0):
             players = [_pl(1, Team.HOME, *a1),
                        _pl(2, Team.HOME, 30 + 4 * u, 2 + 6 * u),
                        _pl(3, Team.HOME, 27.0, 15.0)]
-            for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+            for i, y in enumerate((3, 6, 9, 11, 14, 17)[:vedok]):
                 players.append(_pl(100 + i, Team.AWAY, fal_x, float(y)))
             frames.append(Frame(t=t, players=players,
                                 ball=Ball(x=a1[0], y=a1[1], confidence=1.0)))
@@ -368,13 +370,15 @@ def test_az_ai_finomito_javit_a_figuran_a_tanult_fal_ellen():
     assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
 
 
-def test_az_ai_finomito_nem_valtoztat_ha_nincs_jobb():
-    """Az alap fal ellen ez a figura helyi optimum: a finomító változatlanul
-    hagyja, és ezt ki is mondja; üres figurára ValueError."""
+def test_az_ai_finomito_nem_valtoztat_ha_nincs_jobb(monkeypatch):
+    """Ha nincs javító lépés (itt: kör nélkül), a finomító változatlanul
+    hagyja a figurát, és ezt ki is mondja; üres figurára ValueError."""
     import pytest
 
+    import handball.pipeline.play_simulation as ps
     from handball.pipeline.play_simulation import refine_setplay
 
+    monkeypatch.setattr(ps, "FINOMITO_KOROK", 0)
     r = refine_setplay(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1])
     assert r["valtozasok"] == [] and r["javulas_pp"] == 0.0
     assert r["attackers"] == [[[float(x), float(y)] for x, y in u]
@@ -500,3 +504,23 @@ def test_a_tobb_meccses_kapus_minta_osszeadodik():
     assert _kapus_szorzo(fel) == {}
     assert "far" in _kapus_szorzo(_mintak_osszege([{"kapus": fel},
                                                    {"kapus": fel}])["kapus"])
+
+
+def test_az_edzes_fokusz_felkeszit_a_figurajukra_a_valodi_probabol():
+    """489) A ritka (kétvédős) falunk ellen az ellenfél visszatérő figurája
+    jóval többet ér, mint egy alap 6-0 ellen → "Felkészülés a figurájukra"
+    tétel a MI (védekező) oldalunkon, a valódi forrás-láncból (tanult fal
+    + védekezési próba); zárt 6-0 falnál nem szólal meg."""
+    from handball.pipeline.training import training_focus
+
+    ritka = training_focus(_proba_match(vedok=2))
+    tetel = [i for i in ritka["away"]
+             if i["title"] == "Felkészülés a figurájukra"]
+    assert len(tetel) == 1
+    assert "3×" in tetel[0]["why"] and "százalékponttal többet" in tetel[0]["why"]
+    assert "a falunk alakja nyitja a rést" in tetel[0]["why"]
+    assert not [i for i in ritka["home"]
+                if i["title"] == "Felkészülés a figurájukra"]
+    zart = training_focus(_proba_match())
+    assert not [i for s in ("home", "away") for i in zart[s]
+                if i["title"] == "Felkészülés a figurájukra"]

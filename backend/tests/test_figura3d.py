@@ -1205,3 +1205,68 @@ def test_a_figura_oldalak_fala_a_csapat_osszes_meccsebol(tmp_path,
     assert r.status_code == 200 and r.json()["meccsek"] == 1
     assert c.post("/matches/pr/simulate-setplay", params={"csapat": "Senki"},
                   json=torzs).status_code == 404
+
+
+def test_a_felderites_probaja_es_ajanloja_a_szezon_falbol(tmp_path,
+                                                         monkeypatch):
+    """szezon=1: a védekezési próba falunk a könyvtár összes meccséből
+    (meccsek = 2, a 3D-link a csapat nevével), a figura-ajánló fala a
+    meccs védő csapatának összes meccséből ("(2 meccs)"); a nyomtatható
+    felderítő lap is a szezon-falat írja."""
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    m1 = _proba_match()
+    m2 = _proba_match()
+    m2.meta.match_id = "pr2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/pr/vedekezesi-proba",
+              params={"csapat": "home", "szezon": 1})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["meccsek"] == 2 and j["vedelem"] == "Mi"
+    assert "csapat=Mi" in j["figurak"][0]["link"]
+    assert c.get("/figura3d?" + j["figurak"][0]["link"]).status_code == 200
+    egy = c.get("/matches/pr/vedekezesi-proba", params={"csapat": "home"})
+    assert egy.json()["meccsek"] == 1
+    for d in _AJANLO_FIGURAK[:2]:
+        assert c.post("/playbook", json={"name": d["name"],
+                                         "attackers": d["attackers"]}
+                      ).status_code == 200
+    r = c.get("/playbook-rangsor", params={"meccs": "pr", "vedo": "away",
+                                           "szezon": 1})
+    assert r.status_code == 200
+    assert r.json()["vedelem"].startswith("Tanult védelem — Mi (2 meccs)")
+    lap = c.get("/matches/pr/scouting/export", params={"team": "home"})
+    assert lap.status_code == 200 and "Figuráink ellenük" in lap.text
+    assert "Figuráik a falatok ellen" in lap.text
+
+
+def test_mentett_figura_nelkul_az_alap_figurak_rangsora(tmp_path,
+                                                        monkeypatch):
+    """Üres könyvtárral a figura-ajánló az öt alap-figurát rangsorolja
+    (sablon=true, minden sor sablon, öt sor, mind érvényes); a sablon
+    betölthető a /playbook/{id}-n; egy mentett figura után már csak az
+    jön (sablon=false)."""
+    from handball.pipeline.play_simulation import ALAP_FIGURAK
+
+    assert len(ALAP_FIGURAK) == 5
+    assert len({d["id"] for d in ALAP_FIGURAK}) == 5
+    c = TestClient(_app(tmp_path, monkeypatch))
+    r = c.get("/playbook-rangsor", params={"rendszer": "5-1", "vedok": 5})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["sablon"] is True and len(j["figurak"]) == 5
+    assert all(s["sablon"] and s["pont_pct"] > 0 for s in j["figurak"])
+    assert j["ajanlas"].startswith("Ellenük a(z) „")
+    sab = c.get("/playbook/sablon-kereszt")
+    assert sab.status_code == 200 and sab.json()["sablon"] is True
+    assert c.get("/playbook/sablon-nincs").status_code == 404
+    assert c.post("/playbook", json={"name": "Saját",
+                                     "attackers": _AJANLO_FIGURAK[0]["attackers"]}
+                  ).status_code == 200
+    j = c.get("/playbook-rangsor").json()
+    assert j["sablon"] is False
+    assert [s["name"] for s in j["figurak"]] == ["Saját"]

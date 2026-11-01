@@ -60,6 +60,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   // Védekezési próba: az ő visszatérő figuráik a mi tanult falunk ellen
   // (csak egy meccsnél — a fal a meccs másik oldaláé).
   Map<String, dynamic>? _proba;
+  // Figura-ajánló: a mentett figuráink rangsora az ő e meccsből tanult
+  // faluk ellen (csak egy meccsnél; mentett figura nélkül üres).
+  Map<String, dynamic>? _ajanlo;
   String? _error;
   bool _loading = true;
 
@@ -120,6 +123,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       // Figura-egyezés: melyik MENTETT figurát játsszák (csak egy meccsnél).
       Map<String, dynamic>? pm;
       Map<String, dynamic>? proba;
+      Map<String, dynamic>? ajanlo;
       if (widget.items == null) {
         try {
           pm = await _api.fetchPlaybookMatch(widget.matchId, _team);
@@ -127,9 +131,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           pm = null; // enélkül is teljes a jelentés
         }
         try {
-          proba = await _api.fetchDefenseTest(widget.matchId, _team);
+          proba = await _api.fetchDefenseTest(widget.matchId, _team,
+              szezon: true);
         } catch (_) {
           proba = null; // enélkül is teljes a jelentés
+        }
+        try {
+          ajanlo = await _api.rankPlaybook(widget.matchId,
+              vedo: _team, szezon: true);
+        } catch (_) {
+          ajanlo = null; // enélkül is teljes a jelentés
         }
       }
       // Meccsterv: a MI profilunk (ugyanezen meccsek másik oldala)
@@ -160,6 +171,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         _report = r;
         _playbookMatch = pm;
         _proba = proba;
+        _ajanlo = ajanlo;
         _matchup = matchup;
         _matchupStyle = style;
         _loading = false;
@@ -336,6 +348,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
       if (_probaCard() != null)
         ("Figuráik a falatok ellen", Icons.shield_moon_outlined),
+      if (_ajanloCard() != null)
+        ("Figuráink ellenük", Icons.auto_awesome_outlined),
       if (_figureLibraryCard(r) != null)
         ("Visszatérő figuráik", Icons.replay_outlined),
       if (_figureDossierCard(r) != null)
@@ -440,6 +454,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   KeyedSubtree(
                       key: _sectionKey("Figuráik a falatok ellen"),
                       child: _probaCard()!),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (_ajanloCard() != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Figuráink ellenük"),
+                      child: _ajanloCard()!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 if (_figureLibraryCard(r) != null) ...[
@@ -13466,8 +13486,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           const SizedBox(height: 4),
           Text(
               "A visszatérő figuráikat lejátszottuk a(z) "
-              "${p["vedelem"] ?? "saját csapatotok"} tanult fala ellen (a kilépésével, a kettőzésével, a "
-              "labdakövetésével).",
+              "${p["vedelem"] ?? "saját csapatotok"} tanult fala ellen "
+              "(${_meccsekSzoveg(p["meccsek"])}; a kilépésével, a "
+              "kettőzésével, a labdakövetésével).",
               style: AppText.label),
           if (verdict != null) ...[
             const SizedBox(height: 6),
@@ -13494,6 +13515,80 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 ),
               ]),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// "N meccsből" / "ebből a meccsből" — a tanult fal meccsszáma.
+  static String _meccsekSzoveg(Object? n) {
+    final k = (n as num?)?.toInt() ?? 1;
+    return k > 1 ? "a szezon $k meccséből tanulva" : "ebből a meccsből tanulva";
+  }
+
+  /// Figura-ajánló: a mentett figuráink rangsora az ő tanult faluk ellen
+  /// (a backend play_simulation.rank_playbook-ja) — az ajánló mondat,
+  /// alatta figuránként a lövőhelyzet és az alap 6-0 fal elleni érték
+  /// (legfeljebb öt sor). Null, ha nincs mentett figura.
+  Widget? _ajanloCard() {
+    final a = _ajanlo;
+    final figurak = ((a?["figurak"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+    if (a == null || figurak.isEmpty) return null;
+    final ajanlas = a["ajanlas"] as String?;
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.auto_awesome_outlined,
+                size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text("FIGURÁINK ELLENÜK (figura-ajánló)",
+                    style: AppText.sectionLabel)),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+              "A mentett figuráinkat lejátszottuk az ő tanult faluk ellen "
+              "(rendszer, mélység, kilépés, kettőzés, labdakövetés, kapus — "
+              "${a["vedelem"] ?? ""}), és az alap 6-0 ellen is.",
+              style: AppText.label),
+          if (ajanlas != null) ...[
+            const SizedBox(height: 6),
+            Text(ajanlas, style: AppText.value.copyWith(fontSize: 13)),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          for (final f in figurak.take(5))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(
+                    child: Text("${f["name"]}",
+                        style: AppText.value.copyWith(fontSize: 13))),
+                Text(
+                    "${((f["pont_pct"] as num?) ?? 0).round()}% "
+                    "(alap fal: ${((f["alap_pct"] as num?) ?? 0).round()}%)",
+                    style: AppText.label.copyWith(
+                        fontSize: 12,
+                        color: ((f["elteres_pp"] as num?) ?? 0) >= 5
+                            ? AppColors.accent
+                            : null)),
+              ]),
+            ),
+          const SizedBox(height: 6),
+          Text(
+              a["sablon"] == true
+                  ? "Még nincs mentett figurátok: ez az öt alap-figura "
+                      "rangsora. A tervezőben betölthetők és "
+                      "átrajzolhatók; a mentett figurák kiszorítják."
+                  : "A sorrend a Figura-tervező betöltő-listájában és a "
+                      "figurafüzetben is ez.",
+              style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),
     );

@@ -5,6 +5,52 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **A figura pontszáma a várható-gól modellből** (motor + kliens): a
+  figura-kiértékelés eddig a döntés-elemzés egyszerű lövésértékével
+  számolt, amely a 13 m-ről szabadon leadott lövést a fedezett 6 m-es
+  fölé tette — a figura-ajánló, a védekezési próba és az AI-finomító
+  így hátrébb tolta volna a támadókat, és a felállás (a mozgás előtt)
+  minden figurának ugyanazt a pontot adta. Most a termék xG-modellje
+  (6 m-ről ~0,6, 9 m-ről ~0,37, 12 m-ről ~0,15, a látott kapuszöggel)
+  szorozva a szabadsággal, és a 3D figura a kezdő állóképet nem
+  pontozza: a figura azt kapja, amit a mozgás teremt. A kliens
+  kiértékelése ugyanezt a modellt tükrözi (xgOfPosition).
+
+- **Alap-figurák a figura-ajánlóban** (motor + kliens): mentett figura
+  nélkül a figura-ajánló eddig üres volt. Most ilyenkor a kézilabda öt
+  alapfiguráját (keresztezés beálló-leválással, pick & roll, szélső
+  beindulás második beállónak, átlövés beálló-zárással, hét a hat két
+  beállóval) rangsorolja az ellenfél tanult fala ellen — így az új
+  felhasználó is azonnal kap "ellenük ez működne" választ. A sablonok a
+  tervezőbe betölthetők és átrajzolhatók (/playbook/sablon-…); az első
+  mentett figura kiszorítja őket. A felderítés kártyája jelzi, hogy
+  sablonokat lát.
+
+- **A felderítés próbája és ajánlója a szezon-falból** (motor + kliens):
+  a felderítés "Figuráik a falatok ellen" és "Figuráink ellenük"
+  kártyája, és a nyomtatható felderítő lap is, eddig egy meccsből
+  tanult fallal számolt. Most mindkét fal a könyvtár összes meccséből
+  tanul (a miénk a mi meccseinkből, az övék az övékből), így a
+  kilépés, a kettőzés és a kapus sávjai elég mintát kapnak; a kártya
+  kiírja, hány meccsből. A próba 3D-linkje a csapat nevével nyit.
+  Végpontok: /vedekezesi-proba?szezon=1, /playbook-rangsor?szezon=1.
+
+- **Edzés-fókusz a védekezési próbából** (motor): új edzés-szabály
+  (489): ha az ellenfél visszatérő figurája a mi tanult falunk ellen
+  legalább 5 százalékponttal nagyobb lövőhelyzetet teremt, mint egy alap
+  6-0 ellen, az edzésterv "Felkészülés a figurájukra" tétellel szól —
+  megnevezi, mi nyitja a rést (a kilépésünk, a kettőzésünk, a
+  labdakövetésünk vagy a fal alakja), és a gyakorlatot: a figurájuk 6 a 6
+  ellen a tanult falunkkal, a tervezőben a résnél megállítva.
+
+- **Figura-ajánló a felderítés képernyőn** (kliens): a nyomtatható
+  felderítő lapon már ott volt, most az app felderítés képernyője is
+  hozza a "Figuráink ellenük" kártyát: a mentett figuráink rangsora az
+  ellenfél e meccsből tanult fala ellen, az ajánló mondattal és az alap
+  6-0 elleni értékkel (a legalább 5 százalékpontos rés kiemelve). A
+  védekezési próba kártyája mellett így egy helyen látszik, mit hozzunk
+  ellenük, és mire készüljünk tőlük.
+
 - **A tanult fal a csapat összes meccséből** (motor + figura-oldalak):
   a figura-tervező, a 3D/VR, a figura-lap, a füzet, a figura-ajánló és
   az AI-finomító fala eddig EGY meccsből tanult. Most a `csapat` név
