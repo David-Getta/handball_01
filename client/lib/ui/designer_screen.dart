@@ -105,6 +105,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultKovet = null;
     _tanultKettoz = null;
     _tanultKapus = null;
+    _tanultCsapat = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -136,6 +137,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // neve (mentve / betöltve) — a böngészős 3D ugyanazt mutatja.
   String? _tanultMeccs;
   String _tanultOldal = "away";
+  // A tanult fal a csapat ÖSSZES könyvtári meccséből (a csapat neve) —
+  // ilyenkor a linkek és a szimuláció a `csapat` paramétert viszik.
+  String? _tanultCsapat;
+  // Hány meccsből tanult a fal (a szimuláció "meccsek" mezője).
+  int? _tanultMeccsek;
   // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
   // hozott figuránál még ismeretlen).
   int? _tanultVedok;
@@ -210,6 +216,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
         _tanultKovet = null;
         _tanultKettoz = null;
         _tanultKapus = null;
+        _tanultCsapat = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -308,6 +315,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
 
     String? matchId = matches.first["match_id"] as String;
     String side = "away";
+    // Szezon-mód: a fal a kiválasztott csapat ÖSSZES könyvtári meccséből
+    // tanul (a kilépés, a labdakövetés és a kapus sávjai így elég mintát
+    // kapnak); különben csak ebből az egy meccsből.
+    bool szezon = false;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -356,6 +367,20 @@ class _DesignerScreenState extends State<DesignerScreen> {
                   selected: {side},
                   onSelectionChanged: (s) => setDlg(() => side = s.first),
                 ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: AppColors.gold,
+                  title: Text("A csapat ÖSSZES meccséből tanuljon",
+                      style: AppText.value.copyWith(fontSize: 13)),
+                  subtitle: Text(
+                      "A könyvtár minden meccse, ahol ez a csapat játszott — "
+                      "a kilépés, a labdakövetés és a kapus sávjai így elég "
+                      "mintát kapnak.",
+                      style: AppText.label.copyWith(fontSize: 11)),
+                  value: szezon,
+                  onChanged: (v) => setDlg(() => szezon = v),
+                ),
               ],
             ),
           ),
@@ -385,11 +410,17 @@ class _DesignerScreenState extends State<DesignerScreen> {
       attackers.add(path);
     }
     try {
+      final kivalasztott =
+          matches.firstWhere((m) => m["match_id"] == matchId);
+      final csapatNev = szezon
+          ? "${kivalasztott[side == "home" ? "home_team" : "away_team"] ?? ""}"
+          : "";
       final resp = await _api.simulateSetplayVsMatch(
         matchId!,
         attackers: attackers,
         ballCarrier: setplayBallSteps(_labda, _animSteps),
         defending: side,
+        csapat: csapatNev,
       );
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
       // A szerver kiértékelése (a tanult kapus sávonkénti szorzójával);
@@ -403,6 +434,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
       if (!mounted) return;
       _tanultMeccs = matchId;
       _tanultOldal = side;
+      _tanultCsapat = csapatNev.isNotEmpty ? csapatNev : null;
+      _tanultMeccsek = (resp["meccsek"] as num?)?.toInt();
       _tanultVedok =
           ((resp["defense_model"] as Map?)?["num_defenders"] as num?)?.toInt();
       _tanultKilep =
@@ -567,6 +600,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
   /// védelem (meccs + oldal), különben a kézi fal (védőszám, mélység,
   /// rendszer).
   Map<String, String> _vedelemParams() {
+    final cs = _tanultCsapat;
+    if (cs != null) return {"csapat": cs};
     final m = _tanultMeccs;
     if (m != null) return {"meccs": m, "vedo": _tanultOldal};
     return {
@@ -778,7 +813,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     final tanult = _tanultMeccs;
     if (tanult != null && plays.isNotEmpty) {
       try {
-        final r = await _api.rankPlaybook(tanult, vedo: _tanultOldal);
+        final r = await _api.rankPlaybook(tanult,
+            vedo: _tanultOldal, csapat: _tanultCsapat ?? "");
         for (final row in (r["figurak"] as List? ?? const [])) {
           final m = row as Map<String, dynamic>;
           if (m["id"] is String) rang[m["id"] as String] = m;
@@ -1305,6 +1341,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
           Text("legjobb lövőhelyzet · $quality", style: AppText.label.copyWith(fontSize: 11)),
           if (e.attackerId != null)
             Text("játékos #${e.attackerId}", style: AppText.label.copyWith(fontSize: 11)),
+          // Szezon-mód: a fal a csapat összes könyvtári meccséből tanult.
+          if (_tanultCsapat != null && (_tanultMeccsek ?? 0) > 1)
+            Text("a fal a(z) $_tanultCsapat $_tanultMeccsek meccséből tanult",
+                style: AppText.label.copyWith(fontSize: 11)),
           // A tanult fal kilépési hajlama: a szimulációban ennyire lép ki
           // a labdáshoz legközelebbi védő (5% alatt zárt falnak vesszük).
           if (_tanultMeccs != null && (_tanultKilep ?? 0) >= 0.05)

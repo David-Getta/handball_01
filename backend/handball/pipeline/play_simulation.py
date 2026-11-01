@@ -160,76 +160,63 @@ class DefenseModel:
         (pálya-középtől mért) eltérése közti arány, origón átmenő
         regresszióval, 0..1-be szorítva — LATERAL_LEARN_MIN_FRAMES
         alatt, vagy ha a labda (négyzetes közép) oldal-eltérése
-        LATERAL_MIN_SPREAD_M alatti, az alapérték (0,5) marad. A kettőzési hajlam a kilépéséhez
-        hasonlóan: a lőtávolságon belüli labdás kockák közül azok aránya,
-        ahol két mezőnyvédő is DOUBLE_CLOSE_M-en belül állt. A kapus: a
-        csapat kapusára kaputra érkező lövések sávonkénti gól-aránya
-        (goalkeeper.gk_save_ranges), KAPUS_SULY képzelt alap-lövéssel
-        simítva, a KAPUS_ALAP_GOL-hoz mérve.
+        LATERAL_MIN_SPREAD_M alatti, az alapérték (0,5) marad. A kettőzési
+        hajlam a kilépéséhez hasonlóan: a lőtávolságon belüli labdás kockák
+        közül azok aránya, ahol két mezőnyvédő is DOUBLE_CLOSE_M-en belül
+        állt. A kapus: a csapat kapusára kaputra érkező lövések sávonkénti
+        gól-aránya (goalkeeper.gk_save_ranges), KAPUS_SULY képzelt
+        alap-lövéssel simítva, a KAPUS_ALAP_GOL-hoz mérve.
+
+        A tanulás két lépés: a MINTA (_tanulas_minta — nyers összegek és
+        darabszámok) és a modell a mintából (_modell_mintabol); a
+        `learn_many` több meccs mintáját összeadva tanul.
         """
-        from .decisions import ball_holder
-        from .tactics import _BACK_MAX, detect_formation
         config = config or TacticsConfig()
-        goal_x = config.own_goal_x(defending_team)
-        depths: list[float] = []
-        hatso: list[float] = []
-        formak: dict[str, int] = {}
-        counts: list[int] = []
-        lovo_kockak = raleptek = kettoztek = 0
-        kozep_y = COURT_WIDTH_M / 2.0
-        kov_n, kov_bw, kov_bb = 0, 0.0, 0.0
-        for f in match.frames:
-            ph = classify_phase(f, config)
-            defends = ((defending_team == Team.AWAY and ph == Phase.HOME_ATTACK) or
-                       (defending_team == Team.HOME and ph == Phase.AWAY_ATTACK))
-            if not defends:
-                continue
-            outfield = [p for p in f.players
-                        if p.team == defending_team and abs(p.x - goal_x) > 2.0]
-            if outfield:
-                counts.append(len(outfield))
-                depths.extend(abs(p.x - goal_x) for p in outfield)
-                hatso.extend(abs(p.x - goal_x) for p in outfield
-                             if abs(p.x - goal_x) <= _BACK_MAX)
-                cimke = detect_formation(f, defending_team, config).label
-                if cimke in VEDEKEZESI_RENDSZEREK:
-                    formak[cimke] = formak.get(cimke, 0) + 1
-                holder = ball_holder(f, config)
-                if holder is not None and holder.team != defending_team \
-                        and abs(holder.x - goal_x) <= PRESS_RANGE_M:
-                    lovo_kockak += 1
-                    tav = sorted(math.hypot(p.x - holder.x, p.y - holder.y)
-                                 for p in outfield)
-                    if tav[0] <= PRESS_CLOSE_M:
-                        raleptek += 1
-                    if len(tav) >= 2 and tav[1] <= DOUBLE_CLOSE_M:
-                        kettoztek += 1
-                sor = [p.y for p in outfield
-                       if abs(p.x - goal_x) <= _BACK_MAX]
-                if sor and f.ball is not None:
-                    b = f.ball.y - kozep_y
-                    kov_n += 1
-                    kov_bw += b * (statistics.fmean(sor) - kozep_y)
-                    kov_bb += b * b
+        return cls._modell_mintabol(
+            _tanulas_minta(match, defending_team, config))
+
+    @classmethod
+    def learn_many(cls, meccsek: list,
+                   config: TacticsConfig | None = None) -> "DefenseModel":
+        """A csapat fala TÖBB meccséből: `meccsek` = [(match, a csapat
+        oldala azon a meccsen), …]. A minták összeadódnak (kocka- és
+        lövés-számok), így a hosszabb meccs súlya nagyobb, és a kevés-
+        minta küszöbök (kilépés, labdakövetés, kapus) a teljes szezonra
+        vonatkoznak — egy meccs kevés lövéséből a kapus sávjai alig
+        tanulhatók, hatból igen. Üres listára az alap fal."""
+        config = config or TacticsConfig()
+        mintak = [_tanulas_minta(m, t, config) for m, t in meccsek]
+        if not mintak:
+            return cls()
+        return cls._modell_mintabol(_mintak_osszege(mintak))
+
+    @classmethod
+    def _modell_mintabol(cls, m: dict) -> "DefenseModel":
+        """A modell a (összeadott) mintából — a küszöbök itt dőlnek el."""
         kovetes = 0.5
-        if kov_n >= LATERAL_LEARN_MIN_FRAMES \
-                and kov_bb / kov_n >= LATERAL_MIN_SPREAD_M ** 2:
-            kovetes = round(max(0.0, min(1.0, kov_bw / kov_bb)), 3)
+        if m["kov_n"] >= LATERAL_LEARN_MIN_FRAMES \
+                and m["kov_bb"] / m["kov_n"] >= LATERAL_MIN_SPREAD_M ** 2:
+            kovetes = round(max(0.0, min(1.0, m["kov_bw"] / m["kov_bb"])), 3)
         # A leggyakoribb (holtversenyben a címke szerint — determinisztikus).
+        formak = m["formak"]
         rendszer = (max(formak.items(), key=lambda kv: (kv[1], kv[0]))[0]
                     if formak else "6-0")
-        melyseg = (statistics.fmean(hatso) if rendszer != "6-0" and hatso
-                   else statistics.fmean(depths) if depths else 6.0)
+        melyseg = (m["hatso_osszeg"] / m["hatso_n"]
+                   if rendszer != "6-0" and m["hatso_n"]
+                   else m["melyseg_osszeg"] / m["melyseg_n"]
+                   if m["melyseg_n"] else 6.0)
+        lovo = m["lovo_kockak"]
         return cls(
-            num_defenders=round(statistics.fmean(counts)) if counts else 6,
+            num_defenders=(round(m["vedo_osszeg"] / m["kockak"])
+                           if m["kockak"] else 6),
             line_depth_m=melyseg,
             lateral_gain=kovetes,
             rendszer=rendszer,
-            press_rate=(round(raleptek / lovo_kockak, 3)
-                        if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
-            double_rate=(round(kettoztek / lovo_kockak, 3)
-                         if lovo_kockak >= PRESS_LEARN_MIN_FRAMES else 0.0),
-            kapus=_kapus_tanul(match, defending_team, config),
+            press_rate=(round(m["raleptek"] / lovo, 3)
+                        if lovo >= PRESS_LEARN_MIN_FRAMES else 0.0),
+            double_rate=(round(m["kettoztek"] / lovo, 3)
+                         if lovo >= PRESS_LEARN_MIN_FRAMES else 0.0),
+            kapus=_kapus_szorzo(m["kapus"]),
         )
 
     def kapus_szorzo(self, x: float, y: float, goal_x: float) -> float:
@@ -323,23 +310,118 @@ class DefenseModel:
         return out
 
 
-def _kapus_tanul(match: Match, defending_team: Team,
+def _tanulas_minta(match: Match, defending_team: Team,
+                   config: TacticsConfig) -> dict:
+    """A védekezés-tanulás NYERS mintája egy meccsről (lásd
+    DefenseModel.learn): összegek és darabszámok, amelyek meccsek közt
+    összeadhatók — {"kockak" (védekező kockák mezőnyvédővel),
+    "vedo_osszeg", "melyseg_osszeg", "melyseg_n", "hatso_osszeg",
+    "hatso_n", "formak" (címke → kocka), "lovo_kockak", "raleptek",
+    "kettoztek", "kov_n", "kov_bw", "kov_bb", "kapus" (sáv → [kaputra
+    érkezett, védett])}."""
+    from .decisions import ball_holder
+    from .tactics import _BACK_MAX, detect_formation
+    goal_x = config.own_goal_x(defending_team)
+    m = {"kockak": 0, "vedo_osszeg": 0, "melyseg_osszeg": 0.0,
+         "melyseg_n": 0, "hatso_osszeg": 0.0, "hatso_n": 0, "formak": {},
+         "lovo_kockak": 0, "raleptek": 0, "kettoztek": 0,
+         "kov_n": 0, "kov_bw": 0.0, "kov_bb": 0.0,
+         "kapus": _kapus_minta(match, defending_team, config)}
+    kozep_y = COURT_WIDTH_M / 2.0
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        defends = ((defending_team == Team.AWAY and ph == Phase.HOME_ATTACK) or
+                   (defending_team == Team.HOME and ph == Phase.AWAY_ATTACK))
+        if not defends:
+            continue
+        outfield = [p for p in f.players
+                    if p.team == defending_team and abs(p.x - goal_x) > 2.0]
+        if not outfield:
+            continue
+        m["kockak"] += 1
+        m["vedo_osszeg"] += len(outfield)
+        hatso = [abs(p.x - goal_x) for p in outfield
+                 if abs(p.x - goal_x) <= _BACK_MAX]
+        m["melyseg_osszeg"] += sum(abs(p.x - goal_x) for p in outfield)
+        m["melyseg_n"] += len(outfield)
+        m["hatso_osszeg"] += sum(hatso)
+        m["hatso_n"] += len(hatso)
+        cimke = detect_formation(f, defending_team, config).label
+        if cimke in VEDEKEZESI_RENDSZEREK:
+            m["formak"][cimke] = m["formak"].get(cimke, 0) + 1
+        holder = ball_holder(f, config)
+        if holder is not None and holder.team != defending_team \
+                and abs(holder.x - goal_x) <= PRESS_RANGE_M:
+            m["lovo_kockak"] += 1
+            tav = sorted(math.hypot(p.x - holder.x, p.y - holder.y)
+                         for p in outfield)
+            if tav[0] <= PRESS_CLOSE_M:
+                m["raleptek"] += 1
+            if len(tav) >= 2 and tav[1] <= DOUBLE_CLOSE_M:
+                m["kettoztek"] += 1
+        sor = [p.y for p in outfield if abs(p.x - goal_x) <= _BACK_MAX]
+        if sor and f.ball is not None:
+            b = f.ball.y - kozep_y
+            m["kov_n"] += 1
+            m["kov_bw"] += b * (statistics.fmean(sor) - kozep_y)
+            m["kov_bb"] += b * b
+    return m
+
+
+def _mintak_osszege(mintak: list) -> dict:
+    """Több meccs mintájának összege (minden mező összeadódik)."""
+    ossz = {"kockak": 0, "vedo_osszeg": 0, "melyseg_osszeg": 0.0,
+            "melyseg_n": 0, "hatso_osszeg": 0.0, "hatso_n": 0, "formak": {},
+            "lovo_kockak": 0, "raleptek": 0, "kettoztek": 0,
+            "kov_n": 0, "kov_bw": 0.0, "kov_bb": 0.0, "kapus": {}}
+    for m in mintak:
+        for k, v in m.items():
+            if k == "formak":
+                for c, n in v.items():
+                    ossz["formak"][c] = ossz["formak"].get(c, 0) + n
+            elif k == "kapus":
+                for sav, (faced, saves) in v.items():
+                    r = ossz["kapus"].setdefault(sav, [0, 0])
+                    r[0] += faced
+                    r[1] += saves
+            else:
+                ossz[k] += v
+    return ossz
+
+
+def _kapus_minta(match: Match, defending_team: Team,
                  config: TacticsConfig) -> dict:
-    """A `defending_team` kapusának sávonkénti szorzója (lásd
-    DefenseModel.kapus) — KAPUS_MIN_LOVES alatti sáv kimarad."""
+    """A kapus nyers mintája: sáv → [kaputra érkezett lövés, védés]
+    (goalkeeper.gk_save_ranges) — csak a nem üres sávok."""
     from .goalkeeper import gk_save_ranges
     rng = gk_save_ranges(match, config).get(defending_team.value) or {}
     out = {}
-    for sav, alap in KAPUS_ALAP_GOL.items():
+    for sav in KAPUS_ALAP_GOL:
         rec = rng.get(sav) or {}
         faced = int(rec.get("faced") or 0)
+        if faced:
+            out[sav] = [faced, int(rec.get("saves") or 0)]
+    return out
+
+
+def _kapus_szorzo(minta: dict) -> dict:
+    """A kapus sávonkénti szorzója a (összeadott) mintából (lásd
+    DefenseModel.kapus) — KAPUS_MIN_LOVES alatti sáv kimarad."""
+    out = {}
+    for sav, alap in KAPUS_ALAP_GOL.items():
+        faced, saves = minta.get(sav) or (0, 0)
         if faced < KAPUS_MIN_LOVES:
             continue
-        golok = faced - int(rec.get("saves") or 0)
-        arany = (golok + KAPUS_SULY * alap) / (faced + KAPUS_SULY)
+        arany = (faced - saves + KAPUS_SULY * alap) / (faced + KAPUS_SULY)
         out[sav] = round(max(KAPUS_SZORZO_MIN,
                              min(KAPUS_SZORZO_MAX, arany / alap)), 3)
     return out
+
+
+def _kapus_tanul(match: Match, defending_team: Team,
+                 config: TacticsConfig) -> dict:
+    """A `defending_team` kapusának sávonkénti szorzója egy meccsből."""
+    return _kapus_szorzo(_kapus_minta(match, defending_team, config))
 
 
 def kapus_felirat(kapus: dict) -> str:

@@ -1158,3 +1158,50 @@ def test_az_elo_figura_riasztas_a_probaval_mondja_a_falatok_elleni_erteket(
     assert "A próba szerint a falatok ellen " in al[0]["text"]
     assert "lövőhelyzetet teremt (alap fal: " in al[0]["text"]
     assert al[0]["text"].startswith("Ismert figura: Ők ")
+
+
+def test_a_figura_oldalak_fala_a_csapat_osszes_meccsebol(tmp_path,
+                                                        monkeypatch):
+    """`csapat=<név>`: a 3D, a figura-lap, a figura-ajánló és az
+    AI-finomító fala a könyvtár összes olyan meccséből tanul, ahol a
+    csapat játszott (a név mutatja a meccsszámot); ismeretlen névre 404.
+    A két meccs összege ugyanazt a falat adja, mint a learn_many."""
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    m1 = _proba_match()
+    m2 = _proba_match()
+    m2.meta.match_id = "pr2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/figura3d", params={"u": U, "csapat": "Mi"})
+    assert r.status_code == 200
+    assert "Figura vs Tanult védelem — Mi (2 meccs)" in r.text
+    r = c.get("/figura-lap", params={"u": U, "csapat": "Mi"})
+    assert r.status_code == 200 and "Mi (2 meccs)" in r.text
+    r = c.get("/playbook-rangsor", params={"csapat": "Mi"})
+    assert r.status_code == 200
+    assert r.json()["vedelem"].startswith("Tanult védelem — Mi (2 meccs)")
+    r = c.post("/figura-finomitas", json={
+        "attackers": [[[26, 10], [29, 10], [31.5, 10]],
+                      [[26, 4], [26, 4], [26, 4]]], "csapat": "Mi"})
+    assert r.status_code == 200
+    assert r.json()["vedelem"].startswith("Tanult védelem — Mi (2 meccs)")
+    assert c.get("/figura3d", params={"u": U,
+                                      "csapat": "Senki"}).status_code == 404
+    vart = DefenseModel.learn_many([(m1, Team.AWAY), (m2, Team.AWAY)])
+    egy = DefenseModel.learn(m1, Team.AWAY)
+    assert (vart.num_defenders, vart.rendszer) == (egy.num_defenders,
+                                                   egy.rendszer)
+    # A tervező szimulációja is: csapat → a könyvtár összes meccséből.
+    torzs = {"attackers": [[[28, 10], [30, 10]], [[26, 4], [27, 4]]],
+             "ball_carrier": [0, 0]}
+    r = c.post("/matches/pr/simulate-setplay", params={"csapat": "Mi"},
+               json=torzs)
+    assert r.status_code == 200 and r.json()["meccsek"] == 2
+    r = c.post("/matches/pr/simulate-setplay", params={"defending": "away"},
+               json=torzs)
+    assert r.status_code == 200 and r.json()["meccsek"] == 1
+    assert c.post("/matches/pr/simulate-setplay", params={"csapat": "Senki"},
+                  json=torzs).status_code == 404

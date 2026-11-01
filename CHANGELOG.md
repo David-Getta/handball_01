@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **A tanult fal a csapat összes meccséből** (motor + figura-oldalak):
+  a figura-tervező, a 3D/VR, a figura-lap, a füzet, a figura-ajánló és
+  az AI-finomító fala eddig EGY meccsből tanult. Most a `csapat` név
+  megadásával a könyvtár összes meccséből, amelyen az a csapat játszott:
+  a minták összeadódnak (kocka- és lövés-számok), így a kevés-minta
+  küszöbök — a kilépés, a labdakövetés és főleg a kapus sávjai — a
+  teljes szezonra vonatkoznak. Egy meccs kevés lövéséből a kapus alig
+  tanulható, hatból igen. A fal neve mutatja: "Tanult védelem — Szeged
+  (6 meccs)". A tervező "Egy CSAPAT tanult védelme ellen" ablakában új
+  kapcsoló: "A csapat ÖSSZES meccséből tanuljon" — a szimuláció, a 3D,
+  a lap, a videó, a füzet, a figura-ajánló és az AI-finomító ezután
+  mind ezt a szezon-falat viszi.
+
 - **Az élő figura-riasztás a falatok elleni értéket is mondja** (motor
   + élő képernyő): az élő nézet eddig csak azt jelezte, hogy az ellenfél
   ismert, visszatérő figurája indul. Most a védekezési próbából azt is,

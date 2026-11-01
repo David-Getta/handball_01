@@ -253,9 +253,14 @@ class ApiClient {
   /// `meccs` `vedo` csapatából tanult fal ellen — {vedelem, figurak:
   /// [{id, name, pont_pct, alap_pct, elteres_pp, t_s, tamado}], ajanlas}.
   Future<Map<String, dynamic>> rankPlaybook(String meccs,
-      {String vedo = "away"}) async {
-    final uri = Uri.parse("$baseUrl/playbook-rangsor")
-        .replace(queryParameters: {"meccs": meccs, "vedo": vedo});
+      {String vedo = "away", String csapat = ""}) async {
+    // `csapat` (név): a fal a csapat összes könyvtári meccséből.
+    final uri = Uri.parse("$baseUrl/playbook-rangsor").replace(
+        queryParameters: {
+      "meccs": meccs,
+      "vedo": vedo,
+      if (csapat.isNotEmpty) "csapat": csapat,
+    });
     final resp = await http.get(uri).timeout(const Duration(seconds: 20));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült a figura-rangsor", resp));
@@ -472,9 +477,14 @@ class ApiClient {
     required List<List<List<double>>> attackers,
     required List<int> ballCarrier,
     String defending = "away",
+    String csapat = "",
   }) async {
+    // `csapat` (név): a fal a csapat ÖSSZES könyvtári meccséből tanul.
     final uri = Uri.parse("$baseUrl/matches/$matchId/simulate-setplay")
-        .replace(queryParameters: {"defending": defending});
+        .replace(queryParameters: {
+      "defending": defending,
+      if (csapat.isNotEmpty) "csapat": csapat,
+    });
     final resp = await http.post(
       uri,
       headers: {"Content-Type": "application/json"},

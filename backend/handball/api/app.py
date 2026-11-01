@@ -3327,12 +3327,14 @@ def create_app():
     _utolso_figura: dict = {}
 
     def _figura_bemenet(u: str, l: str, meccs: str, vedo: str, vedok: int,
-                        melyseg: float, rendszer: str = "6-0"):
+                        melyseg: float, rendszer: str = "6-0",
+                        csapat: str = ""):
         """A figura-linkek közös bemenete (/figura3d, /figura-lap): az utak
-        ("x,y,…;x,y,…"), a labdás-sor ("0,1,…") és a védelem — a `meccs`
-        `vedo` csapatából TANULT (a leggyakoribb rendszerében), különben a
-        kézi fal (`vedok`, `melyseg`, `rendszer`: 6-0, 5-1, 4-2, 3-2-1,
-        3-3). Visszaad: (utak, labda, modell, a védelem neve); 400 / 404
+        ("x,y,…;x,y,…"), a labdás-sor ("0,1,…") és a védelem — a `csapat`
+        nevű csapat ÖSSZES könyvtári meccséből, vagy a `meccs` `vedo`
+        csapatából TANULT (a leggyakoribb rendszerében), különben a kézi
+        fal (`vedok`, `melyseg`, `rendszer`: 6-0, 5-1, 4-2, 3-2-1, 3-3).
+        Visszaad: (utak, labda, modell, a védelem neve); 400 / 404
         hibánál."""
         from ..pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
                                                 FIGURA_3D_MAX_PONT)
@@ -3352,43 +3354,70 @@ def create_app():
             raise HTTPException(status_code=400,
                                 detail="hibás labdás-sor (l=0,1,…)")
         modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
-                                           rendszer)
+                                           rendszer, csapat=csapat)
         return utak, labda, modell, vedo_nev
 
+    def _tanult_fal_nev(nev: str, modell) -> str:
+        """A tanult fal neve a figura-oldalak fejlécében: a csapat, a
+        rendszere, és ami a tanultból eltér az alaptól (kilépés,
+        labdakövetés, kettőzés, kapus)."""
+        return "Tanult védelem — " + nev + (
+            f" ({modell.rendszer})" if modell.rendszer != "6-0" else "") + (
+            f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
+            if modell.press_rate >= 0.05 else "") + (
+            f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
+            if modell.lateral_gain != 0.5 else "") + (
+            f" · kettőz: {modell.double_rate * 100:.0f}%"
+            if modell.double_rate >= 0.05 else "") + (
+            f" · {kapus_felirat(modell.kapus)}"
+            if kapus_felirat(modell.kapus) else "")
+
+    def _csapat_meccsei(csapat: str) -> list:
+        """A könyvtár meccsei, ahol a `csapat` nevű csapat játszott:
+        [(meccs, az oldala), …] időrendben; 404, ha egy sincs."""
+        ki = []
+        for m_ in _idorendben(_season_matches()):
+            if m_.meta.home_team == csapat:
+                ki.append((m_, Team.HOME))
+            elif m_.meta.away_team == csapat:
+                ki.append((m_, Team.AWAY))
+        if not ki:
+            raise HTTPException(status_code=404,
+                                detail="csapat: nincs ilyen a könyvtárban")
+        return ki
+
     def _figura_vedelem(meccs: str, vedo: str, vedok: int, melyseg: float,
-                        rendszer: str = "6-0"):
+                        rendszer: str = "6-0", csapat: str = ""):
         """A figura-oldalak (/figura3d, /figura-lap, /figura-fuzet) fala: a
-        `meccs` `vedo` csapatából TANULT (a leggyakoribb rendszerében),
-        különben a kézi fal (`vedok`, `melyseg`, `rendszer`). Visszaad:
-        (modell, a védelem neve); 400 / 404 hibánál."""
+        `csapat` nevű csapat ÖSSZES könyvtári meccséből TANULT
+        (DefenseModel.learn_many — a minták összeadódnak), vagy a `meccs`
+        `vedo` csapatából (egy meccs), különben a kézi fal (`vedok`,
+        `melyseg`, `rendszer`). Visszaad: (modell, a védelem neve); 400 /
+        404 hibánál."""
         from ..pipeline.play_simulation import (VEDEKEZESI_RENDSZEREK,
                                                 DefenseModel)
         if rendszer not in VEDEKEZESI_RENDSZEREK:
             raise HTTPException(
                 status_code=400,
                 detail="rendszer: " + ", ".join(VEDEKEZESI_RENDSZEREK))
-        if meccs:
+        if csapat:
+            meccsek = _csapat_meccsei(csapat)
+            modell = DefenseModel.learn_many(meccsek)
+            vedo_nev = _tanult_fal_nev(f"{csapat} ({len(meccsek)} meccs)",
+                                       modell)
+        elif meccs:
             match = _store.get(meccs)
             if match is None:
                 raise HTTPException(status_code=404, detail="match not found")
             try:
-                csapat = Team(vedo)
+                oldal = Team(vedo)
             except ValueError:
                 raise HTTPException(status_code=400,
                                     detail="vedo: 'home' vagy 'away'")
-            modell = DefenseModel.learn(match, csapat)
-            vedo_nev = "Tanult védelem — " + (
-                match.meta.home_team if csapat == Team.HOME
-                else match.meta.away_team) + (
-                f" ({modell.rendszer})" if modell.rendszer != "6-0" else "") + (
-                f" · kilép a labdásra: {modell.press_rate * 100:.0f}%"
-                if modell.press_rate >= 0.05 else "") + (
-                f" · követi a labdát: {modell.lateral_gain * 100:.0f}%"
-                if modell.lateral_gain != 0.5 else "") + (
-                f" · kettőz: {modell.double_rate * 100:.0f}%"
-                if modell.double_rate >= 0.05 else "") + (
-                f" · {kapus_felirat(modell.kapus)}"
-                if kapus_felirat(modell.kapus) else "")
+            modell = DefenseModel.learn(match, oldal)
+            vedo_nev = _tanult_fal_nev(
+                match.meta.home_team if oldal == Team.HOME
+                else match.meta.away_team, modell)
         else:
             modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))),
@@ -3400,7 +3429,8 @@ def create_app():
 
     def figura3d(request: Request, u: str = "", cim: str = "",
                  meccs: str = "", vedo: str = "away", vedok: int = 6,
-                 melyseg: float = 6.0, l: str = "", rendszer: str = "6-0"):
+                 melyseg: float = 6.0, l: str = "", rendszer: str = "6-0",
+                 csapat: str = ""):
         """A figura-tervező figurája böngészős 3D-ben / VR-ben.
 
         `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
@@ -3416,7 +3446,7 @@ def create_app():
         from ..pipeline.play_simulation import figura_nev, setplay_3d_match
         from ..pipeline.view3d_html import view3d_html
         utak, labda, modell, vedo_nev = _figura_bemenet(
-            u, l, meccs, vedo, vedok, melyseg, rendszer)
+            u, l, meccs, vedo, vedok, melyseg, rendszer, csapat=csapat)
         try:
             sim, ertekeles = setplay_3d_match(
                 utak, modell, ball=labda, name=figura_nev(cim) or None,
@@ -3441,7 +3471,7 @@ def create_app():
     @app.get("/figura-fuzet")
     def figura_fuzet(ids: str = "", meccs: str = "", vedo: str = "away",
                      vedok: int = 6, melyseg: float = 6.0,
-                     rendszer: str = "6-0"):
+                     rendszer: str = "6-0", csapat: str = ""):
         """A csapat FIGURAFÜZETE: a mentett figurák egy nyomtatható
         dokumentumban (böngészőből PDF) — tartalomjegyzék, utána
         figuránként egy oldal (pipeline.figura_lap.figura_fuzet_html).
@@ -3453,7 +3483,7 @@ def create_app():
 
         from ..pipeline.figura_lap import FIGURA_FUZET_MAX, figura_fuzet_html
         modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
-                                           rendszer)
+                                           rendszer, csapat=csapat)
         if ids.strip():
             fajlok = [_play_path(x.strip()) for x in ids.split(",")
                       if x.strip()][:FIGURA_FUZET_MAX]
@@ -3559,7 +3589,8 @@ def create_app():
             raise HTTPException(status_code=400, detail="hibás figura")
         modell, vedo_nev = _figura_vedelem(
             str(body.get("meccs") or ""), str(body.get("vedo") or "away"),
-            vedok, melyseg, str(body.get("rendszer") or "6-0"))
+            vedok, melyseg, str(body.get("rendszer") or "6-0"),
+            csapat=str(body.get("csapat") or ""))
         try:
             r = refine_setplay(utak, modell, ball=labda)
         except ValueError:
@@ -3569,7 +3600,8 @@ def create_app():
 
     @app.get("/playbook-rangsor")
     def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
-                         melyseg: float = 6.0, rendszer: str = "6-0"):
+                         melyseg: float = 6.0, rendszer: str = "6-0",
+                         csapat: str = ""):
         """Figura-ajánló: a mentett figurák rangsora a `meccs` `vedo`
         csapatából TANULT fal ellen (vagy a kézi fal ellen — mint a
         /figura-fuzet), az alap 6-0-hoz mért eltéréssel és egy magyar
@@ -3577,7 +3609,7 @@ def create_app():
         {"vedelem", "figurak", "ajanlas"}."""
         from ..pipeline.play_simulation import rank_playbook
         modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
-                                           rendszer)
+                                           rendszer, csapat=csapat)
         figurak = []
         for f in sorted(_playbook_dir.glob("*.json")):
             try:
@@ -3599,7 +3631,8 @@ def create_app():
     def figura_video_vegpont(u: str = "", cim: str = "", meccs: str = "",
                              vedo: str = "away", vedok: int = 6,
                              melyseg: float = 6.0, l: str = "",
-                             rendszer: str = "6-0", lepes: int = 0):
+                             rendszer: str = "6-0", lepes: int = 0,
+                             csapat: str = ""):
         """A figura felülnézeti VIDEÓJA (MP4, letöltésre — elküldhető a
         csapatnak; a 3D link csak a klub-hálózaton él): a 3D figura
         kockáiból (valós tempó, a késő fal, a passzok), a támadó térfélre
@@ -3615,7 +3648,7 @@ def create_app():
         from ..pipeline.figura_video import figura_video
         from ..pipeline.play_simulation import figura_nev
         utak, labda, modell, vedo_nev = _figura_bemenet(
-            u, l, meccs, vedo, vedok, melyseg, rendszer)
+            u, l, meccs, vedo, vedok, melyseg, rendszer, csapat=csapat)
         from ..pipeline.figura_video import FIGURA_VIDEO_TAR_DB
         nev = figura_nev(cim) or "Figura"
         kulcs = (u, l, nev, meccs, vedo, int(vedok), float(melyseg),
@@ -3649,7 +3682,7 @@ def create_app():
     @app.get("/figura-lap")
     def figura_lap(u: str = "", cim: str = "", meccs: str = "",
                    vedo: str = "away", vedok: int = 6, melyseg: float = 6.0,
-                   l: str = "", rendszer: str = "6-0"):
+                   l: str = "", rendszer: str = "6-0", csapat: str = ""):
         """A figura KIOSZTHATÓ lapja (nyomtatható HTML — böngészőből PDF):
         kulcs-pozíciónként felülnézeti ábra (a támadók, a fal, a labda, a
         futás- és passz-nyilak) a lépések leírásával és a kiértékeléssel
@@ -3659,7 +3692,7 @@ def create_app():
         from ..pipeline.figura_lap import figura_lap_html
         from ..pipeline.play_simulation import figura_nev
         utak, labda, modell, vedo_nev = _figura_bemenet(
-            u, l, meccs, vedo, vedok, melyseg, rendszer)
+            u, l, meccs, vedo, vedok, melyseg, rendszer, csapat=csapat)
         try:
             oldal = figura_lap_html(utak, labda, modell,
                                     nev=figura_nev(cim) or "Figura",
@@ -4362,7 +4395,7 @@ def create_app():
             raise HTTPException(status_code=400, detail="hibás figura")
         utak, labda, modell, vedo_nev = _figura_bemenet(
             g("u"), g("l"), g("meccs"), g("vedo", "away"), vedok, melyseg,
-            g("rendszer", "6-0"))
+            g("rendszer", "6-0"), csapat=g("csapat", ""))
         try:
             sim, ertekeles = setplay_3d_match(
                 utak, modell, ball=labda, name=figura_nev(g("cim")) or None,
@@ -13681,11 +13714,15 @@ def create_app():
         return out
 
     @app.post("/matches/{match_id}/simulate-setplay")
-    def simulate(match_id: str, body: dict, defending: str = "away"):
+    def simulate(match_id: str, body: dict, defending: str = "away",
+                 csapat: str = ""):
         """Az edző figuráját lejátssza a meccsből TANULT védelem ellen.
 
         A meccsből megtanuljuk a `defending` csapat védekezési stílusát, majd a
         kérés törzsében kapott figurát (attackers + ball_carrier) lejátsszuk ellene.
+        `csapat` (név): a fal a csapat ÖSSZES könyvtári meccséből tanul
+        (DefenseModel.learn_many), nem csak ebből — a válasz "meccsek"
+        mezője a meccsszám (1, ha egy meccsből).
         Visszaadja a szimulált Tracking-et, a kiértékelést és a tanult modellt.
         """
         match = _store.get(match_id)
@@ -13696,7 +13733,12 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400, detail="defending must be 'home' or 'away'")
 
-        model = DefenseModel.learn(match, team)
+        if csapat:
+            meccsek = _csapat_meccsei(csapat)
+            model = DefenseModel.learn_many(meccsek)
+        else:
+            meccsek = [(match, team)]
+            model = DefenseModel.learn(match, team)
         try:
             attackers = [[(float(p[0]), float(p[1])) for p in path] for path in body["attackers"]]
             setplay = SetPlay(attackers=attackers, ball_carrier=list(body["ball_carrier"]))
@@ -13710,6 +13752,7 @@ def create_app():
             # A tanult kapus egy mondatban (üres, ha átlagos) — a tervező
             # eredmény-kártyája.
             "kapus_felirat": kapus_felirat(model.kapus),
+            "meccsek": len(meccsek),
             "tracking": sim.to_dict(),
         }
 

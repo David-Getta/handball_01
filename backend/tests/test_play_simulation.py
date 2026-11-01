@@ -461,3 +461,42 @@ def test_a_tanult_kapus_valodi_lovesekbol_es_a_kiertekelesben():
         kapus={"far": 1.3}))["best_shot_value"]
     assert abs(tanult - 1.3 * alap) < 1e-9
     assert kapus_felirat({"far": 1.05}) == ""
+
+
+def test_a_tobb_meccses_tanulas_osszeadja_a_mintakat():
+    """learn_many: egy meccsre azonos a learn-nel; két azonos meccsre a
+    fal-paraméterek ugyanazok; a kilépés a KOCKÁK szerint súlyozódik (60
+    rálépős + 120 zárt kocka → 1/3); üres listára az alap fal."""
+    mely = _press_match(True)
+    zart = _press_match(False, n=120)
+    egy = DefenseModel.learn(mely, Team.AWAY)
+    assert DefenseModel.learn_many([(mely, Team.AWAY)]) == egy
+    ketto = DefenseModel.learn_many([(mely, Team.AWAY), (mely, Team.AWAY)])
+    assert (ketto.num_defenders, ketto.line_depth_m, ketto.rendszer,
+            ketto.press_rate, ketto.double_rate, ketto.lateral_gain) == (
+        egy.num_defenders, egy.line_depth_m, egy.rendszer,
+        egy.press_rate, egy.double_rate, egy.lateral_gain)
+    vegyes = DefenseModel.learn_many([(mely, Team.AWAY), (zart, Team.AWAY)])
+    assert abs(vegyes.press_rate - 60 / 180) < 1e-3
+    assert DefenseModel.learn_many([]) == DefenseModel()
+
+
+def test_a_tobb_meccses_kapus_minta_osszeadodik():
+    """A kapus sávjai meccsek közt összeadódnak: két azonos (minden lövést
+    bekapó) meccsből a simítás gyengébb, a szorzó az 1-től távolabb; a
+    kevés lövéses sáv két meccsből már eléri a küszöböt."""
+    from handball.pipeline.play_simulation import (KAPUS_MIN_LOVES,
+                                                   _kapus_szorzo,
+                                                   _mintak_osszege)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    egy = DefenseModel.learn(m, Team.AWAY).kapus
+    ketto = DefenseModel.learn_many([(m, Team.AWAY), (m, Team.AWAY)]).kapus
+    assert set(ketto) == set(egy)
+    assert all(ketto[s] >= egy[s] for s in egy)
+    fel = {"far": [KAPUS_MIN_LOVES - 1, 0]}
+    assert _kapus_szorzo(fel) == {}
+    assert "far" in _kapus_szorzo(_mintak_osszege([{"kapus": fel},
+                                                   {"kapus": fel}])["kapus"])
