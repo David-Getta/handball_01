@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.187 óta)
+## v0.1.188 — kiadva (2026-11-01)
+
+> Kiadás-jegyzet: A FIGURA-LABOR ÉRTÉKMODELLJE — a figura pontszáma
+> mostantól a termék várható-gól modelljéből jön (a 13 m-es szabad lövés
+> nem ér többet a fedezett 6 m-esnél), és a tervező 200 zajos lejátszásból
+> kimenetenként is mondja: gól, kivédett, eladott labda. A tanult fal a
+> csapat ÖSSZES meccséből tanulhat (szezon-fal), a felderítés próbája és
+> ajánlója is ebből számol; mentett figura nélkül az öt alap-figurát
+> rangsorolja. Az AI-finomító a passzokat is javasolja, a kapus gyenge
+> távolsága beszámít, az élő figura-riasztás a falatok elleni értéket is
+> mondja, és az edzésterv új szabálya felkészít az ellenfél
+> figurájára.
 
 - **Figura-kimenetek: sok lejátszás zajos fallal** (motor + figura-
   tervező): a figura pontszáma egy szám volt — a valódi fal viszont hol
