@@ -531,8 +531,17 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ]
       ];
       final k = _attackers.isEmpty ? 3 : _attackers.first.length;
+      // A javasolt labda-út (a passzok) is: kulcs-pozíciónként a labdás,
+      // a létező támadókra szorítva.
+      final l = [
+        for (final v in (r["labda"] as List?) ?? const [])
+          (v as num).toInt().clamp(0, utak.length - 1)
+      ];
       setState(() {
         _attackers = [for (final u in utak) resamplePath(u, k)];
+        if (l.isNotEmpty) {
+          _labda = [for (int i = 0; i < k; i++) i < l.length ? l[i] : l.last];
+        }
         _sim = null;
         _eval = null;
       });
@@ -1197,8 +1206,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
                   // a mostani fal ellen nagyobb lövőhelyzetet teremtenek.
                   Tooltip(
                     message: "Az AI néhány méterrel arrébb próbálja a "
-                        "futások pontjait (a kezdő felállás marad), és "
-                        "megmondja, melyik változat teremt nagyobb "
+                        "futások pontjait (a kezdő felállás marad) és más "
+                        "átvevőt a passzokhoz, és megmondja, melyik "
+                        "változat teremt nagyobb "
                         "lövőhelyzetet a legutóbbi tanult védelem (különben "
                         "a fenti fal) ellen. Javaslat — te döntesz, átveszed-e.",
                     child: OutlinedButton.icon(

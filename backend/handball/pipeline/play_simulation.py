@@ -976,6 +976,9 @@ FINOMITO_LEPES_M = 1.0
 FINOMITO_KOROK = 6
 FINOMITO_MIN_JAVULAS_PP = 1.0
 FINOMITO_RAHAGYAS_M = 0.3
+# A passz-javaslat legfeljebb ekkora passz (m) lehet: a szimuláció nem
+# ismeri az elfogást, a hosszú keresztpassz a modellben "ingyen" van.
+FINOMITO_PASSZ_MAX_M = 12.0
 
 
 def _pont_nev(i: int, k: int) -> str:
@@ -999,17 +1002,20 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
     (setplay_3d_match), és a legjobb javító lépést megtartjuk — amíg a
     javulás FINOMITO_MIN_JAVULAS_PP alatt nem marad, legfeljebb
     FINOMITO_KOROK körig. A támadó a hatosba és a saját térfelére nem
-    léphet.
+    léphet. A futások mellett a PASSZOKAT is próbálja: egy kulcs-
+    pozíciótól kezdve egy másik támadónál a labda (legfeljebb
+    FINOMITO_PASSZ_MAX_M-es passzal).
 
     Edzőileg: "hol nyit rést ez a fal a figurámon?" — a modell a fal
     tanult szokásai (kilépés, kettőzés, labdakövetés) ellen keresi meg,
-    melyik futás végpontja ér többet néhány méterrel arrébb. Javaslat,
-    nem ítélet: az edző dönti el, átveszi-e.
+    melyik futás végpontja ér többet néhány méterrel arrébb, és kinek
+    érdemes a labdát odaadni. Javaslat, nem ítélet: az edző dönti el,
+    átveszi-e.
 
     Visszaad: {"attackers" (a finomított kulcs-pozíciók), "labda",
     "pont_elotte", "pont_utana", "javulas_pp", "valtozasok" (magyar
-    mondatok támadónként és pontonként), "verdict"}. ValueError, ha
-    nincs érvényes támadó."""
+    mondatok támadónként és pontonként, és a labda új útja, ha
+    változott), "verdict"}. ValueError, ha nincs érvényes támadó."""
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(Team.HOME)
     _, e0 = setplay_3d_match(keypoints, defense, ball=ball, config=config)
@@ -1029,9 +1035,14 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
         fa_y = min(kozep + _GOAL_HALF_W, max(kozep - _GOAL_HALF_W, y))
         return math.hypot(x - goal_x, y - fa_y) >= GOAL_AREA_RADIUS_M + r
 
-    def pont(u) -> float:
-        _, e = setplay_3d_match(u, defense, ball=labda, config=config)
+    def pont(u, lab) -> float:
+        _, e = setplay_3d_match(u, defense, ball=lab, config=config)
         return e["best_shot_value"]
+
+    def passz_hossz(u, a: int, b: int, k: int) -> float:
+        pa = u[a][min(k, len(u[a]) - 1)]
+        pb = u[b][min(k, len(u[b]) - 1)]
+        return math.hypot(pa[0] - pb[0], pa[1] - pb[1])
 
     alap = e0["best_shot_value"]
     most = alap
@@ -1048,13 +1059,23 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
                         continue
                     proba = [list(map(list, v)) for v in utak]
                     proba[i][k] = [x, y]
-                    p = pont(proba)
+                    p = pont(proba, labda)
                     if legjobb is None or p > legjobb[0] + 1e-12:
-                        legjobb = (p, proba)
+                        legjobb = (p, proba, labda)
+        # A passzok: a k. kulcs-pozíciótól a j. támadónál a labda.
+        for k in range(1, len(labda)):
+            for j in range(len(utak)):
+                if j == labda[k] or passz_hossz(
+                        utak, labda[k - 1], j, k) > FINOMITO_PASSZ_MAX_M:
+                    continue
+                lab = labda[:k] + [j] * (len(labda) - k)
+                p = pont(utak, lab)
+                if legjobb is None or p > legjobb[0] + 1e-12:
+                    legjobb = (p, utak, lab)
         if legjobb is None \
                 or 100.0 * (legjobb[0] - most) < FINOMITO_MIN_JAVULAS_PP:
             break
-        most, utak = legjobb
+        most, utak, labda = legjobb
 
     valtozasok = []
     for i, (regi, uj) in enumerate(zip(e0["utak"], utak)):
@@ -1075,6 +1096,11 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
                 f"{nevelo[0].upper()}{nevelo[1:]} {i + 1}. támadó "
                 f"„{_pont_nev(k, len(uj))}” pontja {m} m-rel "
                 + " és ".join(reszek or ["arrébb"]))
+    if labda != list(e0["labda"]):
+        def ut(lab):
+            return " → ".join(f"{v + 1}." for v in lab)
+        valtozasok.append(f"A labda útja a kulcs-pozíciókon: "
+                          f"{ut(labda)} támadó (eddig {ut(e0['labda'])})")
     javulas = round(100.0 * (most - alap), 1)
     if valtozasok:
         verdict = (f"A modell szerint {javulas:.0f} százalékponttal "

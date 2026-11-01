@@ -361,7 +361,8 @@ def test_az_ai_finomito_javit_a_figuran_a_tanult_fal_ellen():
             fa_y = min(11.5, max(8.5, y))
             assert math.hypot(x - 40.0, y - fa_y) >= GOAL_AREA_RADIUS_M
             assert x >= 20.0
-    assert r["valtozasok"] and "támadó „Vég” pontja" in r["valtozasok"][0]
+    assert r["valtozasok"] and "támadó „" in r["valtozasok"][0]
+    assert "pontja" in r["valtozasok"][0]
     assert r["verdict"].startswith("A modell szerint ")
     _, e = setplay_3d_match(r["attackers"], fal, ball=r["labda"])
     assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
@@ -381,3 +382,29 @@ def test_az_ai_finomito_nem_valtoztat_ha_nincs_jobb():
     assert r["verdict"].startswith("A modell nem talált jobb változatot")
     with pytest.raises(ValueError):
         refine_setplay([], DefenseModel())
+
+
+def test_az_ai_finomito_passzt_is_javasol():
+    """Kilépő és kettőző fal ellen a finomító a labdát egy másik
+    támadónak adatja (a futások maradnak): a labda új útja a változások
+    között, a passz legfeljebb FINOMITO_PASSZ_MAX_M; a finomított figura
+    a fal ellen tényleg annyit ér."""
+    import math
+
+    from handball.pipeline.play_simulation import (FINOMITO_PASSZ_MAX_M,
+                                                   refine_setplay,
+                                                   setplay_3d_match)
+
+    fal = DefenseModel(press_rate=1.0, double_rate=1.0)
+    r = refine_setplay(_FINOMITO_FIGURA, fal, ball=[0, 0, 1])
+    assert r["labda"] != [0, 0, 1]
+    assert any(v.startswith("A labda útja a kulcs-pozíciókon: ")
+               for v in r["valtozasok"])
+    for k in range(1, len(r["labda"])):
+        a, b = r["labda"][k - 1], r["labda"][k]
+        if a != b:
+            pa, pb = r["attackers"][a][k], r["attackers"][b][k]
+            assert math.hypot(pa[0] - pb[0],
+                              pa[1] - pb[1]) <= FINOMITO_PASSZ_MAX_M
+    _, e = setplay_3d_match(r["attackers"], fal, ball=r["labda"])
+    assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6

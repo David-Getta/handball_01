@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **Az AI-finomító a passzokat is javasolja** (motor + figura-tervező):
+  a finomító eddig csak a futások pontjait mozgatta. Most azt is
+  kipróbálja, kinél legyen a labda egy kulcs-pozíciótól kezdve (legfeljebb
+  12 m-es passzal — a szimuláció az elfogást nem ismeri, a hosszú
+  keresztpassz benne "ingyen" lenne). A javaslat kimondja a labda új
+  útját ("A labda útja a kulcs-pozíciókon: 1. → 2. → 2. támadó (eddig
+  1. → 1. → 2.)"), és az "Átveszem" a passzokat is átírja a tervezőben.
+  Kilépő, kettőző fal ellen jellemzően a korábbi továbbadás nyer.
+
 - **AI-finomító a figura-tervezőben** (motor + figura-tervező): az új
   "AI-finomítás" gomb a megrajzolt figura futásainak pontjait néhány
   méterrel arrébb próbálja (a kezdő felállás marad, a hatosba és a
