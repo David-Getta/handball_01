@@ -1131,3 +1131,30 @@ def test_a_tanult_kapus_a_szimulacioban_es_a_3d_fejlecben(tmp_path,
     assert j["kapus_felirat"].startswith("a kapus ")
     r = c.get("/figura3d", params={"u": U, "meccs": "lov", "vedo": "away"})
     assert r.status_code == 200 and "a kapus " in r.text
+
+
+def test_az_elo_figura_riasztas_a_probaval_mondja_a_falatok_elleni_erteket(
+        tmp_path, monkeypatch):
+    """Két meccsen ugyanazt a figurát hozó csapat: a könyvtár visszatérő
+    figurája riasztást ad, és mivel a védekezési próba ugyanezt a figurát
+    ismeri (a tagok kockái fedik a riasztás szakaszát), a riasztás a mi
+    tanult falunk elleni lövőhelyzetet is kimondja."""
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    m1 = _proba_match()
+    m2 = _proba_match()
+    m2.meta.match_id = "pr2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/pr/vedekezesi-proba", params={"csapat": "home"})
+    tagok = r.json()["figurak"][0]["tagok"]
+    assert len(tagok) == 3 and all(a < b for a, b in tagok)
+    al = c.get("/matches/pr/figure-alerts").json()["alerts"]
+    assert al and all(a["team"] == "home" for a in al)
+    assert all(a["proba_pct"] is not None and a["alap_pct"] is not None
+               for a in al)
+    assert "A próba szerint a falatok ellen " in al[0]["text"]
+    assert "lövőhelyzetet teremt (alap fal: " in al[0]["text"]
+    assert al[0]["text"].startswith("Ismert figura: Ők ")

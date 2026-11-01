@@ -987,9 +987,11 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
     begyakorolni.
 
     Visszaad: {"figurak": [{"t0_s", "t1_s", "ismetles", "pont_pct",
-    "alap_pct", "elteres_pp", "attackers", "labda"}, …] a pont szerint
-    csökkenőben (holtversenyben az idő), és "verdict" (magyar mondat,
-    vagy None, ha nincs visszatérő figura)}."""
+    "alap_pct", "elteres_pp", "attackers", "labda", "tagok" (a figura
+    minden előfordulása: [[kezdő kocka, záró kocka], …] időrendben — az
+    élő figura-riasztás ebből ismeri fel, melyik figura indul)}, …] a
+    pont szerint csökkenőben (holtversenyben az idő), és "verdict"
+    (magyar mondat, vagy None, ha nincs visszatérő figura)}."""
     from .setplays import (attack_signature, cluster_signatures,
                            segment_attacks)
 
@@ -1026,6 +1028,8 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
             "alap_pct": round(100.0 * ap, 1),
             "elteres_pp": round(100.0 * (pont - ap), 1),
             "attackers": fig["attackers"], "labda": fig["labda"],
+            "tagok": [[int(s.start_t), int(s.end_t)]
+                      for s in sorted(tagok, key=lambda s: s.start_t)],
         })
         if len(sorok) >= PROBA_MAX:
             break

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **Az élő figura-riasztás a falatok elleni értéket is mondja** (motor
+  + élő képernyő): az élő nézet eddig csak azt jelezte, hogy az ellenfél
+  ismert, visszatérő figurája indul. Most a védekezési próbából azt is,
+  mennyit ér ez a figura a TI tanult falatok ellen: "A próba szerint a
+  falatok ellen 54% lövőhelyzetet teremt (alap fal: 52%)." — a
+  kispad így azonnal látja, melyik figurájuknál kell tényleg
+  kapkodni. A próba figurái mostantól az előfordulásaik idejét is
+  viszik (a riasztás ebből ismeri fel, melyik figura indul).
+
 - **Tanult kapus a figura-értékelésben** (motor + figura-tervező): a
   figura pontszáma eddig átlagos kapust feltételezett. Most a tanult
   védelem a kapusukat is megtanulja: a kaputra érkező lövések gól-aránya

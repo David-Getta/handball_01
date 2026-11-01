@@ -13473,7 +13473,12 @@ def create_app():
 
     def _figure_alerts_for(match) -> list:
         """A figura-riasztások listája egy meccsre (lásd get_figure_alerts)
-        — a végpont és a böngészős 3D nézet közös alapja."""
+        — a végpont és a böngészős 3D nézet közös alapja. Ha a védekezési
+        próba (play_simulation.defense_test — a támadó visszatérő figurái
+        a MÁSIK oldal e meccsből tanult fala ellen) ismeri az induló
+        figurát, a riasztás azt is kimondja, mennyit ér a falatok ellen
+        ("proba_pct", "alap_pct"; különben None)."""
+        from ..pipeline.play_simulation import defense_test
         from ..pipeline.setplays import recurring_figure_segments
         alerts = []
         for side in ("home", "away"):
@@ -13488,18 +13493,39 @@ def create_app():
             if not rec:
                 continue
             fo = rec[0]
-            for a, b in recurring_figure_segments(
-                    match, fo["shape"],
-                    Team.HOME if side == "home" else Team.AWAY):
+            tamado = Team.HOME if side == "home" else Team.AWAY
+            vedo = Team.AWAY if side == "home" else Team.HOME
+            # A próba figurái (hibatűrően — enélkül is teljes a riasztás).
+            try:
+                proba = defense_test(match, tamado,
+                                     DefenseModel.learn(match, vedo))["figurak"]
+            except Exception:
+                proba = []
+
+            def proba_sor(a: int, b: int):
+                for f in proba:
+                    if any(t0 <= b and a <= t1 for t0, t1 in f["tagok"]):
+                        return f
+                return None
+
+            for a, b in recurring_figure_segments(match, fo["shape"], tamado):
                 cimke = (f"\u201e{fo['name']}\u201d" if fo.get("name")
                          else fo["zone"])
+                text = (f"Ismert figura: {nev} a visszatérő figuráját "
+                        f"játssza ({cimke}, {fo['matches']} "
+                        f"meccsen {fo['goals']} gól) — {masik}: "
+                        "kettőzés a súlypontnál, kilépés a lövőre!")
+                f = proba_sor(a, b)
+                if f is not None:
+                    text += (f" A próba szerint a falatok ellen "
+                             f"{f['pont_pct']:.0f}% lövőhelyzetet teremt "
+                             f"(alap fal: {f['alap_pct']:.0f}%).")
                 alerts.append({
                     "t": a, "t_end": b, "team": side, "team_name": nev,
                     "zone": fo["zone"], "name": fo.get("name"),
-                    "text": (f"Ismert figura: {nev} a visszatérő figuráját "
-                             f"játssza ({cimke}, {fo['matches']} "
-                             f"meccsen {fo['goals']} gól) — {masik}: "
-                             "kettőzés a súlypontnál, kilépés a lövőre!")})
+                    "proba_pct": f["pont_pct"] if f else None,
+                    "alap_pct": f["alap_pct"] if f else None,
+                    "text": text})
         alerts.sort(key=lambda r: r["t"])
         return alerts
 
