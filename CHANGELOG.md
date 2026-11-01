@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.187 óta)
 
+- **Figura-kimenetek: sok lejátszás zajos fallal** (motor + figura-
+  tervező): a figura pontszáma egy szám volt — a valódi fal viszont hol
+  kilép, hol nem, hol mélyebben áll. Most a tervező szimulációja 200-szor
+  játssza le a figurát a tanult fal ellen, mindegyikben egy kicsit más
+  fallal (a kilépés és a kettőzés a tanult hajlammal mint valószínűséggel,
+  a labdakövetés és a mélység kis szórással), és kimenetenként számol:
+  gól (a legjobb helyzet értéke mint esély), kivédett / mellé, vagy
+  eladott labda (a védőn át vezetett passz elfogva). Az eredmény-kártya
+  sávban és egy mondatban: "200 lejátszásból 62 gól, 104 kivédett vagy
+  mellé, 34 eladott labda — tízből 3 gól". Determinisztikus (rögzített
+  mag): ugyanaz a figura ugyanazt adja. Az eredmény-kártya minősítése
+  az xG-skálához igazítva: 30% felett kiváló, 18% felett ígéretes.
+
 - **A figura pontszáma a várható-gól modellből** (motor + kliens): a
   figura-kiértékelés eddig a döntés-elemzés egyszerű lövésértékével
   számolt, amely a 13 m-ről szabadon leadott lövést a fedezett 6 m-es
@@ -22,9 +35,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   beindulás második beállónak, átlövés beálló-zárással, hét a hat két
   beállóval) rangsorolja az ellenfél tanult fala ellen — így az új
   felhasználó is azonnal kap "ellenük ez működne" választ. A sablonok a
-  tervezőbe betölthetők és átrajzolhatók (/playbook/sablon-…); az első
-  mentett figura kiszorítja őket. A felderítés kártyája jelzi, hogy
-  sablonokat lát.
+  tervezőbe betölthetők és átrajzolhatók (/playbook/sablon-…), a
+  tervező "Figura betöltése" listája üres könyvtárnál ezeket kínálja
+  ("alap-figura" jelzéssel, törlés nélkül); az első mentett figura
+  kiszorítja őket. A felderítés kártyája jelzi, hogy sablonokat lát.
 
 - **A felderítés próbája és ajánlója a szezon-falból** (motor + kliens):
   a felderítés "Figuráik a falatok ellen" és "Figuráink ellenük"

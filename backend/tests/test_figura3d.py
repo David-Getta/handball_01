@@ -1129,6 +1129,8 @@ def test_a_tanult_kapus_a_szimulacioban_es_a_3d_fejlecben(tmp_path,
     j = r.json()
     assert j["defense_model"]["kapus"]
     assert j["kapus_felirat"].startswith("a kapus ")
+    k = j["kimenetek"]
+    assert k and k["n"] > 0 and k["gol"] + k["vedett"] + k["eladott"] == k["n"]
     r = c.get("/figura3d", params={"u": U, "meccs": "lov", "vedo": "away"})
     assert r.status_code == 200 and "a kapus " in r.text
 
@@ -1270,3 +1272,9 @@ def test_mentett_figura_nelkul_az_alap_figurak_rangsora(tmp_path,
     j = c.get("/playbook-rangsor").json()
     assert j["sablon"] is False
     assert [s["name"] for s in j["figurak"]] == ["Saját"]
+    # A könyvtár-lista is: üresen a sablonok, mentett figurával csak az.
+    c2 = TestClient(_app(tmp_path / "ures", monkeypatch))
+    lista = c2.get("/playbook").json()["plays"]
+    assert len(lista) == 5 and all(p["sablon"] for p in lista)
+    assert lista[0]["players"] == 4
+    assert [p["name"] for p in c.get("/playbook").json()["plays"]] == ["Saját"]

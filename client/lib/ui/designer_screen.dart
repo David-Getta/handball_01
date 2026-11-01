@@ -106,6 +106,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultKettoz = null;
     _tanultKapus = null;
     _tanultCsapat = null;
+    _kimenetek = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -142,6 +143,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
   String? _tanultCsapat;
   // Hány meccsből tanult a fal (a szimuláció "meccsek" mezője).
   int? _tanultMeccsek;
+  // Figura-kimenetek: sok lejátszás zajos fallal (a szimuláció
+  // "kimenetek" mezője: gol_pct, vedett_pct, eladott_pct, verdict).
+  Map<String, dynamic>? _kimenetek;
   // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
   // hozott figuránál még ismeretlen).
   int? _tanultVedok;
@@ -445,6 +449,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _tanultKettoz =
           ((resp["defense_model"] as Map?)?["double_rate"] as num?)?.toDouble();
       _tanultKapus = resp["kapus_felirat"] as String?;
+      _kimenetek = (resp["kimenetek"] as Map?)?.cast<String, dynamic>();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -859,6 +864,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
                           title: Text("${p["name"]}",
                               style: AppText.value.copyWith(fontSize: 14)),
                           subtitle: Text(
+                              "${p["sablon"] == true ? "alap-figura · " : ""}"
                               "${p["players"]} játékos"
                               "${_rangFelirat(rang["${p["id"]}"])}",
                               style: AppText.label.copyWith(fontSize: 11)),
@@ -887,24 +893,28 @@ class _DesignerScreenState extends State<DesignerScreen> {
                               onPressed: () => _mentettNyit(
                                   p["id"] as String, "figura-video"),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 18, color: AppColors.textFaint),
-                              onPressed: () async {
-                                try {
-                                  await _api.deletePlay(p["id"] as String);
-                                  setDlg(() => plays.remove(p));
-                                } catch (_) {}
-                              },
-                            ),
+                            // Az alap-figura (sablon) nem törölhető —
+                            // betöltve és mentve lesz sajáttá.
+                            if (p["sablon"] != true)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: AppColors.textFaint),
+                                onPressed: () async {
+                                  try {
+                                    await _api.deletePlay(p["id"] as String);
+                                    setDlg(() => plays.remove(p));
+                                  } catch (_) {}
+                                },
+                              ),
                           ]),
                         ),
                     ],
                   ),
           ),
           actions: [
-            // A mentett figurák egy nyomtatható füzetben (a mostani fallal).
-            if (plays.isNotEmpty)
+            // A mentett figurák egy nyomtatható füzetben (a mostani fallal)
+            // — a sablonok nincsenek a füzetben.
+            if (plays.any((p) => p["sablon"] != true))
               TextButton.icon(
                 onPressed: _figuraFuzetNyit,
                 icon: const Icon(Icons.print_outlined, size: 18),
@@ -1322,9 +1332,46 @@ class _DesignerScreenState extends State<DesignerScreen> {
     );
   }
 
+  /// A kimenetek sávja: gól (akcent), kivédett / mellé (halvány),
+  /// eladott (arany) — a százalékok a sáv alatt.
+  Widget _kimenetSav(Map<String, dynamic> k) {
+    int pct(String key) => ((k[key] as num?) ?? 0).round();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox(
+          height: 10,
+          child: Row(children: [
+            Expanded(
+                flex: pct("gol_pct").clamp(0, 100),
+                child: Container(color: AppColors.accent)),
+            Expanded(
+                flex: pct("vedett_pct").clamp(0, 100),
+                child: Container(color: AppColors.textFaint)),
+            Expanded(
+                flex: pct("eladott_pct").clamp(0, 100),
+                child: Container(color: AppColors.gold)),
+            Expanded(
+                flex: (100 - pct("gol_pct") - pct("vedett_pct") -
+                        pct("eladott_pct"))
+                    .clamp(0, 100),
+                child: const SizedBox.shrink()),
+          ]),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+          "gól ${pct("gol_pct")}% · kivédett/mellé ${pct("vedett_pct")}% · "
+          "eladott ${pct("eladott_pct")}%",
+          style: AppText.label.copyWith(fontSize: 11)),
+    ]);
+  }
+
   Widget _evalCard(SetPlayEvaluation e) {
     final pct = (e.bestShotValue * 100).toStringAsFixed(0);
-    final quality = e.bestShotValue >= 0.4 ? "Kiváló helyzet" : e.bestShotValue >= 0.2 ? "Ígéretes" : "Nehéz helyzet";
+    // Az xG-skálán (6 m-ről szabadon ~0,6, a beálló fedezve ~0,3, a 9 m-es
+    // átlövés ~0,2): a 0,3 feletti helyzet kiváló, 0,18 felett ígéretes.
+    final quality = e.bestShotValue >= 0.3 ? "Kiváló helyzet" : e.bestShotValue >= 0.18 ? "Ígéretes" : "Nehéz helyzet";
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -1374,6 +1421,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
           if (_tanultMeccs != null && (_tanultKapus ?? "").isNotEmpty)
             Text("$_tanultKapus — a pontszám ezzel számol",
                 style: AppText.label.copyWith(fontSize: 11)),
+          // Figura-kimenetek: a fal hol kilép, hol nem — sok lejátszás
+          // zajos fallal, kimenetenként.
+          if (_tanultMeccs != null && _kimenetek != null) ...[
+            const SizedBox(height: 8),
+            Text("${_kimenetek!["n"]} lejátszás zajos fallal",
+                style: AppText.sectionLabel.copyWith(color: AppColors.accent)),
+            _kimenetSav(_kimenetek!),
+            Text("${_kimenetek!["verdict"] ?? ""}",
+                style: AppText.label.copyWith(fontSize: 11)),
+          ],
         ],
       ),
     );

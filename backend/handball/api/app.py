@@ -13797,9 +13797,23 @@ def create_app():
             raise HTTPException(status_code=400, detail="invalid setplay body")
 
         sim = simulate_setplay(setplay, model)
+        # Figura-kimenetek: a tervező kulcs-pozícióiból (a lépésenkénti
+        # útból a Kezdő / Közép / Vég) sok lejátszás zajos fallal —
+        # hibatűrően, enélkül is teljes a válasz.
+        kimenetek = None
+        try:
+            from ..pipeline.play_simulation import simulate_outcomes
+            kulcs = [[u[0], u[len(u) // 2], u[-1]] for u in attackers]
+            labda_sor = list(body["ball_carrier"])
+            labda = [labda_sor[0], labda_sor[len(labda_sor) // 2],
+                     labda_sor[-1]] if labda_sor else None
+            kimenetek = simulate_outcomes(kulcs, model, ball=labda)
+        except Exception:
+            kimenetek = None
         return {
             "defense_model": vars(model),
             "evaluation": evaluate_setplay(sim, defense=model),
+            "kimenetek": kimenetek,
             # A tanult kapus egy mondatban (üres, ha átlagos) — a tervező
             # eredmény-kártyája.
             "kapus_felirat": kapus_felirat(model.kapus),
@@ -13850,7 +13864,11 @@ def create_app():
 
     @app.get("/playbook")
     def list_plays():
-        """A mentett figurák listája (id + név + játékos-szám)."""
+        """A mentett figurák listája (id + név + játékos-szám). Üres
+        könyvtárnál az öt alap-figura (play_simulation.ALAP_FIGURAK,
+        "sablon": true) — a tervező betöltheti és átrajzolhatja; az első
+        mentett figura kiszorítja őket."""
+        from ..pipeline.play_simulation import ALAP_FIGURAK
         out = []
         for f in sorted(_playbook_dir.glob("*.json")):
             try:
@@ -13859,6 +13877,10 @@ def create_app():
                             "players": len(d.get("attackers", []))})
             except Exception:
                 continue  # sérült fájlt kihagyunk
+        if not out:
+            out = [{"id": d["id"], "name": d["name"],
+                    "players": len(d["attackers"]), "sablon": True}
+                   for d in ALAP_FIGURAK]
         return {"plays": out}
 
     @app.get("/playbook/{play_id}")

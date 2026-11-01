@@ -524,3 +524,32 @@ def test_az_edzes_fokusz_felkeszit_a_figurajukra_a_valodi_probabol():
     zart = training_focus(_proba_match())
     assert not [i for s in ("home", "away") for i in zart[s]
                 if i["title"] == "Felkészülés a figurájukra"]
+
+
+def test_a_figura_kimenetek_determinisztikusak_es_a_fal_szerint_valtoznak():
+    """Ugyanaz a seed ugyanazt adja; a darabok összege n; a ritka fal
+    ellen több a gól, mint a zárt ellen; a védőn át vezetett passz
+    eladott labdát is hoz; a verdict a "tízből N gól" mondat."""
+    from handball.pipeline.play_simulation import simulate_outcomes
+
+    figura = [[[26, 10], [29, 10], [31.5, 10]], [[26, 4], [26, 4], [26, 4]],
+              [[30, 2], [33, 2], [36, 1.5]], [[27, 15], [28, 15], [29, 15]]]
+    a = simulate_outcomes(figura, DefenseModel(), ball=[0, 0, 1], n=60, seed=3)
+    b = simulate_outcomes(figura, DefenseModel(), ball=[0, 0, 1], n=60, seed=3)
+    assert a == b
+    assert a["gol"] + a["vedett"] + a["eladott"] == a["n"] == 60
+    assert abs(a["gol_pct"] + a["vedett_pct"] + a["eladott_pct"] - 100) < 0.2
+    assert a["verdict"].startswith("60 lejátszásból ") \
+        and "— tízből" in a["verdict"]
+    ritka = simulate_outcomes(figura, DefenseModel(num_defenders=2),
+                              ball=[0, 0, 1], n=120, seed=1)
+    zart = simulate_outcomes(figura, DefenseModel(rendszer="3-2-1",
+                                                  press_rate=0.8),
+                             ball=[0, 0, 1], n=120, seed=1)
+    assert ritka["gol_pct"] > zart["gol_pct"]
+    assert ritka["atlag_pct"] > zart["atlag_pct"]
+    # keresztpassz a falon át: a passz vonala a védőkön halad
+    kereszt = [[[26, 4], [27, 4], [28, 4]], [[33, 14], [33, 15], [33, 16]]]
+    k = simulate_outcomes(kereszt, DefenseModel(), ball=[0, 0, 1], n=120,
+                          seed=2)
+    assert k["eladott"] > 0

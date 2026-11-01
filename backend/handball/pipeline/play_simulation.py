@@ -1341,3 +1341,108 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
             "javulas_pp": javulas,
             "valtozasok": valtozasok,
             "verdict": verdict}
+
+
+# ---- Figura-kimenetek: sok lejátszás zajos fallal ---------------------------
+# A szimuláció determinisztikus: egy figura egy fal ellen mindig ugyanazt
+# adja. A valódi fal viszont hol kilép, hol nem, hol mélyebben áll —
+# ezért KIMENET_N lejátszás, mindegyik egy kicsit más fallal: a kilépés
+# és a kettőzés a tanult hajlammal mint VALÓSZÍNŰSÉGGEL (vagy kilép, vagy
+# nem), a labdakövetés és a mélység kis szórással. Minden lejátszás
+# kimenete: eladott labda (egy passz elfogva), gól (a legjobb helyzet
+# értéke mint valószínűség) vagy kivédett / mellé. A passz-elfogás a
+# passz vonalának KÖZEPÉHEZ legközelebbi védő távolságából — a passzoló
+# mellől KIMENET_PASSZOLO_M, az átvevő mellől KIMENET_ATVEVO_M levágva
+# (az átvevő őrzője nem a vonalban áll, hanem rajta; a beállóra adott
+# labdát nem fogja el, csak nehezíti): KIMENET_ELFOG_M-en belül
+# KIMENET_ELFOG_P, kétszer annyin belül a fele, különben az alap.
+KIMENET_N = 200
+KIMENET_KOVETES_SZORAS = 0.15
+KIMENET_MELYSEG_SZORAS_M = 0.4
+KIMENET_ELFOG_M = 1.0
+KIMENET_ELFOG_P = 0.5
+KIMENET_ELFOG_ALAP_P = 0.04
+KIMENET_PASSZOLO_M = 1.0
+KIMENET_ATVEVO_M = 2.0
+
+
+def simulate_outcomes(keypoints: list, defense: DefenseModel, *,
+                      ball: list | None = None, n: int = KIMENET_N,
+                      seed: int = 0,
+                      config: TacticsConfig | None = None) -> dict:
+    """Figura-kimenetek: a figura `n` lejátszása zajos fallal (lásd a
+    KIMENET_* konstansokat), kimenetenként számolva.
+
+    Edzőileg: a figura "pontszáma" egy szám; ez azt mondja meg, a sok
+    lehetséges fal-reakcióból hányszor lesz gól, hányszor védés és
+    hányszor eladott labda — "tízből hármat behoz, kettőt elad".
+
+    Visszaad: {"n", "seed", "gol", "vedett", "eladott" (darab),
+    "gol_pct", "vedett_pct", "eladott_pct", "atlag_pct" (a legjobb
+    helyzet értékének átlaga, %), "verdict"}. Determinisztikus: ugyanaz
+    a `seed` ugyanazt adja. ValueError, ha nincs érvényes támadó."""
+    import random
+
+    from .decisions import _point_segment_distance
+
+    config = config or TacticsConfig()
+    rng = random.Random(seed)
+    gol = vedett = eladott = 0
+    osszeg = 0.0
+    for _ in range(max(1, int(n))):
+        fal = replace(
+            defense,
+            press_rate=1.0 if rng.random() < defense.press_rate else 0.0,
+            double_rate=1.0 if rng.random() < defense.double_rate else 0.0,
+            lateral_gain=max(0.0, min(1.0, defense.lateral_gain
+                                      + rng.gauss(0.0, KIMENET_KOVETES_SZORAS))),
+            line_depth_m=max(GOAL_AREA_RADIUS_M, defense.line_depth_m
+                             + rng.gauss(0.0, KIMENET_MELYSEG_SZORAS_M)))
+        sim, e = setplay_3d_match(keypoints, fal, ball=ball, config=config)
+        osszeg += e["best_shot_value"]
+        # Passz-elfogás: a passz indulásának kockáján a védők a szakaszhoz.
+        fps = sim.meta.fps or FIGURA_3D_FPS
+        elfogva = False
+        # (a j. passz a j. labdás-váltás kulcs-pozíciójára érkezik)
+        valtasok = [i for i in range(1, len(e["labda"]))
+                    if e["labda"][i] != e["labda"][i - 1]]
+        for j, (x1, y1, x2, y2) in enumerate(e["passzok"]):
+            if j >= len(valtasok):
+                break
+            t_erk = e["kulcs_t"][valtasok[j]]
+            idx = min(len(sim.frames) - 1, max(0, int(round(t_erk * fps))))
+            vedok = [p for p in sim.frames[idx].players
+                     if p.team == Team.AWAY and p.role != "kapus"]
+            hossz = math.hypot(x2 - x1, y2 - y1)
+            kozep = hossz - KIMENET_PASSZOLO_M - KIMENET_ATVEVO_M
+            if not vedok or kozep <= 0.5:
+                pe = KIMENET_ELFOG_ALAP_P      # kézből kézbe: csak az alap
+            else:
+                ux, uy = (x2 - x1) / hossz, (y2 - y1) / hossz
+                ax, ay = x1 + ux * KIMENET_PASSZOLO_M, y1 + uy * KIMENET_PASSZOLO_M
+                bx, by = x2 - ux * KIMENET_ATVEVO_M, y2 - uy * KIMENET_ATVEVO_M
+                d = min(_point_segment_distance(p.x, p.y, ax, ay, bx, by)
+                        for p in vedok)
+                pe = (KIMENET_ELFOG_P if d <= KIMENET_ELFOG_M
+                      else KIMENET_ELFOG_P / 2 if d <= 2 * KIMENET_ELFOG_M
+                      else KIMENET_ELFOG_ALAP_P)
+            if rng.random() < pe:
+                elfogva = True
+                break
+        if elfogva:
+            eladott += 1
+        elif rng.random() < e["best_shot_value"]:
+            gol += 1
+        else:
+            vedett += 1
+    ossz = gol + vedett + eladott
+    verdict = (f"{ossz} lejátszásból {gol} gól, {vedett} kivédett vagy "
+               f"mellé, {eladott} eladott labda — tízből "
+               f"{round(10 * gol / ossz)} gól")
+    return {"n": ossz, "seed": seed, "gol": gol, "vedett": vedett,
+            "eladott": eladott,
+            "gol_pct": round(100.0 * gol / ossz, 1),
+            "vedett_pct": round(100.0 * vedett / ossz, 1),
+            "eladott_pct": round(100.0 * eladott / ossz, 1),
+            "atlag_pct": round(100.0 * osszeg / ossz, 1),
+            "verdict": verdict}
