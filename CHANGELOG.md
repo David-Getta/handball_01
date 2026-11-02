@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **Élő figura-ajánló** (motor + élő képernyő): az élő képernyő a 15.,
+  30. és 45. percben megmondja, hogy az ADDIG látott ellenfél-fal ellen
+  melyik mentett figuránk (mentett nélkül: melyik alap-figura) érne a
+  legtöbbet — "Figura-ajánló (30. perc): Szeged eddig látott fala ellen
+  a figuráink közül a „Keresztezés” ér a legtöbbet — 31% lövőhelyzet
+  (alap fal: 26%)". Okszerű: csak a percig látott kockákból tanul, a
+  meccs vége nem számít bele; legalább 300 védekező kocka kell hozzá.
+  Új végpont: /matches/{id}/live-figura-ajanlo.
+
 - **A játékos-modell a falban: védőnkénti kilépés** (motor + figura-
   oldalak): a tanult fal eddig egy csapat-szintű kilépési hajlammal
   lépett. Most mezszám szerint tanulja, ki hol áll a vonalban, és KI az,

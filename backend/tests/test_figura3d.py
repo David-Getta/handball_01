@@ -1289,3 +1289,25 @@ def test_a_3d_fejlec_megnevezi_a_kilepo_vedot(tmp_path, monkeypatch):
                                                  "vedo": "away"})
     assert r.status_code == 200 and "kilépő: #6 (100%)" in r.text
     assert "kettőző: #5 (100%)" in r.text
+
+
+def test_az_elo_figura_ajanlo_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-figura-ajanlo: mentett figurával azt
+    rangsorolja (sablon=false), különben az alap-figurákat; 404 ismeretlen
+    meccsre."""
+    import handball.pipeline.play_simulation as ps
+    from test_play_simulation import _proba_match
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (1,))
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(_proba_match(ismetles=20))
+    c = TestClient(app)
+    r = c.get("/matches/pr/live-figura-ajanlo")
+    assert r.status_code == 200 and r.json()["alerts"][0]["sablon"] is True
+    assert c.post("/playbook", json={"name": "Saját",
+                                     "attackers": _AJANLO_FIGURAK[0]["attackers"]}
+                  ).status_code == 200
+    j = c.get("/matches/pr/live-figura-ajanlo").json()["alerts"]
+    assert j and j[0]["name"] == "Saját" and j[0]["sablon"] is False
+    assert "a figuráink közül a „Saját”" in j[0]["text"]
+    assert c.get("/matches/nincs/live-figura-ajanlo").status_code == 404

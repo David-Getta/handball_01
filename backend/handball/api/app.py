@@ -13640,6 +13640,31 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"alerts": _figure_alerts_for(match)}
 
+    @app.get("/matches/{match_id}/live-figura-ajanlo")
+    def get_live_figure_suggestions(match_id: str):
+        """ÉLŐ figura-ajánló: a 15., 30. és 45. percben az addig látott
+        fal ellen melyik mentett figuránk (vagy alap-figura) ér a
+        legtöbbet (play_simulation.live_figure_suggestions — csak az
+        addigi kockákból). Válasz: {"alerts": [{"t", "t_s", "perc",
+        "team", "team_name", "name", "pont_pct", "alap_pct", "sablon",
+        "text"}]}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (ALAP_FIGURAK,
+                                                live_figure_suggestions)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        figurak = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(d, dict):
+                figurak.append(d)
+        if not figurak:
+            figurak = [dict(d) for d in ALAP_FIGURAK]
+        return live_figure_suggestions(match, figurak)
+
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):
         """Figura-felismerés: hány visszatérő figurát játszottak és milyen

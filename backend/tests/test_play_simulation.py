@@ -638,3 +638,30 @@ def test_a_mezszam_nevelovel_magyarul():
         "a 10-es", "a 20-as", "a 30-as", "a 40-es", "az 50-es", "a 60-as",
         "a 70-es", "a 80-as", "a 90-es"]
     assert mezszam_nevelovel(55) == "az 55-ös" and mezszam_nevelovel(23) == "a 23-as"
+
+
+def test_az_elo_figura_ajanlo_az_addig_latott_falbol(monkeypatch):
+    """Az 1. percben (küszöb átállítva) a vendég (Mi) addig látott fala
+    ellen a legjobb figurát mondja; a hazai (Ők) nem védekezik → nincs
+    rá ajánlás; rövid meccsnél (nem ér el a percig) és figura nélkül
+    üres; az ajánlás csak az addigi kockákból jön (a meccs vége nem
+    számít)."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (ALAP_FIGURAK,
+                                                   live_figure_suggestions)
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (1,))
+    m = _proba_match(ismetles=20)          # 80 mp
+    r = live_figure_suggestions(m, ALAP_FIGURAK)
+    assert [a["team"] for a in r["alerts"]] == ["away"]
+    a = r["alerts"][0]
+    assert a["perc"] == 1 and a["team_name"] == "Mi" and a["sablon"] is True
+    assert a["text"].startswith("Figura-ajánló (1. perc): Mi eddig látott "
+                                "fala ellen az alap-figurák közül a „")
+    assert "% lövőhelyzet (alap fal: " in a["text"]
+    # csak az addigi kockák: a meccs első 60 mp-e önmagában ugyanazt adja
+    rovid = Match(m.meta, [f for f in m.frames if f.t <= 60 * 25])
+    assert live_figure_suggestions(rovid, ALAP_FIGURAK)["alerts"] == r["alerts"]
+    assert live_figure_suggestions(_proba_match(ismetles=5),
+                                   ALAP_FIGURAK)["alerts"] == []
+    assert live_figure_suggestions(m, [])["alerts"] == []

@@ -163,6 +163,16 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "figura", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Élő figura-ajánló: a 15., 30., 45. percben az addig látott fal
+    // ellen melyik figuránk érne a legtöbbet — csak az addigi kockákból,
+    // a támadó kispadnak szól.
+    try {
+      for (final a in await _api.fetchLiveFigureSuggestions(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "figura", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     try {
       final r = await _api.fetchRules(matchId);
       for (final w in ((r["powerplay"] as List?) ?? const [])

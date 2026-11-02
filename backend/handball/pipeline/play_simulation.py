@@ -1583,3 +1583,66 @@ def simulate_outcomes(keypoints: list, defense: DefenseModel, *,
             "eladott_pct": round(100.0 * eladott / ossz, 1),
             "atlag_pct": round(100.0 * osszeg / ossz, 1),
             "verdict": verdict}
+
+
+# ---- Élő figura-ajánló: meccs közben, az addig látott fal ellen ------------
+# Ezekben a percekben szól (a meccs kezdetétől mért játékidő), ha az
+# addigi kockákból már tanulható a fal: legalább ennyi védekező kocka
+# (mintaszám) kell. Csak az addigi kockákat nézi — előre nem lát.
+LIVE_AJANLO_PERCEK = (15, 30, 45)
+LIVE_AJANLO_MIN_KOCKA = 300
+
+
+def live_figure_suggestions(match: Match, figurak: list,
+                            config: TacticsConfig | None = None) -> dict:
+    """Élő figura-ajánló: a LIVE_AJANLO_PERCEK perceiben az addig látott
+    fal ellen (DefenseModel.learn a kezdettől a percig tartó kockákon)
+    rangsorolja a `figurak` listát (rank_playbook), és az első helyezettet
+    mondja — mindkét csapat falára (a másik kispadnak szól).
+
+    Edzőileg: a félidőben nem a teljes meccs, hanem az addig látott fal
+    alapján kell dönteni — ez azt mondja meg, az eddigiek szerint melyik
+    figuránk érne a legtöbbet ellenük. Okszerű: a percig látottakból, a
+    későbbi kockák nélkül.
+
+    Visszaad: {"alerts": [{"t" (kocka), "t_s", "perc", "team" (a VÉDŐ
+    oldal, akinek a fala ellen), "team_name", "name", "pont_pct",
+    "alap_pct", "sablon", "text"}, …]} t szerint; üres, ha nincs figura,
+    vagy a fal még nem tanulható."""
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    alerts = []
+    if not figurak or not match.frames:
+        return {"alerts": alerts}
+    t0 = match.frames[0].t
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [f for f in match.frames if f.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side in ("home", "away"):
+            team = Team.HOME if side == "home" else Team.AWAY
+            minta = _tanulas_minta(resz, team, config)
+            if minta["kockak"] < LIVE_AJANLO_MIN_KOCKA:
+                continue
+            fal = DefenseModel._modell_mintabol(minta)
+            r = rank_playbook(figurak, fal, config=config)
+            if not r["figurak"]:
+                continue
+            b = r["figurak"][0]
+            nev = (match.meta.home_team if side == "home"
+                   else match.meta.away_team)
+            mibol = ("az alap-figurák közül a" if b["sablon"]
+                     else "a figuráink közül a")
+            alerts.append({
+                "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc,
+                "team": side, "team_name": nev, "name": b["name"],
+                "pont_pct": b["pont_pct"], "alap_pct": b["alap_pct"],
+                "sablon": b["sablon"],
+                "text": (f"Figura-ajánló ({perc}. perc): {nev} eddig "
+                         f"látott fala ellen {mibol} „{b['name']}” ér a "
+                         f"legtöbbet — {b['pont_pct']:.0f}% lövőhelyzet "
+                         f"(alap fal: {b['alap_pct']:.0f}%)")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}

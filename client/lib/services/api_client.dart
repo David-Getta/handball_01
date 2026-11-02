@@ -1763,6 +1763,22 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő figura-ajánló (GET /matches/{id}/live-figura-ajanlo): a 15., 30.
+  /// és 45. percben az addig látott fal ellen a legjobb figuránk —
+  /// [{t, t_s, perc, team, team_name, name, pont_pct, alap_pct, sablon,
+  /// text}].
+  Future<List<Map<String, dynamic>>> fetchLiveFigureSuggestions(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-figura-ajanlo"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az élő figura-ajánló", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// A 3D pálya védekezés-panelje (GET /matches/{id}/defence-timeline):
   /// {"rows": [{"t","s","defending","label","goal_x"}], "formations":
   /// {név: [[mélység, y], …]}} — a sablonok a bal kapu előtt.
