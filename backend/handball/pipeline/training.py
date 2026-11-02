@@ -1570,7 +1570,7 @@ def _training_focus_cached(match: Match,
     _szabaly = 489
     try:
         from .play_simulation import (AJANLO_ELTERES_PP, DefenseModel,
-                                      defense_test)
+                                      defense_test, mezszam_nevelovel)
         for side, masik in (("home", "away"), ("away", "home")):
             ved489 = DefenseModel.learn(
                 match, Team.HOME if side == "home" else Team.AWAY, config)
@@ -1583,10 +1583,16 @@ def _training_focus_cached(match: Match,
             if f489["elteres_pp"] < AJANLO_ELTERES_PP:
                 continue
             szok489 = []
-            if ved489.press_rate >= 0.3:
-                szok489.append("a kilépésünk")
-            if ved489.double_rate >= 0.2:
-                szok489.append("a kettőzésünk")
+            kil489 = ved489.kilepo_vedo()
+            if ved489.press_rate >= 0.3 or (kil489 and kil489["press_rate"] >= 0.3):
+                szok489.append("a kilépésünk" + (
+                    f" ({mezszam_nevelovel(kil489['mez'])} mezszámúé)"
+                    if kil489 else ""))
+            ket489 = ved489.kettozo_vedo()
+            if ved489.double_rate >= 0.2 or (ket489 and ket489["double_rate"] >= 0.2):
+                szok489.append("a kettőzésünk" + (
+                    f" ({mezszam_nevelovel(ket489['mez'])} mezszámúé)"
+                    if ket489 else ""))
             if ved489.lateral_gain >= 0.7:
                 szok489.append("a labdakövetésünk")
             ok489 = (" — " + " és ".join(szok489) + " nyitja a rést"

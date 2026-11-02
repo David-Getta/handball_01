@@ -3,6 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.188 óta)
+
+- **A játékos-modell a falban: védőnkénti kilépés** (motor + figura-
+  oldalak): a tanult fal eddig egy csapat-szintű kilépési hajlammal
+  lépett. Most mezszám szerint tanulja, ki hol áll a vonalban, és KI az,
+  aki rálép a labdásra, amikor ő a legközelebbi — a szimulációban a
+  labdáshoz legközelebbi vonal-védő a SAJÁT hajlamával lép ki, a többi
+  a falban marad. Így a figura a jó oldalon talál rést: ahol a kilépő
+  védő áll. Ugyanígy a kettőzés: ki az, aki másodikként is rálép. A
+  3D/VR fejléce és a tervező eredmény-kártyája megnevezi: "kilépő: #6
+  (62%) · kettőző: #5 (40%)"; az edzésterv felkészülés-tétele is a
+  mezszámot mondja ("a kilépésünk — a 6-os mezszámúé — nyitja a rést").
+  Egy védő saját hajlamához legalább 15 olyan kocka kell, ahol ő volt a
+  legközelebbi (vagy a második); a többi a csapat hajlamát kapja.
+
 ## v0.1.188 — kiadva (2026-11-01)
 
 > Kiadás-jegyzet: A FIGURA-LABOR ÉRTÉKMODELLJE — a figura pontszáma

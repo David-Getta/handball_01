@@ -3370,7 +3370,15 @@ def create_app():
             f" · kettőz: {modell.double_rate * 100:.0f}%"
             if modell.double_rate >= 0.05 else "") + (
             f" · {kapus_felirat(modell.kapus)}"
-            if kapus_felirat(modell.kapus) else "")
+            if kapus_felirat(modell.kapus) else "") + (
+            f" · kilépő: #{modell.kilepo_vedo()['mez']} "
+            f"({modell.kilepo_vedo()['press_rate'] * 100:.0f}%)"
+            if modell.kilepo_vedo() and modell.kilepo_vedo()["press_rate"] >= 0.3
+            else "") + (
+            f" · kettőző: #{modell.kettozo_vedo()['mez']} "
+            f"({modell.kettozo_vedo()['double_rate'] * 100:.0f}%)"
+            if modell.kettozo_vedo() and modell.kettozo_vedo()["double_rate"] >= 0.2
+            else "")
 
     def _csapat_meccsei(csapat: str) -> list:
         """A könyvtár meccsei, ahol a `csapat` nevű csapat játszott:

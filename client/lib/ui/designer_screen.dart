@@ -107,6 +107,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultKapus = null;
     _tanultCsapat = null;
     _kimenetek = null;
+    _tanultKilepo = null;
+    _tanultKettozo = null;
   }
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
@@ -146,6 +148,31 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // Figura-kimenetek: sok lejátszás zajos fallal (a szimuláció
   // "kimenetek" mezője: gol_pct, vedett_pct, eladott_pct, verdict).
   Map<String, dynamic>? _kimenetek;
+  // A tanult fal leggyakrabban kilépő védője ("#6 (62%)") — a
+  // defense_model.vedok listából; null, ha nincs ismert hajlam.
+  String? _tanultKilepo;
+
+  // A tanult fal leggyakrabban kettőző védője ("#4 (40%)").
+  String? _tanultKettozo;
+
+  /// A fal kilépő (vagy `kulcs` = "double_rate": kettőző) védője a tanult
+  /// védők listájából: a legnagyobb saját hajlamú, ha legalább `kuszob`
+  /// (a backend fejlécével azonos küszöbök: 30% kilépés, 20% kettőzés).
+  static String? _kilepoVedo(Object? model,
+      {String kulcs = "press_rate", double kuszob = 0.3}) {
+    final vedok = ((model as Map?)?["vedok"] as List?) ?? const [];
+    Map<String, dynamic>? best;
+    for (final v in vedok.whereType<Map>()) {
+      final r = (v[kulcs] as num?)?.toDouble();
+      if (r == null) continue;
+      if (best == null || r > ((best[kulcs] as num).toDouble())) {
+        best = v.cast<String, dynamic>();
+      }
+    }
+    if (best == null) return null;
+    final r = (best[kulcs] as num).toDouble();
+    return r >= kuszob ? "#${best["mez"]} (${(r * 100).round()}%)" : null;
+  }
   // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
   // hozott figuránál még ismeretlen).
   int? _tanultVedok;
@@ -449,6 +476,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _tanultKettoz =
           ((resp["defense_model"] as Map?)?["double_rate"] as num?)?.toDouble();
       _tanultKapus = resp["kapus_felirat"] as String?;
+      _tanultKilepo = _kilepoVedo(resp["defense_model"]);
+      _tanultKettozo = _kilepoVedo(resp["defense_model"],
+          kulcs: "double_rate", kuszob: 0.2);
       _kimenetek = (resp["kimenetek"] as Map?)?.cast<String, dynamic>();
       setState(() {
         _sim = sim;
@@ -1420,6 +1450,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
           // számol (a kapus gyenge sávjából jövő helyzet többet ér).
           if (_tanultMeccs != null && (_tanultKapus ?? "").isNotEmpty)
             Text("$_tanultKapus — a pontszám ezzel számol",
+                style: AppText.label.copyWith(fontSize: 11)),
+          // A játékos-modell a falban: ki lép ki — a figurát oda érdemes
+          // vinni, ahol ő áll.
+          if (_tanultMeccs != null && _tanultKilepo != null)
+            Text("a falban a kilépő: $_tanultKilepo — a szimulációban az ő "
+                "helyén nyílik a rés",
+                style: AppText.label.copyWith(fontSize: 11)),
+          if (_tanultMeccs != null && _tanultKettozo != null)
+            Text("a falban a kettőző: $_tanultKettozo — mellette szabadul "
+                "a társ",
                 style: AppText.label.copyWith(fontSize: 11)),
           // Figura-kimenetek: a fal hol kilép, hol nem — sok lejátszás
           // zajos fallal, kimenetenként.

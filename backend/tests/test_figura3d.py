@@ -1278,3 +1278,14 @@ def test_mentett_figura_nelkul_az_alap_figurak_rangsora(tmp_path,
     assert len(lista) == 5 and all(p["sablon"] for p in lista)
     assert lista[0]["players"] == 4
     assert [p["name"] for p in c.get("/playbook").json()["plays"]] == ["Saját"]
+
+
+def test_a_3d_fejlec_megnevezi_a_kilepo_vedot(tmp_path, monkeypatch):
+    from test_play_simulation import _vedo_match
+
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(_vedo_match())
+    r = TestClient(app).get("/figura3d", params={"u": U, "meccs": "v",
+                                                 "vedo": "away"})
+    assert r.status_code == 200 and "kilépő: #6 (100%)" in r.text
+    assert "kettőző: #5 (100%)" in r.text

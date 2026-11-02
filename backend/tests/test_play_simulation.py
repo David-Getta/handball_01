@@ -553,3 +553,88 @@ def test_a_figura_kimenetek_determinisztikusak_es_a_fal_szerint_valtoznak():
     k = simulate_outcomes(kereszt, DefenseModel(), ball=[0, 0, 1], n=120,
                           seed=2)
     assert k["eladott"] > 0
+
+
+def _vedo_match(n: int = 60):
+    """A hazai labdás felváltva a jobb (31; 13,3) és a bal (31; 6,7)
+    oldalon; a vendég fal a hatoson mezszámmal (2..7, y = 3..17): a
+    6-os (y = 14) mindig rálép a jobb oldali labdásra, a 3-as (y = 6) a
+    bal oldalinál a falban marad."""
+    frames = []
+    for t in range(2 * n):
+        jobb = t % 2 == 0
+        by = 13.3 if jobb else 6.7
+        players = [_pl(1, Team.HOME, 31.0, by), _pl(2, Team.HOME, 28.0, 10.0)]
+        for i, y in enumerate((3, 6, 9, 11, 14, 17)):
+            x, yy = 34.0, float(y)
+            if jobb and y == 14:
+                x, yy = 32.0, 14.2
+            if jobb and y == 11:
+                x, yy = 32.5, 11.9      # az 5-ös kettőz (második, 2,5 m-en belül)
+            players.append(PlayerPosition(
+                track_id=100 + i, team=Team.AWAY, x=x, y=yy,
+                source=PositionSource.MEASURED, confidence=1.0,
+                jersey_number=i + 2))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=31.0, y=by, confidence=1.0)))
+    return Match(MatchMeta(match_id="v", home_team="A", away_team="B",
+                           fps=25), frames)
+
+
+def test_a_tanult_fal_vedonkent_lep_ki():
+    """A játékos-modell a falban: a 6-os saját hajlama 1, a 3-asé 0 (a
+    csapaté 0,5); a szimulációban a jobb oldali labdásra a 6-os helye
+    (5. vonal-slot) teljesen kilép, a bal oldalinál senki — mint a
+    press_rate=1 / 0 fal. learn_many összeadja a védők mintáját; a 3D
+    fejléce megnevezi a kilépőt."""
+    m = _vedo_match()
+    fal = DefenseModel.learn(m, Team.AWAY)
+    assert abs(fal.press_rate - 0.5) < 1e-9
+    assert [v["mez"] for v in fal.vedok] == [2, 3, 4, 5, 6, 7]
+    assert fal.vedok[4]["press_rate"] == 1.0 and fal.vedok[1]["press_rate"] == 0.0
+    assert fal.kilepo_vedo()["mez"] == 6
+    # kettőzés: a jobb oldalon az 5-ös a második és 2,5 m-en belül van; a
+    # bal oldalon a 4-es a második, de a falban marad
+    assert fal.vedok[3]["double_rate"] == 1.0 and fal.vedok[2]["double_rate"] == 0.0
+    assert fal.kettozo_vedo()["mez"] == 5 and abs(fal.double_rate - 0.5) < 1e-9
+    from dataclasses import replace
+
+    # (a szimulált fal slotjai: y = 3, 5,8, 8,6, 11,4, 14,2, 17 — a labda
+    # a 6-os (5. slot) és a 3-as (2. slot) elé)
+    jobb = Ball(x=31.0, y=14.5, confidence=1.0)
+    bal = Ball(x=31.0, y=5.5, confidence=1.0)
+    # (ugyanaz a tanult fal védőnkénti hajlam nélkül, csapat-szintű 1 / 0)
+    assert fal.respond(jobb, 40.0) == replace(fal, press_rate=1.0,
+                                              double_rate=1.0,
+                                              vedok=[]).respond(jobb, 40.0)
+    assert fal.respond(bal, 40.0) == replace(fal, press_rate=0.0,
+                                             double_rate=0.0,
+                                             vedok=[]).respond(bal, 40.0)
+    assert fal.respond(bal, 40.0) != replace(fal, vedok=[]).respond(bal, 40.0)
+    ketto = DefenseModel.learn_many([(m, Team.AWAY), (m, Team.AWAY)])
+    assert ketto.vedok[4]["kozel"] == 2 * fal.vedok[4]["kozel"]
+    assert DefenseModel().kilepo_vedo() is None
+
+
+def test_a_vedekezesi_proba_megnevezi_a_rest_nyito_vedot():
+    """Ha a próba szerint a falunk többet enged, és a fal kilépője /
+    kettőzője ismert, a verdict megnevezi őket."""
+    from handball.pipeline.play_simulation import defense_test
+
+    fal = DefenseModel.learn(_vedo_match(), Team.AWAY)
+    fal.num_defenders = 2          # ritka fal → a próba rést talál
+    r = defense_test(_proba_match(), Team.HOME, fal)
+    assert r["verdict"].endswith(
+        "be kell gyakorolni (a 6-os kilépése és az 5-ös kettőzése nyitja)")
+
+
+def test_a_mezszam_nevelovel_magyarul():
+    from handball.pipeline.play_simulation import mezszam_nevelovel
+
+    assert [mezszam_nevelovel(n) for n in (1, 2, 3, 4, 5, 6, 7, 8, 9)] == [
+        "az 1-es", "a 2-es", "a 3-as", "a 4-es", "az 5-ös", "a 6-os",
+        "a 7-es", "a 8-as", "a 9-es"]
+    assert [mezszam_nevelovel(n) for n in (10, 20, 30, 40, 50, 60, 70, 80, 90)] == [
+        "a 10-es", "a 20-as", "a 30-as", "a 40-es", "az 50-es", "a 60-as",
+        "a 70-es", "a 80-as", "a 90-es"]
+    assert mezszam_nevelovel(55) == "az 55-ös" and mezszam_nevelovel(23) == "a 23-as"

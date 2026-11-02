@@ -72,6 +72,14 @@ PRESS_GAP_M = 1.0
 LATERAL_LEARN_MIN_FRAMES = 50
 LATERAL_MIN_SPREAD_M = 2.0
 
+# Védőnkénti kilépés (a játékos-modell a falban): egy védő SAJÁT
+# kilépési hajlamához ennyi olyan kocka kell, ahol ő állt legközelebb a
+# lőtávolságon belüli labdáshoz (mintaszám); a falba az a mezszám kerül,
+# aki a védekező kockák legalább ekkora részén a pályán volt (a csere
+# nem).
+VEDO_PRESS_MIN = 15
+VEDO_JELEN_ARANY = 0.3
+
 # Kettőzési hajlam: a lőtávolságon belüli labdás kockák közül azok, ahol
 # a labdáshoz legalább KÉT mezőnyvédő áll legfeljebb DOUBLE_CLOSE_M-re (a
 # defense.double_teams küszöbe) — a tanuláshoz ugyanannyi minta kell,
@@ -132,6 +140,15 @@ class DefenseModel:
                      (többet enged be a szokásosnál), 1 alatt kevesebbet.
                      A figura-értékelés a lövőhely sávjának szorzójával
                      számol; üres = átlagos kapus.
+    - vedok:         a fal védői mezszám szerint, a vonalbeli helyük (y)
+                     sorrendjében: [{"mez", "y", "press_rate" (a SAJÁT
+                     kilépési hajlama, vagy None, ha kevés a minta),
+                     "kozel", "double_rate" (a saját kettőzési hajlama:
+                     amikor ő a második legközelebbi, rálép-e), "masodik"}].
+                     A szimulációban a labdáshoz legközelebbi vonal-védő a
+                     saját hajlamával lép ki, a második legközelebbi a
+                     saját kettőzésével (ha ismert), különben a csapatéval
+                     — a játékos-modell a falban.
     """
     num_defenders: int = 6
     line_depth_m: float = 6.0
@@ -140,6 +157,7 @@ class DefenseModel:
     press_rate: float = 0.0
     double_rate: float = 0.0
     kapus: dict = field(default_factory=dict)
+    vedok: list = field(default_factory=list)
 
     @classmethod
     def learn(cls, match: Match, defending_team: Team,
@@ -205,6 +223,20 @@ class DefenseModel:
                    else m["melyseg_osszeg"] / m["melyseg_n"]
                    if m["melyseg_n"] else 6.0)
         lovo = m["lovo_kockak"]
+        vedok = []
+        for mez, v in m.get("vedok", {}).items():
+            if v["n"] < max(PRESS_LEARN_MIN_FRAMES,
+                            VEDO_JELEN_ARANY * m["kockak"]):
+                continue
+            vedok.append({
+                "mez": mez, "y": round(v["y_osszeg"] / v["n"], 2),
+                "press_rate": (round(v["ralepett"] / v["kozel"], 3)
+                               if v["kozel"] >= VEDO_PRESS_MIN else None),
+                "kozel": v["kozel"],
+                "double_rate": (round(v["kettozott"] / v["masodik"], 3)
+                                if v["masodik"] >= VEDO_PRESS_MIN else None),
+                "masodik": v["masodik"]})
+        vedok.sort(key=lambda r: (r["y"], r["mez"]))
         return cls(
             num_defenders=(round(m["vedo_osszeg"] / m["kockak"])
                            if m["kockak"] else 6),
@@ -216,7 +248,48 @@ class DefenseModel:
             double_rate=(round(m["kettoztek"] / lovo, 3)
                          if lovo >= PRESS_LEARN_MIN_FRAMES else 0.0),
             kapus=_kapus_szorzo(m["kapus"]),
+            vedok=vedok,
         )
+
+    def vonal_vedok(self) -> int:
+        """Hány védő áll a vonalban (az előretoltak nélkül) — a
+        `respond` kimenetének első ennyi eleme a vonal, y szerint."""
+        n_osszes = max(1, self.num_defenders)
+        return n_osszes - len(VEDEKEZESI_RENDSZEREK.get(self.rendszer, ())
+                               [:n_osszes - 1])
+
+    def vedo_kilepes(self, slot: int) -> float:
+        """A `slot`. vonal-védő kilépési hajlama: a sajátja (a tanult
+        védő, aki ott áll), ha ismert, különben a csapaté."""
+        if slot < self.vonal_vedok() and slot < len(self.vedok):
+            r = self.vedok[slot].get("press_rate")
+            if r is not None:
+                return float(r)
+        return self.press_rate
+
+    def kilepo_vedo(self):
+        """A fal leggyakrabban kilépő védője ({"mez", "press_rate"}) —
+        None, ha egyik védő hajlama sem ismert vagy mind 0."""
+        ismert = [v for v in self.vedok if v.get("press_rate")]
+        if not ismert:
+            return None
+        return max(ismert, key=lambda v: (v["press_rate"], -v["mez"]))
+
+    def vedo_kettozes(self, slot: int) -> float:
+        """A `slot`. vonal-védő kettőzési hajlama (mint vedo_kilepes)."""
+        if slot < self.vonal_vedok() and slot < len(self.vedok):
+            r = self.vedok[slot].get("double_rate")
+            if r is not None:
+                return float(r)
+        return self.double_rate
+
+    def kettozo_vedo(self):
+        """A fal leggyakrabban kettőző védője ({"mez", "double_rate"}) —
+        None, ha nincs ismert, 0 feletti hajlam."""
+        ismert = [v for v in self.vedok if v.get("double_rate")]
+        if not ismert:
+            return None
+        return max(ismert, key=lambda v: (v["double_rate"], -v["mez"]))
 
     def kapus_szorzo(self, x: float, y: float, goal_x: float) -> float:
         """A lövőhely sávjának tanult kapus-szorzója (1, ha nincs)."""
@@ -275,11 +348,17 @@ class DefenseModel:
         és a kapu-közép vonalán, PRESS_GAP_M-re); a kettőzési hajlam: a
         második legközelebbi `double_rate` arányban a saját helyéről a
         labdás felé, DOUBLE_GAP_M-re tőle — a hatoson belülre egyik sem."""
-        if (self.press_rate <= 0.0 and self.double_rate <= 0.0) or not out \
-                or abs(ball.x - goal_x) > PRESS_RANGE_M:
+        if not out or abs(ball.x - goal_x) > PRESS_RANGE_M:
             return out
         sorrend = sorted(range(len(out)), key=lambda k: (
             math.hypot(out[k][0] - ball.x, out[k][1] - ball.y), k))
+        # A legközelebbi vonal-védő a SAJÁT hajlamával (a játékos-modell),
+        # a második a saját kettőzésével.
+        kilep = self.vedo_kilepes(sorrend[0])
+        kettoz = (self.vedo_kettozes(sorrend[1]) if len(sorrend) >= 2
+                  else 0.0)
+        if kilep <= 0.0 and kettoz <= 0.0:
+            return out
 
         def lep(hely, cel, r):
             nx = hely[0] + (cel[0] - hely[0]) * r
@@ -292,21 +371,36 @@ class DefenseModel:
             return nx, ny
 
         out = list(out)
-        if self.press_rate > 0.0:
+        if kilep > 0.0:
             i = sorrend[0]
             dx, dy = goal_x - ball.x, COURT_WIDTH_M / 2.0 - ball.y
             d = math.hypot(dx, dy) or 1.0
             cel = (ball.x + dx / d * PRESS_GAP_M, ball.y + dy / d * PRESS_GAP_M)
-            out[i] = lep(out[i], cel, min(1.0, self.press_rate))
-        if self.double_rate > 0.0 and len(sorrend) >= 2:
+            out[i] = lep(out[i], cel, min(1.0, kilep))
+        if kettoz > 0.0 and len(sorrend) >= 2:
             j = sorrend[1]
             dx, dy = out[j][0] - ball.x, out[j][1] - ball.y
             d = math.hypot(dx, dy)
             if d > DOUBLE_GAP_M:
                 cel = (ball.x + dx / d * DOUBLE_GAP_M,
                        ball.y + dy / d * DOUBLE_GAP_M)
-                out[j] = lep(out[j], cel, min(1.0, self.double_rate))
+                out[j] = lep(out[j], cel, min(1.0, kettoz))
         return out
+
+
+def mezszam_nevelovel(mez: int) -> str:
+    """A mezszám névelővel és a magyar sorszám-raggal ("a 6-os", "az
+    5-ös", "a 3-as", "a 10-es", "a 20-as") — a mondatokba."""
+    n = int(mez)
+    utolso, tizes = n % 10, (n // 10) % 10
+    if n and utolso == 0:
+        rag = {1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as",
+               7: "es", 8: "as", 9: "es"}.get(tizes, "as")
+    else:
+        rag = {1: "es", 2: "es", 3: "as", 4: "es", 5: "ös", 6: "os",
+               7: "es", 8: "as", 9: "es", 0: "ás"}[utolso]
+    nevelo = "az" if n in (1, 5) or 50 <= n <= 59 else "a"
+    return f"{nevelo} {n}-{rag}"
 
 
 def _tanulas_minta(match: Match, defending_team: Team,
@@ -325,7 +419,8 @@ def _tanulas_minta(match: Match, defending_team: Team,
          "melyseg_n": 0, "hatso_osszeg": 0.0, "hatso_n": 0, "formak": {},
          "lovo_kockak": 0, "raleptek": 0, "kettoztek": 0,
          "kov_n": 0, "kov_bw": 0.0, "kov_bb": 0.0,
-         "kapus": _kapus_minta(match, defending_team, config)}
+         "kapus": _kapus_minta(match, defending_team, config),
+         "vedok": {}}
     kozep_y = COURT_WIDTH_M / 2.0
     for f in match.frames:
         ph = classify_phase(f, config)
@@ -349,6 +444,7 @@ def _tanulas_minta(match: Match, defending_team: Team,
         if cimke in VEDEKEZESI_RENDSZEREK:
             m["formak"][cimke] = m["formak"].get(cimke, 0) + 1
         holder = ball_holder(f, config)
+        kozel = None
         if holder is not None and holder.team != defending_team \
                 and abs(holder.x - goal_x) <= PRESS_RANGE_M:
             m["lovo_kockak"] += 1
@@ -358,6 +454,30 @@ def _tanulas_minta(match: Match, defending_team: Team,
                 m["raleptek"] += 1
             if len(tav) >= 2 and tav[1] <= DOUBLE_CLOSE_M:
                 m["kettoztek"] += 1
+            sorban = sorted(outfield, key=lambda p: (
+                math.hypot(p.x - holder.x, p.y - holder.y), p.track_id))
+            kozel = sorban[0]
+            masodik = sorban[1] if len(sorban) >= 2 else None
+        else:
+            masodik = None
+        # Védőnként (mezszám szerint): hol áll, ő lép-e ki, amikor ő a
+        # legközelebbi a labdáshoz, és ő kettőz-e, amikor ő a második.
+        for p in outfield:
+            if p.jersey_number is None:
+                continue
+            v = m["vedok"].setdefault(int(p.jersey_number), {
+                "n": 0, "y_osszeg": 0.0, "kozel": 0, "ralepett": 0,
+                "masodik": 0, "kettozott": 0})
+            v["n"] += 1
+            v["y_osszeg"] += p.y
+            if kozel is not None and p is kozel:
+                v["kozel"] += 1
+                if math.hypot(p.x - holder.x, p.y - holder.y) <= PRESS_CLOSE_M:
+                    v["ralepett"] += 1
+            if masodik is not None and p is masodik:
+                v["masodik"] += 1
+                if math.hypot(p.x - holder.x, p.y - holder.y) <= DOUBLE_CLOSE_M:
+                    v["kettozott"] += 1
         sor = [p.y for p in outfield if abs(p.x - goal_x) <= _BACK_MAX]
         if sor and f.ball is not None:
             b = f.ball.y - kozep_y
@@ -372,10 +492,18 @@ def _mintak_osszege(mintak: list) -> dict:
     ossz = {"kockak": 0, "vedo_osszeg": 0, "melyseg_osszeg": 0.0,
             "melyseg_n": 0, "hatso_osszeg": 0.0, "hatso_n": 0, "formak": {},
             "lovo_kockak": 0, "raleptek": 0, "kettoztek": 0,
-            "kov_n": 0, "kov_bw": 0.0, "kov_bb": 0.0, "kapus": {}}
+            "kov_n": 0, "kov_bw": 0.0, "kov_bb": 0.0, "kapus": {},
+            "vedok": {}}
     for m in mintak:
         for k, v in m.items():
-            if k == "formak":
+            if k == "vedok":
+                for mez, r in v.items():
+                    o = ossz["vedok"].setdefault(mez, {
+                        "n": 0, "y_osszeg": 0.0, "kozel": 0, "ralepett": 0,
+                        "masodik": 0, "kettozott": 0})
+                    for kk in o:
+                        o[kk] += r[kk]
+            elif k == "formak":
                 for c, n in v.items():
                     ossz["formak"][c] = ossz["formak"].get(c, 0) + n
             elif k == "kapus":
@@ -1186,6 +1314,15 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
             verdict += (f" — a falatok szokása {b['elteres_pp']:.0f} "
                         "százalékponttal többet enged, mint egy alap 6-0: "
                         "ezt a figurát a meccs előtt be kell gyakorolni")
+            # A játékos-modell: ki nyitja a rést (ha ismert és érdemi).
+            kil = defense.kilepo_vedo()
+            ket = defense.kettozo_vedo()
+            kik = ([f"{mezszam_nevelovel(kil['mez'])} kilépése"]
+                   if kil and kil["press_rate"] >= 0.3 else []) + (
+                  [f"{mezszam_nevelovel(ket['mez'])} kettőzése"]
+                   if ket and ket["double_rate"] >= 0.2 else [])
+            if kik:
+                verdict += " (" + " és ".join(kik) + " nyitja)"
     return {"figurak": sorok, "verdict": verdict}
 
 
