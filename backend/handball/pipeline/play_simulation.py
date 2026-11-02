@@ -103,6 +103,24 @@ KAPUS_SZORZO_MAX = 1.3
 KAPUS_SAV_NEV = {"close": "közelről", "mid": "közepes távolságból",
                  "far": "távolról"}
 
+# Tanult lövők — a játékos-modell a TÁMADÁSBAN: mezszámonként és
+# lövőhely-sávonként (kapus_sav) a szerzett gól és a helyzetei xG-jének
+# hányadosa — 1 felett a helyzeteinél TÖBBET lő be (jobb befejező az
+# átlagnál), 1 alatt kevesebbet. LOVO_SULY képzelt, pontosan a várt
+# értékű lövéssel simítva (egy meccs sávonként kevés lövést ad), ebbe a
+# sávba szorítva; a sávhoz legalább LOVO_MIN_LOVES látott lövés kell
+# (alatta nincs szorzó — nem találgatunk). A figura-értékelés a helyzetbe
+# érő támadó (a mezszáma) sávjának szorzójával számol — ugyanaz a figura
+# a biztos kezű lövővel a végén többet ér.
+LOVO_SULY = 6
+LOVO_MIN_LOVES = 3
+LOVO_SZORZO_MIN = 0.7
+LOVO_SZORZO_MAX = 1.3
+# A feliratokban és a mondatokban ennél kisebb eltérés az 1-től nem hír,
+# és legfeljebb ennyi lövőt nevezünk meg.
+LOVO_FELIRAT_ELTERES = 0.1
+LOVO_FELIRAT_MAX = 3
+
 
 def kapus_sav(x: float, y: float, goal_x: float) -> str:
     """A lövőhely távolság-sávja a kaputól (a gk_save_ranges-é: közeli
@@ -566,6 +584,182 @@ def kapus_felirat(kapus: dict) -> str:
             + " annyi gólt kap, mint az átlag") if reszek else ""
 
 
+# ---- Tanult támadás-modell: a lövők ----------------------------------------
+
+@dataclass
+class AttackModel:
+    """Egy csapat lövői, meccsadatból tanult szorzókkal — a játékos-modell
+    a TÁMADÁSBAN (a DefenseModel párja).
+
+    - lovok: {mezszám: {"close" / "mid" / "far": szorzó}} — a lövő
+      sávonkénti szorzója: 1 felett a helyzeteinél többet lő be, 1 alatt
+      kevesebbet (lásd LOVO_SULY). A figura-értékelés (evaluate_setplay)
+      a helyzetbe érő támadó sávjának szorzójával számol, ha a figura
+      támadóihoz mezszám tartozik (a meccsből vett figura "mez" sora, a
+      mentett figura "mez" mezője); üres / ismeretlen mezszám = átlagos
+      lövő.
+    """
+    lovok: dict = field(default_factory=dict)
+
+    @classmethod
+    def learn(cls, match: Match, attacking_team: Team,
+              config: TacticsConfig | None = None) -> "AttackModel":
+        """A csapat lövői egy meccs látott lövéseiből (xg.match_xg): a
+        lövő mezszáma az elengedés kockájáról, a sáv a lövőhelyé."""
+        config = config or TacticsConfig()
+        return cls._modell_mintabol(_lovo_minta(match, attacking_team, config))
+
+    @classmethod
+    def learn_many(cls, meccsek: list,
+                   config: TacticsConfig | None = None) -> "AttackModel":
+        """TÖBB meccsből: `meccsek` = [(match, a csapat oldala), …] — a
+        lövések mezszámonként és sávonként összeadódnak, így a küszöb
+        (LOVO_MIN_LOVES) a szezonra vonatkozik: egy meccs kevés lövéséből
+        a lövő sávjai alig tanulhatók, hatból igen. Üres listára üres
+        modell."""
+        config = config or TacticsConfig()
+        return cls._modell_mintabol(_lovo_mintak_osszege(
+            [_lovo_minta(m, t, config) for m, t in meccsek]))
+
+    @classmethod
+    def _modell_mintabol(cls, m: dict) -> "AttackModel":
+        """A modell a (összeadott) mintából — a küszöb itt dől el."""
+        return cls(lovok=_lovo_szorzo(m))
+
+    def lovo_szorzo(self, mez, x: float, y: float, goal_x: float) -> float:
+        """A `mez` mezszámú lövő szorzója a lövőhely sávjában (1, ha
+        nincs tanult lövő vagy sáv)."""
+        if mez is None:
+            return 1.0
+        try:
+            savok = self.lovok.get(int(mez)) or {}
+        except (TypeError, ValueError):
+            return 1.0
+        return float(savok.get(kapus_sav(x, y, goal_x), 1.0))
+
+    def figura_lovok(self, mezek) -> list:
+        """A figura támadóinak sávonkénti szorzói a `mezek` (támadónként a
+        mezszám vagy None) sorból — az evaluate_setplay `lovok` bemenete;
+        üres lista, ha egyikük sem tanult lövő."""
+        ki = []
+        for mez in list(mezek or []):
+            try:
+                ki.append(dict(self.lovok.get(int(mez)) or {}))
+            except (TypeError, ValueError):
+                ki.append({})
+        return ki if any(ki) else []
+
+    def kiemelt(self) -> list:
+        """A figyelemre méltó lövők: [{"mez", "sav", "szorzo"}, …] — az
+        1-től legalább LOVO_FELIRAT_ELTERES-sel eltérő sávok, az eltérés
+        szerint csökkenőben (holtversenyben mezszám, sáv), legfeljebb
+        LOVO_FELIRAT_MAX."""
+        sorok = [{"mez": mez, "sav": sav, "szorzo": v}
+                 for mez, savok in self.lovok.items()
+                 for sav, v in savok.items()
+                 if abs(v - 1.0) >= LOVO_FELIRAT_ELTERES]
+        sorok.sort(key=lambda r: (-abs(r["szorzo"] - 1.0), r["mez"], r["sav"]))
+        return sorok[:LOVO_FELIRAT_MAX]
+
+
+def _lovo_minta(match: Match, attacking_team: Team,
+                config: TacticsConfig) -> dict:
+    """A lövők NYERS mintája egy meccsről: {mezszám: {sáv: [lövés, gól,
+    xG-összeg]}} — a csapat látott lövései (xg.match_xg; a nem látott,
+    középkezdésből következtetett gól nincs köztük), a lövő mezszáma az
+    elengedés (release_t) vagy az esemény kockájáról; mezszám nélküli
+    lövő kimarad. Meccsek közt összeadható."""
+    from .xg import match_xg
+    by_t = {f.t: f for f in match.frames}
+    goal_x = config.attacks_toward_x(attacking_team)
+    out: dict = {}
+    for sh in match_xg(match, config)["shots"]:
+        pid = sh.get("player_id")
+        if sh["team"] != attacking_team.value or pid is None:
+            continue
+        mez = None
+        for t in (sh.get("release_t"), sh["t"]):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            mez = next((int(p.jersey_number) for p in f.players
+                        if p.track_id == pid and p.jersey_number is not None),
+                       None)
+            if mez is not None:
+                break
+        if mez is None:
+            continue
+        r = out.setdefault(mez, {}).setdefault(
+            kapus_sav(sh["x"], sh["y"], goal_x), [0, 0, 0.0])
+        r[0] += 1
+        r[1] += 1 if sh["outcome"] == "goal" else 0
+        r[2] += float(sh["xg"])
+    return out
+
+
+def _lovo_mintak_osszege(mintak: list) -> dict:
+    """Több meccs lövő-mintájának összege (mezszám és sáv szerint)."""
+    ossz: dict = {}
+    for m in mintak:
+        for mez, savok in m.items():
+            for sav, (n, gol, xg) in savok.items():
+                r = ossz.setdefault(mez, {}).setdefault(sav, [0, 0, 0.0])
+                r[0] += n
+                r[1] += gol
+                r[2] += xg
+    return ossz
+
+
+def _lovo_szorzo(minta: dict) -> dict:
+    """A lövők sávonkénti szorzója a (összeadott) mintából (lásd
+    AttackModel.lovok): a gól és az xG hányadosa, LOVO_SULY képzelt, a
+    sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba szorítva;
+    LOVO_MIN_LOVES alatti sáv kimarad (a lövő is, ha egy sávja sem
+    marad)."""
+    out: dict = {}
+    for mez, savok in minta.items():
+        for sav, (n, gol, xg) in savok.items():
+            if n < LOVO_MIN_LOVES or xg <= 0:
+                continue
+            atlag = xg / n
+            arany = (gol + LOVO_SULY * atlag) / (xg + LOVO_SULY * atlag)
+            out.setdefault(int(mez), {})[sav] = round(
+                max(LOVO_SZORZO_MIN, min(LOVO_SZORZO_MAX, arany)), 3)
+    return out
+
+
+def lovo_felirat(tamadas) -> str:
+    """A tanult lövők egy sorban ("a lövők: a 7-es távolról 1,3×, a 10-es
+    közelről 0,8× annyit lőnek be, mint amennyit a helyzeteik érnek") —
+    csak az 1-től LOVO_FELIRAT_ELTERES-sel eltérő sávok
+    (AttackModel.kiemelt); üres, ha nincs ilyen (vagy nincs modell)."""
+    if tamadas is None:
+        return ""
+    reszek = [f"{mezszam_nevelovel(r['mez'])} {KAPUS_SAV_NEV[r['sav']]} "
+              + f"{r['szorzo']:.1f}".replace(".", ",") + "×"
+              for r in tamadas.kiemelt()]
+    if not reszek:
+        return ""
+    return "a lövők: " + ", ".join(reszek) + (
+        " annyit lő be, mint amennyit a helyzetei érnek" if len(reszek) == 1
+        else " annyit lőnek be, mint amennyit a helyzeteik érnek")
+
+
+def lovo_zaradek(sor: dict, elo: str = ", a végén ") -> str:
+    """A figura-sor (setplay_3d_match / rank_playbook / defense_test
+    kimenete) lövő-záradéka a mondatokba: "<elo>a 9-es lövésével, aki
+    innen 1,3× annyit lő be, mint amennyit a helyzet ér" — üres, ha a
+    sorhoz nincs tanult lövő, vagy a szorzója LOVO_FELIRAT_ELTERES-nél
+    kevésbé tér el az 1-től."""
+    mez = sor.get("lovo_mez")
+    sz = sor.get("lovo_szorzo")
+    if mez is None or sz is None or abs(float(sz) - 1.0) < LOVO_FELIRAT_ELTERES:
+        return ""
+    return (f"{elo}{mezszam_nevelovel(mez)} lövésével, aki innen "
+            + f"{float(sz):.1f}".replace(".", ",")
+            + "× annyit lő be, mint amennyit a helyzet ér")
+
+
 # ---- A figura (set play) és a szimuláció ----------------------------------
 
 @dataclass
@@ -742,7 +936,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                      ball: list | None = None,
                      name: str | None = None,
                      defense_name: str | None = None,
-                     config: TacticsConfig | None = None) -> tuple[Match, dict]:
+                     config: TacticsConfig | None = None,
+                     tamadas: "AttackModel | None" = None,
+                     mezek: list | None = None) -> tuple[Match, dict]:
     """A tervező figurája 3D-re (böngésző / VR): valós tempóban, kapussal.
 
     `keypoints`: támadónként a kulcs-pozíciók ([(x, y), …] — a tervező
@@ -758,14 +954,19 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     Edzőileg: a megrajzolt figura bejárható — a headsetben a játékos a
     saját útját a saját szemével látja, a tempóval és a fal reakciójával.
 
+    `tamadas` + `mezek` (támadónként a mezszám vagy None): a tanult
+    lövők — a kiértékelés a helyzetbe érő támadó sávjának lövő-
+    szorzójával számol (AttackModel), a kimenet "lovo_mez" /
+    "lovo_szorzo" mezője a helyzetbe érő támadó mezszáma és szorzója.
+
     Visszaad: (Match — a hazai a támadó, a vendég a védő; kiértékelés:
     {"best_shot_value", "t_s" (a legjobb helyzet ideje), "attacker_id",
-    "hossz_s" (a mozgás), "utak" (támadónként a pályára szorított
-    kulcs-pozíciók — a padló nyilaihoz), "labda" (kulcs-pozíciónként a
-    labdás sorszáma), "passzok" ([[x1, y1, x2, y2], …] — a passzok a
-    kulcs-pozíciókon), "kulcs_t" (kulcs-pozíciónként az idő mp-ben, a
-    kezdő állóképpel együtt — a lépésenkénti megálláshoz)}). ValueError,
-    ha nincs érvényes támadó."""
+    "lovo_mez", "lovo_szorzo", "hossz_s" (a mozgás), "utak" (támadónként
+    a pályára szorított kulcs-pozíciók — a padló nyilaihoz), "labda"
+    (kulcs-pozíciónként a labdás sorszáma), "passzok" ([[x1, y1, x2, y2],
+    …] — a passzok a kulcs-pozíciókon), "kulcs_t" (kulcs-pozíciónként az
+    idő mp-ben, a kezdő állóképpel együtt — a lépésenkénti
+    megálláshoz)}). ValueError, ha nincs érvényes támadó."""
     config = config or TacticsConfig()
     utak = []
     # (régi sorszám → új: a pont nélküli támadó kiesik, a labdás-sor ehhez
@@ -781,6 +982,12 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
             utak.append(pontok)
     if not utak:
         raise ValueError("a figurában nincs támadó")
+    # A mezszámok az ÚJ sorszámokon (a kiesett támadóé nélkül); a tanult
+    # lövők szorzói ugyanígy.
+    mezek = list(mezek or [])
+    mezek_uj = [mezek[i] if i < len(mezek) else None
+                for i in sorted(regi_uj, key=regi_uj.get)]
+    lovok = tamadas.figura_lovok(mezek_uj) if tamadas is not None else None
     szakaszok = max(len(u) for u in utak) - 1
     # A leghosszabb szakasz (bármelyik támadóé) szabja a szakasz-időt.
     leghosszabb = 0.0
@@ -901,7 +1108,7 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
         sim.frames.append(utolso)
     # A kezdő állókép nélkül: a figura azt kapja, amit a MOZGÁS teremt.
     ertekeles = evaluate_setplay(sim, config=config, defense=defense,
-                                 from_t=allas)
+                                 from_t=allas, lovok=lovok)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
     # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is
     # nézhető a figura.
@@ -922,11 +1129,15 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     sim.meta.home_team = figura_nev(name) or "Figura"
     sim.meta.away_team = (figura_nev(defense_name, FIGURA_3D_VEDO_NEV_MAX)
                           or "Védelem")
+    tam = ertekeles["attacker_id"]
     return sim, {
         "best_shot_value": round(float(ertekeles["best_shot_value"]), 3),
         "t_s": (round(ertekeles["step"] / fps, 1)
                 if ertekeles["step"] >= 0 else None),
-        "attacker_id": ertekeles["attacker_id"],
+        "attacker_id": tam,
+        "lovo_mez": (mezek_uj[tam - 1]
+                     if tam and 0 <= tam - 1 < len(mezek_uj) else None),
+        "lovo_szorzo": round(float(ertekeles.get("lovo_szorzo", 1.0)), 3),
         "hossz_s": round(mozgas_s, 1),
         "utak": [[[round(x, 1), round(y, 1)] for x, y in u] for u in utak],
         "labda": labda,
@@ -1062,7 +1273,7 @@ def attack_figure(match: Match, t: int, *, pontok: int = 3,
 
 def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
                      defense: DefenseModel | None = None,
-                     from_t: int = 0) -> dict:
+                     from_t: int = 0, lovok: list | None = None) -> dict:
     """Pontozza a szimulált figurát: a teremtett legjobb lövőhelyzet.
 
     Minden lépésben minden támadóra: várható gól (xg.xg_of_position — a
@@ -1078,12 +1289,20 @@ def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
     kihagyja (a felállás nem a figura által teremtett helyzet: a mozgás
     előtt a labdás 13 m-ről "szabad", és minden figura ugyanazt a
     pontot kapná).
+    `lovok`: támadónként (a track_id − 1 sorszámon) a tanult lövő
+    sávonkénti szorzója (AttackModel.figura_lovok) — a helyzetbe érő
+    támadó sávjának szorzójával súlyoz: a biztos kezű lövő helyzete
+    többet ér, a bizonytalané kevesebbet.
+
+    Visszaad: {"best_shot_value", "step", "attacker_id", "lovo_szorzo"
+    (a legjobb helyzetnél alkalmazott lövő-szorzó; 1, ha nincs)}.
     """
     from .xg import xg_of_position
 
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(Team.HOME)
-    best = {"best_shot_value": 0.0, "step": -1, "attacker_id": None}
+    best = {"best_shot_value": 0.0, "step": -1, "attacker_id": None,
+            "lovo_szorzo": 1.0}
 
     for f in match.frames:
         if f.t < from_t:
@@ -1100,8 +1319,15 @@ def evaluate_setplay(match: Match, config: TacticsConfig | None = None,
             score = sv * openness
             if defense is not None and defense.kapus:
                 score *= defense.kapus_szorzo(a.x, a.y, goal_x)
+            lsz = 1.0
+            if lovok:
+                i = a.track_id - 1
+                if 0 <= i < len(lovok) and lovok[i]:
+                    lsz = float(lovok[i].get(kapus_sav(a.x, a.y, goal_x), 1.0))
+                    score *= lsz
             if score > best["best_shot_value"]:
-                best = {"best_shot_value": score, "step": f.t, "attacker_id": a.track_id}
+                best = {"best_shot_value": score, "step": f.t,
+                        "attacker_id": a.track_id, "lovo_szorzo": lsz}
     return best
 
 
@@ -1158,7 +1384,8 @@ ALAP_FIGURAK = [
 
 
 def rank_playbook(figurak: list, defense: DefenseModel, *,
-                  config: TacticsConfig | None = None) -> dict:
+                  config: TacticsConfig | None = None,
+                  tamadas: AttackModel | None = None) -> dict:
     """Figura-ajánló: a mentett figurák rangsora a `defense` fal ellen.
 
     Minden figurát lejátszunk a fal ellen (setplay_3d_match — mint a 3D
@@ -1172,22 +1399,32 @@ def rank_playbook(figurak: list, defense: DefenseModel, *,
     "óvatosan" figura az, amit ez a fal (az alap-falhoz mérten) legalább
     AJANLO_ELTERES_PP-vel jobban zár, mint az ajánlottat.
 
+    `tamadas` (AttackModel — a MI tanult lövőink): a figura támadóinak
+    mezszámaival ("mez" — a meccsből vett és onnan mentett figura hozza)
+    a helyzetbe érő támadó lövő-szorzója is számít, MINDKÉT fal ellen
+    (az eltérés a falé marad): a biztos kezű lövővel záruló figura
+    többet ér.
+
     Visszaad: {"figurak": [{"id", "name", "pont_pct" (a legjobb
     lövőhelyzet ezen fal ellen, %), "alap_pct" (az alap-fal ellen),
     "elteres_pp", "t_s", "tamado" (a legjobb helyzetű támadó sorszáma,
-    1-től)}, …] a pont szerint csökkenőben (holtversenyben név, id), és
-    "ajanlas" (magyar mondat, vagy None, ha nincs értékelhető figura)}.
-    A hibás (pont nélküli, nem szám koordinátájú) figura kimarad."""
+    1-től), "lovo_mez" (a mezszáma, ha ismert), "lovo_szorzo"}, …] a
+    pont szerint csökkenőben (holtversenyben név, id), és "ajanlas"
+    (magyar mondat, vagy None, ha nincs értékelhető figura)}. A hibás
+    (pont nélküli, nem szám koordinátájú) figura kimarad."""
     alap = DefenseModel()
     sorok = []
     for d in list(figurak or [])[:AJANLO_MAX]:
         if not isinstance(d, dict):
             continue
+        mezek = d.get("mez") if isinstance(d.get("mez"), list) else None
         try:
             _, e = setplay_3d_match(d.get("attackers") or [], defense,
-                                    ball=d.get("labda"), config=config)
+                                    ball=d.get("labda"), config=config,
+                                    tamadas=tamadas, mezek=mezek)
             _, ea = setplay_3d_match(d.get("attackers") or [], alap,
-                                     ball=d.get("labda"), config=config)
+                                     ball=d.get("labda"), config=config,
+                                     tamadas=tamadas, mezek=mezek)
         except (TypeError, ValueError):
             continue          # hibás figura-fájl: kimarad a rangsorból
         pont, ap = e["best_shot_value"], ea["best_shot_value"]
@@ -1200,6 +1437,8 @@ def rank_playbook(figurak: list, defense: DefenseModel, *,
             "elteres_pp": round(100.0 * (pont - ap), 1),
             "t_s": e["t_s"],
             "tamado": e["attacker_id"],
+            "lovo_mez": e["lovo_mez"],
+            "lovo_szorzo": e["lovo_szorzo"],
         })
     sorok.sort(key=lambda r: (-r["pont_pct"], r["name"].lower(),
                               str(r["id"] or "")))
@@ -1212,7 +1451,8 @@ def rank_playbook(figurak: list, defense: DefenseModel, *,
             # (az 1. és az 5. — "első", "ötödik" — magánhangzóval kezdődik)
             nevelo = "az" if b["tamado"] in (1, 5) else "a"
             mp = f"{b['t_s']:.1f}".replace(".", ",")
-            ajanlas += f" ({mp} mp-nél, {nevelo} {b['tamado']}. támadónál)"
+            ajanlas += (f" ({mp} mp-nél, {nevelo} {b['tamado']}. támadónál"
+                        + lovo_zaradek(b, elo=" — ") + ")")
         if b["elteres_pp"] >= AJANLO_ELTERES_PP:
             ajanlas += (f" — ez a fal {b['elteres_pp']:.0f} százalékponttal "
                         "rosszabbul zárja, mint az alap 6-0")
@@ -1242,7 +1482,8 @@ PROBA_MAX = 8
 
 
 def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
-                 config: TacticsConfig | None = None) -> dict:
+                 config: TacticsConfig | None = None,
+                 tamadas: AttackModel | None = None) -> dict:
     """Védekezési próba: az `attacking` csapat visszatérő figuráit (a
     meccs támadás-szakaszainak klaszterei, legalább PROBA_MIN_ISMETLES
     ismétléssel) lejátsszuk a `defense` fal ellen — mint a figura-
@@ -1254,12 +1495,19 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
     labdakövetés) maga nyitja a rést; azt kell a meccs előtt
     begyakorolni.
 
+    `tamadas` (AttackModel — az Ő tanult lövőik): a figura támadóinak
+    mezszámával (a meccsből vett figura "mez" sora) a figurát záró lövő
+    szorzója is számít, mindkét fal ellen — a biztos kezű lövőjükkel
+    záruló figura veszélyesebb, és a mondat megnevezi.
+
     Visszaad: {"figurak": [{"t0_s", "t1_s", "ismetles", "pont_pct",
-    "alap_pct", "elteres_pp", "attackers", "labda", "tagok" (a figura
-    minden előfordulása: [[kezdő kocka, záró kocka], …] időrendben — az
-    élő figura-riasztás ebből ismeri fel, melyik figura indul)}, …] a
-    pont szerint csökkenőben (holtversenyben az idő), és "verdict"
-    (magyar mondat, vagy None, ha nincs visszatérő figura)}."""
+    "alap_pct", "elteres_pp", "attackers", "labda", "mez" (támadónként a
+    mezszám vagy None), "lovo_mez" / "lovo_szorzo" (a helyzetbe érő
+    támadó mezszáma és lövő-szorzója), "tagok" (a figura minden
+    előfordulása: [[kezdő kocka, záró kocka], …] időrendben — az élő
+    figura-riasztás ebből ismeri fel, melyik figura indul)}, …] a pont
+    szerint csökkenőben (holtversenyben az idő), és "verdict" (magyar
+    mondat, vagy None, ha nincs visszatérő figura)}."""
     from .setplays import (attack_signature, cluster_signatures,
                            segment_attacks)
 
@@ -1283,9 +1531,11 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
             continue
         try:
             _, e = setplay_3d_match(fig["attackers"], defense,
-                                    ball=fig["labda"], config=config)
+                                    ball=fig["labda"], config=config,
+                                    tamadas=tamadas, mezek=fig.get("mez"))
             _, ea = setplay_3d_match(fig["attackers"], alap,
-                                     ball=fig["labda"], config=config)
+                                     ball=fig["labda"], config=config,
+                                     tamadas=tamadas, mezek=fig.get("mez"))
         except ValueError:
             continue
         pont, ap = e["best_shot_value"], ea["best_shot_value"]
@@ -1296,6 +1546,8 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
             "alap_pct": round(100.0 * ap, 1),
             "elteres_pp": round(100.0 * (pont - ap), 1),
             "attackers": fig["attackers"], "labda": fig["labda"],
+            "mez": list(fig.get("mez") or []),
+            "lovo_mez": e["lovo_mez"], "lovo_szorzo": e["lovo_szorzo"],
             "tagok": [[int(s.start_t), int(s.end_t)]
                       for s in sorted(tagok, key=lambda s: s.start_t)],
         })
@@ -1309,7 +1561,8 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
         mp = int(b["t0_s"] % 60)
         verdict = (f"a legveszélyesebb visszatérő figurájuk "
                    f"({b['ismetles']}×, pl. {perc}:{mp:02d}-kor) a falatok "
-                   f"ellen {b['pont_pct']:.0f}% lövőhelyzetet teremt")
+                   f"ellen {b['pont_pct']:.0f}% lövőhelyzetet teremt"
+                   + lovo_zaradek(b))
         if b["elteres_pp"] >= AJANLO_ELTERES_PP:
             verdict += (f" — a falatok szokása {b['elteres_pp']:.0f} "
                         "százalékponttal többet enged, mint egy alap 6-0: "

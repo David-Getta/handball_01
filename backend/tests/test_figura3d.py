@@ -1076,6 +1076,12 @@ def test_a_vedekezesi_proba_vegpont_es_a_felderito_lap(tmp_path, monkeypatch):
     assert "meccs=pr" in link and "vedo=away" in link
     assert c.get("/figura3d?" + link).status_code == 200
     assert j["verdict"].startswith("a legveszélyesebb visszatérő figurájuk")
+    # Az ő tanult lövőik (ebből a meccsből: nincs lövés → üres felirat),
+    # a figura mezszámai és a záró lövő a sorban.
+    assert j["lovo_felirat"] == ""
+    assert sorted(j["figurak"][0]["mez"]) == [1, 2, 3]
+    assert j["figurak"][0]["lovo_mez"] in (1, 2, 3)
+    assert j["figurak"][0]["lovo_szorzo"] == 1.0
     lap = c.get("/matches/pr/scouting/export", params={"team": "home"})
     assert lap.status_code == 200
     assert "Figuráik a falatok ellen" in lap.text
@@ -1241,6 +1247,40 @@ def test_a_felderites_probaja_es_ajanloja_a_szezon_falbol(tmp_path,
                                            "szezon": 1})
     assert r.status_code == 200
     assert r.json()["vedelem"].startswith("Tanult védelem — Mi (2 meccs)")
+    assert r.json()["lovo_felirat"] == ""      # a mi lövőink: nincs lövés
+
+
+def test_a_mezszammal_mentett_figura_zaro_lovoje_a_rangsorban(tmp_path,
+                                                             monkeypatch):
+    """POST /playbook a "mez" sorral (támadónként mezszám vagy null)
+    menti a mezszámokat, a GET visszaadja; a figura-ajánló sora a záró
+    lövő mezszámát mondja (a modell nélkül 1-es szorzóval). Rossz hosszú
+    vagy nem szám mezszám-sor: 400; csupa null: nem kerül a fájlba."""
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(_proba_match())
+    c = TestClient(app)
+    d = _AJANLO_FIGURAK[0]
+    mez = [7] * len(d["attackers"])
+    r = c.post("/playbook", json={"name": "Mezes", "attackers": d["attackers"],
+                                  "mez": mez})
+    assert r.status_code == 200
+    assert c.get(f"/playbook/{r.json()['id']}").json()["mez"] == mez
+    assert c.post("/playbook", json={"name": "x", "attackers": d["attackers"],
+                                     "mez": [7]}).status_code == 400
+    assert c.post("/playbook", json={"name": "x", "attackers": d["attackers"],
+                                     "mez": ["a"] * len(mez)}).status_code == 400
+    ures = c.post("/playbook", json={"name": "Ures", "attackers": d["attackers"],
+                                     "mez": [None] * len(mez)})
+    assert ures.status_code == 200
+    assert "mez" not in c.get(f"/playbook/{ures.json()['id']}").json()
+    rang = c.get("/playbook-rangsor", params={"meccs": "pr", "vedo": "away"})
+    assert rang.status_code == 200
+    sorok = {s["name"]: s for s in rang.json()["figurak"]}
+    assert sorok["Mezes"]["lovo_mez"] == 7 and sorok["Mezes"]["lovo_szorzo"] == 1.0
+    assert sorok["Ures"]["lovo_mez"] is None
+    assert rang.json()["lovo_felirat"] == ""
     lap = c.get("/matches/pr/scouting/export", params={"team": "home"})
     assert lap.status_code == 200 and "Figuráink ellenük" in lap.text
     assert "Figuráik a falatok ellen" in lap.text

@@ -300,15 +300,18 @@ class ApiClient {
 
   /// Figura mentése a könyvtárba; visszaadja az azonosítót.
   Future<String> savePlay(String name, List<List<List<double>>> attackers,
-      {List<int>? labda}) async {
+      {List<int>? labda, List<int?>? mez}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/playbook"),
       headers: {"Content-Type": "application/json"},
-      // `labda`: kulcs-pozíciónként a labdás sorszáma (a passzok).
+      // `labda`: kulcs-pozíciónként a labdás sorszáma (a passzok);
+      // `mez`: támadónként a mezszám vagy null (a meccsből vett figuráé
+      // — a figura-ajánló a záró lövő tanult szorzójával számol vele).
       body: jsonEncode({
         "name": name,
         "attackers": attackers,
         if (labda != null) "labda": labda,
+        if (mez != null) "mez": mez,
       }),
     );
     if (resp.statusCode != 200) {

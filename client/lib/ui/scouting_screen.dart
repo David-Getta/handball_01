@@ -13490,6 +13490,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               "(${_meccsekSzoveg(p["meccsek"])}; a kilépésével, a "
               "kettőzésével, a labdakövetésével).",
               style: AppText.label),
+          // A játékos-modell a támadásban: az ő tanult lövőik — a
+          // figurát záró lövő sávjának szorzójával számol a pontszám
+          // (a backend AttackModel-je; a felirat onnan jön).
+          if ((p["lovo_felirat"] as String?)?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "${p["lovo_felirat"]} — a pontszám a figurát záró lövő "
+                  "szorzójával számol.",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
           if (verdict != null) ...[
             const SizedBox(height: 6),
             Text("${verdict[0].toUpperCase()}${verdict.substring(1)}.",
@@ -13558,6 +13569,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               "(rendszer, mélység, kilépés, kettőzés, labdakövetés, kapus — "
               "${a["vedelem"] ?? ""}), és az alap 6-0 ellen is.",
               style: AppText.label),
+          // A mi tanult lövőink: a mezszámmal mentett figura záró
+          // lövőjének szorzójával számol a pontszám (backend AttackModel).
+          if ((a["lovo_felirat"] as String?)?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "${a["lovo_felirat"]} — a mezszámmal mentett figurák "
+                  "pontszáma a záró lövő szorzójával számol.",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
           if (ajanlas != null) ...[
             const SizedBox(height: 6),
             Text(ajanlas, style: AppText.value.copyWith(fontSize: 13)),

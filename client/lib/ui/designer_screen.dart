@@ -92,8 +92,22 @@ class _DesignerScreenState extends State<DesignerScreen> {
   void _jatekosBe() {
     if (_playing || _attackers.length >= designerMaxAttackers) return;
     final hely = newAttackerSpot(_attackers.length);
-    setState(() => _attackers.add(List<Offset>.filled(_pontok, hely, growable: true)));
+    setState(() {
+      _mezek = _mezekIgazitva();
+      _attackers.add(List<Offset>.filled(_pontok, hely, growable: true));
+      _mezek.add(null); // az új támadónak nincs mezszáma
+    });
   }
+
+  /// A támadók mezszáma (a meccsből vett figura hozza, a mentés
+  /// továbbadja — a figura-ajánló a záró lövő tanult szorzójával számol
+  /// vele); a támadó-listához igazítva (hiányzó: null).
+  List<int?> _mezek = [];
+
+  List<int?> _mezekIgazitva() => [
+        for (int i = 0; i < _attackers.length; i++)
+          i < _mezek.length ? _mezek[i] : null,
+      ];
 
   /// A kézi fal állítása (védőszám, rendszer, mélység) a KÉZI falra vált:
   /// a 3D, a lap, a videó és a füzet is ezt viszi (eddig a legutóbbi
@@ -127,6 +141,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     setState(() {
       _attackers.removeLast();
       _labda = [for (final v in _labda) v.clamp(0, _attackers.length - 1)];
+      _mezek = _mezekIgazitva(); // a kiesett támadó mezszáma is kiesik
     });
   }
 
@@ -231,6 +246,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
       if (utak.length < 2 || utak.any((u) => u.isEmpty)) return false;
       final k = utak.first.length.clamp(2, designerMaxPoints);
       _attackers = [for (final u in utak) resamplePath(u, k)];
+      // A támadók mezszáma a meccsből (a figura-ajánló lövő-szorzójához).
+      _mezek = [
+        for (final v in (f["mez"] as List?) ?? const []) (v as num?)?.toInt()
+      ];
+      _mezek = _mezekIgazitva();
       final l = [
         for (final v in (f["labda"] as List?) ?? const [])
           (v as num).toInt().clamp(0, _attackers.length - 1)
@@ -805,7 +825,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
         for (final a in _attackers)
           [for (final p in a) [p.dx, p.dy]],
       ];
-      await _api.savePlay(name, attackers, labda: _vanPassz ? _labda : null);
+      // A mezszámok (ha a figura a meccsből jött) a figurával mennek.
+      final mez = _mezekIgazitva();
+      await _api.savePlay(name, attackers,
+          labda: _vanPassz ? _labda : null,
+          mez: mez.any((v) => v != null) ? mez : null);
       _nev = name;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -845,6 +869,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
     // figuránkénti lövőhelyzettel — kézi falnál nincs rangsor.
     final rang = <String, Map<String, dynamic>>{};
     String? ajanlas;
+    // A mi tanult lövőink (backend AttackModel): a mezszámmal mentett
+    // figura záró lövőjének szorzójával számol a rangsor.
+    String? lovok;
     final tanult = _tanultMeccs;
     if (tanult != null && plays.isNotEmpty) {
       try {
@@ -855,6 +882,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
           if (m["id"] is String) rang[m["id"] as String] = m;
         }
         ajanlas = r["ajanlas"] as String?;
+        final lf = r["lovo_felirat"] as String?;
+        lovok = (lf ?? "").isNotEmpty ? lf : null;
         final sorrend = rang.keys.toList();
         plays.sort((a, b) {
           final ia = sorrend.indexOf("${a["id"]}");
@@ -887,6 +916,14 @@ class _DesignerScreenState extends State<DesignerScreen> {
                           child: Text(ajanlas,
                               style: AppText.label.copyWith(
                                   fontSize: 12, color: AppColors.accent)),
+                        ),
+                      if (lovok != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                              "$lovok — a mezszámmal mentett figura "
+                              "záró lövőjének szorzójával számol a rangsor",
+                              style: AppText.label.copyWith(fontSize: 11)),
                         ),
                       for (final p in plays)
                         ListTile(
@@ -976,6 +1013,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
           for (final a in attackers)
             if (a.isNotEmpty) resamplePath(a, k),
         ];
+        // A mentett mezszámok (a meccsből vett figuráé) — a mentés és a
+        // rangsor viszi tovább.
+        _mezek = [
+          for (final v in (play["mez"] as List?) ?? const [])
+            (v as num?)?.toInt()
+        ];
+        _mezek = _mezekIgazitva();
         _editStep = 0;
         _nev = "${play["name"] ?? ""}";
         // A mentett labdás-sor (a passzok) a pontokra vetítve, a létező

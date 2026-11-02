@@ -23,9 +23,10 @@ from handball.pipeline.play_simulation import (
 )
 
 
-def _pl(track_id, team, x, y):
+def _pl(track_id, team, x, y, jersey=None):
     return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
-                          source=PositionSource.MEASURED, confidence=1.0)
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          jersey_number=jersey)
 
 
 def test_defense_model_learns_depth_and_count():
@@ -283,7 +284,8 @@ def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0,
     """A hazai (Ők) ugyanazt a beálló-figurát `ismetles`-szer játssza: az
     1-es középen előre, a 2-es a szélről befut; a támadások közt a labda
     a saját térfelükön (átmenet). A vendég (Mi) fala `fal_x`-en, `vedok`
-    védővel (6: zárt 6-0; kevesebb: ritka fal)."""
+    védővel (6: zárt 6-0; kevesebb: ritka fal). A támadók mezszáma a
+    sorszámuk (a figura "mez" sorához)."""
     frames = []
     t = 0
     for _ in range(ismetles):
@@ -291,9 +293,9 @@ def _proba_match(ismetles: int = 3, fps: float = 25.0, fal_x: float = 34.0,
         for s in range(n):
             u = s / (n - 1)
             a1 = (25 + 5 * u, 10.0)
-            players = [_pl(1, Team.HOME, *a1),
-                       _pl(2, Team.HOME, 30 + 4 * u, 2 + 6 * u),
-                       _pl(3, Team.HOME, 27.0, 15.0)]
+            players = [_pl(1, Team.HOME, *a1, jersey=1),
+                       _pl(2, Team.HOME, 30 + 4 * u, 2 + 6 * u, jersey=2),
+                       _pl(3, Team.HOME, 27.0, 15.0, jersey=3)]
             for i, y in enumerate((3, 6, 9, 11, 14, 17)[:vedok]):
                 players.append(_pl(100 + i, Team.AWAY, fal_x, float(y)))
             frames.append(Frame(t=t, players=players,
@@ -665,3 +667,166 @@ def test_az_elo_figura_ajanlo_az_addig_latott_falbol(monkeypatch):
     assert live_figure_suggestions(_proba_match(ismetles=5),
                                    ALAP_FIGURAK)["alerts"] == []
     assert live_figure_suggestions(m, [])["alerts"] == []
+
+
+def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
+    """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
+    képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba
+    szorítva; LOVO_MIN_LOVES alatti sáv kimarad; a minták meccsek közt
+    összeadódnak (a kevés lövéses sáv két meccsből eléri a küszöböt)."""
+    from handball.pipeline.play_simulation import (
+        LOVO_MIN_LOVES, LOVO_SULY, LOVO_SZORZO_MAX, LOVO_SZORZO_MIN,
+        _lovo_mintak_osszege, _lovo_szorzo)
+
+    k = _lovo_szorzo({7: {"far": [10, 8, 3.0], "mid": [10, 2, 5.0],
+                          "close": [LOVO_MIN_LOVES - 1, 2, 1.2]},
+                      9: {"mid": [10, 5, 5.0]}})
+    assert set(k[7]) == {"far", "mid"}
+    assert k[7]["far"] == LOVO_SZORZO_MAX     # 8 gól 3 xG-ből: nagyon jó
+    assert k[7]["mid"] == LOVO_SZORZO_MIN     # 2 gól 5 xG-ből: gyenge
+    assert k[9] == {"mid": 1.0}               # pont annyi, amennyit ér
+    atlag = 3.0 / 10
+    vart = (4 + LOVO_SULY * atlag) / (3.0 + LOVO_SULY * atlag)
+    assert _lovo_szorzo({7: {"far": [10, 4, 3.0]}})[7]["far"] == round(vart, 3)
+    fel = {7: {"close": [LOVO_MIN_LOVES - 1, 2, 1.2]}}
+    assert _lovo_szorzo(fel) == {}
+    assert "close" in _lovo_szorzo(_lovo_mintak_osszege([fel, fel]))[7]
+
+
+def test_a_tanult_lovok_valodi_lovesekbol_es_a_kiertekelesben():
+    """A valódi forrás-láncon (szimulált meccs lövésekkel, mezszámmal →
+    match_xg): a lövő csapat lövői szorzót kapnak (mezszám szerint), a
+    nem lövő csapaté üres; két meccsből a simítás gyengébb. A kiértékelés
+    a helyzetbe érő támadó sávjának szorzójával súlyoz, a feliratok
+    kimondják; mezszám nélkül nincs szorzó."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   lovo_felirat)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    egy = AttackModel.learn(m, Team.HOME)
+    assert egy.lovok and all(isinstance(mez, int) for mez in egy.lovok)
+    assert all(0.7 <= v <= 1.3 for s in egy.lovok.values() for v in s.values())
+    assert AttackModel.learn(m, Team.AWAY).lovok == {}
+    ketto = AttackModel.learn_many([(m, Team.HOME), (m, Team.HOME)])
+    for mez, savok in egy.lovok.items():
+        for sav, v in savok.items():
+            assert abs(ketto.lovok[mez][sav] - 1.0) >= abs(v - 1.0) - 1e-9
+    assert AttackModel.learn_many([]).lovok == {}
+
+    # Egy szabad, távoli lövőhely: a szorzó egy az egyben a pontszámba megy.
+    egy_kocka = Match(MatchMeta(match_id="e", home_team="A", away_team="B",
+                                fps=25), [Frame(t=0, players=[
+                                    _pl(1, Team.HOME, 28.0, 10.0),
+                                    _pl(100, Team.AWAY, 34.0, 3.0)],
+                                    ball=Ball(x=28.0, y=10.0, confidence=1.0))])
+    alap = evaluate_setplay(egy_kocka)
+    tanult = evaluate_setplay(egy_kocka, lovok=[{"far": 1.3}])
+    assert abs(tanult["best_shot_value"] - 1.3 * alap["best_shot_value"]) < 1e-9
+    assert (alap["lovo_szorzo"], tanult["lovo_szorzo"]) == (1.0, 1.3)
+    assert evaluate_setplay(egy_kocka, lovok=[{"close": 1.3}]) == alap
+    modell = AttackModel(lovok={7: {"far": 1.3}, 10: {"close": 0.8}})
+    assert modell.lovo_szorzo(7, 28.0, 10.0, 40.0) == 1.3
+    assert modell.lovo_szorzo(7, 34.5, 10.0, 40.0) == 1.0
+    assert modell.lovo_szorzo(None, 28.0, 10.0, 40.0) == 1.0
+    assert modell.figura_lovok([None, 7, "x", 10]) == [
+        {}, {"far": 1.3}, {}, {"close": 0.8}]
+    assert modell.figura_lovok([None, 3]) == []
+    assert lovo_felirat(modell) == (
+        "a lövők: a 7-es távolról 1,3×, a 10-es közelről 0,8× annyit "
+        "lőnek be, mint amennyit a helyzeteik érnek")
+    assert lovo_felirat(AttackModel(lovok={7: {"far": 1.3}})).endswith(
+        "annyit lő be, mint amennyit a helyzetei érnek")
+    assert lovo_felirat(AttackModel(lovok={7: {"far": 1.05}})) == ""
+    assert lovo_felirat(None) == ""
+
+
+def test_a_vedekezesi_proba_a_zaro_lovo_szorzojaval_szamol():
+    """Az ő tanult lövőikkel a figurájuk pontszáma a záró lövő sávjának
+    szorzójával nő (mindkét fal ellen — az eltérés a falé marad), a
+    sor mondja a mezszámát, a mondat megnevezi; lövő-modell nélkül a
+    mezszám ismert, a szorzó 1, és nincs záradék."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   defense_test)
+
+    alap = defense_test(_proba_match(), Team.HOME, DefenseModel())
+    f = alap["figurak"][0]
+    assert sorted(f["mez"]) == [1, 2, 3]
+    assert f["lovo_mez"] in (1, 2, 3) and f["lovo_szorzo"] == 1.0
+    assert "lövésével" not in alap["verdict"]
+    lovo = AttackModel(lovok={f["lovo_mez"]: {"close": 1.3, "mid": 1.3,
+                                              "far": 1.3}})
+    tanult = defense_test(_proba_match(), Team.HOME, DefenseModel(),
+                          tamadas=lovo)
+    g = tanult["figurak"][0]
+    assert g["lovo_mez"] == f["lovo_mez"] and g["lovo_szorzo"] == 1.3
+    assert abs(g["pont_pct"] - 1.3 * f["pont_pct"]) < 0.2
+    assert abs(g["alap_pct"] - 1.3 * f["alap_pct"]) < 0.2
+    assert tanult["verdict"].endswith(
+        f"lövőhelyzetet teremt, a végén "
+        f"{'az' if f['lovo_mez'] == 1 else 'a'} {f['lovo_mez']}-"
+        f"{'es' if f['lovo_mez'] != 3 else 'as'} lövésével, aki innen 1,3× "
+        "annyit lő be, mint amennyit a helyzet ér")
+    # Más lövő szorzója nem számít (nem ő ér helyzetbe).
+    masik = [m for m in (1, 2, 3) if m != f["lovo_mez"]][0]
+    assert defense_test(_proba_match(), Team.HOME, DefenseModel(),
+                        tamadas=AttackModel(lovok={masik: {"far": 0.7}})
+                        )["figurak"][0]["pont_pct"] == f["pont_pct"]
+
+
+def test_a_figura_ajanlo_a_mezszammal_mentett_figurat_a_lovovel_pontozza():
+    """A figura-ajánló: a "mez" sorral mentett figura záró lövőjének
+    szorzója a pontszámba megy (az alap-fal ellen is), az ajánló mondat
+    megnevezi; a mezszám nélküli figura (és a lövő-modell nélküli
+    rangsor) változatlan."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   rank_playbook)
+
+    figura = [[[26, 10], [29, 10], [31.5, 10]], [[26, 4], [26, 4], [26, 4]],
+              [[30, 2], [33, 2], [36, 1.5]], [[27, 15], [28, 15], [29, 15]]]
+    nelkul = rank_playbook([{"id": "a", "name": "Beúszás", "attackers": figura,
+                             "labda": [0, 0, 1]}], DefenseModel())
+    r0 = nelkul["figurak"][0]
+    assert r0["lovo_mez"] is None and r0["lovo_szorzo"] == 1.0
+    mezek = [None] * 4
+    mezek[r0["tamado"] - 1] = 7
+    lovo = AttackModel(lovok={7: {"close": 1.3, "mid": 1.3, "far": 1.3}})
+    vele = rank_playbook([{"id": "a", "name": "Beúszás", "attackers": figura,
+                           "labda": [0, 0, 1], "mez": mezek}],
+                         DefenseModel(), tamadas=lovo)
+    r1 = vele["figurak"][0]
+    assert r1["lovo_mez"] == 7 and r1["lovo_szorzo"] == 1.3
+    assert abs(r1["pont_pct"] - 1.3 * r0["pont_pct"]) < 0.2
+    assert abs(r1["alap_pct"] - 1.3 * r0["alap_pct"]) < 0.2
+    assert ("támadónál — a 7-es lövésével, aki innen 1,3× annyit lő be, "
+            "mint amennyit a helyzet ér)") in vele["ajanlas"]
+    # Mezszám nélkül a modell nem hat; a modell nélkül a mezszám csak
+    # a sorba kerül.
+    assert rank_playbook([{"id": "a", "name": "Beúszás", "attackers": figura,
+                           "labda": [0, 0, 1]}], DefenseModel(),
+                         tamadas=lovo)["figurak"][0]["pont_pct"] == r0["pont_pct"]
+    csak = rank_playbook([{"id": "a", "name": "Beúszás", "attackers": figura,
+                           "labda": [0, 0, 1], "mez": mezek}],
+                         DefenseModel())["figurak"][0]
+    assert (csak["lovo_mez"], csak["lovo_szorzo"], csak["pont_pct"]) == (
+        7, 1.0, r0["pont_pct"])
+
+
+def test_az_edzes_fokusz_a_zaro_lovot_is_megnevezi(monkeypatch):
+    """489) Az ő tanult lövőikkel (a modell a tesztben adott, a próba
+    valódi) a felkészülés-tétel a figurát záró lövőt is megnevezi."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import AttackModel
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(ps.AttackModel, "learn", classmethod(
+        lambda cls, match, team, config=None: AttackModel(
+            lovok={m: {"close": 1.3, "mid": 1.3, "far": 1.3}
+                   for m in (1, 2, 3)})))
+    tetel = [i for i in training_focus(_proba_match(vedok=2))["away"]
+             if i["title"] == "Felkészülés a figurájukra"]
+    assert len(tetel) == 1
+    assert "nyitja a rést; a végén " in tetel[0]["why"]
+    assert tetel[0]["why"].endswith(
+        "lövésével, aki innen 1,3× annyit lő be, mint amennyit a helyzet ér")

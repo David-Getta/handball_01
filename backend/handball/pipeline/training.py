@@ -1569,14 +1569,19 @@ def _training_focus_cached(match: Match,
     # együtt kell begyakorolni.
     _szabaly = 489
     try:
-        from .play_simulation import (AJANLO_ELTERES_PP, DefenseModel,
-                                      defense_test, mezszam_nevelovel)
+        from .play_simulation import (AJANLO_ELTERES_PP, AttackModel,
+                                      DefenseModel, defense_test,
+                                      lovo_zaradek, mezszam_nevelovel)
         for side, masik in (("home", "away"), ("away", "home")):
             ved489 = DefenseModel.learn(
                 match, Team.HOME if side == "home" else Team.AWAY, config)
+            # Az ő tanult lövőik: a figurát záró lövő szorzója is számít.
             pr489 = defense_test(
                 match, Team.HOME if masik == "home" else Team.AWAY,
-                ved489, config=config)
+                ved489, config=config,
+                tamadas=AttackModel.learn(
+                    match, Team.HOME if masik == "home" else Team.AWAY,
+                    config))
             if not pr489["figurak"]:
                 continue
             f489 = pr489["figurak"][0]
@@ -1604,7 +1609,8 @@ def _training_focus_cached(match: Match,
                 f"pl. {perc489}:{mp489:02d}-kor) a falunk ellen "
                 f"{f489['pont_pct']:.0f}% lövőhelyzetet teremt, "
                 f"{f489['elteres_pp']:.0f} százalékponttal többet, mint "
-                f"egy alap 6-0 ellen{ok489}",
+                f"egy alap 6-0 ellen{ok489}"
+                + lovo_zaradek(f489, elo="; a végén "),
                 "a figurájuk 6 a 6 ellen, a tanult falunkkal: kilépés "
                 "csak a lövő-karra és azonnali visszazárás, a kettőzés "
                 "után a beálló átadva, a fal a labdával csak a hatos "

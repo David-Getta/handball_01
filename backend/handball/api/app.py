@@ -55,8 +55,9 @@ from ..pipeline.report_html import scouting_report_html
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
-from ..pipeline.play_simulation import (DefenseModel, SetPlay, simulate_setplay,
-                                        evaluate_setplay, kapus_felirat)
+from ..pipeline.play_simulation import (AttackModel, DefenseModel, SetPlay,
+                                        simulate_setplay, evaluate_setplay,
+                                        kapus_felirat, lovo_felirat)
 
 
 def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
@@ -3522,20 +3523,27 @@ def create_app():
                                               ajanlas=ajanlas))
 
     def _vedekezesi_proba(match, csapat: Team, vedo_match, vedo_oldal: Team,
-                          fal=None):
+                          fal=None, tamadas=None):
         """Az `csapat` visszatérő figurái a `vedo_match` `vedo_oldal`
         csapatából tanult fal ellen (play_simulation.defense_test), a
         figurák /figura3d lekérdezésével ("link": a figura a tanult fal
         ellen, 3D-ben bejárható). `fal`: kész modell (a szezon-fal) — a
-        link ilyenkor a csapat nevével (`csapat=`) nyit."""
+        link ilyenkor a csapat nevével (`csapat=`) nyit. `tamadas`: az ő
+        tanult lövőik (AttackModel — a szezonból), különben ebből a
+        meccsből; a válasz "lovo_felirat" sora a figyelemre méltó
+        lövőik."""
         from urllib.parse import quote
 
         from ..pipeline.play_simulation import (defense_test,
                                                 figura_link_kod)
         vedo_nev = (vedo_match.meta.home_team if vedo_oldal == Team.HOME
                     else vedo_match.meta.away_team)
+        if tamadas is None:
+            tamadas = AttackModel.learn(match, csapat)
         r = defense_test(match, csapat, fal if fal is not None
-                         else DefenseModel.learn(vedo_match, vedo_oldal))
+                         else DefenseModel.learn(vedo_match, vedo_oldal),
+                         tamadas=tamadas)
+        r["lovo_felirat"] = lovo_felirat(tamadas)
         for f in r["figurak"]:
             try:
                 f["link"] = (figura_link_kod(f["attackers"], f["labda"],
@@ -3578,8 +3586,16 @@ def create_app():
                     else vm.meta.away_team)
         if szezon:
             meccsek = _csapat_meccsei(vedo_nev)
+            # Az ő lövőik is a szezonból (ha a könyvtárban vannak).
+            try:
+                tamadas = AttackModel.learn_many(_csapat_meccsei(
+                    match.meta.home_team if t == Team.HOME
+                    else match.meta.away_team))
+            except HTTPException:
+                tamadas = None
             r = _vedekezesi_proba(match, t, vm, vo,
-                                  fal=DefenseModel.learn_many(meccsek))
+                                  fal=DefenseModel.learn_many(meccsek),
+                                  tamadas=tamadas)
             r["link_csapat"] = vedo_nev
         else:
             meccsek = [(vm, vo)]
@@ -3661,8 +3677,29 @@ def create_app():
         sablon = not figurak
         if sablon:
             figurak = [dict(d) for d in ALAP_FIGURAK]
+        # A MI tanult lövőink (a meccs másik oldala; szezon / csapat-névvel
+        # az összes meccsünkből): a "mez" sorral mentett figura záró
+        # lövőjének szorzója is számít. Csak meccs mellett ismert.
+        tamadas = None
+        if meccs:
+            vm = _store.get(meccs)
+            try:
+                vo = Team(vedo)
+            except ValueError:
+                vo = Team.AWAY
+            if vm is not None:
+                mi = Team.HOME if vo == Team.AWAY else Team.AWAY
+                tamadas = AttackModel.learn(vm, mi)
+                if szezon or csapat:
+                    try:
+                        tamadas = AttackModel.learn_many(_csapat_meccsei(
+                            vm.meta.home_team if mi == Team.HOME
+                            else vm.meta.away_team))
+                    except HTTPException:
+                        pass
         return {"vedelem": vedo_nev, "sablon": sablon,
-                **rank_playbook(figurak, modell)}
+                "lovo_felirat": lovo_felirat(tamadas),
+                **rank_playbook(figurak, modell, tamadas=tamadas)}
 
     # A figura-videók gyorsítótára (a várólapról többen is letöltik) és a
     # rajzolás zárja (egyszerre egy — a többi kérés vár).
@@ -13332,7 +13369,15 @@ def create_app():
                     else match.meta.away_team))
             except Exception:
                 sajat_fal = None
-            proba = _vedekezesi_proba(match, t, match, own_t, fal=sajat_fal)
+            # Az ő lövőik a szezon összes meccséből; hiba esetén ebből.
+            try:
+                tamadas = AttackModel.learn_many(_csapat_meccsei(
+                    match.meta.home_team if t == Team.HOME
+                    else match.meta.away_team))
+            except Exception:
+                tamadas = None
+            proba = _vedekezesi_proba(match, t, match, own_t, fal=sajat_fal,
+                                      tamadas=tamadas)
         except Exception:
             proba = None
         _lib_nevekkel(rep_sc)
@@ -13570,7 +13615,7 @@ def create_app():
         a MÁSIK oldal e meccsből tanult fala ellen) ismeri az induló
         figurát, a riasztás azt is kimondja, mennyit ér a falatok ellen
         ("proba_pct", "alap_pct"; különben None)."""
-        from ..pipeline.play_simulation import defense_test
+        from ..pipeline.play_simulation import defense_test, lovo_zaradek
         from ..pipeline.setplays import recurring_figure_segments
         alerts = []
         for side in ("home", "away"):
@@ -13589,8 +13634,9 @@ def create_app():
             vedo = Team.AWAY if side == "home" else Team.HOME
             # A próba figurái (hibatűrően — enélkül is teljes a riasztás).
             try:
-                proba = defense_test(match, tamado,
-                                     DefenseModel.learn(match, vedo))["figurak"]
+                proba = defense_test(
+                    match, tamado, DefenseModel.learn(match, vedo),
+                    tamadas=AttackModel.learn(match, tamado))["figurak"]
             except Exception:
                 proba = []
 
@@ -13610,7 +13656,8 @@ def create_app():
                 f = proba_sor(a, b)
                 if f is not None:
                     text += (f" A próba szerint a falatok ellen "
-                             f"{f['pont_pct']:.0f}% lövőhelyzetet teremt "
+                             f"{f['pont_pct']:.0f}% lövőhelyzetet teremt"
+                             f"{lovo_zaradek(f)} "
                              f"(alap fal: {f['alap_pct']:.0f}%).")
                 alerts.append({
                     "t": a, "t_end": b, "team": side, "team_name": nev,
@@ -13971,10 +14018,25 @@ def create_app():
                 raise HTTPException(status_code=400,
                                     detail="labda: nem létező játékos vagy pont")
 
+        # A támadók mezszáma (a meccsből vett figura hozza; a tervező
+        # továbbadja): támadónként egész vagy null — a figura-ajánló a
+        # záró lövő tanult szorzójával számol vele.
+        mez = body.get("mez")
+        if mez is not None:
+            try:
+                mez = [None if v is None else int(v) for v in mez]
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400,
+                                    detail="mez: támadónként mezszám vagy null")
+            if len(mez) != len(attackers):
+                raise HTTPException(status_code=400,
+                                    detail="mez: támadónként egy mezszám")
         play_id = uuid.uuid4().hex[:10]
         data = {"id": play_id, "name": name, "attackers": attackers}
         if labda:
             data["labda"] = labda
+        if mez and any(v is not None for v in mez):
+            data["mez"] = mez
         _play_path(play_id).write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"id": play_id, "name": name}

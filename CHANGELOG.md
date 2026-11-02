@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **A játékos-modell a támadásban: tanult lövők** (motor + védekezési
+  próba + figura-ajánló + edzésterv + élő riasztás): a tanult fal
+  párja. A csapat lövőit mezszámonként és lövőhely-sávonként (közelről
+  / közepes távolságból / távolról) tanulja meg: a szerzett gól és a
+  helyzetei xG-jének hányadosa — 1 felett a helyzeteinél többet lő be,
+  1 alatt kevesebbet (hat képzelt, pontosan a várt értékű lövéssel
+  simítva, 0,7 és 1,3 közé szorítva, sávonként legalább három látott
+  lövésből; a szezon meccseiből összeadva). A figura-pontozás a
+  helyzetbe érő támadó sávjának szorzójával számol: ugyanaz a figura a
+  biztos kezű lövővel a végén többet ér. A védekezési próba az ő
+  lövőikkel játssza a figurájukat ("…34% lövőhelyzetet teremt, a végén
+  a 9-es lövésével, aki innen 1,3× annyit lő be, mint amennyit a
+  helyzet ér"), az élő "ismert figura" riasztás és az edzésterv
+  felkészülés-tétele ugyanezt mondja; a figura-ajánló a mi lövőinkkel
+  rangsorol, ha a figura mezszámmal mentett — a meccsből vett figura
+  mezszámai a tervezőből a mentésbe is mennek. A felületek "a lövők: a
+  9-es távolról 1,3× annyit lő be, mint amennyit a helyzetei érnek"
+  sorral mondják, kivel számoltak.
+
 - **Élő figura-ajánló** (motor + élő képernyő): az élő képernyő a 15.,
   30. és 45. percben megmondja, hogy az ADDIG látott ellenfél-fal ellen
   melyik mentett figuránk (mentett nélkül: melyik alap-figura) érne a
