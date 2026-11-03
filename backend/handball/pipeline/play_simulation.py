@@ -760,6 +760,103 @@ def lovo_zaradek(sor: dict, elo: str = ", a végén ") -> str:
             + "× annyit lő be, mint amennyit a helyzet ér")
 
 
+# ---- Utolsó lövés: kire és honnan -----------------------------------------
+# A hajrá-döntés modellje: a csapat tanult lövői (AttackModel) × az
+# ELLENFÉL kapusának tanult sávjai (DefenseModel.kapus) — melyik lövőnk
+# melyik sávból ér a legtöbbet ellenük. A sáv képviselő-helye a kapu
+# előtt, középen, ennyi méterre (a sávhatárok — SHOT_RANGE_CLOSE_M = 7,
+# SHOT_RANGE_MID_M = 9,5 — közé eső tipikus lövőhely); az érték az xG a
+# képviselő-helyen × a lövő-szorzó × a kapus-szorzó. A jelöltek csak a
+# TANULT lövő-sávok (ahol minta van); egy sem → None, a modell nem
+# találgat. A "kerülendő" a leggyengébb jelölt, ha az ajánlottnál
+# legalább UTOLSO_LOVES_ELTERES várható góllal kevesebbet ér.
+UTOLSO_LOVES_TAV_M = {"close": 6.5, "mid": 8.5, "far": 10.0}
+UTOLSO_LOVES_ELTERES = 0.08
+# A sáv jelzőként a mondatokba ("a 7-es távoli lövését").
+UTOLSO_LOVES_SAV_JELZO = {"close": "közeli", "mid": "közepes távolságú",
+                          "far": "távoli"}
+
+
+def last_shot_choice(tamadas, kapus: dict | None = None) -> dict | None:
+    """Az utolsó lövés a kész modellekből: `tamadas` (AttackModel — a
+    lövők), `kapus` (a SZEMKÖZTI kapus sávonkénti szorzója,
+    DefenseModel.kapus; üres = átlagos kapus). Minden tanult lövő × sáv
+    párosra: érték = xG a sáv képviselő-helyén × lövő-szorzó × kapus-
+    szorzó; a legjobb az "utolsó labda".
+
+    Edzőileg: a hajrában, egyenlő állásnál az utolsó támadást nem a
+    szokás, hanem a számok szerint kell megjátszani — kinek a kezében és
+    honnan ér a legtöbbet a lövés ELLENÜK (az ő kapusukkal), és kit nem
+    szabad lövőhelyzetbe hozni.
+
+    Visszaad: {"mez", "sav", "sav_nev", "tav_m", "xg", "lovo_szorzo",
+    "kapus_szorzo", "ertek", "jeloltek" (hány páros), "kerulendo"
+    ({"mez", "sav", "sav_nev", "ertek"} vagy None), "verdict"} — None,
+    ha nincs tanult lövő-sáv (kevés minta)."""
+    from .xg import xg_of_position
+    kapus = kapus or {}
+    jeloltek = []
+    for mez, savok in (tamadas.lovok if tamadas is not None else {}).items():
+        for sav, lsz in savok.items():
+            tav = UTOLSO_LOVES_TAV_M.get(sav)
+            if tav is None:
+                continue
+            xg = xg_of_position(COURT_LENGTH_M - tav, COURT_WIDTH_M / 2.0,
+                                COURT_LENGTH_M)
+            ksz = float(kapus.get(sav, 1.0))
+            jeloltek.append({
+                "mez": int(mez), "sav": sav, "sav_nev": KAPUS_SAV_NEV[sav],
+                "tav_m": tav, "xg": xg, "lovo_szorzo": float(lsz),
+                "kapus_szorzo": ksz,
+                "ertek": round(xg * float(lsz) * ksz, 3)})
+    if not jeloltek:
+        return None
+    jeloltek.sort(key=lambda r: (-r["ertek"], r["mez"], r["sav"]))
+    b = dict(jeloltek[0])
+    rossz = jeloltek[-1]
+    kerul = None
+    if (rossz["mez"], rossz["sav"]) != (b["mez"], b["sav"]) \
+            and b["ertek"] - rossz["ertek"] >= UTOLSO_LOVES_ELTERES:
+        kerul = {k: rossz[k] for k in ("mez", "sav", "sav_nev", "ertek")}
+
+    def szam(v, d=2):
+        return f"{v:.{d}f}".replace(".", ",")
+
+    reszek = []
+    if abs(b["lovo_szorzo"] - 1.0) >= LOVO_FELIRAT_ELTERES:
+        reszek.append(f"ő innen {szam(b['lovo_szorzo'], 1)}× annyit lő be, "
+                      "mint amennyit a helyzet ér")
+    if abs(b["kapus_szorzo"] - 1.0) >= LOVO_FELIRAT_ELTERES:
+        reszek.append(f"a kapusuk {b['sav_nev']} {szam(b['kapus_szorzo'], 1)}× "
+                      "annyit kap, mint az átlag")
+    verdict = (f"{mezszam_nevelovel(b['mez'])}é {b['sav_nev']} "
+               f"({b['tav_m']:.0f} m): {szam(b['ertek'])} várható gól")
+    if reszek:
+        verdict += " — " + ", ".join(reszek)
+    if kerul:
+        verdict += (f"; ne {mezszam_nevelovel(kerul['mez'])}é "
+                    f"{kerul['sav_nev']} ({szam(kerul['ertek'])})")
+    b["jeloltek"] = len(jeloltek)
+    b["kerulendo"] = kerul
+    b["verdict"] = verdict
+    return b
+
+
+def last_shot_pick(match: Match, config: TacticsConfig | None = None) -> dict:
+    """Utolsó lövés: kire és honnan — csapatonként ({"home": …, "away":
+    …}): last_shot_choice a csapat ebből a meccsből tanult lövőivel
+    (AttackModel.learn) és a SZEMKÖZTI kapus ebből a meccsből tanult
+    sávjaival (_kapus_tanul). None, ha a csapatnak nincs tanult lövő-
+    sávja (kevés minta — a modell nem találgat)."""
+    config = config or TacticsConfig()
+    out = {}
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        out[side] = last_shot_choice(AttackModel.learn(match, team, config),
+                                     _kapus_tanul(match, masik, config))
+    return out
+
+
 # ---- A figura (set play) és a szimuláció ----------------------------------
 
 @dataclass

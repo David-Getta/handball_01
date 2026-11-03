@@ -9810,6 +9810,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.play_simulation import last_shot_pick
+            res["last_shot_pick"] = last_shot_pick(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import conceded_chance_quality
             res["conceded_chance_quality"] = (
                 conceded_chance_quality(match))
@@ -12014,6 +12019,8 @@ def create_app():
                 from ..pipeline.momentum import closing_attacks
                 _layer("closing_attacks",
                        lambda: closing_attacks(match))
+                from ..pipeline.play_simulation import last_shot_pick
+                _layer("last_shot_pick", lambda: last_shot_pick(match))
                 from ..pipeline.xg import conceded_chance_quality
                 _layer("conceded_chance_quality",
                        lambda: conceded_chance_quality(match))

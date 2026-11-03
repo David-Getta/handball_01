@@ -8935,6 +8935,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Utolsó labda: kire és honnan — a backend play_simulation
+  // last_shot_choice képe (lsp_pick: a tanult lövőik × átlagos kapus; a
+  // mondat a backendé, itt nincs küszöb).
+  String? _lastShotPick(Map<String, dynamic> r) {
+    final p = r["lsp_pick"];
+    if (p is! Map) return null;
+    final v = p["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return "az utolsó labdájuk $v · a hajrában erre a lövőre zárjatok";
+  }
+
   // Félidő-zárás: mit kezdenek a dudaszó előtti utolsó labdával (3+
   // záró támadás; 50% felett jó, 15% alatt elpuskázott — a
   // backend-kulccsal azonos küszöbök).
@@ -12183,6 +12194,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lerohanás-hatékonyság", _fastBreakConversion(r)!],
       if (_closingAttacks(r) != null)
         ["Utolsó labda", _closingAttacks(r)!],
+      if (_lastShotPick(r) != null)
+        ["Utolsó labda: kire", _lastShotPick(r)!],
       if (_concededChanceQuality(r) != null)
         ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_stealTypes(r) != null)

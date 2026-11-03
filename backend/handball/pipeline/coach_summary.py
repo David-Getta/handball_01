@@ -7509,6 +7509,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                                   f"({pr['passes']} passz).")
     except Exception:
         pass
+    # Utolsó lövés: kire és honnan — a tanult lövők × a szemközti kapus
+    # (play_simulation.last_shot_pick; a mondat a motoré).
+    try:
+        from .play_simulation import last_shot_pick
+        lsp = last_shot_pick(match)
+        for side, name in (("home", home), ("away", away)):
+            p = lsp.get(side)
+            if p:
+                pass_line += f" A(z) {name} utolsó labdája {p['verdict']}."
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

@@ -1562,6 +1562,36 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 490) Utolsó labda: kire és honnan — a tanult lövőink × az ő kapusuk
+    # szerint kinek a kezében és honnan ér a legtöbbet a hajrá-lövésünk.
+    # Ha a számok szerint nem mindegy (a lövő vagy a kapus szorzója
+    # érdemben eltér az 1-től, vagy van kerülendő lövőnk), azt a hajrá-
+    # szituációt edzésen kell begyakorolni, ne a pályán dőljön el.
+    _szabaly = 490
+    try:
+        from .play_simulation import (LOVO_FELIRAT_ELTERES,
+                                      UTOLSO_LOVES_SAV_JELZO,
+                                      last_shot_pick, mezszam_nevelovel)
+        lsp490 = last_shot_pick(match, config)
+        for side in ("home", "away"):
+            p490 = lsp490.get(side)
+            if not p490:
+                continue
+            if (abs(p490["lovo_szorzo"] - 1.0) < LOVO_FELIRAT_ELTERES
+                    and abs(p490["kapus_szorzo"] - 1.0) < LOVO_FELIRAT_ELTERES
+                    and not p490["kerulendo"]):
+                continue
+            add(side, "támadás", "Utolsó labda: kire és honnan",
+                "a tanult lövőink és az ő kapusuk szerint az utolsó labda "
+                f"{p490['verdict']}",
+                "hajrá-szituáció edzésen: 30 mp, egy gól hátrány, a "
+                f"támadás {mezszam_nevelovel(p490['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[p490['sav']]} lövésére fut ki "
+                "(elzárással, a passz időzítésével); a kerülendő lövő "
+                "labda nélkül köt le egy védőt")
+    except Exception:
+        pass
+
     # 489) Védekezési próba: az ellenfél visszatérő figurája a MI tanult
     # falunk ellen nagyobb lövőhelyzetet teremt, mint egy alap 6-0 ellen
     # — a falunk szokása (a kilépés, a kettőzés, a labdakövetés) maga

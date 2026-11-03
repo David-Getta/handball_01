@@ -817,9 +817,13 @@ def test_az_edzes_fokusz_a_zaro_lovot_is_megnevezi(monkeypatch):
     """489) Az ő tanult lövőikkel (a modell a tesztben adott, a próba
     valódi) a felkészülés-tétel a figurát záró lövőt is megnevezi."""
     import handball.pipeline.play_simulation as ps
+    import handball.pipeline.training as tr
     from handball.pipeline.play_simulation import AttackModel
     from handball.pipeline.training import training_focus
 
+    # A rangsor korlátja nélkül: a tanult lövőkkel más tétel (490) is
+    # megszólal, és a területek közti forgás kiszoríthatná a 489-et.
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
     monkeypatch.setattr(ps.AttackModel, "learn", classmethod(
         lambda cls, match, team, config=None: AttackModel(
             lovok={m: {"close": 1.3, "mid": 1.3, "far": 1.3}
@@ -830,3 +834,135 @@ def test_az_edzes_fokusz_a_zaro_lovot_is_megnevezi(monkeypatch):
     assert "nyitja a rést; a végén " in tetel[0]["why"]
     assert tetel[0]["why"].endswith(
         "lövésével, aki innen 1,3× annyit lő be, mint amennyit a helyzet ér")
+
+
+def test_az_utolso_loves_a_lovo_es_a_kapus_szorzojabol():
+    """Utolsó lövés: a tanult lövő × sáv párosok értéke az xG a sáv
+    képviselő-helyén × a lövő × a szemközti kapus szorzója; a legjobb az
+    ajánlás, a leggyengébb (elég nagy különbséggel) a kerülendő, a
+    mondat mindkettőt mondja; átlagos kapusnál és egy jelöltnél nincs
+    záradék; tanult lövő nélkül None (nem találgat)."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   UTOLSO_LOVES_ELTERES,
+                                                   UTOLSO_LOVES_TAV_M,
+                                                   last_shot_choice)
+    from handball.pipeline.xg import xg_of_position
+
+    xg = {s: xg_of_position(40.0 - d, 10.0, 40.0)
+          for s, d in UTOLSO_LOVES_TAV_M.items()}
+    assert xg["close"] > xg["mid"] > xg["far"]
+    m = AttackModel(lovok={7: {"far": 1.3}, 10: {"close": 0.7}})
+    p = last_shot_choice(m, kapus={"far": 1.2, "close": 0.7})
+    assert (p["mez"], p["sav"], p["sav_nev"], p["tav_m"], p["jeloltek"]) == (
+        7, "far", "távolról", UTOLSO_LOVES_TAV_M["far"], 2)
+    assert abs(p["ertek"] - xg["far"] * 1.3 * 1.2) < 1e-3
+    assert (p["lovo_szorzo"], p["kapus_szorzo"]) == (1.3, 1.2)
+    rossz = round(xg["close"] * 0.7 * 0.7, 3)
+    assert p["ertek"] - rossz >= UTOLSO_LOVES_ELTERES
+    assert p["kerulendo"] == {"mez": 10, "sav": "close", "sav_nev": "közelről",
+                              "ertek": rossz}
+    e = f"{p['ertek']:.2f}".replace(".", ",")
+    k = f"{rossz:.2f}".replace(".", ",")
+    assert p["verdict"] == (
+        f"a 7-esé távolról (10 m): {e} várható gól — ő innen 1,3× annyit "
+        "lő be, mint amennyit a helyzet ér, a kapusuk távolról 1,2× annyit "
+        f"kap, mint az átlag; ne a 10-esé közelről ({k})")
+    # Erős kapus távolról: a közeli, gyengébb lövő kerül előre.
+    q = last_shot_choice(m, kapus={"far": 0.7})
+    assert (q["mez"], q["sav"]) == (10, "close")
+    # Egy jelölt, átlagos kapus: nincs kerülendő, nincs záradék.
+    egy = last_shot_choice(AttackModel(lovok={5: {"mid": 1.0}}))
+    assert egy["kerulendo"] is None and egy["kapus_szorzo"] == 1.0
+    assert egy["verdict"] == (
+        f"az 5-ösé közepes távolságból (8 m): "
+        + f"{egy['ertek']:.2f}".replace(".", ",") + " várható gól")
+    assert last_shot_choice(AttackModel()) is None
+    assert last_shot_choice(None) is None
+
+
+def test_az_utolso_loves_valodi_meccsbol_es_a_felderitesben():
+    """A valódi láncon (szimulált meccs → tanult lövők, a szemközti kapus
+    sávjai): a lövő csapatnak van utolsó labdája (a tanult sávjai közül,
+    a legnagyobb értékű), a nem lövőnek None. A felderítés a nyers
+    mintákat str mezszám-kulccsal tárolja, a képet újraszámolja, két
+    meccs mintája összeadódik; az edzői kulcs és a meccsterv (az ő
+    lövőik × a mi kapusunk) ugyanebből beszél; az összefoglaló a
+    motor mondatát írja."""
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   _kapus_tanul,
+                                                   last_shot_choice,
+                                                   last_shot_pick)
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    r = last_shot_pick(m)
+    assert r["away"] is None
+    p = r["home"]
+    lovok = AttackModel.learn(m, Team.HOME).lovok
+    assert p and p["sav"] in lovok[p["mez"]]
+    assert p["jeloltek"] == sum(len(s) for s in lovok.values())
+    kapus = _kapus_tanul(m, Team.AWAY, TacticsConfig())
+    assert p["kapus_szorzo"] == kapus.get(p["sav"], 1.0)
+    assert p == last_shot_choice(AttackModel(lovok=lovok), kapus)
+
+    rep = scout_team(m, Team.HOME)
+    assert rep.lsp_lovo_minta and all(isinstance(k, str)
+                                      for k in rep.lsp_lovo_minta)
+    assert rep.lsp_pick and rep.lsp_pick["kapus_szorzo"] == 1.0
+    assert any(k.startswith("Utolsó labdájuk: ") and "lövését vegyétek el"
+               in k for k in rep.keys_to_game)
+    ketto = combine_reports([rep, rep])
+    for mez, savok in rep.lsp_lovo_minta.items():
+        for sav, v in savok.items():
+            assert ketto.lsp_lovo_minta[mez][sav][0] == 2 * v[0]
+    assert ketto.lsp_pick and ketto.lsp_pick["mez"] == rep.lsp_pick["mez"]
+    own = scout_team(m, Team.AWAY)
+    assert own.lsp_kapus_minta and own.lsp_pick is None
+    assert not any("Utolsó labdájuk" in k for k in own.keys_to_game)
+    terv = [s for s in matchup_plan(own, rep)
+            if s.startswith("Az ő utolsó labdájuk ellenetek ")]
+    assert len(terv) == 1 and "lövését vegyétek el" in terv[0]
+    forditva = [s for s in matchup_plan(rep, own)
+                if s.startswith("A ti utolsó labdátok az ő kapusuk ellen ")]
+    assert len(forditva) == 1
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert f"utolsó labdája {p['verdict']}." in szoveg
+
+
+def test_az_edzes_fokusz_utolso_labda_szabalya(monkeypatch):
+    """490) Ha a számok szerint nem mindegy (a lövő vagy a kapus szorzója
+    érdemben eltér, vagy van kerülendő), a hajrá-szituáció edzés-tétel
+    lesz a motor mondatával; ha minden szorzó átlagos és nincs
+    kerülendő, nem szólal meg; a nem lövő oldalon soha."""
+    import handball.pipeline.play_simulation as ps
+    import handball.pipeline.training as tr
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   last_shot_choice)
+    from handball.pipeline.training import training_focus
+
+    # A rangsor korlátja nélkül (a 490. a támadás-terület végén áll).
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+
+    def tetelek(lovok, kapus):
+        monkeypatch.setattr(ps.AttackModel, "learn", classmethod(
+            lambda cls, match, team, config=None: AttackModel(
+                lovok=lovok if team == Team.HOME else {})))
+        monkeypatch.setattr(ps, "_kapus_tanul",
+                            lambda match, team, config: kapus)
+        f = training_focus(_proba_match())
+        return {side: [i for i in f[side]
+                       if i["title"] == "Utolsó labda: kire és honnan"]
+                for side in ("home", "away")}
+
+    t = tetelek({7: {"far": 1.3}, 10: {"close": 0.7}}, {"far": 1.2})
+    assert len(t["home"]) == 1 and t["away"] == []
+    vart = last_shot_choice(AttackModel(lovok={7: {"far": 1.3},
+                                               10: {"close": 0.7}}),
+                            {"far": 1.2})
+    assert t["home"][0]["why"].endswith(vart["verdict"])
+    assert "a 7-es távoli lövésére fut ki" in t["home"][0]["drill"]
+    assert tetelek({7: {"far": 1.0}}, {}) == {"home": [], "away": []}

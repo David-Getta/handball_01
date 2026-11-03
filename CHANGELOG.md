@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **Utolsó lövés: kire és honnan** (`last_shot_pick` — motor + API +
+  összefoglaló + felderítés + meccsterv + edzésterv + kliens-csempe): a
+  hajrá-döntés modellje. A csapat tanult lövőit (mezszám × lövőhely-
+  sáv) az ELLENFÉL kapusának tanult sávjaival párosítja: minden lövő ×
+  sáv párosra az xG a sáv tipikus helyén (6,5 / 8,5 / 10 m) × a lövő
+  szorzója × a kapus szorzója — a legjobb az "utolsó labda", a
+  leggyengébb (ha legalább 0,08 várható góllal kevesebb) a kerülendő.
+  Edzői olvasat: egyenlő állásnál az utolsó támadást a számok szerint
+  kell megjátszani — "a 7-esé távolról (10 m): 0,33 várható gól — ő
+  innen 1,3× annyit lő be, mint amennyit a helyzet ér, a kapusuk
+  távolról 1,2× annyit kap, mint az átlag; ne a 10-esé közelről
+  (0,21)". Csak tanult lövő-sávból választ (kevés minta → nincs
+  ítélet). Felületek: /analyze és a meccs-csomag; az összefoglaló
+  játékkép-mondata; a felderítés a lövő- és kapus-mintát nyersen tárolja
+  (meccsek közt összeadódik), a kulcs "Utolsó labdájuk: … — a hajrában
+  a 7-es távoli lövését vegyétek el, a 10-es közeli lövése engedhető";
+  a meccsterv 470. szabálya az ő lövőiket a TI kapusotokkal (és a ti
+  lövőiteket az övékkel) párosítja; az edzésterv 490. szabálya a hajrá-
+  szituációt gyakoroltatja, ha a számok szerint nem mindegy; a
+  felderítő képernyő "Utolsó labda: kire" csempéje.
+
 - **A játékos-modell a támadásban: tanult lövők** (motor + védekezési
   próba + figura-ajánló + edzésterv + élő riasztás): a tanult fal
   párja. A csapat lövőit mezszámonként és lövőhely-sávonként (közelről
