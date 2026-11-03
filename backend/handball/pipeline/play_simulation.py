@@ -1996,3 +1996,94 @@ def live_figure_suggestions(match: Match, figurak: list,
                          f"(alap fal: {b['alap_pct']:.0f}%)")})
     alerts.sort(key=lambda a: (a["t"], a["team"]))
     return {"alerts": alerts}
+
+
+# ---- Élő utolsó labda -------------------------------------------------------
+# A hajrá: a felvétel vége előtt ennyi mp-cel szól (az utolsó támadások
+# még elrendezhetők), ha az állás ekkor legfeljebb LIVE_UTOLSO_KULONBSEG
+# gólos — mindkét kispadnak: a saját lövői az ellenfél kapusa ellen
+# (last_shot_choice). A modellek a `tamadas` / `kapus` bemenetből (a
+# szezon könyvtára — az API adja, EZ a meccs nélkül), különben az ADDIG
+# látott kockákból tanulva: okszerű, a későbbi lövések nem számítanak.
+LIVE_UTOLSO_ELOTTE_S = 180.0
+LIVE_UTOLSO_KULONBSEG = 1
+
+
+def kapus_many(meccsek: list, config: TacticsConfig | None = None) -> dict:
+    """A csapat kapusának sávonkénti szorzója TÖBB meccsből (`meccsek` =
+    [(match, a csapat oldala), …]): a sáv-minták összeadódnak
+    (_kapus_minta), a szorzó az összegből (_kapus_szorzo) — a szezon-
+    kapus, mint a DefenseModel.learn_many kapusa, a fal nélkül."""
+    config = config or TacticsConfig()
+    minta: dict = {}
+    for m, t in meccsek:
+        for sav, (faced, saves) in _kapus_minta(m, t, config).items():
+            r = minta.setdefault(sav, [0, 0])
+            r[0] += faced
+            r[1] += saves
+    return _kapus_szorzo(minta)
+
+
+def live_last_shot_alerts(match: Match, config: TacticsConfig | None = None,
+                          *, tamadas: dict | None = None,
+                          kapus: dict | None = None) -> dict:
+    """Élő utolsó labda: a hajrában (LIVE_UTOLSO_ELOTTE_S-szel a felvétel
+    vége előtt), ha az állás szoros (legfeljebb LIVE_UTOLSO_KULONBSEG
+    gól), csapatonként kimondja, kinek a kezében és honnan ér a
+    legtöbbet az utolsó labda — a tanult lövőik az ellenfél kapusának
+    tanult sávjai ellen (last_shot_choice). `tamadas` ({"home" / "away":
+    AttackModel}) és `kapus` ({"home" / "away": a SZEMKÖZTI kapus
+    sávjai}) a szezonból; ahol nincs, az addig látott kockákból tanul.
+
+    Edzőileg: az időkérésen nem a szokás, hanem a számok döntsék el, ki
+    kapja az utolsó labdát — és kit nem szabad helyzetbe hozni.
+
+    Visszaad: {"alerts": [{"t", "t_s", "perc", "team", "team_name",
+    "allas" ("hazai:vendég" a hajrá elején), "kulonbseg" (a csapat
+    szemszögéből), "mez", "sav", "ertek", "text"}, …]} t és team
+    szerint; üres, ha a meccs rövidebb a hajránál, az állás nem szoros,
+    vagy a csapatnak nincs tanult lövő-sávja."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    frames = match.frames
+    if not frames:
+        return {"alerts": []}
+    t_h = frames[-1].t - int(round(LIVE_UTOLSO_ELOTTE_S * fps))
+    if t_h <= frames[0].t:
+        return {"alerts": []}
+    sc = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.t < t_h:
+            sc[e.team.value] += 1
+    if abs(sc["home"] - sc["away"]) > LIVE_UTOLSO_KULONBSEG:
+        return {"alerts": []}
+    eddig = Match(meta=match.meta, frames=[f for f in frames if f.t <= t_h])
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    perc = int((t_h - frames[0].t) / fps // 60)
+    alerts = []
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        tam = (tamadas or {}).get(side)
+        if tam is None:
+            tam = AttackModel.learn(eddig, team, config)
+        kap = (kapus or {}).get(side)
+        if kap is None:
+            kap = _kapus_tanul(eddig, masik, config)
+        p = last_shot_choice(tam, kap)
+        if p is None:
+            continue
+        other = "away" if side == "home" else "home"
+        kul = sc[side] - sc[other]
+        helyzet = ("egál" if kul == 0 else
+                   f"{abs(kul)} gól {'előny' if kul > 0 else 'hátrány'}")
+        alerts.append({
+            "t": t_h, "t_s": round(t_h / fps, 1), "perc": perc,
+            "team": side, "team_name": nevek[side],
+            "allas": f"{sc['home']}:{sc['away']}", "kulonbseg": kul,
+            "mez": p["mez"], "sav": p["sav"], "ertek": p["ertek"],
+            "text": (f"Utolsó labda ({perc}. perc, {sc['home']}:{sc['away']}, "
+                     f"{helyzet}): {nevek[side]} utolsó labdája "
+                     f"{p['verdict']}")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}

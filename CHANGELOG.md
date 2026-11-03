@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **Élő utolsó labda** (motor + végpont + élő képernyő): a hajrában (3
+  perccel a felvétel vége előtt), ha az állás legfeljebb egygólos, az
+  élő képernyő mindkét kispadnak megmondja, kinek a kezében és honnan
+  ér a legtöbbet az utolsó labda — a csapat tanult lövői az ellenfél
+  kapusának tanult sávjai ellen: "Utolsó labda (57. perc, 24:25, 1 gól
+  hátrány): Szeged utolsó labdája a 7-esé távolról (10 m): 0,33 várható
+  gól — ő innen 1,3× annyit lő be, mint amennyit a helyzet ér; ne a
+  10-esé közelről (0,21)". A modellek a könyvtár KORÁBBI meccseiből
+  (ez a meccs nélkül — okszerű); ahol nincs ilyen, az addig látott
+  kockákból tanul. Új végpont: /matches/{id}/live-utolso-labda.
+
 - **A játékos-modell a döntésekben** (döntés-elemzés, szorításos
   döntés, helyzet-döntés, 3D döntés-pillanatok, összefoglaló): a "mi
   lett volna a jobb döntés" eddig csak a helyzetből számolt — most a

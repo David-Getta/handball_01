@@ -173,6 +173,16 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "figura", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Élő utolsó labda: a hajrában, szoros állásnál kinek a kezében és
+    // honnan ér a legtöbbet az utolsó labda — a tanult lövők az ellenfél
+    // kapusa ellen (a szezon korábbi meccseiből, különben az addigiakból).
+    try {
+      for (final a in await _api.fetchLiveLastShot(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     try {
       final r = await _api.fetchRules(matchId);
       for (final w in ((r["powerplay"] as List?) ?? const [])

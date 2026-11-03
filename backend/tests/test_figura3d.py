@@ -1351,3 +1351,41 @@ def test_az_elo_figura_ajanlo_vegpont(tmp_path, monkeypatch):
     assert j and j[0]["name"] == "Saját" and j[0]["sablon"] is False
     assert "a figuráink közül a „Saját”" in j[0]["text"]
     assert c.get("/matches/nincs/live-figura-ajanlo").status_code == 404
+
+
+def test_az_elo_utolso_labda_vegpont_a_szezon_modelljeivel(tmp_path,
+                                                           monkeypatch):
+    """GET /matches/{id}/live-utolso-labda: a lövő- és a kapus-modell a
+    könyvtár KORÁBBI meccseiből (ez a meccs nélkül — szezon_meccsek), a
+    hajrá riasztása a küszöb feloldásával a lövő csapatnak; lövés
+    nélküli meccsen (modell nélkül) üres; 404 ismeretlen meccsre."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (AttackModel, kapus_many,
+                                                   last_shot_choice)
+    from handball.sim.match_simulator import simulate_ground_truth
+    from test_play_simulation import _proba_match
+
+    monkeypatch.setattr(ps, "LIVE_UTOLSO_KULONBSEG", 100)
+    app = _app(tmp_path, monkeypatch)
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    m1.meta.match_id, m2.meta.match_id = "gt1", "gt2"
+    assert (m1.meta.home_team, m1.meta.away_team) == (
+        m2.meta.home_team, m2.meta.away_team)
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/gt1/live-utolso-labda")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["szezon_meccsek"] == {"home": 1, "away": 1}
+    assert [a["team"] for a in j["alerts"]] == ["home"]
+    vart = last_shot_choice(AttackModel.learn_many([(m2, Team.HOME)]),
+                            kapus_many([(m2, Team.AWAY)]))
+    assert j["alerts"][0]["text"].endswith(vart["verdict"])
+    app.state.put_match(_proba_match(ismetles=60))
+    assert c.get("/matches/pr/live-utolso-labda").json()["alerts"] == []
+    assert c.get("/matches/nincs/live-utolso-labda").status_code == 404

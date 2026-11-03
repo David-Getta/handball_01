@@ -1782,6 +1782,22 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő utolsó labda (GET /matches/{id}/live-utolso-labda): a hajrában,
+  /// szoros állásnál kinek a kezében és honnan ér a legtöbbet az utolsó
+  /// labda (a tanult lövők az ellenfél kapusa ellen, a szezon korábbi
+  /// meccseiből) — [{t, t_s, perc, team, team_name, allas, kulonbseg,
+  /// mez, sav, ertek, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveLastShot(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-utolso-labda"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az élő utolsó labda", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// A 3D pálya védekezés-panelje (GET /matches/{id}/defence-timeline):
   /// {"rows": [{"t","s","defending","label","goal_x"}], "formations":
   /// {név: [[mélység, y], …]}} — a sablonok a bal kapu előtt.

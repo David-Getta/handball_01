@@ -10,7 +10,7 @@ legyenek. A teszt-csomag őre nem engedi elavulni.
 | Mérték | Érték | Miből számolva |
 |---|---:|---|
 | Elemző réteg (meccs-csomag) | **516** | `_layer("...")` regisztrációk az `api/app.py`-ban |
-| Automata teszt | **2847** | `def test_*` függvények a `backend/tests/`-ben |
+| Automata teszt | **2850** | `def test_*` függvények a `backend/tests/`-ben |
 | Meccsterv-szabály | **470** | a legnagyobb sorszámozott szabály a `pipeline/scouting.py`-ban |
 | Edzés-szabály | **490** | a legnagyobb sorszámozott szabály a `pipeline/training.py`-ban |
 | Kliens-csempe (felderítés) | **491** | csempe-sorok a `client/lib/ui/scouting_screen.dart`-ban |

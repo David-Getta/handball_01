@@ -966,3 +966,76 @@ def test_az_edzes_fokusz_utolso_labda_szabalya(monkeypatch):
     assert t["home"][0]["why"].endswith(vart["verdict"])
     assert "a 7-es távoli lövésére fut ki" in t["home"][0]["drill"]
     assert tetelek({7: {"far": 1.0}}, {}) == {"home": [], "away": []}
+
+
+def test_az_elo_utolso_labda_a_hajraban_szoros_allasnal():
+    """A felvétel vége előtt LIVE_UTOLSO_ELOTTE_S-szel, ha az állás
+    legfeljebb LIVE_UTOLSO_KULONBSEG gólos: csapatonként az utolsó labda
+    a megadott (szezon-) modellekből, a motor mondatával; ahol nincs
+    modell, az addig látott kockákból tanul (lövés nélküli meccsen nincs
+    tanult lövő → üres); a hajránál rövidebb meccs üres."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   LIVE_UTOLSO_ELOTTE_S,
+                                                   last_shot_choice,
+                                                   live_last_shot_alerts)
+
+    m = _proba_match(ismetles=60)            # 240 mp > a hajrá 180 mp-e
+    tam = {"home": AttackModel(lovok={1: {"far": 1.3}}),
+           "away": AttackModel(lovok={5: {"close": 0.7, "mid": 1.2}})}
+    kap = {"home": {"far": 1.2}, "away": {}}
+    r = live_last_shot_alerts(m, tamadas=tam, kapus=kap)
+    # (azonos kockán a csapat neve szerint: away, home)
+    assert [a["team"] for a in r["alerts"]] == ["away", "home"]
+    a, h = r["alerts"]
+    assert h["t"] == m.frames[-1].t - int(round(LIVE_UTOLSO_ELOTTE_S * 25))
+    perc = int((h["t"] - m.frames[0].t) / 25 // 60)
+    assert (h["allas"], h["kulonbseg"], h["perc"]) == ("0:0", 0, perc)
+    assert (h["mez"], h["sav"], h["team_name"]) == (1, "far", "Ők")
+    assert h["text"] == (f"Utolsó labda ({perc}. perc, 0:0, egál): Ők utolsó "
+                         "labdája "
+                         + last_shot_choice(tam["home"], kap["home"])["verdict"])
+    assert (a["mez"], a["sav"], a["team_name"]) == (5, "mid", "Mi")
+    assert a["ertek"] == last_shot_choice(tam["away"], {})["ertek"]
+    # Csak a hazai modellel: a vendég az addigi kockákból tanul — nincs.
+    csak = live_last_shot_alerts(m, tamadas={"home": tam["home"]}, kapus=kap)
+    assert [x["team"] for x in csak["alerts"]] == ["home"]
+    assert live_last_shot_alerts(m)["alerts"] == []
+    assert live_last_shot_alerts(_proba_match(ismetles=10), tamadas=tam,
+                                 kapus=kap)["alerts"] == []
+
+
+def test_az_elo_utolso_labda_okszeru_es_az_allast_nezi(monkeypatch):
+    """A valódi láncon (szimulált meccs: a hazai sok gólt lő, a vendég
+    nem): az állás a hajrá elején nem szoros → nincs riasztás; a küszöb
+    feloldva a hazainak szól, az ADDIG látott kockákból tanult lövőkkel
+    és a vendég kapus addigi sávjaival (a meccs vége nem számít), a
+    vendégnek nincs tanult lövője."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   LIVE_UTOLSO_ELOTTE_S,
+                                                   _kapus_tanul,
+                                                   last_shot_choice,
+                                                   live_last_shot_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    assert live_last_shot_alerts(m)["alerts"] == []
+    monkeypatch.setattr(ps, "LIVE_UTOLSO_KULONBSEG", 100)
+    r = live_last_shot_alerts(m)["alerts"]
+    assert [a["team"] for a in r] == ["home"]
+    a = r[0]
+    t_h = m.frames[-1].t - int(round(LIVE_UTOLSO_ELOTTE_S * 25))
+    eddig = Match(m.meta, [f for f in m.frames if f.t <= t_h])
+    vart = last_shot_choice(AttackModel.learn(eddig, Team.HOME),
+                            _kapus_tanul(eddig, Team.AWAY, TacticsConfig()))
+    assert a["text"].endswith(vart["verdict"]) and a["t"] == t_h
+    h, v = (int(x) for x in a["allas"].split(":"))
+    assert h > v == 0 and a["kulonbseg"] == h
+    assert f"{h} gól előny" in a["text"]
+    # Okszerűség: a hajrá kockáit üresre cserélve (ugyanaddig tart a
+    # felvétel) ugyanaz a riasztás — a későbbi lövések nem számítanak.
+    ures = [Frame(t=f.t, players=[], ball=None) for f in m.frames
+            if f.t > t_h]
+    assert live_last_shot_alerts(Match(m.meta, eddig.frames + ures)
+                                 )["alerts"] == r

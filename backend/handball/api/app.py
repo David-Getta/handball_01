@@ -13719,6 +13719,45 @@ def create_app():
             figurak = [dict(d) for d in ALAP_FIGURAK]
         return live_figure_suggestions(match, figurak)
 
+    @app.get("/matches/{match_id}/live-utolso-labda")
+    def get_live_last_shot(match_id: str):
+        """ÉLŐ utolsó labda: a hajrában (3 perccel a felvétel vége előtt),
+        szoros állásnál kinek a kezében és honnan ér a legtöbbet az
+        utolsó labda — a csapat tanult lövői az ellenfél kapusának tanult
+        sávjai ellen (play_simulation.live_last_shot_alerts). A modellek
+        a könyvtár KORÁBBI meccseiből (ez a meccs nélkül — okszerű; a
+        lövők a csapat, a kapus az ellenfél meccseiből); ahol nincs
+        ilyen, az addig látott kockákból. Válasz: {"alerts": [{"t",
+        "t_s", "perc", "team", "team_name", "allas", "kulonbseg", "mez",
+        "sav", "ertek", "text"}], "szezon_meccsek": {"home", "away"}}.
+        404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (kapus_many,
+                                                live_last_shot_alerts)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        def korabbi(nev: str) -> list:
+            try:
+                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                        if m_.meta.match_id != match_id]
+            except HTTPException:
+                return []
+
+        tamadas, kapus, db = {}, {}, {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            sajat = korabbi(nevek[side])
+            ellen = korabbi(nevek[masik])
+            db[side] = len(sajat)
+            if sajat:
+                tamadas[side] = AttackModel.learn_many(sajat)
+            if ellen:
+                kapus[side] = kapus_many(ellen)
+        return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
+                "szezon_meccsek": db}
+
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):
         """Figura-felismerés: hány visszatérő figurát játszottak és milyen
