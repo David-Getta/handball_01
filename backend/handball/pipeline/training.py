@@ -1562,6 +1562,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 492) Kapus-választás: az ellenfél tanult lövői ellen a két
+    # kapusunk közül az egyik érdemben kevesebbet kapna (a sáv-mérlege
+    # szerint) — ő álljon ellenük, és a gyengébb kapus a lövőik sávját
+    # edzésen kapja (hogy a különbség ne nőjön).
+    _szabaly = 492
+    try:
+        from .play_simulation import keeper_choice, mezszam_nevelovel
+        kc492 = keeper_choice(match, config)
+        for side in ("home", "away"):
+            p492 = kc492.get(side)
+            if not p492 or not p492.get("dontes"):
+                continue
+            add(side, "kapus", "Kapus-választás ellenük",
+                f"a lövőik ellen a kapusaink nem egyformák: {p492['verdict']}",
+                f"{mezszam_nevelovel(p492['kapus_mez'])} kezdjen a kapuban "
+                "ellenük; edzésen a lövőik sávjából (a tanult távolságból) "
+                f"sorozat-lövés mindkét kapusnak, {mezszam_nevelovel(p492['masik_mez'])} "
+                "a gyenge sávját célzottan")
+    except Exception:
+        pass
+
     # 491) Kit kinek: az ellenfél veszélyes távoli lövőjének sávjában a
     # falunk lassú kilépője áll, és van kilépő védőnk — a fal sorrendjét
     # kell cserélni, a kilépő álljon a lövővel szemben; ezt a párosítást

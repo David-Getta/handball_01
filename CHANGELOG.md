@@ -3,6 +3,26 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.189 óta)
+
+- **Kapus-választás: melyik kapusunk az ő lövőik ellen**
+  (`keeper_choice` — motor + API + összefoglaló + felderítés +
+  meccsterv + edzésterv + kliens-csempe): kapusonként (mezszám) a
+  kaputra érkező lövések sáv-mérlege — a kapus-szolgálatok szerint, ki
+  védett a lövés pillanatában —, ebből a kapus sávonkénti szorzója
+  (mint a csapat-kapusé), és az ellenfél tanult lövői ellen kapusonként
+  a várható kapott gól lövésenként (a lövőik száma és szorzója
+  sávonként × a kapus sáv-szorzója). A kisebb a jobb: "a 16-os álljon a
+  kapuban az ő lövőik ellen: 0,36 várható gól lövésenként (a 12-es:
+  0,41) — távolról 0,8× annyit kap, mint az átlag"; két tanult kapus és
+  legalább 0,02 különbség kell (különben "nincs érdemi különbség").
+  Felületek: /analyze és a meccs-csomag; az összefoglaló; a felderítés
+  a kapusonkénti sáv-mérleget nyersen tárolja (összeadódik), kulcsa
+  "Kapusaik: ha a 12-es áll a kapuban, távolról (1,2× annyit kap)";
+  meccsterv 472 (a ti kapusaitok × az ő lövőik, és a kapusaik közül a
+  sebezhetőbb a ti lövőitekkel); edzés-szabály 492; a felderítő
+  képernyő "Kapusaik sávonként" csempéje.
+
 ## v0.1.189 — kiadva (2026-11-03)
 
 > Kiadás-jegyzet: A JÁTÉKOS-MODELL — a tanult fal után a tanult lövők.

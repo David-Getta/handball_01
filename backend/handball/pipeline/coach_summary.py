@@ -7537,6 +7537,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 pass_line += f" A(z) {name} falának kit kinek: {v}."
     except Exception:
         pass
+    # Kapus-választás: melyik kapusuk álljon az ellenfél lövői ellen
+    # (play_simulation.keeper_choice; a mondat a motoré) — csak ha a
+    # különbség érdemi.
+    try:
+        from .play_simulation import keeper_choice
+        kc = keeper_choice(match)
+        for side, name in (("home", home), ("away", away)):
+            p = kc.get(side)
+            if p and p.get("dontes"):
+                pass_line += f" A(z) {name} kapus-választása: {p['verdict']}."
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

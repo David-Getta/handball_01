@@ -8935,6 +8935,35 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-választás: a kapusaik tanult sáv-szorzói (kc_kapusok — a backend
+  // play_simulation.keeper_choice_from mintája); egy sáv akkor hír, ha a
+  // szorzója legalább 0.1-del eltér az 1-től (LOVO_FELIRAT_ELTERES).
+  String? _keeperChoice(Map<String, dynamic> r) {
+    final l = r["kc_kapusok"];
+    if (l is! List || l.isEmpty) return null;
+    const savNev = {
+      "close": "közelről",
+      "mid": "közepes távolságból",
+      "far": "távolról"
+    };
+    final reszek = <String>[];
+    for (final k in l.whereType<Map>()) {
+      final mez = k["mez"];
+      final sz = (k["szorzok"] as Map?)?.cast<String, dynamic>() ?? const {};
+      final savok = <String>[];
+      for (final e in sz.entries) {
+        final v = (e.value as num?)?.toDouble();
+        if (v == null || (v - 1.0).abs() < 0.1) continue;
+        savok.add("${savNev[e.key] ?? e.key} "
+            "${v.toStringAsFixed(1).replaceAll(".", ",")}×");
+      }
+      if (savok.isNotEmpty) reszek.add("a $mez-es ${savok.join(", ")}");
+    }
+    if (reszek.isEmpty) return null;
+    return "kapusaik: ${reszek.join("; ")} annyit kap, mint az átlag · "
+        "a lövés-választás a kapus szerint";
+  }
+
   // Kit kinek: a veszélyes távoli lövőjük és a sávja — a backend
   // play_simulation.shooter_defender_pairs képe (kk_lovok; a küszöbök a
   // backendé, itt csak a sor).
@@ -12214,6 +12243,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Utolsó labda: kire", _lastShotPick(r)!],
       if (_shooterDefenderMatchup(r) != null)
         ["Kit kinek: távoli lövőjük", _shooterDefenderMatchup(r)!],
+      if (_keeperChoice(r) != null)
+        ["Kapusaik sávonként", _keeperChoice(r)!],
       if (_concededChanceQuality(r) != null)
         ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_stealTypes(r) != null)

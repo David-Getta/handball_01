@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **517 réteg**, modulonként csoportosítva; a
+Összesen **518 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -375,10 +375,11 @@ leírás a réteg-függvény docstringjének első sora.
 | `super_sub_roles` | Szuper-csere poszt: MELYIK POSZTRÓL termel a paduk. |
 | `win_prob` | Meccs-esély görbe: P(hazai győzelem) a felismert gólok mentén. |
 
-## play_simulation (2)
+## play_simulation (3)
 
 | Réteg | Mit mér |
 |---|---|
+| `keeper_choice` | Kapus-választás — csapatonként, a VÉDEKEZŐ oldal szemszögéből: |
 | `last_shot_pick` | Utolsó lövés: kire és honnan — csapatonként ({"home": …, "away": |
 | `shooter_defender_matchup` | Kit kinek — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az |
 

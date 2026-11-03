@@ -9841,6 +9841,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.play_simulation import keeper_choice
+            res["keeper_choice"] = keeper_choice(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import conceded_chance_quality
             res["conceded_chance_quality"] = (
                 conceded_chance_quality(match))
@@ -12051,6 +12056,8 @@ def create_app():
                     shooter_defender_matchup)
                 _layer("shooter_defender_matchup",
                        lambda: shooter_defender_matchup(match))
+                from ..pipeline.play_simulation import keeper_choice
+                _layer("keeper_choice", lambda: keeper_choice(match))
                 from ..pipeline.xg import conceded_chance_quality
                 _layer("conceded_chance_quality",
                        lambda: conceded_chance_quality(match))

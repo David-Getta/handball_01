@@ -884,6 +884,113 @@ def test_a_kit_kinek_valodi_meccsbol_es_a_felderitesben(monkeypatch):
     assert f"falának kit kinek: {parok[0]['verdict']}." in szoveg
 
 
+def test_a_kapus_valasztas_a_mintakbol():
+    """Kapus-választás a kész mintákból: a lövőik sávonkénti lövésszáma
+    és tanult szorzója × a kapusok sáv-szorzója — a kevesebbet kapó
+    kapus; az érték visszaszámolható; a mondat a sávot is mondja; kis
+    különbségnél "nincs érdemi különbség" (dontes False); egy tanult
+    kapus, tanult sáv nélküli kapus vagy lövő-minta nélkül None."""
+    from handball.pipeline.play_simulation import (
+        KAPUS_MIN_LOVES, KAPUS_VALASZTAS_ELTERES, UTOLSO_LOVES_TAV_M,
+        _kapus_szorzo, _lovo_szorzo, keeper_choice_from)
+    from handball.pipeline.xg import xg_of_position
+
+    lovok = {9: {"far": [10, 6, 3.0]}, 10: {"close": [4, 2, 1.8]}}
+    kapusok = {16: {"far": [10, 8], "close": [6, 2]},
+               12: {"far": [10, 3], "close": [6, 4]}}
+    r = keeper_choice_from(lovok, kapusok)
+    assert (r["kapus_mez"], r["masik_mez"]) == (16, 12)
+    assert r["dontes"] is True and r["elteres"] >= KAPUS_VALASZTAS_ELTERES
+    lsz = _lovo_szorzo(lovok)
+    xg = {s: xg_of_position(40.0 - d, 10.0, 40.0)
+          for s, d in UTOLSO_LOVES_TAV_M.items()}
+    k16 = _kapus_szorzo(kapusok[16])
+    vart = (10 * xg["far"] * lsz[9]["far"] * k16["far"]
+            + 4 * xg["close"] * lsz[10]["close"] * k16["close"]) / 14
+    assert abs(r["ertek"] - vart) < 1e-3
+    assert [k["mez"] for k in r["kapusok"]] == [16, 12]
+    assert r["verdict"].startswith(
+        "a 16-os álljon a kapuban az ő lövőik ellen: ")
+    assert "— távolról 0,7× annyit kap, mint az átlag" in r["verdict"]
+    # Egyforma kapusok: nincs érdemi különbség.
+    egyf = keeper_choice_from(lovok, {16: {"far": [10, 5]}, 12: {"far": [10, 5]}})
+    assert egyf["dontes"] is False and egyf["elteres"] == 0.0
+    assert egyf["verdict"].startswith("a két kapusunk között nincs érdemi")
+    assert keeper_choice_from(lovok, {16: {"far": [10, 8]}}) is None
+    assert keeper_choice_from(lovok, {16: {"far": [10, 8]},
+                                      12: {"far": [KAPUS_MIN_LOVES - 1, 0]}}) is None
+    assert keeper_choice_from({}, kapusok) is None
+    assert keeper_choice_from({"9": {"far": [10, 6, 3.0]}}, kapusok)["kapus_mez"] == 16
+
+
+def test_a_kapus_valasztas_valodi_meccsbol_es_a_felderitesben(monkeypatch):
+    """A valódi láncon (szimulált meccs, csapatonként egy kapus): a
+    kapusonkénti sáv-mérleg egy kapusra összegezve a csapat-kapus
+    mérlege; egy kapussal a választás None. A felderítés a mérleget str
+    kulccsal tárolja, két meccsből összeadja, a képet (kc_kapusok)
+    újraszámolja, a kulcs a kapus gyenge sávját mondja; két kapussal (a
+    minta kézzel bővítve) a meccsterv (472) és — a motor mintáját
+    cserélve — az edzésterv (492) és az összefoglaló is szól."""
+    import handball.pipeline.play_simulation as ps
+    import handball.pipeline.training as tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import (
+        _kapus_minta, _kapus_minta_kapusonkent, _kapus_szorzo,
+        keeper_choice, keeper_choice_from)
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.pipeline.training import training_focus
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    cfg = TacticsConfig()
+    kk = _kapus_minta_kapusonkent(m, Team.AWAY, cfg)
+    assert len(kk) == 1
+    (mez, savok), = kk.items()
+    assert isinstance(mez, int) and savok == _kapus_minta(m, Team.AWAY, cfg)
+    assert _kapus_minta_kapusonkent(m, Team.HOME, cfg) == {}
+    assert keeper_choice(m) == {"home": None, "away": None}
+
+    own = scout_team(m, Team.AWAY)
+    assert list(own.kapusok_minta) == [str(mez)]
+    assert own.kc_kapusok == [{"mez": mez, "lovesek": sum(v[0] for v in savok.values()),
+                               "szorzok": _kapus_szorzo(savok)}]
+    ketto = combine_reports([own, own])
+    for s, v in own.kapusok_minta[str(mez)].items():
+        assert ketto.kapusok_minta[str(mez)][s] == [2 * v[0], 2 * v[1]]
+    assert ketto.kc_kapusok[0]["mez"] == mez
+    gyenge = [s for s, v in _kapus_szorzo(savok).items() if v >= 1.1]
+    assert any(k.startswith("Kapusaik: ") for k in own.keys_to_game) == bool(gyenge)
+    opp = scout_team(m, Team.HOME)
+    assert opp.kapusok_minta == {} and opp.kc_kapusok == []
+    assert not [s for s in matchup_plan(own, opp) if "Kapus-választás" in s]
+    # Két kapus (a második kézzel: minden sávban erősebb): a meccsterv
+    # a mi kapusainkat az ő lövőikkel párosítja.
+    own.kapusok_minta["99"] = {s: [v[0], v[0]] for s, v in savok.items()}
+    vart = keeper_choice_from(opp.lsp_lovo_minta, own.kapusok_minta)
+    assert vart and vart["kapus_mez"] == 99
+    terv = [s for s in matchup_plan(own, opp) if s.startswith("Kapus-választás: ")]
+    assert len(terv) == 1 and vart["verdict"] in terv[0]
+    # A motor mintáját cserélve: az edzésterv és az összefoglaló.
+    ketkapus = dict(kk)
+    ketkapus[99] = {s: [v[0], v[0]] for s, v in savok.items()}
+    monkeypatch.setattr(ps, "_kapus_minta_kapusonkent",
+                        lambda match, team, config: ketkapus
+                        if team == Team.AWAY else {})
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+    r = keeper_choice(m)
+    assert r["home"] is None and r["away"]["kapus_mez"] == 99
+    tetel = [i for i in training_focus(m)["away"]
+             if i["title"] == "Kapus-választás ellenük"]
+    assert len(tetel) == (1 if r["away"]["dontes"] else 0)
+    if tetel:
+        assert tetel[0]["why"].endswith(r["away"]["verdict"])
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert (f"kapus-választása: {r['away']['verdict']}." in szoveg) == bool(
+        r["away"]["dontes"])
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba
