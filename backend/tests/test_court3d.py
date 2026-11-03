@@ -155,11 +155,12 @@ def test_a_passzsav_a_dontes_elemzes_modelljet_adja():
 def test_dontes_pillanatok_a_dontes_elemzes_modelljevel():
     """A döntés-pillanatok: ahol a legjobb opció (decisions.best_option)
     legalább DECISION_GAP_MIN-nel jobb a választott passznál — a
-    döntés-elemzés modelljével újraszámolva ugyanaz a különbség;
-    lövésnél a cél a támadott kapu közepe; időrendben."""
+    döntés-elemzés modelljével (a játékos-modellel: tanult lövők, a
+    szemközti kapus sávjai) újraszámolva ugyanaz a különbség; lövésnél a
+    cél a támadott kapu közepe; időrendben."""
     from handball.pipeline.court3d import DECISION_GAP_MIN, decision_moments
-    from handball.pipeline.decisions import (best_option, detect_passes,
-                                             evaluate_options)
+    from handball.pipeline.decisions import (best_option, decision_models,
+                                             detect_passes, evaluate_options)
     from handball.pipeline.tactics import TacticsConfig
     from handball.sim.match_simulator import simulate_ground_truth
 
@@ -171,9 +172,13 @@ def test_dontes_pillanatok_a_dontes_elemzes_modelljevel():
     assert sum(d["flagged"].values()) == len(d["moments"])
     assert all(d["flagged"][k] <= d["passes"][k] for k in ("home", "away"))
     cfg = TacticsConfig()
+    modellek = decision_models(m, cfg)
+    assert modellek["home"]["tamadas"].lovok or modellek["home"]["kapus"]
     by_s = {}
     for pe in detect_passes(m, cfg):
-        opts = evaluate_options(pe.decision_frame, pe.passer_pos, cfg)
+        mod = modellek[pe.team.value]
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, cfg,
+                                tamadas=mod["tamadas"], kapus=mod["kapus"])
         best = best_option(opts)
         ch = next(o for o in opts if o.kind == "pass"
                   and o.target_id == pe.receiver_id)

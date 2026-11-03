@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **A játékos-modell a döntésekben** (döntés-elemzés, szorításos
+  döntés, helyzet-döntés, 3D döntés-pillanatok, összefoglaló): a "mi
+  lett volna a jobb döntés" eddig csak a helyzetből számolt — most a
+  játékosból is. Az opciók értéke a fogadó (a lövő) tanult lövő-
+  szorzójával (a mezszáma és a hely sávja szerint) és a szemközti kapus
+  tanult sávjával súlyozódik: a passz annak ér többet, aki onnan
+  betalál, a lövés abból a sávból, ahol a kapusuk gyenge
+  (decisions.decision_models — a meccsből tanulva, a döntés-rétegek
+  közös bemenete). A helyzet-döntés "modell" mezője és az összefoglaló
+  kimondja, kivel számolt ("a lövők: a 7-es közelről 1,3× …; a kapusuk
+  távolról 1,2× annyi gólt kap, mint az átlag"). Az élő döntés-figyelő
+  a modell NÉLKÜL marad: az egész meccsből tanult lövő élőben előre
+  nézne.
+
 - **Utolsó lövés: kire és honnan** (`last_shot_pick` — motor + API +
   összefoglaló + felderítés + meccsterv + edzésterv + kliens-csempe): a
   hajrá-döntés modellje. A csapat tanult lövőit (mezszám × lövőhely-

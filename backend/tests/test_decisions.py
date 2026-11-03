@@ -440,6 +440,94 @@ def test_az_elo_dontes_figyelo_idoben_szol_es_nem_nez_elore():
     assert live_decision_alerts(fele)["alerts"][0]["t"] == a["t"]
 
 
+def test_a_jatekos_modell_a_dontes_opciokban():
+    """A tanult lövő (AttackModel) és a szemközti kapus sávjai az opciók
+    értékébe mennek: a biztos kezű (1,3×) társnak adott passz 1,3-szoros,
+    a lövés a lövő saját sávja (0,8×) és a kapus sávja (1,2×) szerint;
+    mezszám nélküli társ és modell nélkül a tiszta helyzet-érték — a
+    legjobb opció így a játékostól is függ."""
+    from handball.pipeline.play_simulation import AttackModel, kapus_sav
+
+    cfg = TacticsConfig()
+
+    def pl(tid, x, y, mez=None):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0, jersey_number=mez)
+
+    frame = Frame(t=0, players=[
+        pl(1, 28.0, 10.0, 9),        # labdás, 12 m (távoli sáv)
+        pl(2, 34.5, 8.0, 7),         # közeli sáv, tanult lövő
+        pl(3, 34.5, 12.0),           # közeli sáv, mezszám nélkül
+        _pl(11, Team.AWAY, 31.0, 10.0),
+    ], ball=Ball(x=28.0, y=10.0, confidence=1.0))
+    assert kapus_sav(28.0, 10.0, GOAL_X) == "far"
+    assert kapus_sav(34.5, 8.0, GOAL_X) == "close"
+    holder = ball_holder(frame, cfg)
+
+    def ertekek(**kw):
+        return {(o.kind, o.target_id): o.value
+                for o in evaluate_options(frame, holder, cfg, **kw)}
+
+    alap = ertekek()
+    assert alap[("pass", 2)] == alap[("pass", 3)]
+    tam = AttackModel(lovok={7: {"close": 1.3}, 9: {"far": 0.8}})
+    vele = ertekek(tamadas=tam, kapus={"far": 1.2})
+    assert abs(vele[("pass", 2)] - 1.3 * alap[("pass", 2)]) < 1e-9
+    assert vele[("pass", 3)] == alap[("pass", 3)]
+    assert abs(vele[("shoot", None)] - 0.8 * 1.2 * alap[("shoot", None)]) < 1e-9
+    csak = ertekek(kapus={"far": 1.2})
+    assert abs(csak[("shoot", None)] - 1.2 * alap[("shoot", None)]) < 1e-9
+    assert csak[("pass", 2)] == alap[("pass", 2)]
+    assert best_option(evaluate_options(frame, holder, cfg,
+                                        tamadas=tam)).target_id == 2
+    assert ertekek(tamadas=AttackModel()) == alap
+
+
+def test_a_dontes_modell_valodi_meccsbol_tanulja_a_jatekosokat():
+    """decision_models a szimulált meccsből: a hazai lövőknek van
+    szorzója és a vendég kapus sávjai is megvannak, a vendégnek egyik
+    sem; a szorításos és a helyzet-döntés ezzel számol (a "modell" mező
+    a felirat), az élő figyelő a modell NÉLKÜL (okszerű: a rekordjai a
+    modell nélküli helyzet-döntéséi); a játékos-elemzés is fut vele."""
+    from handball.pipeline.decisions import (decision_models,
+                                             live_decision_alerts,
+                                             pressure_decision_quality,
+                                             situational_decisions)
+    from handball.pipeline.play_simulation import (kapus_felirat,
+                                                   lovo_felirat)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    dm = decision_models(m)
+    assert dm["home"]["tamadas"].lovok and dm["home"]["kapus"]
+    assert not dm["away"]["tamadas"].lovok and dm["away"]["kapus"] == {}
+    assert dm["away"]["felirat"] == ""
+    vart = [s for s in (lovo_felirat(dm["home"]["tamadas"]),
+                        kapus_felirat(dm["home"]["kapus"]).replace(
+                            "a kapus ", "a kapusuk ", 1)) if s]
+    assert dm["home"]["felirat"] == "; ".join(vart)
+    sit = situational_decisions(m)
+    assert sit["home"]["modell"] == dm["home"]["felirat"]
+    assert sit["away"]["modell"] == ""
+    assert situational_decisions(m, modellek=False)["home"]["modell"] == ""
+    recs_live: list = []
+    situational_decisions(m, records_out=recs_live, modellek=False)
+    recs_model: list = []
+    situational_decisions(m, records_out=recs_model)
+    assert len(recs_live) == len(recs_model) > 0
+    assert [r["t"] for r in recs_live] == [r["t"] for r in recs_model]
+    assert isinstance(live_decision_alerts(m)["alerts"], list)
+    pdq = pressure_decision_quality(m)
+    assert pdq["home"]["pressed"] + pdq["home"]["free"] > 0
+    pid = next(iter(dm["home"]["tamadas"].lovok))
+    jatekos = next((p.track_id for f in m.frames for p in f.players
+                    if p.jersey_number == pid and p.team == Team.HOME), None)
+    assert jatekos is not None
+    assert analyze_player_decisions(m, jatekos).passes >= 0
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

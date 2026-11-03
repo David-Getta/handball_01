@@ -369,8 +369,9 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
     "sit_best" a passzoló ÖSSZES döntése ebben a helyzetben a meccsen, és
     közülük a legjobb-opciósak (situational_decisions) — a felirat ebből
     mondja ki, ha a pillanat a játékos visszatérő szokása."""
-    from .decisions import (best_option, decision_situation, detect_passes,
-                            evaluate_options, situational_decisions)
+    from .decisions import (best_option, decision_models, decision_situation,
+                            detect_passes, evaluate_options,
+                            situational_decisions)
 
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
@@ -384,12 +385,21 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
                     for r_ in _sd[side_]["players"]}
     except Exception:
         sit_rows = {}
+    # A játékos-modell (tanult lövők, a szemközti kapus sávjai): a jobb
+    # döntés a játékostól is függ — mint a döntés-rétegekben.
+    try:
+        modellek = decision_models(match, config)
+    except Exception:
+        modellek = {}
     for pe in detect_passes(match, config):
         side = getattr(pe.team, "value", pe.team)
         if side not in passes:
             continue
         passes[side] += 1
-        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config)
+        mod = modellek.get(side) or {}
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config,
+                                tamadas=mod.get("tamadas"),
+                                kapus=mod.get("kapus"))
         best = best_option(opts)
         chosen = next((o for o in opts if o.kind == "pass"
                        and o.target_id == pe.receiver_id), None)

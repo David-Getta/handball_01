@@ -164,19 +164,82 @@ def support_distance(match: Match,
     return out
 
 
+def _jatekos_szorzo(p: PlayerPosition, goal_x: float, tamadas, kapus) -> float:
+    """A játékos-modell szorzója egy lövőhelyre: a játékos tanult lövő-
+    szorzója a hely sávjában (play_simulation.AttackModel — a mezszáma
+    szerint) × a szemközti kapus tanult sávjának szorzója
+    (DefenseModel.kapus). 1, ha nincs modell, nincs mezszám, vagy a
+    sáv nem tanult."""
+    if tamadas is None and not kapus:
+        return 1.0
+    from .play_simulation import kapus_sav
+    sav = kapus_sav(p.x, p.y, goal_x)
+    sz = 1.0
+    if tamadas is not None and p.jersey_number is not None:
+        sz *= float((tamadas.lovok.get(int(p.jersey_number)) or {})
+                    .get(sav, 1.0))
+    if kapus:
+        sz *= float(kapus.get(sav, 1.0))
+    return sz
+
+
 def evaluate_options(frame: Frame, holder: PlayerPosition,
-                     config: Optional[TacticsConfig] = None) -> list[Option]:
-    """A labdás játékos összes opciója értékkel: lövés + passz minden csapattárshoz."""
+                     config: Optional[TacticsConfig] = None,
+                     tamadas=None, kapus: Optional[dict] = None) -> list[Option]:
+    """A labdás játékos összes opciója értékkel: lövés + passz minden
+    csapattárshoz.
+
+    `tamadas` (play_simulation.AttackModel — a labdás csapat tanult
+    lövői) és `kapus` (a szemközti kapus sávonkénti szorzója,
+    DefenseModel.kapus): a JÁTÉKOS-MODELL — a lövés értéke a lövő, a
+    passzé a fogadó tanult lövő-szorzójával és a hely sávjának kapus-
+    szorzójával súlyozva (decision_models adja meccsből). A biztos kezű
+    társnak adott passz így többet ér, a kapus gyenge sávjából a lövés
+    is; modell nélkül a tiszta helyzet-érték (az érték ilyenkor 0..1,
+    a szorzókkal legfeljebb ~1,7)."""
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(holder.team)
-    options = [Option("shoot", None, shot_value(holder.x, holder.y, goal_x))]
+    options = [Option("shoot", None, shot_value(holder.x, holder.y, goal_x)
+                      * _jatekos_szorzo(holder, goal_x, tamadas, kapus))]
     for p in frame.players:
         if p.team != holder.team or p.track_id == holder.track_id:
             continue
         sv = shot_value(p.x, p.y, goal_x)
         comp = pass_completion(holder, p, frame)
-        options.append(Option("pass", p.track_id, sv * comp))
+        options.append(Option("pass", p.track_id, sv * comp
+                              * _jatekos_szorzo(p, goal_x, tamadas, kapus)))
     return options
+
+
+@memoize_primitive("decision_models")
+def decision_models(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """A döntés-modell játékos-rétege csapatonként: {"home" / "away":
+    {"tamadas" (play_simulation.AttackModel — a csapat ebből a meccsből
+    tanult lövői), "kapus" (a SZEMKÖZTI kapus ebből a meccsből tanult
+    sávonkénti szorzói), "felirat"}} — az evaluate_options bemenete. A
+    felirat a felületeknek: "a lövők: a 7-es közelről 1,3× …; a kapusuk
+    távolról 1,2× annyi gólt kap, mint az átlag" (üres, ha egyik modell
+    sem mond érdemit).
+
+    Edzőileg: a "mi lett volna a jobb döntés" nem a helyzetből, hanem a
+    játékosból is számol — a passz annak ér többet, aki onnan betalál,
+    és a lövés abból a sávból, ahol a kapusuk gyenge."""
+    from .play_simulation import (AttackModel, _kapus_tanul, kapus_felirat,
+                                  lovo_felirat)
+    config = config or TacticsConfig()
+    out = {}
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        tam = AttackModel.learn(match, team, config)
+        kap = _kapus_tanul(match, masik, config)
+        reszek = [s for s in (lovo_felirat(tam),
+                              kapus_felirat(kap).replace("a kapus ",
+                                                         "a kapusuk ", 1))
+                  if s]
+        out[side] = {"tamadas": tam, "kapus": kap,
+                     "felirat": "; ".join(reszek)}
+    return out
 
 
 def best_option(options: list[Option]) -> Optional[Option]:
@@ -261,6 +324,8 @@ def analyze_player_decisions(match: Match, player_id: int,
     """
     config = config or TacticsConfig()
     passes = [pe for pe in detect_passes(match, config) if pe.passer_id == player_id]
+    # A játékos-modell: a tanult lövők és a szemközti kapus sávjai.
+    modellek = decision_models(match, config)
 
     distribution: dict[int, int] = {}
     optimal = 0
@@ -268,7 +333,10 @@ def analyze_player_decisions(match: Match, player_id: int,
 
     for pe in passes:
         distribution[pe.receiver_id] = distribution.get(pe.receiver_id, 0) + 1
-        options = evaluate_options(pe.decision_frame, pe.passer_pos, config)
+        mod = modellek.get(getattr(pe.team, "value", pe.team)) or {}
+        options = evaluate_options(pe.decision_frame, pe.passer_pos, config,
+                                   tamadas=mod.get("tamadas"),
+                                   kapus=mod.get("kapus"))
         best = best_option(options)
         # A ténylegesen választott opció: passz a fogadóhoz.
         actual = next((o for o in options
@@ -977,10 +1045,18 @@ def pressure_decision_quality(match: Match,
             rec["free"] += 1
             rec["free_best"] += good
 
+    # A játékos-modell: a tanult lövők és a szemközti kapus sávjai.
+    modellek = decision_models(match, config)
+
+    def _mod(team) -> dict:
+        return modellek.get(getattr(team, "value", team)) or {}
+
     for pe in detect_passes(match, config):
         if pe.decision_frame is None or pe.passer_pos is None:
             continue
-        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config)
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config,
+                                tamadas=_mod(pe.team).get("tamadas"),
+                                kapus=_mod(pe.team).get("kapus"))
         chosen = next((o.value for o in opts
                        if o.kind == "pass" and o.target_id == pe.receiver_id),
                       None)
@@ -998,7 +1074,9 @@ def pressure_decision_quality(match: Match,
                         if p.track_id == e.player_id), None)
         if shooter is None:
             continue
-        opts = evaluate_options(f, shooter, config)
+        opts = evaluate_options(f, shooter, config,
+                                tamadas=_mod(e.team).get("tamadas"),
+                                kapus=_mod(e.team).get("kapus"))
         chosen = next((o.value for o in opts if o.kind == "shoot"), None)
         _record(f, shooter, e.team, chosen, opts)
 
@@ -1131,9 +1209,16 @@ def _from_area_m(x: float, y: float, goal_x: float) -> float:
 
 def situational_decisions(match: Match,
                           config: Optional[TacticsConfig] = None,
-                          records_out: Optional[list] = None) -> dict:
+                          records_out: Optional[list] = None,
+                          modellek=None) -> dict:
     """Helyzet-döntés: MIT CSINÁLNAK az egyes helyzetekben, és mi lett
     volna a legjobb.
+
+    `modellek`: a játékos-modell (decision_models alakja) — alapból a
+    meccsből tanulva: a legjobb opció a fogadó (a lövő) tanult lövő-
+    szorzójával és a szemközti kapus sávjával is számol; `False` =
+    modell nélkül (az élő figyelő, mert az egész meccsből tanult modell
+    előre nézne). A kimenet "modell" mezője a felirat (üres, ha nincs).
 
     A döntés-elemzés eddig összesítve mondta meg, mennyire optimális egy
     passz — ez a játékos- és csapat-modell helyzetenkénti képe. Minden
@@ -1175,6 +1260,9 @@ def situational_decisions(match: Match,
 
     config = config or TacticsConfig()
     by_t = {f.t: f for f in match.frames}
+    if modellek is None:
+        modellek = decision_models(match, config)
+    modellek = modellek or {}
 
     def _empty():
         return {s: {"decisions": 0, "actions": {}, "best": {}, "match": 0}
@@ -1223,12 +1311,16 @@ def situational_decisions(match: Match,
         sit = decision_situation(frame, holder, config)
         if sit is None:
             return
+        mod = modellek.get(team.value) or {}
+        tam, kap = mod.get("tamadas"), mod.get("kapus")
         options = [(xg_of_position(holder.x, holder.y, goal_x)
-                    * cover(holder), None)]
+                    * cover(holder)
+                    * _jatekos_szorzo(holder, goal_x, tam, kap), None)]
         for p in mates:
             options.append((xg_of_position(p.x, p.y, goal_x)
                             * pass_completion(holder, p, frame)
-                            * cover(p), p))
+                            * cover(p)
+                            * _jatekos_szorzo(p, goal_x, tam, kap), p))
         best_v, best_p = max(options, key=lambda o: o[0])
         chosen_v = next(v for v, p in options if p is target)
         act = _action(holder, target, goal_x)
@@ -1286,7 +1378,8 @@ def situational_decisions(match: Match,
                 for pid, s in sorted(per_player[side].items())]
         rec = {"situations": sits, "players": rows, "situation": None,
                "habit": None, "best_action": None, "top": None,
-               "verdict": None}
+               "verdict": None,
+               "modell": (modellek.get(side) or {}).get("felirat", "")}
         out[side] = rec
         worst = None
         for sit in SIT_SITUATIONS:
@@ -1347,7 +1440,8 @@ def live_decision_alerts(match: Match,
 
     Edzőileg: ez a kispadnak szóló élő tanács — a félidei elemzés helyett
     már a 15. percben: "kilépésre rendre hátra passzolnak, lépjetek ki
-    rájuk".
+    rájuk". A játékos-modell (tanult lövők, kapus-sávok) NÉLKÜL: az az
+    egész meccsből tanul, élőben előre nézne.
 
     Visszatérés: {"alerts": [{"t" (a jelzést kiváltó döntés kockája),
     "team" (a rossz szokású csapat), "situation", "habit", "best_action",
@@ -1355,7 +1449,7 @@ def live_decision_alerts(match: Match,
     """
     config = config or TacticsConfig()
     recs: list = []
-    situational_decisions(match, config, records_out=recs)
+    situational_decisions(match, config, records_out=recs, modellek=False)
     recs.sort(key=lambda r: (r["t"], r["side"]))
     names = {"home": match.meta.home_team, "away": match.meta.away_team}
     acc: dict = {}

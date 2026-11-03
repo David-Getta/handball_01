@@ -3595,6 +3595,11 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
             mondat = (sit.get(side) or {}).get("verdict")
             if mondat:
                 body += f" A(z) {name} szokása: {mondat}."
+                # A játékos-modell: a "jobb opció" a tanult lövőkkel és a
+                # szemközti kapus sávjaival számolt (ha van ilyen minta).
+                modell = (sit.get(side) or {}).get("modell")
+                if modell:
+                    body += f" (A modell a játékosokkal számol: {modell}.)"
     except Exception:
         pass
     # Időkérés-befejező: az időkérés után kire játszanak.
