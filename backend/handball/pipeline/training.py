@@ -1562,6 +1562,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 493) Falválasztás: az ellenfél visszatérő figurái ellen a
+    # szimulációban egy másik rendszerünk érdemben kevesebbet enged, mint
+    # a mostani — a váltást (az új rendszer a saját szokásainkkal, a
+    # figuráik ellen) edzésen kell begyakorolni.
+    _szabaly = 493
+    try:
+        from .play_simulation import (defense_system_choice,
+                                      rendszer_nevelovel)
+        fv493 = defense_system_choice(match, config)
+        for side in ("home", "away"):
+            p493 = fv493.get(side)
+            if not p493 or not p493.get("valt"):
+                continue
+            add(side, "védekezés", "Falváltás a figuráik ellen",
+                f"a szimuláció szerint {p493['verdict']}",
+                f"{rendszer_nevelovel(p493['javasolt'])} begyakorlása a "
+                "figuráik ellen: a Figura-tervezőben az ő figurájuk a mi "
+                f"falunkkal {p493['javasolt']}-ben, aztán a pályán 6 a 6 "
+                "ellen, a kilépés és a visszazárás az új rendszerben")
+    except Exception:
+        pass
+
     # 492) Kapus-választás: az ellenfél tanult lövői ellen a két
     # kapusunk közül az egyik érdemben kevesebbet kapna (a sáv-mérlege
     # szerint) — ő álljon ellenük, és a gyengébb kapus a lövőik sávját

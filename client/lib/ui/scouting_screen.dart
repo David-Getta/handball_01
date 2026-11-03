@@ -8935,6 +8935,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Falválasztás: a figuráikat a szimulációban melyik rendszer zárta a
+  // legjobban (fv_rendszer_db / fv_meccsek — backend
+  // play_simulation.defense_system_choice); legalább 2 meccs kell
+  // (FV_MIN_MECCS) és a meccsek többsége.
+  String? _defenseSystemChoice(Map<String, dynamic> r) {
+    final meccsek = ((r["fv_meccsek"] as num?) ?? 0).toInt();
+    final db = (r["fv_rendszer_db"] as Map?)?.cast<String, dynamic>();
+    if (meccsek < 2 || db == null || db.isEmpty) return null;
+    String? top;
+    var topN = -1;
+    for (final e in db.entries) {
+      final n = (e.value as num?)?.toInt() ?? 0;
+      if (n > topN || (n == topN && top != null && e.key.compareTo(top) > 0)) {
+        top = e.key;
+        topN = n;
+      }
+    }
+    if (top == null || 2 * topN < meccsek) return null;
+    final nevelo = top.startsWith("5") ? "az" : "a";
+    return "a figuráikat a szimulációban $nevelo $top zárta a legjobban "
+        "($topN/$meccsek meccs) · ellenük ezt a falat érdemes hozni";
+  }
+
   // Kapus-választás: a kapusaik tanult sáv-szorzói (kc_kapusok — a backend
   // play_simulation.keeper_choice_from mintája); egy sáv akkor hír, ha a
   // szorzója legalább 0.1-del eltér az 1-től (LOVO_FELIRAT_ELTERES).
@@ -12245,6 +12268,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kit kinek: távoli lövőjük", _shooterDefenderMatchup(r)!],
       if (_keeperChoice(r) != null)
         ["Kapusaik sávonként", _keeperChoice(r)!],
+      if (_defenseSystemChoice(r) != null)
+        ["Falválasztás ellenük", _defenseSystemChoice(r)!],
       if (_concededChanceQuality(r) != null)
         ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_stealTypes(r) != null)

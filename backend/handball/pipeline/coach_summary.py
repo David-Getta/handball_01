@@ -7549,6 +7549,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 pass_line += f" A(z) {name} kapus-választása: {p['verdict']}."
     except Exception:
         pass
+    # Falválasztás: melyik rendszerük zárja jobban az ellenfél figuráit
+    # (play_simulation.defense_system_choice) — csak ha érdemi a váltás.
+    try:
+        from .play_simulation import defense_system_choice
+        fv = defense_system_choice(match)
+        for side, name in (("home", home), ("away", away)):
+            p = fv.get(side)
+            if p and p.get("valt"):
+                pass_line += f" A(z) {name} falválasztása: {p['verdict']}."
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

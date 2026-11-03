@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **Falválasztás: melyik rendszerünk zárja a figuráikat**
+  (`defense_system_choice` — motor + API + összefoglaló + felderítés +
+  meccsterv + edzésterv + kliens-csempe): az ellenfél visszatérő
+  figuráit a MI tanult falunkkal játssza le, de a rendszert cserélve
+  (6-0, 5-1, 4-2, 3-2-1, 3-3 — a kilépés, a kettőzés, a labdakövetés,
+  a kapus és a védők maradnak), az ő tanult lövőikkel; rendszerenként
+  az ismétléssel súlyozott lövőhelyzet. A legkisebb a javasolt; váltást
+  csak legalább 3 százalékpont nyereségnél mond: "a figuráik ellen az
+  5-1 zár jobban: 22% lövőhelyzet a mostani 6-0 28%-a helyett (6
+  százalékponttal kevesebb, 3 figurájukból)". Edzőileg: ellenük milyen
+  falat hozzunk — nem általában, hanem az ő figuráik ellen. Felületek:
+  /analyze és a meccs-csomag; az összefoglaló (csak érdemi váltásnál);
+  a felderítés a javasolt rendszert meccsenként számolja (összeadódik),
+  kulcsa "A figuráikat a szimulációban az 5-1 zárta a legjobban (2/3
+  meccs)"; meccsterv 473 (a javasolt rendszer × a ti szokásos falatok);
+  edzés-szabály 493 (a váltás begyakorlása); a felderítő képernyő
+  "Falválasztás ellenük" csempéje. A visszatérő figurák kinyerése közös
+  (recurring_figures) a védekezési próbával.
+
 - **Kapus-választás: melyik kapusunk az ő lövőik ellen**
   (`keeper_choice` — motor + API + összefoglaló + felderítés +
   meccsterv + edzésterv + kliens-csempe): kapusonként (mezszám) a

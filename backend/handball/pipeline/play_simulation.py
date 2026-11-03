@@ -1597,6 +1597,124 @@ PROBA_MIN_ISMETLES = 2
 PROBA_MAX = 8
 
 
+def recurring_figures(match: Match, attacking: Team,
+                      config: TacticsConfig | None = None) -> list:
+    """Az `attacking` csapat visszatérő figurái: a meccs támadás-
+    szakaszainak klaszterei (setplays), legalább PROBA_MIN_ISMETLES
+    ismétléssel, az ismétlés szerint csökkenőben (holtversenyben a
+    klaszter sorszáma) — [(figura: attack_figure a klaszter leghosszabb
+    szakaszából, a klaszter szakaszai időrend nélkül), …]; a figurává
+    nem alakítható klaszter kimarad. A védekezési próba és a
+    falválasztás közös alapja."""
+    from .setplays import (attack_signature, cluster_signatures,
+                           segment_attacks)
+    config = config or TacticsConfig()
+    seqs = segment_attacks(match, config)
+    labels = cluster_signatures([attack_signature(s) for s in seqs])
+    klaszter: dict[int, list] = {}
+    for s, lab in zip(seqs, labels):
+        if s.team == attacking:
+            klaszter.setdefault(lab, []).append(s)
+    ki = []
+    for lab in sorted(klaszter, key=lambda k: (-len(klaszter[k]), k)):
+        tagok = klaszter[lab]
+        if len(tagok) < PROBA_MIN_ISMETLES:
+            continue
+        rep = max(tagok, key=lambda s: (s.end_t - s.start_t, -s.start_t))
+        fig = attack_figure(match, (rep.start_t + rep.end_t) // 2,
+                            config=config)
+        if fig is None:
+            continue
+        ki.append((fig, tagok))
+    return ki
+
+
+# ---- Falválasztás: melyik rendszerünk zárja a figuráikat --------------------
+# Az ellenfél visszatérő figurái (recurring_figures) a MI tanult falunkkal
+# lejátszva, de a rendszert cserélve (VEDEKEZESI_RENDSZEREK mind — a
+# kilépés, a kettőzés, a labdakövetés, a kapus és a védők maradnak), a
+# tanult lövőikkel; rendszerenként az ismétléssel súlyozott átlagos
+# legjobb lövőhelyzet. A legkisebb a javasolt; váltást csak akkor mond,
+# ha a javasolt legalább FALVALASZTAS_ELTERES_PP-vel kevesebbet enged a
+# mostani (tanult) rendszernél. A felderítésben a javasolt rendszer
+# meccsenként számolódik; a kulcshoz legalább FV_MIN_MECCS meccs kell.
+FALVALASZTAS_ELTERES_PP = 3.0
+FV_MIN_MECCS = 2
+
+
+def rendszer_nevelovel(r: str) -> str:
+    """A rendszer névelővel ("az 5-1", "a 6-0", "a 3-2-1")."""
+    return ("az " if str(r).startswith("5") else "a ") + str(r)
+
+
+def defense_system_choice(match: Match,
+                          config: TacticsConfig | None = None) -> dict:
+    """Falválasztás — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az
+    ellenfél visszatérő figurái ellen melyik rendszerünk (6-0, 5-1, 4-2,
+    3-2-1, 3-3) teremt a legkisebb lövőhelyzetet — a tanult falunk
+    szokásaival és az ő tanult lövőikkel lejátszva.
+
+    Edzőileg: "ellenük milyen falat hozzunk?" — nem általában, hanem az
+    ő figuráik ellen: ha a figurájuk a beállóra épül, az előretolt
+    védős rendszer zárhatja jobban; ha átlövésre, a mély 6-0.
+
+    Visszaad csapatonként: {"rendszerek" ({rendszer: lövőhelyzet %}),
+    "mostani" (a tanult rendszerünk), "mostani_pct", "javasolt",
+    "javasolt_pct", "javulas_pp", "valt" (érdemi-e a váltás), "figurak"
+    (hány visszatérő figurájuk), "verdict"} — None, ha nincs visszatérő
+    figurájuk (kevés minta — a modell nem találgat)."""
+    config = config or TacticsConfig()
+    out: dict = {}
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        figurak = recurring_figures(match, masik, config)[:PROBA_MAX]
+        if not figurak:
+            out[side] = None
+            continue
+        fal = DefenseModel.learn(match, team, config)
+        tam = AttackModel.learn(match, masik, config)
+        pontok: dict = {}
+        for r in VEDEKEZESI_RENDSZEREK:
+            fal_r = replace(fal, rendszer=r)
+            ossz = suly = 0.0
+            for fig, tagok in figurak:
+                try:
+                    _, e = setplay_3d_match(fig["attackers"], fal_r,
+                                            ball=fig["labda"], config=config,
+                                            tamadas=tam, mezek=fig.get("mez"))
+                except ValueError:
+                    continue
+                ossz += e["best_shot_value"] * len(tagok)
+                suly += len(tagok)
+            if suly:
+                pontok[r] = round(100.0 * ossz / suly, 1)
+        if not pontok:
+            out[side] = None
+            continue
+        mostani = fal.rendszer if fal.rendszer in pontok else "6-0"
+        javasolt = min(pontok, key=lambda r: (pontok[r], r != mostani, r))
+        javulas = round(pontok[mostani] - pontok[javasolt], 1)
+        valt = javasolt != mostani and javulas >= FALVALASZTAS_ELTERES_PP
+        if valt:
+            verdict = (f"a figuráik ellen {rendszer_nevelovel(javasolt)} zár "
+                       f"jobban: {pontok[javasolt]:.0f}% lövőhelyzet a mostani "
+                       f"{mostani} {pontok[mostani]:.0f}%-a helyett "
+                       f"({javulas:.0f} százalékponttal kevesebb, "
+                       f"{len(figurak)} figurájukból)")
+        else:
+            masik_r = min((r for r in pontok if r != mostani),
+                          key=lambda r: (pontok[r], r), default=None)
+            verdict = (f"a figuráik ellen a mostani {mostani} a jó: "
+                       f"{pontok[mostani]:.0f}% lövőhelyzet"
+                       + (f" (a legjobb másik rendszer, {rendszer_nevelovel(masik_r)}: "
+                          f"{pontok[masik_r]:.0f}%)" if masik_r else ""))
+        out[side] = {"rendszerek": pontok, "mostani": mostani,
+                     "mostani_pct": pontok[mostani], "javasolt": javasolt,
+                     "javasolt_pct": pontok[javasolt], "javulas_pp": javulas,
+                     "valt": valt, "figurak": len(figurak), "verdict": verdict}
+    return out
+
+
 def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
                  config: TacticsConfig | None = None,
                  tamadas: AttackModel | None = None) -> dict:
@@ -1624,27 +1742,10 @@ def defense_test(match: Match, attacking: Team, defense: DefenseModel, *,
     figura-riasztás ebből ismeri fel, melyik figura indul)}, …] a pont
     szerint csökkenőben (holtversenyben az idő), és "verdict" (magyar
     mondat, vagy None, ha nincs visszatérő figura)}."""
-    from .setplays import (attack_signature, cluster_signatures,
-                           segment_attacks)
-
     config = config or TacticsConfig()
-    seqs = segment_attacks(match, config)
-    labels = cluster_signatures([attack_signature(s) for s in seqs])
-    klaszter: dict[int, list] = {}
-    for s, lab in zip(seqs, labels):
-        if s.team == attacking:
-            klaszter.setdefault(lab, []).append(s)
     alap = DefenseModel()
     sorok = []
-    for lab in sorted(klaszter, key=lambda k: (-len(klaszter[k]), k)):
-        tagok = klaszter[lab]
-        if len(tagok) < PROBA_MIN_ISMETLES:
-            continue
-        rep = max(tagok, key=lambda s: (s.end_t - s.start_t, -s.start_t))
-        fig = attack_figure(match, (rep.start_t + rep.end_t) // 2,
-                            config=config)
-        if fig is None:
-            continue
+    for fig, tagok in recurring_figures(match, attacking, config):
         try:
             _, e = setplay_3d_match(fig["attackers"], defense,
                                     ball=fig["labda"], config=config,

@@ -175,6 +175,13 @@ class ScoutingReport:
     # kapusonként a tanult sáv-szorzók) származtatott, ÚJRASZÁMOLVA.
     kapusok_minta: dict = field(default_factory=dict)
     kc_kapusok: list = field(default_factory=list)
+    # Falválasztás (play_simulation.defense_system_choice): a figuráik
+    # ellen a szimulációban legjobban záró rendszer meccsenként —
+    # {rendszer: meccsek száma}, a váltást javasló meccsek és az ítéletes
+    # meccsek száma; meccsek közt összeadódik (arány sose).
+    fv_rendszer_db: dict = field(default_factory=dict)
+    fv_valt_db: int = 0
+    fv_meccsek: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -10758,6 +10765,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Falválasztás: a figuráikat a szimulációban melyik rendszer zárta a
+    # legjobban (play_simulation.defense_system_choice) — legalább
+    # FV_MIN_MECCS meccsből, a meccsek többségében.
+    try:
+        from .play_simulation import FV_MIN_MECCS, rendszer_nevelovel
+        _fvm = int(rep.fv_meccsek or 0)
+        if _fvm >= FV_MIN_MECCS and rep.fv_rendszer_db:
+            _fvr, _fvn = max(rep.fv_rendszer_db.items(),
+                             key=lambda kv: (kv[1], kv[0]))
+            if 2 * _fvn >= _fvm:
+                keys.append(
+                    f"A figuráikat a szimulációban {rendszer_nevelovel(_fvr)} "
+                    f"zárta a legjobban ({_fvn}/{_fvm} meccs) — ellenük ezt "
+                    "a falat érdemes hozni.")
+    except Exception:
+        pass
+
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
     return strengths, weaknesses, keys
@@ -13406,6 +13430,18 @@ def _scout_team_cached(match: Match, team: Team,
                 for k, m_ in _kck(match, team, config).items()}
         except Exception:
             pass
+        # Falválasztás: a figuráik ellen a szimulációban legjobban záró
+        # rendszer (a VELÜK SZEMBEN védekező oldal képe ebből a meccsből).
+        try:
+            from .play_simulation import defense_system_choice as _fvc
+            _fv = _fvc(match, config).get(
+                "away" if team == Team.HOME else "home")
+            if _fv:
+                rep.fv_rendszer_db = {_fv["javasolt"]: 1}
+                rep.fv_valt_db = 1 if _fv["valt"] else 0
+                rep.fv_meccsek = 1
+        except Exception:
+            pass
         from .momentum import goal_responses
         grec = goal_responses(match, config)[team.value]
         rep.response_n = grec["responses"]
@@ -15599,6 +15635,32 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 473) Falválasztás: a figuráikat a szimulációban legjobban záró
+    # rendszer (legalább FV_MIN_MECCS meccsből, a többségben) × a TI
+    # szokásos falatok — ha más, ellenük azt a falat hozzátok.
+    try:
+        from .play_simulation import FV_MIN_MECCS, rendszer_nevelovel
+        _fvm473 = int(opp.fv_meccsek or 0)
+        if _fvm473 >= FV_MIN_MECCS and opp.fv_rendszer_db:
+            _r473, _n473 = max(opp.fv_rendszer_db.items(),
+                               key=lambda kv: (kv[1], kv[0]))
+            if 2 * _n473 >= _fvm473:
+                if own.defense_main and own.defense_main != "—" \
+                        and own.defense_main != _r473:
+                    plan.append(
+                        f"A figuráikat a szimulációban {rendszer_nevelovel(_r473)} "
+                        f"zárta a legjobban ({_n473}/{_fvm473} meccs), ti "
+                        f"főleg {own.defense_main}-ban védekeztek — ellenük "
+                        f"próbáljátok {rendszer_nevelovel(_r473)}-et, a saját "
+                        "kilépésetekkel és kettőzésetekkel.")
+                elif own.defense_main == _r473:
+                    plan.append(
+                        f"A figuráikat a szimulációban is a ti falatok, "
+                        f"{rendszer_nevelovel(_r473)} zárta a legjobban "
+                        f"({_n473}/{_fvm473} meccs) — maradjatok nála.")
     except Exception:
         pass
 
@@ -24521,6 +24583,13 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                     sav, [0, 0])
                 m[0] += v[0]
                 m[1] += v[1]
+    # Falválasztás: a javasolt rendszerek meccs-számai összeadódnak.
+    rep.fv_rendszer_db = {}
+    rep.fv_valt_db = sum(int(r.fv_valt_db or 0) for r in reports)
+    rep.fv_meccsek = sum(int(r.fv_meccsek or 0) for r in reports)
+    for r in reports:
+        for rs, n in (r.fv_rendszer_db or {}).items():
+            rep.fv_rendszer_db[rs] = rep.fv_rendszer_db.get(rs, 0) + int(n)
     # Passz-hálózat egyesítése: azonos (from,to) párok passzai összeadódnak.
     rep.pass_total = sum(r.pass_total for r in reports)
     merged_pairs: dict = {}

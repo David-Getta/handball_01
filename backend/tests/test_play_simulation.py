@@ -991,6 +991,98 @@ def test_a_kapus_valasztas_valodi_meccsbol_es_a_felderitesben(monkeypatch):
         r["away"]["dontes"])
 
 
+def test_a_falvalasztas_a_figuraik_ellen():
+    """Falválasztás: a vendég (Mi) fala ellen a hazai visszatérő figurája
+    minden rendszerben lejátszva — a mostani a tanult rendszer, a pontja
+    a védekezési próba pontja, a javasolt a legkisebb, a váltás csak
+    FALVALASZTAS_ELTERES_PP felett, a mondat a motoré; a hazai oldalon
+    (nincs ellenfél-figura) None; egyszeri támadásból None."""
+    from handball.pipeline.play_simulation import (
+        AttackModel, FALVALASZTAS_ELTERES_PP, VEDEKEZESI_RENDSZEREK,
+        defense_system_choice, defense_test, recurring_figures,
+        rendszer_nevelovel)
+
+    m = _proba_match()
+    r = defense_system_choice(m)
+    assert r["home"] is None
+    p = r["away"]
+    assert p and set(p["rendszerek"]) == set(VEDEKEZESI_RENDSZEREK)
+    assert p["figurak"] == 1
+    fal = DefenseModel.learn(m, Team.AWAY)
+    assert p["mostani"] == fal.rendszer
+    assert p["mostani_pct"] == p["rendszerek"][fal.rendszer]
+    proba = defense_test(m, Team.HOME, fal,
+                         tamadas=AttackModel.learn(m, Team.HOME))
+    assert abs(p["mostani_pct"] - proba["figurak"][0]["pont_pct"]) < 0.15
+    assert p["javasolt_pct"] == min(p["rendszerek"].values())
+    assert p["javulas_pp"] == round(p["mostani_pct"] - p["javasolt_pct"], 1)
+    assert p["valt"] == (p["javasolt"] != p["mostani"]
+                         and p["javulas_pp"] >= FALVALASZTAS_ELTERES_PP)
+    assert p["verdict"].startswith("a figuráik ellen ")
+    if p["valt"]:
+        assert f"{rendszer_nevelovel(p['javasolt'])} zár jobban" in p["verdict"]
+    else:
+        assert f"a mostani {p['mostani']} a jó" in p["verdict"]
+    assert len(recurring_figures(m, Team.HOME)) == 1
+    assert recurring_figures(m, Team.AWAY) == []
+    assert defense_system_choice(_proba_match(ismetles=1)) == {
+        "home": None, "away": None}
+    assert [rendszer_nevelovel(x) for x in ("6-0", "5-1", "3-2-1")] == [
+        "a 6-0", "az 5-1", "a 3-2-1"]
+
+
+def test_a_falvalasztas_a_felderitesben_es_az_edzestervben(monkeypatch):
+    """A felderítés a figuráik ellen javasolt rendszert meccsenként
+    számolja (az ő jelentésükben, a velük szemben védekező oldal
+    képéből), két meccsből összeadja; a kulcs és a meccsterv (473) a
+    többségi rendszerről szól legalább FV_MIN_MECCS meccsből (a ti
+    szokásos falatokhoz mérve), egy meccsből még nem; az edzésterv (493)
+    és az összefoglaló csak érdemi váltásnál."""
+    import handball.pipeline.training as tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import (FV_MIN_MECCS,
+                                                   defense_system_choice,
+                                                   rendszer_nevelovel)
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.pipeline.training import training_focus
+
+    m = _proba_match()
+    p = defense_system_choice(m)["away"]
+    opp = scout_team(m, Team.HOME)
+    assert (opp.fv_rendszer_db, opp.fv_meccsek, opp.fv_valt_db) == (
+        {p["javasolt"]: 1}, 1, int(p["valt"]))
+    own = scout_team(m, Team.AWAY)
+    assert own.fv_meccsek == 0 and own.fv_rendszer_db == {}
+    assert FV_MIN_MECCS == 2
+    assert not any(k.startswith("A figuráikat a szimulációban")
+                   for k in opp.keys_to_game)
+    ketto = combine_reports([opp, opp])
+    assert ketto.fv_meccsek == 2 and ketto.fv_rendszer_db == {p["javasolt"]: 2}
+    kulcs = (f"A figuráikat a szimulációban {rendszer_nevelovel(p['javasolt'])} "
+             "zárta a legjobban (2/2 meccs)")
+    assert any(k.startswith(kulcs) for k in ketto.keys_to_game)
+    own2 = combine_reports([own, own])
+    terv = [s for s in matchup_plan(own2, ketto)
+            if "zárta a legjobban (2/2 meccs)" in s]
+    if own2.defense_main in ("—", "", None):
+        assert terv == []
+    elif own2.defense_main == p["javasolt"]:
+        assert len(terv) == 1 and "maradjatok nála" in terv[0]
+    else:
+        assert len(terv) == 1 and \
+            f"próbáljátok {rendszer_nevelovel(p['javasolt'])}-et" in terv[0]
+    assert not [s for s in matchup_plan(ketto, own2) if "zárta a legjobban" in s]
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+    tetel = [i for i in training_focus(m)["away"]
+             if i["title"] == "Falváltás a figuráik ellen"]
+    assert len(tetel) == (1 if p["valt"] else 0)
+    if tetel:
+        assert tetel[0]["why"].endswith(p["verdict"])
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert (f"falválasztása: {p['verdict']}." in szoveg) == bool(p["valt"])
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba
