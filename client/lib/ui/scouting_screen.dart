@@ -8935,6 +8935,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kit kinek: a veszélyes távoli lövőjük és a sávja — a backend
+  // play_simulation.shooter_defender_pairs képe (kk_lovok; a küszöbök a
+  // backendé, itt csak a sor).
+  String? _shooterDefenderMatchup(Map<String, dynamic> r) {
+    final l = r["kk_lovok"];
+    if (l is! List || l.isEmpty || l.first is! Map) return null;
+    final p = (l.first as Map).cast<String, dynamic>();
+    final mez = p["lovo_mez"];
+    final sz = (p["szorzo"] as num?)?.toDouble();
+    if (mez == null || sz == null) return null;
+    final sav = p["band"] == "far" ? "távolról" : "közepes távolságból";
+    return "távoli lövőjük a $mez-es ($sav ${sz.toStringAsFixed(1).replaceAll(".", ",")}× "
+        "annyit lő be, mint amennyit a helyzetei érnek) a ${p["sav_nev"]} "
+        "sávból (${p["lovesek"]} lövés) · a sávjában a kilépő védőtök álljon";
+  }
+
   // Utolsó labda: kire és honnan — a backend play_simulation
   // last_shot_choice képe (lsp_pick: a tanult lövőik × átlagos kapus; a
   // mondat a backendé, itt nincs küszöb).
@@ -12196,6 +12212,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Utolsó labda", _closingAttacks(r)!],
       if (_lastShotPick(r) != null)
         ["Utolsó labda: kire", _lastShotPick(r)!],
+      if (_shooterDefenderMatchup(r) != null)
+        ["Kit kinek: távoli lövőjük", _shooterDefenderMatchup(r)!],
       if (_concededChanceQuality(r) != null)
         ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_stealTypes(r) != null)

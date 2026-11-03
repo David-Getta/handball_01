@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **Kit kinek: a lövőjük és a védőnk** (`shooter_defender_matchup` —
+  motor + API + összefoglaló + felderítés + meccsterv + edzésterv +
+  kliens-csempe): az emberfogás-kérdés a két játékos-modellből. Az
+  ellenfél távolról vagy közepes távolságból veszélyes lövői (a sáv
+  szorzója legalább 1,1×), a lövőhelyük sávja (a pálya szélessége három
+  sávra osztva, legalább három lövésből) és a falunk ott álló védője
+  (a tanult helye szerint): ha az a védő ritkán lép ki (30% alatt vagy
+  ismeretlen) és van kilépő védőnk (50% felett), a modell cserét
+  javasol — "a 9-es (távolról 1,3× annyit lő be, mint amennyit a
+  helyzetei érnek) a szélső sávból lő (5 lövés); ott a 3-as áll, aki
+  ritkán lép ki (12%) — a 6-os (kilépő, 62%) álljon vele szemben". A
+  sáv neve oldal-független (szélső / középső), a védőt a mezszáma
+  nevezi. Felületek: /analyze és a meccs-csomag; az összefoglaló; a
+  felderítés a lövőik sáv-mintáját és a faluk védőnkénti mintáját
+  nyersen tárolja (összeadódik), kulcsa "Távoli lövőjük: …"; meccsterv
+  471 (az ő lövőik × a ti falatok védői); edzés-szabály 491 (a fal
+  sorrendjének cseréje begyakorolva); a felderítő képernyő "Kit kinek"
+  csempéje.
+
 - **AI-finomító a lövőkkel: a befejezőt is cseréli** (motor + tervező):
   a finomító eddig a futásokat tolta és a passzokat cserélte; most a
   tanult lövőkkel (a meccsből vett figura mezszámaival) a SZEREPCSERÉT

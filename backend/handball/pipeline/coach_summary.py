@@ -7525,6 +7525,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 pass_line += f" A(z) {name} utolsó labdája {p['verdict']}."
     except Exception:
         pass
+    # Kit kinek: az ellenfél veszélyes távoli lövője × a fal ott álló
+    # védője (play_simulation.shooter_defender_matchup; a mondat a
+    # motoré).
+    try:
+        from .play_simulation import shooter_defender_matchup
+        kk = shooter_defender_matchup(match)
+        for side, name in (("home", home), ("away", away)):
+            v = (kk.get(side) or {}).get("verdict")
+            if v:
+                pass_line += f" A(z) {name} falának kit kinek: {v}."
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

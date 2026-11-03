@@ -159,6 +159,16 @@ class ScoutingReport:
     lsp_lovo_minta: dict = field(default_factory=dict)
     lsp_kapus_minta: dict = field(default_factory=dict)
     lsp_pick: dict | None = None
+    # Kit kinek (play_simulation.shooter_defender_pairs): a lövőik
+    # sáv-mintája {mez (str): [lövés sávonként]} és a SAJÁT faluk
+    # védőnkénti nyers mintája {mez (str): {"n", "y_osszeg", "kozel",
+    # "ralepett", "masodik", "kettozott"}} + a védekező kockák száma —
+    # meccsek közt összeadódik; a kép (kk_lovok: a veszélyes távoli
+    # lövőik és a sávjuk) származtatott, a végén ÚJRASZÁMOLVA.
+    kk_lovo_savok: dict = field(default_factory=dict)
+    fal_vedok_minta: dict = field(default_factory=dict)
+    fal_kockak: int = 0
+    kk_lovok: list = field(default_factory=list)
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -10703,6 +10713,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Kit kinek: a veszélyes távoli lövőjük és a sávja — a sávjában a
+    # kilépő védőtök álljon (play_simulation.shooter_defender_pairs).
+    try:
+        from .play_simulation import KAPUS_SAV_NEV, mezszam_nevelovel
+        _kk = (rep.kk_lovok or [None])[0]
+        if _kk:
+            _szkk = f"{_kk['szorzo']:.1f}".replace(".", ",")
+            keys.append(
+                f"Távoli lövőjük: {mezszam_nevelovel(_kk['lovo_mez'])} "
+                f"({KAPUS_SAV_NEV[_kk['band']]} {_szkk}× annyit lő be, mint "
+                f"amennyit a helyzetei érnek) a {_kk['sav_nev']} sávból "
+                f"({_kk['lovesek']} lövés) — a sávjában a kilépő védőtök "
+                "álljon, a lövő-karjára lépjen ki.")
+    except Exception:
+        pass
+
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
     return strengths, weaknesses, keys
@@ -13328,6 +13354,21 @@ def _scout_team_cached(match: Match, team: Team,
                                    for s, v in _lspk(match, team, config).items()}
         except Exception:
             pass
+        # Kit kinek: a lövőik sáv-mintája és a saját faluk védőnkénti
+        # nyers mintája (str mezszám-kulccsal).
+        try:
+            from .play_simulation import (_lovo_sav_minta as _kks,
+                                          _tanulas_minta as _kkt)
+            rep.kk_lovo_savok = {str(m): [int(x) for x in v]
+                                 for m, v in _kks(match, team, config).items()}
+            _tm = _kkt(match, team, config)
+            rep.fal_vedok_minta = {
+                str(m): {k: (float(x) if k == "y_osszeg" else int(x))
+                         for k, x in v.items()}
+                for m, v in _tm.get("vedok", {}).items()}
+            rep.fal_kockak = int(_tm.get("kockak", 0))
+        except Exception:
+            pass
         from .momentum import goal_responses
         grec = goal_responses(match, config)[team.value]
         rep.response_n = grec["responses"]
@@ -13427,6 +13468,10 @@ def _scout_team_cached(match: Match, team: Team,
         rep.lsp_pick = _lsp_pick_of(rep)
     except Exception:
         rep.lsp_pick = None
+    try:
+        rep.kk_lovok = _kk_lovok_of(rep)
+    except Exception:
+        rep.kk_lovok = []
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -13439,6 +13484,32 @@ def _lsp_pick_of(rep: "ScoutingReport") -> dict | None:
     from .play_simulation import AttackModel, last_shot_choice
     return last_shot_choice(
         AttackModel._modell_mintabol(rep.lsp_lovo_minta or {}))
+
+
+def _kk_lovok_of(rep: "ScoutingReport") -> list:
+    """A veszélyes távoli lövőik és a sávjuk a (összegzett) lövő- és
+    sáv-mintából (play_simulation.shooter_defender_pairs, a fal nélkül):
+    [{"lovo_mez", "sav", "sav_nev", "band", "szorzo", "lovesek"}, …] —
+    a scout_team és a combine_reports végén újraszámolva."""
+    from .play_simulation import AttackModel, shooter_defender_pairs
+    return [{k: p[k] for k in ("lovo_mez", "sav", "sav_nev", "band",
+                               "szorzo", "lovesek")}
+            for p in shooter_defender_pairs(
+                AttackModel._modell_mintabol(rep.lsp_lovo_minta or {}),
+                rep.kk_lovo_savok or {}, [])]
+
+
+def _kk_parok_of(own: "ScoutingReport", opp: "ScoutingReport") -> list:
+    """Kit kinek a két jelentésből: az ő lövőik (opp) × a MI falunk
+    védői (own, az összegzett védőnkénti mintából)."""
+    from .play_simulation import (AttackModel, _vedok_mintabol,
+                                  shooter_defender_pairs)
+    vedok = _vedok_mintabol(own.fal_vedok_minta or {}, own.fal_kockak or 0)
+    if not vedok:
+        return []
+    return shooter_defender_pairs(
+        AttackModel._modell_mintabol(opp.lsp_lovo_minta or {}),
+        opp.kk_lovo_savok or {}, vedok)
 
 
 
@@ -15470,6 +15541,18 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 471) Kit kinek: az ő veszélyes távoli lövőjük sávja × a TI falatok
+    # ott álló védője — ha a sávban a lassú kilépőtök áll, a kilépő
+    # védőtök álljon a lövővel szemben (a fal sorrendjének cseréje).
+    try:
+        _kk471 = _kk_parok_of(own, opp)
+        if _kk471:
+            plan.append("Kit kinek: " + _kk471[0]["verdict"] + (
+                f"; a második: {_kk471[1]['verdict']}" if len(_kk471) > 1
+                else "") + ".")
     except Exception:
         pass
 
@@ -24326,6 +24409,23 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             m = rep.lsp_kapus_minta.setdefault(sav, [0, 0])
             m[0] += v[0]
             m[1] += v[1]
+    # Kit kinek: a lövőik sáv-mintája és a faluk védőnkénti mintája
+    # (mezszám szerint) összeadódik; a kép (kk_lovok) a végén újra.
+    rep.kk_lovo_savok = {}
+    rep.fal_vedok_minta = {}
+    rep.fal_kockak = sum(int(r.fal_kockak or 0) for r in reports)
+    for r in reports:
+        for mez, v in (r.kk_lovo_savok or {}).items():
+            m = rep.kk_lovo_savok.setdefault(str(mez), [0] * len(v))
+            for i, x in enumerate(v):
+                if i < len(m):
+                    m[i] += x
+        for mez, v in (r.fal_vedok_minta or {}).items():
+            m = rep.fal_vedok_minta.setdefault(str(mez), {
+                "n": 0, "y_osszeg": 0.0, "kozel": 0, "ralepett": 0,
+                "masodik": 0, "kettozott": 0})
+            for k in m:
+                m[k] += v.get(k, 0)
     # Passz-hálózat egyesítése: azonos (from,to) párok passzai összeadódnak.
     rep.pass_total = sum(r.pass_total for r in reports)
     merged_pairs: dict = {}
@@ -24380,6 +24480,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rep.lsp_pick = _lsp_pick_of(rep)
     except Exception:
         rep.lsp_pick = None
+    try:
+        rep.kk_lovok = _kk_lovok_of(rep)
+    except Exception:
+        rep.kk_lovok = []
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep

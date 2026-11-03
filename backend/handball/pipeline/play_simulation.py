@@ -241,20 +241,7 @@ class DefenseModel:
                    else m["melyseg_osszeg"] / m["melyseg_n"]
                    if m["melyseg_n"] else 6.0)
         lovo = m["lovo_kockak"]
-        vedok = []
-        for mez, v in m.get("vedok", {}).items():
-            if v["n"] < max(PRESS_LEARN_MIN_FRAMES,
-                            VEDO_JELEN_ARANY * m["kockak"]):
-                continue
-            vedok.append({
-                "mez": mez, "y": round(v["y_osszeg"] / v["n"], 2),
-                "press_rate": (round(v["ralepett"] / v["kozel"], 3)
-                               if v["kozel"] >= VEDO_PRESS_MIN else None),
-                "kozel": v["kozel"],
-                "double_rate": (round(v["kettozott"] / v["masodik"], 3)
-                                if v["masodik"] >= VEDO_PRESS_MIN else None),
-                "masodik": v["masodik"]})
-        vedok.sort(key=lambda r: (r["y"], r["mez"]))
+        vedok = _vedok_mintabol(m.get("vedok", {}), m["kockak"])
         return cls(
             num_defenders=(round(m["vedo_osszeg"] / m["kockak"])
                            if m["kockak"] else 6),
@@ -505,6 +492,29 @@ def _tanulas_minta(match: Match, defending_team: Team,
     return m
 
 
+def _vedok_mintabol(vedok_minta: dict, kockak: int) -> list:
+    """A fal védői a (összeadott) védőnkénti mintából (lásd
+    DefenseModel.vedok): aki a védekező kockák legalább VEDO_JELEN_ARANY
+    részén (és PRESS_LEARN_MIN_FRAMES kockán) a falban állt, a tanult
+    helyével (y) és a saját kilépési / kettőzési hajlamával (legalább
+    VEDO_PRESS_MIN alkalomból, különben None); y szerint rendezve. A
+    felderítés az összegzett mintából is ezt hívja."""
+    vedok = []
+    for mez, v in vedok_minta.items():
+        if v["n"] < max(PRESS_LEARN_MIN_FRAMES, VEDO_JELEN_ARANY * kockak):
+            continue
+        vedok.append({
+            "mez": int(mez), "y": round(v["y_osszeg"] / v["n"], 2),
+            "press_rate": (round(v["ralepett"] / v["kozel"], 3)
+                           if v["kozel"] >= VEDO_PRESS_MIN else None),
+            "kozel": v["kozel"],
+            "double_rate": (round(v["kettozott"] / v["masodik"], 3)
+                            if v["masodik"] >= VEDO_PRESS_MIN else None),
+            "masodik": v["masodik"]})
+    vedok.sort(key=lambda r: (r["y"], r["mez"]))
+    return vedok
+
+
 def _mintak_osszege(mintak: list) -> dict:
     """Több meccs mintájának összege (minden mező összeadódik)."""
     ossz = {"kockak": 0, "vedo_osszeg": 0, "melyseg_osszeg": 0.0,
@@ -662,17 +672,14 @@ class AttackModel:
         return sorok[:LOVO_FELIRAT_MAX]
 
 
-def _lovo_minta(match: Match, attacking_team: Team,
-                config: TacticsConfig) -> dict:
-    """A lövők NYERS mintája egy meccsről: {mezszám: {sáv: [lövés, gól,
-    xG-összeg]}} — a csapat látott lövései (xg.match_xg; a nem látott,
-    középkezdésből következtetett gól nincs köztük), a lövő mezszáma az
-    elengedés (release_t) vagy az esemény kockájáról; mezszám nélküli
-    lövő kimarad. Meccsek közt összeadható."""
+def _lovesek_mezszammal(match: Match, attacking_team: Team,
+                        config: TacticsConfig):
+    """A csapat látott lövései (xg.match_xg; a nem látott, középkezdésből
+    következtetett gól nincs köztük) a lövő mezszámával — (mezszám,
+    lövés-sor) párok; a mezszám az elengedés (release_t) vagy az esemény
+    kockájáról, mezszám nélküli lövő kimarad."""
     from .xg import match_xg
     by_t = {f.t: f for f in match.frames}
-    goal_x = config.attacks_toward_x(attacking_team)
-    out: dict = {}
     for sh in match_xg(match, config)["shots"]:
         pid = sh.get("player_id")
         if sh["team"] != attacking_team.value or pid is None:
@@ -687,8 +694,18 @@ def _lovo_minta(match: Match, attacking_team: Team,
                        None)
             if mez is not None:
                 break
-        if mez is None:
-            continue
+        if mez is not None:
+            yield mez, sh
+
+
+def _lovo_minta(match: Match, attacking_team: Team,
+                config: TacticsConfig) -> dict:
+    """A lövők NYERS mintája egy meccsről: {mezszám: {sáv: [lövés, gól,
+    xG-összeg]}} — a csapat mezszámos lövései (_lovesek_mezszammal), a
+    sáv a lövőhelyé (kapus_sav). Meccsek közt összeadható."""
+    goal_x = config.attacks_toward_x(attacking_team)
+    out: dict = {}
+    for mez, sh in _lovesek_mezszammal(match, attacking_team, config):
         r = out.setdefault(mez, {}).setdefault(
             kapus_sav(sh["x"], sh["y"], goal_x), [0, 0, 0.0])
         r[0] += 1
@@ -2050,6 +2067,145 @@ def live_figure_suggestions(match: Match, figurak: list,
                          f"(alap fal: {b['alap_pct']:.0f}%)")})
     alerts.sort(key=lambda a: (a["t"], a["team"]))
     return {"alerts": alerts}
+
+
+# ---- Kit kinek: a lövőik × a falunk védői -----------------------------------
+# Az ő tanult lövőik közül a távolról vagy közepes távolságból veszélyes
+# (a sáv szorzója legalább KITKINEK_LOVO_SZORZO) lövők, a lövőhelyük
+# SÁVJA (a pálya szélessége KITKINEK_SAVOK egyenlő sávra osztva — a
+# leggyakoribb sáv, legalább KITKINEK_MIN_LOVES lövésből), és a falunk
+# védője, aki a tanult helye (y) szerint abban a sávban áll
+# (DefenseModel.vedok). Ha az ott álló védő ritkán lép ki (a saját
+# hajlama KITKINEK_LASSU alatt vagy ismeretlen) és van kilépő védőnk
+# (legalább KITKINEK_KILEPO), a modell cserét javasol: a kilépő álljon
+# a lövővel szemben. A sáv neve oldal-független ("szélső" / "középső"):
+# a védőt a mezszáma nevezi meg, nem a bal / jobb.
+KITKINEK_LOVO_SZORZO = 1.1
+KITKINEK_SAVOK = 3
+KITKINEK_MIN_LOVES = 3
+KITKINEK_LASSU = 0.3
+KITKINEK_KILEPO = 0.5
+KITKINEK_SAV_NEV = {0: "szélső", 1: "középső", 2: "szélső"}
+
+
+def lovo_sav_index(y: float) -> int:
+    """A lövőhely (vagy a védő helye) sávja a pálya szélességén (0..
+    KITKINEK_SAVOK−1) — a nyers y-ból, mindkét csapatra ugyanúgy (egy
+    pályán állnak, szemben)."""
+    return int(min(KITKINEK_SAVOK - 1,
+                   max(0, y // (COURT_WIDTH_M / KITKINEK_SAVOK))))
+
+
+def _lovo_sav_minta(match: Match, attacking_team: Team,
+                    config: TacticsConfig) -> dict:
+    """A lövők sáv-mintája: {mezszám: [lövés sávonként]} — a csapat
+    mezszámos lövései a lövőhely y-sávja szerint. Meccsek közt
+    összeadható."""
+    out: dict = {}
+    for mez, sh in _lovesek_mezszammal(match, attacking_team, config):
+        out.setdefault(mez, [0] * KITKINEK_SAVOK)[lovo_sav_index(sh["y"])] += 1
+    return out
+
+
+def shooter_defender_pairs(tamadas, savok: dict, vedok: list) -> list:
+    """Kit kinek a kész modellekből: `tamadas` (AttackModel — az ő
+    lövőik), `savok` (a lövőik sáv-mintája, _lovo_sav_minta alakban,
+    mezszám-kulccsal), `vedok` (a falunk védői, DefenseModel.vedok
+    alakban). Visszaad: [{"lovo_mez", "sav" (index), "sav_nev", "band"
+    ("far" / "mid"), "szorzo", "lovesek" (a sávban), "vedo_mez",
+    "vedo_kilepes" (0..1 vagy None), "javasolt_mez", "javasolt_kilepes",
+    "verdict"}, …] a szorzó szerint csökkenőben (holtversenyben
+    mezszám); üres, ha nincs veszélyes lövő."""
+    parok = []
+    if tamadas is None:
+        return parok
+    for mez, bands in tamadas.lovok.items():
+        jeloltek = [(float(bands[b]), b) for b in ("far", "mid") if b in bands]
+        if not jeloltek:
+            continue
+        szorzo, band = max(jeloltek, key=lambda r: (r[0], r[1]))
+        if szorzo < KITKINEK_LOVO_SZORZO:
+            continue
+        sav_db = list(savok.get(mez) or savok.get(str(mez)) or [])
+        if not sav_db or max(sav_db) < KITKINEK_MIN_LOVES:
+            continue
+        sav = max(range(len(sav_db)), key=lambda i: (sav_db[i], -i))
+        kozep = (sav + 0.5) * COURT_WIDTH_M / KITKINEK_SAVOK
+        ott = [v for v in vedok if lovo_sav_index(v["y"]) == sav]
+        vedo = (min(ott, key=lambda v: (abs(v["y"] - kozep), v["mez"]))
+                if ott else None)
+        javasolt = None
+        if vedo is not None and (vedo.get("press_rate") is None
+                                 or vedo["press_rate"] < KITKINEK_LASSU):
+            kilepok = [v for v in vedok
+                       if v.get("press_rate") is not None
+                       and v["press_rate"] >= KITKINEK_KILEPO
+                       and v["mez"] != vedo["mez"]]
+            if kilepok:
+                javasolt = max(kilepok, key=lambda v: (v["press_rate"],
+                                                       -v["mez"]))
+        sor = {"lovo_mez": int(mez), "sav": sav,
+               "sav_nev": KITKINEK_SAV_NEV.get(sav, "középső"),
+               "band": band, "szorzo": round(szorzo, 3),
+               "lovesek": int(sav_db[sav]),
+               "vedo_mez": vedo["mez"] if vedo else None,
+               "vedo_kilepes": vedo.get("press_rate") if vedo else None,
+               "javasolt_mez": javasolt["mez"] if javasolt else None,
+               "javasolt_kilepes": (javasolt["press_rate"]
+                                    if javasolt else None)}
+        sz = f"{szorzo:.1f}".replace(".", ",")
+        v = (f"{mezszam_nevelovel(sor['lovo_mez'])} ({KAPUS_SAV_NEV[band]} "
+             f"{sz}× annyit lő be, mint amennyit a helyzetei érnek) a "
+             f"{sor['sav_nev']} sávból lő ({sor['lovesek']} lövés)")
+        if vedo is None:
+            v += " — a falunkban ott nincs tanult védő"
+        else:
+            vk = vedo.get("press_rate")
+            v += f"; ott {mezszam_nevelovel(vedo['mez'])} áll"
+            if javasolt is not None:
+                v += (f", aki " + (f"ritkán lép ki ({vk * 100:.0f}%)"
+                                   if vk is not None else
+                                   "kilépését nem ismerjük")
+                      + f" — {mezszam_nevelovel(javasolt['mez'])} "
+                      f"(kilépő, {javasolt['press_rate'] * 100:.0f}%) "
+                      "álljon vele szemben")
+            elif vk is not None and vk >= KITKINEK_LASSU:
+                v += f", aki rendre kilép ({vk * 100:.0f}%) — jó a párosítás"
+            else:
+                v += (" — nincs kilépő védőnk, akit elé állíthatnánk: a "
+                      "sáv védője lépjen ki rá")
+        sor["verdict"] = v
+        parok.append(sor)
+    parok.sort(key=lambda r: (-r["szorzo"], r["lovo_mez"]))
+    return parok
+
+
+def shooter_defender_matchup(match: Match,
+                             config: TacticsConfig | None = None) -> dict:
+    """Kit kinek — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az
+    ellenfél távolról / közepes távolságból veszélyes lövői (az ő tanult
+    lövőik, AttackModel.learn), a lövőhelyük sávja, és a falunk védője,
+    aki ott áll (DefenseModel.learn → vedok) — csere-javaslattal a
+    kilépő védőre (shooter_defender_pairs).
+
+    Edzőileg: az emberfogás-kérdés — "ki álljon a 9-essel szemben?" A
+    távoli lövőt az a védő tartja, aki rendre kilép; ha a sávjában a
+    lassú kilépő áll, a fal sorrendjét kell cserélni.
+
+    Visszaad csapatonként: {"parok": [...], "verdict"} — a verdict az
+    első pár mondata, None, ha nincs veszélyes lövőjük vagy tanult
+    védőnk (kevés minta — a modell nem találgat)."""
+    config = config or TacticsConfig()
+    out = {}
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        vedok = DefenseModel.learn(match, team, config).vedok
+        parok = (shooter_defender_pairs(
+            AttackModel.learn(match, masik, config),
+            _lovo_sav_minta(match, masik, config), vedok) if vedok else [])
+        out[side] = {"parok": parok,
+                     "verdict": parok[0]["verdict"] if parok else None}
+    return out
 
 
 # ---- Élő utolsó labda -------------------------------------------------------

@@ -765,6 +765,125 @@ def test_az_elo_figura_ajanlo_a_lovokkel(monkeypatch):
     assert nelkul[0]["lovo_mez"] == 7 and nelkul[0]["lovo_szorzo"] == 1.0
 
 
+def test_a_kit_kinek_parositas_a_modellekbol():
+    """Kit kinek a kész modellekből: a távolról veszélyes lövő (a sáv
+    szorzója legalább KITKINEK_LOVO_SZORZO) a leggyakoribb sávjával; a
+    sávban álló lassú kilépő védő helyett a kilépőt javasolja, a mondat
+    mindent kimond; ha ott kilépő áll, "jó a párosítás"; ha nincs
+    kilépőnk, azt mondja; védő nélkül "nincs tanult védő"; a közeli vagy
+    átlagos lövő és a kevés lövés kimarad; modell nélkül üres."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   KITKINEK_MIN_LOVES,
+                                                   lovo_sav_index,
+                                                   shooter_defender_pairs)
+
+    assert [lovo_sav_index(y) for y in (0.0, 6.6, 6.7, 13.3, 13.4, 20.0)] == [
+        0, 0, 1, 1, 2, 2]
+    tam = AttackModel(lovok={9: {"far": 1.3}, 10: {"close": 1.3},
+                             11: {"mid": 1.0}, 12: {"mid": 1.2}})
+    savok = {9: [5, 1, 0], 12: [KITKINEK_MIN_LOVES - 1, 0, 0]}
+    vedok = [{"mez": 3, "y": 3.0, "press_rate": 0.1},
+             {"mez": 6, "y": 14.0, "press_rate": 0.6},
+             {"mez": 4, "y": 9.0, "press_rate": None}]
+    p = shooter_defender_pairs(tam, savok, vedok)
+    assert len(p) == 1
+    s = p[0]
+    assert (s["lovo_mez"], s["sav"], s["sav_nev"], s["band"], s["szorzo"],
+            s["lovesek"]) == (9, 0, "szélső", "far", 1.3, 5)
+    assert (s["vedo_mez"], s["vedo_kilepes"], s["javasolt_mez"],
+            s["javasolt_kilepes"]) == (3, 0.1, 6, 0.6)
+    assert s["verdict"] == (
+        "a 9-es (távolról 1,3× annyit lő be, mint amennyit a helyzetei "
+        "érnek) a szélső sávból lő (5 lövés); ott a 3-as áll, aki ritkán "
+        "lép ki (10%) — a 6-os (kilépő, 60%) álljon vele szemben")
+    # A sávban kilépő áll: jó a párosítás; str kulcsú sáv-minta is jó.
+    jo = shooter_defender_pairs(tam, {"9": [5, 1, 0]},
+                                [{"mez": 3, "y": 3.0, "press_rate": 0.7}])[0]
+    assert jo["javasolt_mez"] is None and jo["verdict"].endswith(
+        "ott a 3-as áll, aki rendre kilép (70%) — jó a párosítás")
+    # Lassú védő, de nincs kilépőnk.
+    nincs = shooter_defender_pairs(tam, savok,
+                                   [{"mez": 3, "y": 3.0, "press_rate": 0.1}])[0]
+    assert nincs["javasolt_mez"] is None and "nincs kilépő védőnk" in nincs["verdict"]
+    # Ismeretlen kilépésű védő a sávban + kilépő: csere.
+    ism = shooter_defender_pairs(tam, savok, [
+        {"mez": 3, "y": 3.0, "press_rate": None},
+        {"mez": 6, "y": 14.0, "press_rate": 0.6}])[0]
+    assert ism["javasolt_mez"] == 6 and "kilépését nem ismerjük" in ism["verdict"]
+    # Védő nélkül a sávban.
+    ures = shooter_defender_pairs(tam, savok,
+                                  [{"mez": 6, "y": 14.0, "press_rate": 0.6}])[0]
+    assert ures["vedo_mez"] is None and "ott nincs tanult védő" in ures["verdict"]
+    assert shooter_defender_pairs(tam, savok, []) and \
+        shooter_defender_pairs(None, savok, vedok) == []
+    assert shooter_defender_pairs(AttackModel(lovok={9: {"far": 1.3}}), {},
+                                  vedok) == []
+
+
+def test_a_kit_kinek_valodi_meccsbol_es_a_felderitesben(monkeypatch):
+    """A valódi láncon (szimulált meccs: a hazai lő, a vendég véd
+    mezszámos fallal): a vendég oldal párjai a tanult lövőkből, a sáv-
+    mintából és a fal védőiből állnak össze (ugyanaz, mint a kész
+    modellekből), a hazainak nincs (az ellenfél nem lő). A felderítés a
+    sáv-mintát és a fal védőnkénti mintáját str kulccsal tárolja, két
+    meccsből összeadja, a képet (kk_lovok) újraszámolja; az edzői kulcs,
+    a meccsterv (471), az edzésterv (491) és az összefoglaló ugyanebből
+    beszél."""
+    import handball.pipeline.training as tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import (
+        AttackModel, _lovo_sav_minta, _vedok_mintabol,
+        shooter_defender_matchup, shooter_defender_pairs)
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.pipeline.training import training_focus
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    r = shooter_defender_matchup(m)
+    assert r["home"] == {"parok": [], "verdict": None}
+    parok = r["away"]["parok"]
+    assert parok and r["away"]["verdict"] == parok[0]["verdict"]
+    vedok = DefenseModel.learn(m, Team.AWAY).vedok
+    assert parok == shooter_defender_pairs(
+        AttackModel.learn(m, Team.HOME),
+        _lovo_sav_minta(m, Team.HOME, TacticsConfig()), vedok)
+    assert all(p["vedo_mez"] is not None for p in parok)
+
+    opp = scout_team(m, Team.HOME)
+    assert opp.kk_lovo_savok and all(isinstance(k, str) for k in opp.kk_lovo_savok)
+    assert [p["lovo_mez"] for p in opp.kk_lovok] == [p["lovo_mez"] for p in parok]
+    assert any(k.startswith("Távoli lövőjük: ") for k in opp.keys_to_game)
+    own = scout_team(m, Team.AWAY)
+    assert own.fal_vedok_minta and own.fal_kockak > 0
+    assert _vedok_mintabol(own.fal_vedok_minta, own.fal_kockak) == vedok
+    assert own.kk_lovok == []
+    ketto = combine_reports([own, own])
+    assert ketto.fal_kockak == 2 * own.fal_kockak
+    for mez, v in own.fal_vedok_minta.items():
+        assert ketto.fal_vedok_minta[mez]["n"] == 2 * v["n"]
+    opp2 = combine_reports([opp, opp])
+    for mez, v in opp.kk_lovo_savok.items():
+        assert opp2.kk_lovo_savok[mez] == [2 * x for x in v]
+    assert [p["lovo_mez"] for p in opp2.kk_lovok] == \
+        [p["lovo_mez"] for p in opp.kk_lovok]
+    terv = [s for s in matchup_plan(own, opp) if s.startswith("Kit kinek: ")]
+    assert len(terv) == 1 and parok[0]["verdict"] in terv[0]
+    assert not [s for s in matchup_plan(opp, own) if s.startswith("Kit kinek: ")]
+
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+    f = training_focus(m)
+    csere = [p for p in parok if p["javasolt_mez"] is not None]
+    tetel = [i for i in f["away"] if i["title"] == "Kit kinek: a lövőjük és a védőnk"]
+    assert len(tetel) == (1 if csere else 0)
+    if csere:
+        assert tetel[0]["why"].endswith(csere[0]["verdict"])
+    assert not [i for i in f["home"] if i["title"] == "Kit kinek: a lövőjük és a védőnk"]
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert f"falának kit kinek: {parok[0]['verdict']}." in szoveg
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba

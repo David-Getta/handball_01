@@ -1562,6 +1562,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 491) Kit kinek: az ellenfél veszélyes távoli lövőjének sávjában a
+    # falunk lassú kilépője áll, és van kilépő védőnk — a fal sorrendjét
+    # kell cserélni, a kilépő álljon a lövővel szemben; ezt a párosítást
+    # (és a kilépést a lövő-karra) edzésen kell begyakorolni.
+    _szabaly = 491
+    try:
+        from .play_simulation import (mezszam_nevelovel,
+                                      shooter_defender_matchup)
+        kk491 = shooter_defender_matchup(match, config)
+        for side in ("home", "away"):
+            p491 = [p for p in (kk491.get(side) or {}).get("parok", [])
+                    if p.get("javasolt_mez") is not None]
+            if not p491:
+                continue
+            p491 = p491[0]
+            add(side, "védekezés", "Kit kinek: a lövőjük és a védőnk",
+                f"az ellenfél távoli lövője ellen rossz a párosításunk: "
+                f"{p491['verdict']}",
+                f"a fal sorrendje cserélve: {mezszam_nevelovel(p491['javasolt_mez'])} "
+                f"a {p491['sav_nev']} sávban, {mezszam_nevelovel(p491['lovo_mez'])} "
+                "lövő-karjára kilépve; 6 a 6 ellen a figurájukkal, a "
+                "lövőjük minden labdájánál a kilépés és a visszazárás "
+                "gyakorolva")
+    except Exception:
+        pass
+
     # 490) Utolsó labda: kire és honnan — a tanult lövőink × az ő kapusuk
     # szerint kinek a kezében és honnan ér a legtöbbet a hajrá-lövésünk.
     # Ha a számok szerint nem mindegy (a lövő vagy a kapus szorzója
