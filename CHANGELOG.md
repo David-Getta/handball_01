@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.188 óta)
+## v0.1.189 — kiadva (2026-11-03)
+
+> Kiadás-jegyzet: A JÁTÉKOS-MODELL — a tanult fal után a tanult lövők.
+> A csapat lövőit mezszámonként és lövőhely-sávonként tanulja (a
+> szerzett gól a helyzetei xG-jéhez mérve), és ez számít a figura
+> pontszámában, a védekezési próbában ("a végén a 9-es lövésével, aki
+> innen 1,3× annyit lő be"), a figura-ajánlóban, a döntés-elemzésben (a
+> passz annak ér többet, aki onnan betalál, a lövés abból a sávból, ahol
+> a kapusuk gyenge) és az AI-finomítóban, amely a befejezőt is cseréli.
+> A tanult fal védőnként lép ki (ki a kilépő, ki a kettőző). Két új
+> réteg: Utolsó lövés — kire és honnan (a lövők × az ő kapusuk) és Kit
+> kinek — a veszélyes távoli lövőjük sávja × a falunk ott álló védője
+> (csere-javaslattal a kilépő védőre), mindkettő a felderítésben, a
+> meccstervben és az edzéstervben; az élő képernyőn a félidei
+> figura-ajánló és a hajrá "utolsó labda" jelzése, mindkettő okszerűen,
+> az addig látottakból.
 
 - **Kit kinek: a lövőjük és a védőnk** (`shooter_defender_matchup` —
   motor + API + összefoglaló + felderítés + meccsterv + edzésterv +
