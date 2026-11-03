@@ -276,12 +276,19 @@ class ApiClient {
   /// javulas_pp, valtozasok, verdict}.
   Future<Map<String, dynamic>> refineSetplay(
       List<List<List<double>>> attackers, List<int> labda,
-      Map<String, String> vedelem) async {
+      Map<String, String> vedelem,
+      {List<int?>? mez}) async {
+    // `mez`: támadónként a mezszám vagy null — a tanult lövőkkel a
+    // finomító a szerepcserét is próbálja (a válasz "mez" sora).
     final resp = await http
         .post(Uri.parse("$baseUrl/figura-finomitas"),
             headers: {"Content-Type": "application/json"},
-            body: jsonEncode(
-                {"attackers": attackers, "labda": labda, ...vedelem}))
+            body: jsonEncode({
+              "attackers": attackers,
+              "labda": labda,
+              if (mez != null) "mez": mez,
+              ...vedelem,
+            }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült az AI-finomítás", resp));
@@ -487,8 +494,10 @@ class ApiClient {
     required List<int> ballCarrier,
     String defending = "away",
     String csapat = "",
+    List<int?>? mez,
   }) async {
-    // `csapat` (név): a fal a csapat ÖSSZES könyvtári meccséből tanul.
+    // `csapat` (név): a fal a csapat ÖSSZES könyvtári meccséből tanul;
+    // `mez`: támadónként a mezszám (a tanult lövőkkel számol a pontszám).
     final uri = Uri.parse("$baseUrl/matches/$matchId/simulate-setplay")
         .replace(queryParameters: {
       "defending": defending,
@@ -497,7 +506,11 @@ class ApiClient {
     final resp = await http.post(
       uri,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"attackers": attackers, "ball_carrier": ballCarrier}),
+      body: jsonEncode({
+        "attackers": attackers,
+        "ball_carrier": ballCarrier,
+        if (mez != null) "mez": mez,
+      }),
     );
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült a szimuláció", resp));

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.188 óta)
 
+- **AI-finomító a lövőkkel: a befejezőt is cseréli** (motor + tervező):
+  a finomító eddig a futásokat tolta és a passzokat cserélte; most a
+  tanult lövőkkel (a meccsből vett figura mezszámaival) a SZEREPCSERÉT
+  is próbálja — két támadó utat cserél, hogy a biztos kezű lövő fusson
+  arra az útra, amelyik a helyzetet teremti: "Szerepcsere: a 7-es a 3.
+  támadó útját futja". A tervező a mezszámokat küldi és veszi át
+  (a tokeneken a mezszám látszik), a tanult fal elleni lejátszás és a
+  figura-kimenetek pontszáma is a mi lövőinkkel számol ("a lövők: a
+  7-es közelről 1,3× …" sor az eredmény-kártyán). A mi lövőink a meccs
+  másik oldaláé (a szezon-falnál az összes meccsünkből). Az élő
+  figura-ajánló is a lövőkkel rangsorol (a fal ellen támadó csapat
+  lövői a könyvtár korábbi meccseiből, különben az addigi kockákból):
+  "… 31% lövőhelyzet — a 7-es lövésével, aki innen 1,3× annyit lő be,
+  mint amennyit a helyzet ér (alap fal: 26%)".
+
 - **Élő utolsó labda** (motor + végpont + élő képernyő): a hajrában (3
   perccel a felvétel vége előtt), ha az állás legfeljebb egygólos, az
   élő képernyő mindkét kispadnak megmondja, kinek a kezében és honnan

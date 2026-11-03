@@ -372,6 +372,69 @@ def test_az_ai_finomito_javit_a_figuran_a_tanult_fal_ellen():
     assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
 
 
+def test_az_ai_finomito_a_befejezot_is_csereli(monkeypatch):
+    """A tanult lövőkkel és a mezszámokkal a finomító szerepcserét is
+    próbál: a (minden sávban 1,3×) biztos kezű lövőt arra az útra
+    teszi, amelyik a helyzetet teremti — egy körben ez a legjobb lépés,
+    a mondat kimondja, a pontszám a cserés figurával visszaszámolható;
+    modell vagy mezszám nélkül nincs csere, a "mez" sor marad."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   refine_setplay,
+                                                   setplay_3d_match)
+
+    fal = DefenseModel()
+    _, e0 = setplay_3d_match(_FINOMITO_FIGURA, fal, ball=[0, 0, 1])
+    b = e0["attacker_id"] - 1                 # aki a helyzetbe ér
+    masik = (b + 1) % len(_FINOMITO_FIGURA)
+    mez = [20 + i for i in range(len(_FINOMITO_FIGURA))]
+    mez[masik] = 7                            # a jó lövő rossz úton
+    tam = AttackModel(lovok={7: {"close": 1.3, "mid": 1.3, "far": 1.3}})
+    monkeypatch.setattr(ps, "FINOMITO_KOROK", 1)
+    r = refine_setplay(_FINOMITO_FIGURA, fal, ball=[0, 0, 1], tamadas=tam,
+                       mezek=mez)
+    assert r["mez"][b] == 7 and r["mez"][masik] == mez[b]
+    assert sorted(r["mez"]) == sorted(mez)
+    assert abs(r["pont_utana"] - 1.3 * r["pont_elotte"]) < 0.2
+    assert r["attackers"] == [[[float(x), float(y)] for x, y in u]
+                              for u in _FINOMITO_FIGURA]
+    csere = [v for v in r["valtozasok"] if v.startswith("Szerepcsere: ")]
+    assert len(csere) == 1 and f"a 7-es {'az' if b + 1 in (1, 5) else 'a'} " \
+        f"{b + 1}. támadó útját futja" in csere[0]
+    assert "szerepcsere: " in r["verdict"]
+    _, e = setplay_3d_match(r["attackers"], fal, ball=r["labda"],
+                            tamadas=tam, mezek=r["mez"])
+    assert abs(100.0 * e["best_shot_value"] - r["pont_utana"]) < 0.6
+    # Modell nélkül, vagy egy mezszámmal: nincs csere.
+    nelkul = refine_setplay(_FINOMITO_FIGURA, fal, ball=[0, 0, 1], mezek=mez)
+    assert nelkul["mez"] == mez
+    egy = refine_setplay(_FINOMITO_FIGURA, fal, ball=[0, 0, 1], tamadas=tam,
+                         mezek=[7, None, None, None])
+    assert egy["mez"] == [7, None, None, None]
+
+
+def test_a_figura_kimenetek_a_tanult_lovovel():
+    """A kimenet-szimuláció a tanult lövővel: a helyzetbe érő, biztos kezű
+    támadóval a lejátszások átlag-értéke és a gólok száma nő (ugyanaz a
+    seed); mezszám nélkül a modell nem hat."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   setplay_3d_match,
+                                                   simulate_outcomes)
+
+    _, e0 = setplay_3d_match(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1])
+    mez = [None] * len(_FINOMITO_FIGURA)
+    mez[e0["attacker_id"] - 1] = 7
+    tam = AttackModel(lovok={7: {"close": 1.3, "mid": 1.3, "far": 1.3}})
+    alap = simulate_outcomes(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1],
+                             n=120, seed=3)
+    vele = simulate_outcomes(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1],
+                             n=120, seed=3, tamadas=tam, mezek=mez)
+    assert vele["atlag_pct"] > alap["atlag_pct"]
+    assert vele["gol"] >= alap["gol"]
+    assert simulate_outcomes(_FINOMITO_FIGURA, DefenseModel(), ball=[0, 0, 1],
+                             n=120, seed=3, tamadas=tam) == alap
+
+
 def test_az_ai_finomito_nem_valtoztat_ha_nincs_jobb(monkeypatch):
     """Ha nincs javító lépés (itt: kör nélkül), a finomító változatlanul
     hagyja a figurát, és ezt ki is mondja; üres figurára ValueError."""
@@ -667,6 +730,39 @@ def test_az_elo_figura_ajanlo_az_addig_latott_falbol(monkeypatch):
     assert live_figure_suggestions(_proba_match(ismetles=5),
                                    ALAP_FIGURAK)["alerts"] == []
     assert live_figure_suggestions(m, [])["alerts"] == []
+
+
+def test_az_elo_figura_ajanlo_a_lovokkel(monkeypatch):
+    """A mezszámmal mentett figura záró lövője az élő ajánlóban is
+    számít: a vendég (Mi) fala ellen a hazai lövőinek modelljével a
+    pontszám a záró lövő szorzójával nő, a mondat megnevezi; modell
+    nélkül az addig látott kockákból tanul (lövés nélkül: nincs
+    szorzó)."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   live_figure_suggestions)
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (1,))
+    m = _proba_match(ismetles=20)
+    figura = {"id": "a", "name": "Beúszás", "attackers": _FINOMITO_FIGURA,
+              "labda": [0, 0, 1]}
+    alap = live_figure_suggestions(m, [figura])["alerts"]
+    assert [a["team"] for a in alap] == ["away"]
+    assert alap[0]["lovo_mez"] is None and alap[0]["lovo_szorzo"] == 1.0
+    _, e0 = ps.setplay_3d_match(_FINOMITO_FIGURA, DefenseModel(),
+                                ball=[0, 0, 1])
+    mez = [None] * len(_FINOMITO_FIGURA)
+    mez[e0["attacker_id"] - 1] = 7
+    tam = AttackModel(lovok={7: {"close": 1.3, "mid": 1.3, "far": 1.3}})
+    vele = live_figure_suggestions(m, [{**figura, "mez": mez}],
+                                   tamadas={"away": tam})["alerts"]
+    assert vele[0]["lovo_mez"] == 7 and vele[0]["lovo_szorzo"] == 1.3
+    assert abs(vele[0]["pont_pct"] - 1.3 * alap[0]["pont_pct"]) < 0.2
+    assert ("% lövőhelyzet — a 7-es lövésével, aki innen 1,3× annyit lő "
+            "be, mint amennyit a helyzet ér (alap fal: ") in vele[0]["text"]
+    # Mezszámmal, de modell nélkül (az addigi kockákból nincs lövő).
+    nelkul = live_figure_suggestions(m, [{**figura, "mez": mez}])["alerts"]
+    assert nelkul[0]["lovo_mez"] == 7 and nelkul[0]["lovo_szorzo"] == 1.0
 
 
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():

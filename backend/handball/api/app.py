@@ -3436,6 +3436,31 @@ def create_app():
                         + f"{modell.line_depth_m:.1f} m)".replace(".", ","))
         return modell, vedo_nev
 
+    def _sajat_lovok(meccs: str, vedo: str, szezon: bool = False):
+        """A MI tanult lövőink (AttackModel) a figura-oldalakhoz: a
+        `meccs` `vedo` csapatának ELLENFELE (mi támadunk a tanult fal
+        ellen) ebből a meccsből; `szezon` esetén a csapat összes könyvtári
+        meccséből (learn_many). None, ha nincs meccs vagy ismeretlen."""
+        if not meccs:
+            return None
+        vm = _store.get(meccs)
+        if vm is None:
+            return None
+        try:
+            vo = Team(vedo)
+        except ValueError:
+            vo = Team.AWAY
+        mi = Team.HOME if vo == Team.AWAY else Team.AWAY
+        tamadas = AttackModel.learn(vm, mi)
+        if szezon:
+            try:
+                tamadas = AttackModel.learn_many(_csapat_meccsei(
+                    vm.meta.home_team if mi == Team.HOME
+                    else vm.meta.away_team))
+            except HTTPException:
+                pass
+        return tamadas
+
     def figura3d(request: Request, u: str = "", cim: str = "",
                  meccs: str = "", vedo: str = "away", vedok: int = 6,
                  melyseg: float = 6.0, l: str = "", rendszer: str = "6-0",
@@ -3610,10 +3635,14 @@ def create_app():
         fal ellen nagyobb lövőhelyzetet teremtenek
         (play_simulation.refine_setplay). Törzs: {"attackers": támadónként
         a kulcs-pozíciók [[x, y], …], "labda": [sorszám, …] (opcionális),
-        és a fal: "meccs" + "vedo" (tanult) vagy "vedok", "melyseg",
-        "rendszer" (kézi — mint a /figura3d)}. Visszaad: {"vedelem",
-        "attackers", "labda", "pont_elotte", "pont_utana", "javulas_pp",
-        "valtozasok", "verdict"}; 400 a hibás figurára."""
+        "mez": támadónként a mezszám vagy null (opcionális — a tanult
+        lövőkkel a finomító a szerepcserét is próbálja), és a fal:
+        "meccs" + "vedo" (tanult; "csapat" / "szezon": a szezonból) vagy
+        "vedok", "melyseg", "rendszer" (kézi — mint a /figura3d)}. A MI
+        lövőink a meccs másik oldaláé (szezonban az összes meccsünkből).
+        Visszaad: {"vedelem", "lovo_felirat", "attackers", "labda",
+        "mez", "pont_elotte", "pont_utana", "javulas_pp", "valtozasok",
+        "verdict"}; 400 a hibás figurára."""
         from ..pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
                                                 FIGURA_3D_MAX_PONT,
                                                 refine_setplay)
@@ -3623,20 +3652,28 @@ def create_app():
                     for u in list(body.get("attackers") or [])
                     [:FIGURA_3D_MAX_JATEKOS]]
             labda = [int(v) for v in (body.get("labda") or [])]
+            mez = [None if v is None else int(v)
+                   for v in (body.get("mez") or [])][:FIGURA_3D_MAX_JATEKOS]
             vedok = int(body.get("vedok", 6))
             melyseg = float(body.get("melyseg", 6.0))
         except (TypeError, ValueError, IndexError):
             raise HTTPException(status_code=400, detail="hibás figura")
+        meccs = str(body.get("meccs") or "")
+        vedo = str(body.get("vedo") or "away")
+        csapat = str(body.get("csapat") or "")
         modell, vedo_nev = _figura_vedelem(
-            str(body.get("meccs") or ""), str(body.get("vedo") or "away"),
-            vedok, melyseg, str(body.get("rendszer") or "6-0"),
-            csapat=str(body.get("csapat") or ""))
+            meccs, vedo, vedok, melyseg, str(body.get("rendszer") or "6-0"),
+            csapat=csapat)
+        tamadas = _sajat_lovok(meccs, vedo,
+                               bool(csapat or body.get("szezon")))
         try:
-            r = refine_setplay(utak, modell, ball=labda)
+            r = refine_setplay(utak, modell, ball=labda, tamadas=tamadas,
+                               mezek=mez)
         except ValueError:
             raise HTTPException(status_code=400,
                                 detail="a figurában nincs támadó")
-        return {"vedelem": vedo_nev, **r}
+        return {"vedelem": vedo_nev, "lovo_felirat": lovo_felirat(tamadas),
+                **r}
 
     @app.get("/playbook-rangsor")
     def playbook_rangsor(meccs: str = "", vedo: str = "away", vedok: int = 6,
@@ -3680,23 +3717,7 @@ def create_app():
         # A MI tanult lövőink (a meccs másik oldala; szezon / csapat-névvel
         # az összes meccsünkből): a "mez" sorral mentett figura záró
         # lövőjének szorzója is számít. Csak meccs mellett ismert.
-        tamadas = None
-        if meccs:
-            vm = _store.get(meccs)
-            try:
-                vo = Team(vedo)
-            except ValueError:
-                vo = Team.AWAY
-            if vm is not None:
-                mi = Team.HOME if vo == Team.AWAY else Team.AWAY
-                tamadas = AttackModel.learn(vm, mi)
-                if szezon or csapat:
-                    try:
-                        tamadas = AttackModel.learn_many(_csapat_meccsei(
-                            vm.meta.home_team if mi == Team.HOME
-                            else vm.meta.away_team))
-                    except HTTPException:
-                        pass
+        tamadas = _sajat_lovok(meccs, vedo, bool(szezon or csapat))
         return {"vedelem": vedo_nev, "sablon": sablon,
                 "lovo_felirat": lovo_felirat(tamadas),
                 **rank_playbook(figurak, modell, tamadas=tamadas)}
@@ -13699,9 +13720,12 @@ def create_app():
         """ÉLŐ figura-ajánló: a 15., 30. és 45. percben az addig látott
         fal ellen melyik mentett figuránk (vagy alap-figura) ér a
         legtöbbet (play_simulation.live_figure_suggestions — csak az
-        addigi kockákból). Válasz: {"alerts": [{"t", "t_s", "perc",
-        "team", "team_name", "name", "pont_pct", "alap_pct", "sablon",
-        "text"}]}. 404: nincs ilyen meccs."""
+        addigi kockákból). A fal ellen támadó csapat lövői a könyvtár
+        KORÁBBI meccseiből (ez a meccs nélkül — okszerű), különben az
+        addigi kockákból: a mezszámmal mentett figura záró lövője is
+        számít. Válasz: {"alerts": [{"t", "t_s", "perc", "team",
+        "team_name", "name", "pont_pct", "alap_pct", "sablon", "lovo_mez",
+        "lovo_szorzo", "text"}]}. 404: nincs ilyen meccs."""
         from ..pipeline.play_simulation import (ALAP_FIGURAK,
                                                 live_figure_suggestions)
         match = _store.get(match_id)
@@ -13717,7 +13741,20 @@ def create_app():
                 figurak.append(d)
         if not figurak:
             figurak = [dict(d) for d in ALAP_FIGURAK]
-        return live_figure_suggestions(match, figurak)
+        # A fal ellen támadó csapat (a másik oldal) lövői a korábbi
+        # meccsekből — csak ha a figurák közt van mezszámos.
+        tamadas = {}
+        if any(isinstance(d.get("mez"), list) for d in figurak):
+            nevek = {"home": match.meta.away_team, "away": match.meta.home_team}
+            for side, nev in nevek.items():
+                try:
+                    korabbi = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                               if m_.meta.match_id != match_id]
+                except HTTPException:
+                    korabbi = []
+                if korabbi:
+                    tamadas[side] = AttackModel.learn_many(korabbi)
+        return live_figure_suggestions(match, figurak, tamadas=tamadas)
 
     @app.get("/matches/{match_id}/live-utolso-labda")
     def get_live_last_shot(match_id: str):
@@ -13919,8 +13956,16 @@ def create_app():
         try:
             attackers = [[(float(p[0]), float(p[1])) for p in path] for path in body["attackers"]]
             setplay = SetPlay(attackers=attackers, ball_carrier=list(body["ball_carrier"]))
+            # A támadók mezszáma (opcionális): a tanult lövőkkel számol.
+            mez = [None if v is None else int(v)
+                   for v in (body.get("mez") or [])]
         except (KeyError, TypeError, IndexError, ValueError):
             raise HTTPException(status_code=400, detail="invalid setplay body")
+        # A MI tanult lövőink: a meccs másik oldala (a szezonból, ha a
+        # fal is onnan tanul).
+        tamadas = _sajat_lovok(match_id, team.value, bool(csapat))
+        lovok = (tamadas.figura_lovok(mez)
+                 if tamadas is not None and mez else None)
 
         sim = simulate_setplay(setplay, model)
         # Figura-kimenetek: a tervező kulcs-pozícióiból (a lépésenkénti
@@ -13933,16 +13978,18 @@ def create_app():
             labda_sor = list(body["ball_carrier"])
             labda = [labda_sor[0], labda_sor[len(labda_sor) // 2],
                      labda_sor[-1]] if labda_sor else None
-            kimenetek = simulate_outcomes(kulcs, model, ball=labda)
+            kimenetek = simulate_outcomes(kulcs, model, ball=labda,
+                                          tamadas=tamadas, mezek=mez)
         except Exception:
             kimenetek = None
         return {
             "defense_model": vars(model),
-            "evaluation": evaluate_setplay(sim, defense=model),
+            "evaluation": evaluate_setplay(sim, defense=model, lovok=lovok),
             "kimenetek": kimenetek,
             # A tanult kapus egy mondatban (üres, ha átlagos) — a tervező
-            # eredmény-kártyája.
+            # eredmény-kártyája; és a mi tanult lövőink.
             "kapus_felirat": kapus_felirat(model.kapus),
+            "lovo_felirat": lovo_felirat(tamadas) if mez else "",
             "meccsek": len(meccsek),
             "tracking": sim.to_dict(),
         }

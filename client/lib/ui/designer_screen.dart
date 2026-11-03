@@ -119,11 +119,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _tanultKovet = null;
     _tanultKettoz = null;
     _tanultKapus = null;
+    _tanultLovok = null;
     _tanultCsapat = null;
     _kimenetek = null;
     _tanultKilepo = null;
     _tanultKettozo = null;
   }
+
+  /// A mi tanult lövőink egy sorban (a backend lovo_felirat-ja) — a
+  /// pontszám a mezszámos támadók lövő-szorzójával számol.
+  String? _tanultLovok;
 
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
   void _vedoValt(int d) {
@@ -466,12 +471,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
       final csapatNev = szezon
           ? "${kivalasztott[side == "home" ? "home_team" : "away_team"] ?? ""}"
           : "";
+      // A mezszámok (ha a figura a meccsből jött): a pontszám a tanult
+      // lövőinkkel számol.
+      final mez = _mezekIgazitva();
       final resp = await _api.simulateSetplayVsMatch(
         matchId!,
         attackers: attackers,
         ballCarrier: setplayBallSteps(_labda, _animSteps),
         defending: side,
         csapat: csapatNev,
+        mez: mez.any((v) => v != null) ? mez : null,
       );
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
       // A szerver kiértékelése (a tanult kapus sávonkénti szorzójával);
@@ -496,6 +505,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _tanultKettoz =
           ((resp["defense_model"] as Map?)?["double_rate"] as num?)?.toDouble();
       _tanultKapus = resp["kapus_felirat"] as String?;
+      _tanultLovok = resp["lovo_felirat"] as String?;
       _tanultKilepo = _kilepoVedo(resp["defense_model"]);
       _tanultKettozo = _kilepoVedo(resp["defense_model"],
           kulcs: "double_rate", kuszob: 0.2);
@@ -567,12 +577,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
   Future<void> _aiFinomitas() async {
     Map<String, dynamic> r;
     try {
+      // A mezszámok is mennek: a tanult lövőkkel a finomító a
+      // szerepcserét is próbálja (ki fejezze be).
+      final mez = _mezekIgazitva();
       r = await _api.refineSetplay(
           [
             for (final a in _attackers) [for (final p in a) [p.dx, p.dy]]
           ],
           _labda,
-          _vedelemParams());
+          _vedelemParams(),
+          mez: mez.any((v) => v != null) ? mez : null);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -595,6 +609,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
             children: [
               Text("${r["vedelem"] ?? ""}",
                   style: AppText.label.copyWith(fontSize: 11)),
+              // A mi tanult lövőink (backend AttackModel) — a finomító
+              // ezekkel számol, és a szerepcserét is próbálja.
+              if ((r["lovo_felirat"] as String?)?.isNotEmpty == true)
+                Text("${r["lovo_felirat"]}",
+                    style: AppText.label.copyWith(fontSize: 11)),
               const SizedBox(height: 6),
               Text("${r["verdict"] ?? ""}", style: AppText.label),
               for (final v in valtozasok)
@@ -638,11 +657,19 @@ class _DesignerScreenState extends State<DesignerScreen> {
         for (final v in (r["labda"] as List?) ?? const [])
           (v as num).toInt().clamp(0, utak.length - 1)
       ];
+      // A szerepcsere: a javasolt mezszám-sor (ki melyik utat futja).
+      final mezUj = (r["mez"] as List?)
+          ?.map((v) => (v as num?)?.toInt())
+          .toList();
       setState(() {
         _attackers = [for (final u in utak) resamplePath(u, k)];
         if (l.isNotEmpty) {
           _labda = [for (int i = 0; i < k; i++) i < l.length ? l[i] : l.last];
         }
+        if (mezUj != null && mezUj.length == _attackers.length) {
+          _mezek = mezUj;
+        }
+        _mezek = _mezekIgazitva();
         _sim = null;
         _eval = null;
       });
@@ -656,8 +683,12 @@ class _DesignerScreenState extends State<DesignerScreen> {
   /// rendszer).
   Map<String, String> _vedelemParams() {
     final cs = _tanultCsapat;
-    if (cs != null) return {"csapat": cs};
     final m = _tanultMeccs;
+    // (szezon-falnál a meccs + oldal is megy: abból tudja a backend, kik
+    // a MI lövőink — a fal a csapat nevéből tanul)
+    if (cs != null) {
+      return {"csapat": cs, if (m != null) "meccs": m, "vedo": _tanultOldal};
+    }
     if (m != null) return {"meccs": m, "vedo": _tanultOldal};
     return {
       "vedok": "$_numDefenders",
@@ -1112,7 +1143,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
             child: CustomPaint(
               painter: _DesignerPainter(
                   attackers: _attackers, step: _editStep, model: _model,
-                  labda: _labda),
+                  labda: _labda, mezek: _mezekIgazitva()),
               size: size,
             ),
           );
@@ -1495,6 +1526,12 @@ class _DesignerScreenState extends State<DesignerScreen> {
           if (_tanultMeccs != null && (_tanultKapus ?? "").isNotEmpty)
             Text("$_tanultKapus — a pontszám ezzel számol",
                 style: AppText.label.copyWith(fontSize: 11)),
+          // A mi tanult lövőink: a mezszámos támadó sávjának szorzójával
+          // számol a pontszám (a meccsből vett figura mezszámaival).
+          if (_tanultMeccs != null && (_tanultLovok ?? "").isNotEmpty)
+            Text("$_tanultLovok — a mezszámos támadók pontszáma ezzel "
+                "számol",
+                style: AppText.label.copyWith(fontSize: 11)),
           // A játékos-modell a falban: ki lép ki — a figurát oda érdemes
           // vinni, ahol ő áll.
           if (_tanultMeccs != null && _tanultKilepo != null)
@@ -1527,12 +1564,16 @@ class _DesignerPainter extends CustomPainter {
   final int step;
   final DefenseModel model;
   final List<int> labda; // kulcs-pozíciónként a labdás
+  // Támadónként a mezszám (a meccsből vett figuráé) vagy null — a token
+  // a mezszámot mutatja, ha van (a szerepcsere így látszik).
+  final List<int?> mezek;
 
   _DesignerPainter(
       {required this.attackers,
       required this.step,
       required this.model,
-      required this.labda});
+      required this.labda,
+      this.mezek = const []});
 
   int get _labdas => labda[step].clamp(0, attackers.length - 1);
 
@@ -1570,7 +1611,8 @@ class _DesignerPainter extends CustomPainter {
       final c = tr.toScreen(p.dx, p.dy);
       canvas.drawCircle(c, 0.85 * tr.scale, Paint()..color = AppColors.home.withValues(alpha: 0.18));
       canvas.drawCircle(c, 0.65 * tr.scale, Paint()..color = AppColors.home);
-      _label(canvas, c, "${i + 1}", 0.65 * tr.scale);
+      final mez = i < mezek.length ? mezek[i] : null;
+      _label(canvas, c, mez != null ? "$mez" : "${i + 1}", 0.65 * tr.scale);
     }
 
     // A passz, ami ERRE a pontra érkezik (az előző pont labdásától).

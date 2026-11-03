@@ -1350,6 +1350,16 @@ def test_az_elo_figura_ajanlo_vegpont(tmp_path, monkeypatch):
     j = c.get("/matches/pr/live-figura-ajanlo").json()["alerts"]
     assert j and j[0]["name"] == "Saját" and j[0]["sablon"] is False
     assert "a figuráink közül a „Saját”" in j[0]["text"]
+    assert j[0]["lovo_mez"] is None and j[0]["lovo_szorzo"] == 1.0
+    # Mezszámmal mentett figura: a záró lövő a sorban (lövés nélküli
+    # könyvtár: a szorzó 1).
+    assert c.post("/playbook", json={
+        "name": "Mezes", "attackers": _AJANLO_FIGURAK[0]["attackers"],
+        "mez": [7] * len(_AJANLO_FIGURAK[0]["attackers"])}).status_code == 200
+    j = c.get("/matches/pr/live-figura-ajanlo").json()["alerts"]
+    mezes = [a for a in j if a["name"] == "Mezes" or a["lovo_mez"] == 7]
+    assert all(a["lovo_szorzo"] == 1.0 for a in j)
+    assert mezes or j[0]["lovo_mez"] is None
     assert c.get("/matches/nincs/live-figura-ajanlo").status_code == 404
 
 
@@ -1389,3 +1399,55 @@ def test_az_elo_utolso_labda_vegpont_a_szezon_modelljeivel(tmp_path,
     app.state.put_match(_proba_match(ismetles=60))
     assert c.get("/matches/pr/live-utolso-labda").json()["alerts"] == []
     assert c.get("/matches/nincs/live-utolso-labda").status_code == 404
+
+
+def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
+        tmp_path, monkeypatch):
+    """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a
+    "lovo_felirat" (a mi lövőink a meccs másik oldaláról — lövés nélküli
+    meccsen üres); POST /matches/{id}/simulate-setplay a "mez" sorral: a
+    kiértékelés "lovo_szorzo" mezője és a "lovo_felirat"; mez nélkül a
+    felirat üres. A lövős meccsen (szimulált) a felirat a tanult lövőké."""
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import AttackModel, lovo_felirat
+    from handball.sim.match_simulator import simulate_ground_truth
+    from test_play_simulation import _proba_match
+
+    app = _app(tmp_path, monkeypatch)
+    app.state.put_match(_proba_match())
+    c = TestClient(app)
+    d = _AJANLO_FIGURAK[0]
+    mez = [7] + [None] * (len(d["attackers"]) - 1)
+    r = c.post("/figura-finomitas", json={
+        "attackers": d["attackers"], "meccs": "pr", "vedo": "away",
+        "mez": mez})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["mez"] == mez and j["lovo_felirat"] == ""
+    r = c.post("/matches/pr/simulate-setplay", params={"defending": "away"},
+               json={"attackers": [[[26, 10], [30, 10]], [[28, 4], [30, 6]]],
+                     "ball_carrier": [0, 0], "mez": [7, None]})
+    assert r.status_code == 200
+    assert r.json()["evaluation"]["lovo_szorzo"] == 1.0
+    assert r.json()["lovo_felirat"] == ""
+    # A lövős meccsen a hazai (a vendég fal ellen mi támadunk) lövői.
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    m.meta.match_id = "gt"
+    app.state.put_match(m)
+    tam = AttackModel.learn(m, Team.HOME)
+    assert tam.lovok
+    mez7 = [next(iter(tam.lovok))] + [None] * (len(d["attackers"]) - 1)
+    j = c.post("/figura-finomitas", json={
+        "attackers": d["attackers"], "meccs": "gt", "vedo": "away",
+        "mez": mez7}).json()
+    assert j["lovo_felirat"] == lovo_felirat(tam)
+    assert sorted(x for x in j["mez"] if x is not None) == [mez7[0]]
+    s = c.post("/matches/gt/simulate-setplay", params={"defending": "away"},
+               json={"attackers": [[[26, 10], [30, 10]], [[28, 4], [30, 6]]],
+                     "ball_carrier": [0, 0], "mez": [mez7[0], None]}).json()
+    assert s["lovo_felirat"] == lovo_felirat(tam)
+    assert "lovo_szorzo" in s["evaluation"]
+    assert c.post("/matches/gt/simulate-setplay", params={"defending": "away"},
+                  json={"attackers": [[[26, 10], [30, 10]]],
+                        "ball_carrier": [0, 0]}).json()["lovo_felirat"] == ""

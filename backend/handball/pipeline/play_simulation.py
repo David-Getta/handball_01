@@ -1235,6 +1235,8 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
         "lovo_mez": (mezek_uj[tam - 1]
                      if tam and 0 <= tam - 1 < len(mezek_uj) else None),
         "lovo_szorzo": round(float(ertekeles.get("lovo_szorzo", 1.0)), 3),
+        # A mezszámok az érvényes támadók sorrendjében (a finomítónak).
+        "mezek": list(mezek_uj),
         "hossz_s": round(mozgas_s, 1),
         "utak": [[[round(x, 1), round(y, 1)] for x, y in u] for u in utak],
         "labda": labda,
@@ -1701,7 +1703,9 @@ def _pont_nev(i: int, k: int) -> str:
 
 def refine_setplay(keypoints: list, defense: DefenseModel, *,
                    ball: list | None = None,
-                   config: TacticsConfig | None = None) -> dict:
+                   config: TacticsConfig | None = None,
+                   tamadas: AttackModel | None = None,
+                   mezek: list | None = None) -> dict:
     """AI-finomító: a figura kulcs-pozícióinak kis módosításai, amelyek a
     `defense` fal ellen nagyobb lövőhelyzetet teremtenek.
 
@@ -1713,23 +1717,30 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
     FINOMITO_KOROK körig. A támadó a hatosba és a saját térfelére nem
     léphet. A futások mellett a PASSZOKAT is próbálja: egy kulcs-
     pozíciótól kezdve egy másik támadónál a labda (legfeljebb
-    FINOMITO_PASSZ_MAX_M-es passzal).
+    FINOMITO_PASSZ_MAX_M-es passzal). A tanult lövőkkel (`tamadas` +
+    `mezek`: támadónként a mezszám) a SZEREPCSERÉT is: két támadó utat
+    cserél — a biztos kezű lövő fusson arra az útra, amelyik a
+    helyzetet teremti.
 
     Edzőileg: "hol nyit rést ez a fal a figurámon?" — a modell a fal
     tanult szokásai (kilépés, kettőzés, labdakövetés) ellen keresi meg,
-    melyik futás végpontja ér többet néhány méterrel arrébb, és kinek
-    érdemes a labdát odaadni. Javaslat, nem ítélet: az edző dönti el,
-    átveszi-e.
+    melyik futás végpontja ér többet néhány méterrel arrébb, kinek
+    érdemes a labdát odaadni, és ki fejezze be. Javaslat, nem ítélet:
+    az edző dönti el, átveszi-e.
 
-    Visszaad: {"attackers" (a finomított kulcs-pozíciók), "labda",
+    Visszaad: {"attackers" (a finomított kulcs-pozíciók), "labda", "mez"
+    (támadónként a mezszám a finomítás után — a csere itt látszik),
     "pont_elotte", "pont_utana", "javulas_pp", "valtozasok" (magyar
-    mondatok támadónként és pontonként, és a labda új útja, ha
-    változott), "verdict"}. ValueError, ha nincs érvényes támadó."""
+    mondatok támadónként és pontonként, a labda új útja és a
+    szerepcsere, ha változott), "verdict"}. ValueError, ha nincs
+    érvényes támadó."""
     config = config or TacticsConfig()
     goal_x = config.attacks_toward_x(Team.HOME)
-    _, e0 = setplay_3d_match(keypoints, defense, ball=ball, config=config)
+    _, e0 = setplay_3d_match(keypoints, defense, ball=ball, config=config,
+                             tamadas=tamadas, mezek=mezek)
     utak = [[list(p) for p in u] for u in e0["utak"]]
     labda = list(e0["labda"])
+    mez = list(e0["mezek"])
     kozep = COURT_WIDTH_M / 2.0
 
     def ervenyes(x: float, y: float) -> bool:
@@ -1744,8 +1755,9 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
         fa_y = min(kozep + _GOAL_HALF_W, max(kozep - _GOAL_HALF_W, y))
         return math.hypot(x - goal_x, y - fa_y) >= GOAL_AREA_RADIUS_M + r
 
-    def pont(u, lab) -> float:
-        _, e = setplay_3d_match(u, defense, ball=lab, config=config)
+    def pont(u, lab, mz) -> float:
+        _, e = setplay_3d_match(u, defense, ball=lab, config=config,
+                                tamadas=tamadas, mezek=mz)
         return e["best_shot_value"]
 
     def passz_hossz(u, a: int, b: int, k: int) -> float:
@@ -1758,6 +1770,9 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
     lepes = FINOMITO_LEPES_M
     iranyok = [(lepes * math.cos(a), lepes * math.sin(a))
                for a in (k * math.pi / 4 for k in range(8))]
+    # Szerepcsere csak tanult lövőkkel és legalább két mezszámmal.
+    cserelhet = (tamadas is not None and tamadas.lovok
+                 and sum(m is not None for m in mez) >= 2)
     for _ in range(FINOMITO_KOROK):
         legjobb = None
         for i, u in enumerate(utak):
@@ -1768,9 +1783,9 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
                         continue
                     proba = [list(map(list, v)) for v in utak]
                     proba[i][k] = [x, y]
-                    p = pont(proba, labda)
+                    p = pont(proba, labda, mez)
                     if legjobb is None or p > legjobb[0] + 1e-12:
-                        legjobb = (p, proba, labda)
+                        legjobb = (p, proba, labda, mez)
         # A passzok: a k. kulcs-pozíciótól a j. támadónál a labda.
         for k in range(1, len(labda)):
             for j in range(len(utak)):
@@ -1778,13 +1793,25 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
                         utak, labda[k - 1], j, k) > FINOMITO_PASSZ_MAX_M:
                     continue
                 lab = labda[:k] + [j] * (len(labda) - k)
-                p = pont(utak, lab)
+                p = pont(utak, lab, mez)
                 if legjobb is None or p > legjobb[0] + 1e-12:
-                    legjobb = (p, utak, lab)
+                    legjobb = (p, utak, lab, mez)
+        # A szerepcsere: két mezszámos támadó utat cserél (a futások és a
+        # labda útja marad, a lövő más).
+        if cserelhet:
+            for i in range(len(mez)):
+                for j in range(i + 1, len(mez)):
+                    if mez[i] is None or mez[j] is None:
+                        continue
+                    mz = list(mez)
+                    mz[i], mz[j] = mz[j], mz[i]
+                    p = pont(utak, labda, mz)
+                    if legjobb is None or p > legjobb[0] + 1e-12:
+                        legjobb = (p, utak, labda, mz)
         if legjobb is None \
                 or 100.0 * (legjobb[0] - most) < FINOMITO_MIN_JAVULAS_PP:
             break
-        most, utak, labda = legjobb
+        most, utak, labda, mez = legjobb
 
     valtozasok = []
     for i, (regi, uj) in enumerate(zip(e0["utak"], utak)):
@@ -1810,6 +1837,13 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
             return " → ".join(f"{v + 1}." for v in lab)
         valtozasok.append(f"A labda útja a kulcs-pozíciókon: "
                           f"{ut(labda)} támadó (eddig {ut(e0['labda'])})")
+    if mez != list(e0["mezek"]):
+        cserek = [f"{mezszam_nevelovel(m)} "
+                  f"{'az' if i + 1 in (1, 5) else 'a'} {i + 1}. támadó "
+                  "útját futja"
+                  for i, m in enumerate(mez)
+                  if m is not None and m != e0["mezek"][i]]
+        valtozasok.append("Szerepcsere: " + ", ".join(cserek))
     javulas = round(100.0 * (most - alap), 1)
     if valtozasok:
         verdict = (f"A modell szerint {javulas:.0f} százalékponttal "
@@ -1823,6 +1857,7 @@ def refine_setplay(keypoints: list, defense: DefenseModel, *,
     return {"attackers": [[[round(x, 1), round(y, 1)] for x, y in u]
                           for u in utak],
             "labda": labda,
+            "mez": mez,
             "pont_elotte": round(100.0 * alap, 1),
             "pont_utana": round(100.0 * most, 1),
             "javulas_pp": javulas,
@@ -1856,9 +1891,13 @@ KIMENET_ATVEVO_M = 2.0
 def simulate_outcomes(keypoints: list, defense: DefenseModel, *,
                       ball: list | None = None, n: int = KIMENET_N,
                       seed: int = 0,
-                      config: TacticsConfig | None = None) -> dict:
+                      config: TacticsConfig | None = None,
+                      tamadas: AttackModel | None = None,
+                      mezek: list | None = None) -> dict:
     """Figura-kimenetek: a figura `n` lejátszása zajos fallal (lásd a
-    KIMENET_* konstansokat), kimenetenként számolva.
+    KIMENET_* konstansokat), kimenetenként számolva. `tamadas` +
+    `mezek`: a tanult lövőkkel (mint a setplay_3d_match) — a gól
+    valószínűsége a helyzetbe érő támadó lövő-szorzójával.
 
     Edzőileg: a figura "pontszáma" egy szám; ez azt mondja meg, a sok
     lehetséges fal-reakcióból hányszor lesz gól, hányszor védés és
@@ -1885,7 +1924,8 @@ def simulate_outcomes(keypoints: list, defense: DefenseModel, *,
                                       + rng.gauss(0.0, KIMENET_KOVETES_SZORAS))),
             line_depth_m=max(GOAL_AREA_RADIUS_M, defense.line_depth_m
                              + rng.gauss(0.0, KIMENET_MELYSEG_SZORAS_M)))
-        sim, e = setplay_3d_match(keypoints, fal, ball=ball, config=config)
+        sim, e = setplay_3d_match(keypoints, fal, ball=ball, config=config,
+                                  tamadas=tamadas, mezek=mezek)
         osszeg += e["best_shot_value"]
         # Passz-elfogás: a passz indulásának kockáján a védők a szakaszhoz.
         fps = sim.meta.fps or FIGURA_3D_FPS
@@ -1944,11 +1984,17 @@ LIVE_AJANLO_MIN_KOCKA = 300
 
 
 def live_figure_suggestions(match: Match, figurak: list,
-                            config: TacticsConfig | None = None) -> dict:
+                            config: TacticsConfig | None = None,
+                            tamadas: dict | None = None) -> dict:
     """Élő figura-ajánló: a LIVE_AJANLO_PERCEK perceiben az addig látott
     fal ellen (DefenseModel.learn a kezdettől a percig tartó kockákon)
     rangsorolja a `figurak` listát (rank_playbook), és az első helyezettet
     mondja — mindkét csapat falára (a másik kispadnak szól).
+
+    `tamadas` ({"home" / "away": AttackModel} — a fal oldala szerint az
+    ELLENE támadó csapat tanult lövői, pl. a szezon korábbi meccseiből):
+    a mezszámmal mentett figurák záró lövőjének szorzója is számít;
+    ahol nincs, az addig látott kockákból tanul (okszerű).
 
     Edzőileg: a félidőben nem a teljes meccs, hanem az addig látott fal
     alapján kell dönteni — ez azt mondja meg, az eddigiek szerint melyik
@@ -1957,8 +2003,8 @@ def live_figure_suggestions(match: Match, figurak: list,
 
     Visszaad: {"alerts": [{"t" (kocka), "t_s", "perc", "team" (a VÉDŐ
     oldal, akinek a fala ellen), "team_name", "name", "pont_pct",
-    "alap_pct", "sablon", "text"}, …]} t szerint; üres, ha nincs figura,
-    vagy a fal még nem tanulható."""
+    "alap_pct", "sablon", "lovo_mez", "lovo_szorzo", "text"}, …]} t
+    szerint; üres, ha nincs figura, vagy a fal még nem tanulható."""
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
     alerts = []
@@ -1977,7 +2023,13 @@ def live_figure_suggestions(match: Match, figurak: list,
             if minta["kockak"] < LIVE_AJANLO_MIN_KOCKA:
                 continue
             fal = DefenseModel._modell_mintabol(minta)
-            r = rank_playbook(figurak, fal, config=config)
+            # A fal ellen támadó csapat lövői: a megadott modell, vagy az
+            # addig látott kockákból.
+            tam = (tamadas or {}).get(side)
+            if tam is None:
+                tam = AttackModel.learn(
+                    resz, Team.AWAY if side == "home" else Team.HOME, config)
+            r = rank_playbook(figurak, fal, config=config, tamadas=tam)
             if not r["figurak"]:
                 continue
             b = r["figurak"][0]
@@ -1990,9 +2042,11 @@ def live_figure_suggestions(match: Match, figurak: list,
                 "team": side, "team_name": nev, "name": b["name"],
                 "pont_pct": b["pont_pct"], "alap_pct": b["alap_pct"],
                 "sablon": b["sablon"],
+                "lovo_mez": b["lovo_mez"], "lovo_szorzo": b["lovo_szorzo"],
                 "text": (f"Figura-ajánló ({perc}. perc): {nev} eddig "
                          f"látott fala ellen {mibol} „{b['name']}” ér a "
-                         f"legtöbbet — {b['pont_pct']:.0f}% lövőhelyzet "
+                         f"legtöbbet — {b['pont_pct']:.0f}% lövőhelyzet"
+                         f"{lovo_zaradek(b, elo=' — ')} "
                          f"(alap fal: {b['alap_pct']:.0f}%)")})
     alerts.sort(key=lambda a: (a["t"], a["team"]))
     return {"alerts": alerts}
