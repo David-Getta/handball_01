@@ -120,6 +120,9 @@ LOVO_SZORZO_MAX = 1.3
 # és legfeljebb ennyi lövőt nevezünk meg.
 LOVO_FELIRAT_ELTERES = 0.1
 LOVO_FELIRAT_MAX = 3
+# Ennél kisebb sáv-szorzó a lövő GYENGE sávja — a játékos-edzésterv
+# befejezés-tétele (a sávhoz legalább LOVO_MIN_LOVES lövés kell).
+LOVO_GYENGE_SZORZO = 0.85
 
 
 def kapus_sav(x: float, y: float, goal_x: float) -> str:

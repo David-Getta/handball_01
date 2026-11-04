@@ -12695,6 +12695,46 @@ def _player_training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # (c3) Befejezés SÁVONKÉNT — a tanult lövő-modell (AttackModel): a
+    #    játékos melyik távolságból lő be a helyzeteinél kevesebbet. A (c)
+    #    azt mondja, hogy elmarad; ez azt, hogy HONNAN — és a gyakorlat
+    #    a sávhoz igazodik.
+    try:
+        from .play_simulation import (KAPUS_SAV_NEV, LOVO_GYENGE_SZORZO,
+                                      AttackModel, _lovo_minta)
+        gyak = {"close": ("ziccer- és beálló-befejezés a 6 m-ről: fordulás "
+                          "után helyezett lövés a kapus mozdulása UTÁN, 20 "
+                          "ismétlés mindkét oldalról, fáradtan is"),
+                "mid": ("8 m-es lövés elzárás mögül: felugrás és gyors kar, "
+                        "a kapus sarkaira, 15 ismétlés passz utáni első "
+                        "érintésből"),
+                "far": ("átlövés-sorozat 9–10 m-ről blokk fölött és mellett, "
+                        "a kapus megmozdulása után helyezve, 20 ismétlés "
+                        "lendületből")}
+        for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+            lovok = AttackModel.learn(match, team, config).lovok
+            minta = _lovo_minta(match, team, config)
+            # mezszám → track (a játékos-lap a track-azonosítóval megy)
+            pid_of = {}
+            for tid, j in mez.items():
+                pid_of.setdefault(int(j), tid)
+            for jersey, savok in sorted(lovok.items()):
+                gyenge = [(v, s) for s, v in savok.items()
+                          if v <= LOVO_GYENGE_SZORZO]
+                if not gyenge or int(jersey) not in pid_of:
+                    continue
+                v, s = min(gyenge)
+                n, gol, xg = (minta.get(int(jersey)) or {}).get(s, [0, 0, 0.0])
+                add(side, pid_of[int(jersey)], int(jersey), "befejezés",
+                    "Befejezés a gyenge sávból",
+                    f"{KAPUS_SAV_NEV[s]} {n} lövésből {gol} gól, miközben a "
+                    f"helyzetei {xg:.1f} várható gólt értek — innen "
+                    + f"{v:.1f}".replace(".", ",")
+                    + "× annyit lő be, mint amennyit a helyzetei érnek",
+                    gyak[s], clips=["missed_chance", "shot"])
+    except Exception:
+        pass
+
     # (c2) Hosszú labda — az ő indításai foghatók el.
     try:
         from .attack_types import risky_passers

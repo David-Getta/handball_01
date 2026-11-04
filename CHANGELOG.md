@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **Játékos-edzésterv: befejezés a gyenge sávból** (egyéni edzés-
+  fókusz): a tanult lövő-modell a játékos lapjára is kerül — ha egy
+  távolságsávból (közelről / közepes távolságból / távolról) a
+  helyzeteinél érdemben kevesebbet lő be (a sáv szorzója legfeljebb
+  0,85, legalább három lövésből), tételt kap: "Befejezés a gyenge
+  sávból — távolról 6 lövésből 1 gól, miközben a helyzetei 2,1 várható
+  gólt értek — innen 0,7× annyit lő be, mint amennyit a helyzetei
+  érnek", a gyakorlat a sávhoz igazítva (ziccer a 6 m-ről, 8 m-es
+  lövés elzárás mögül, átlövés-sorozat blokk fölött). A "Befejezés a
+  helyzeteihez képest" tétel azt mondja, hogy elmarad; ez azt, hogy
+  honnan.
+
 - **Falválasztás: melyik rendszerünk zárja a figuráikat**
   (`defense_system_choice` — motor + API + összefoglaló + felderítés +
   meccsterv + edzésterv + kliens-csempe): az ellenfél visszatérő

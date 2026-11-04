@@ -311,6 +311,64 @@ def test_a_kondicio_szabaly_valodi_retegbol_is_megszolal():
     assert any(i["area"] == "kondíció" for i in tetelek), tetelek
 
 
+def test_befejezes_a_gyenge_savbol_a_valodi_lovo_modellbol():
+    """(c3) A tanult lövő-modell gyenge sávja (a szorzó legfeljebb
+    LOVO_GYENGE_SZORZO) a játékos lapjára kerül — a VALÓDI láncon
+    (szimulált meccs → match_xg → mezszám → AttackModel): tételt csak
+    gyenge sávú hazai lövő kap, a vendég (nem lő) senkije sem."""
+    from handball.pipeline.play_simulation import (LOVO_GYENGE_SZORZO,
+                                                   AttackModel)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    lovok = AttackModel.learn(m, Team.HOME).lovok
+    gyengek = {j for j, savok in lovok.items()
+               if any(v <= LOVO_GYENGE_SZORZO for v in savok.values())}
+    rec = player_training_focus(m)
+    cim = "Befejezés a gyenge sávból"
+
+    def kaptak(side):
+        return {p["jersey"] for p in rec[side]["players"]
+                for i in p["items"] if i["title"] == cim}
+
+    assert kaptak("home") <= gyengek
+    assert kaptak("away") == set()
+
+
+def test_befejezes_a_gyenge_savbol_a_savhoz_igazitott_gyakorlattal(
+        monkeypatch):
+    """(c3) A gyenge sáv tétele: a sáv neve, a lövésszám, a gól, az xG és
+    a szorzó a miértben, a gyakorlat a sávhoz igazítva; a jó sávú lövő
+    nem kap ilyet; a legrosszabb sáv kerül a lapra."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import AttackModel
+    from test_play_simulation import _proba_match
+
+    monkeypatch.setattr(ps.AttackModel, "learn", classmethod(
+        lambda cls, match, team, config=None: AttackModel(
+            lovok={1: {"far": 0.7, "close": 0.8}, 2: {"mid": 1.2}})
+        if team == Team.HOME else AttackModel()))
+    monkeypatch.setattr(ps, "_lovo_minta",
+                        lambda match, team, config: {
+                            1: {"far": [6, 1, 2.1], "close": [4, 2, 2.4]},
+                            2: {"mid": [5, 3, 1.5]}}
+                        if team == Team.HOME else {})
+    rec = player_training_focus(_proba_match())
+    cim = "Befejezés a gyenge sávból"
+    tetel = {p["jersey"]: i for p in rec["home"]["players"]
+             for i in p["items"] if i["title"] == cim}
+    assert set(tetel) == {1}
+    assert tetel[1]["area"] == "befejezés"
+    assert tetel[1]["why"] == (
+        "távolról 6 lövésből 1 gól, miközben a helyzetei 2.1 várható gólt "
+        "értek — innen 0,7× annyit lő be, mint amennyit a helyzetei érnek")
+    assert tetel[1]["drill"].startswith("átlövés-sorozat 9–10 m-ről")
+    assert tetel[1]["clips"] == ["missed_chance", "shot"]
+    assert not [i for p in rec["away"]["players"] for i in p["items"]
+                if i["title"] == cim]
+
+
 def test_a_szezon_lapon_ott_van_a_mit_gyakorolj():
     """A játékos szezon-lapján ott a "Mit gyakorolj" szakasz.
 
