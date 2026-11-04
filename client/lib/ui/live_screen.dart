@@ -183,6 +183,17 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Élő kit kinek: a 15., 30., 45. percben az addig látott falunk védői
+    // × az ellenfél tanult lövői (a szezon korábbi meccseiből) — ki álljon
+    // a veszélyes távoli lövővel szemben, és kire ne lépjünk ki; a védő
+    // kispadnak szól, és csak változásnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveMatchup(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     try {
       final r = await _api.fetchRules(matchId);
       for (final w in ((r["powerplay"] as List?) ?? const [])

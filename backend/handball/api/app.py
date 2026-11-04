@@ -9851,6 +9851,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.play_simulation import allowed_shooters
+            res["allowed_shooters"] = allowed_shooters(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import conceded_chance_quality
             res["conceded_chance_quality"] = (
                 conceded_chance_quality(match))
@@ -12066,6 +12071,8 @@ def create_app():
                 from ..pipeline.play_simulation import defense_system_choice
                 _layer("defense_system_choice",
                        lambda: defense_system_choice(match))
+                from ..pipeline.play_simulation import allowed_shooters
+                _layer("allowed_shooters", lambda: allowed_shooters(match))
                 from ..pipeline.xg import conceded_chance_quality
                 _layer("conceded_chance_quality",
                        lambda: conceded_chance_quality(match))
@@ -13817,6 +13824,46 @@ def create_app():
             if ellen:
                 kapus[side] = kapus_many(ellen)
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
+                "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/live-kit-kinek")
+    def get_live_matchup(match_id: str):
+        """ÉLŐ kit kinek: a 15., 30. és 45. percben az addig látott falunk
+        védői × az ellenfél tanult lövői — ki álljon a veszélyes távoli
+        lövővel szemben (csere-javaslattal a kilépőre), és kire ne
+        lépjünk ki (play_simulation.live_matchup_alerts). A lövőik a
+        könyvtár KORÁBBI meccseiből (ez a meccs nélkül — okszerű); ahol
+        nincs, az addig látott kockákból. Válasz: {"alerts": [{"t", "t_s",
+        "perc", "team" (a VÉDŐ oldal), "team_name", "fajta", "lovo_mez",
+        "vedo_mez", "javasolt_mez", "verdict", "text"}], "szezon_meccsek":
+        {"home", "away"}} — a szám oldalanként az ELLENFÉL korábbi
+        meccsei. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (live_matchup_alerts,
+                                                lovo_minta_many,
+                                                lovo_sav_minta_many)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        def korabbi(nev: str) -> list:
+            try:
+                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                        if m_.meta.match_id != match_id]
+            except HTTPException:
+                return []
+
+        tamadas, savok, mintak, db = {}, {}, {}, {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            ellen = korabbi(nevek[masik])
+            db[side] = len(ellen)
+            if ellen:
+                tamadas[side] = AttackModel.learn_many(ellen)
+                savok[side] = lovo_sav_minta_many(ellen)
+                mintak[side] = lovo_minta_many(ellen)
+        return {**live_matchup_alerts(match, tamadas=tamadas, savok=savok,
+                                      mintak=mintak),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/setplays")

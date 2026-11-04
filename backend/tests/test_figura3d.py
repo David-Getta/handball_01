@@ -1401,6 +1401,46 @@ def test_az_elo_utolso_labda_vegpont_a_szezon_modelljeivel(tmp_path,
     assert c.get("/matches/nincs/live-utolso-labda").status_code == 404
 
 
+def test_az_elo_kit_kinek_vegpont_a_szezon_lovoivel(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-kit-kinek: a lövő-modell, a sáv- és a nyers
+    minta az ELLENFÉL könyvtári KORÁBBI meccseiből (ez a meccs nélkül —
+    szezon_meccsek oldalanként az ellenfél meccsei), a riasztás a VÉDŐ
+    oldalnak (a vendég fala a hazai lövői ellen) az addig látott falból
+    — ugyanaz, mint a motor a kész modellekkel; a hazai fala nem
+    tanulható (a vendég nem támad) → nincs; 404 ismeretlen meccsre."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   live_matchup_alerts,
+                                                   lovo_minta_many,
+                                                   lovo_sav_minta_many)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    app = _app(tmp_path, monkeypatch)
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    m1.meta.match_id, m2.meta.match_id = "gt1", "gt2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/gt1/live-kit-kinek")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["szezon_meccsek"] == {"home": 1, "away": 1}
+    ok = [(m2, Team.HOME)]
+    vart = live_matchup_alerts(
+        m1, tamadas={"away": AttackModel.learn_many(ok)},
+        savok={"away": lovo_sav_minta_many(ok)},
+        mintak={"away": lovo_minta_many(ok)})["alerts"]
+    assert vart and all(a["team"] == "away" for a in vart)
+    assert [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert lovo_minta_many([]) == {} and lovo_sav_minta_many([]) == {}
+    assert c.get("/matches/nincs/live-kit-kinek").status_code == 404
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

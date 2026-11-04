@@ -7560,6 +7560,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 pass_line += f" A(z) {name} falválasztása: {p['verdict']}."
     except Exception:
         pass
+    # Engedett lövő: az ellenfél gyenge távoli lövője, akire a falnak nem
+    # kell kilépnie (play_simulation.allowed_shooters; a mondat a motoré).
+    try:
+        from .play_simulation import allowed_shooters
+        el = allowed_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            v = (el.get(side) or {}).get("verdict")
+            if v:
+                pass_line += f" A(z) {name} falának engedett lövője: {v}."
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

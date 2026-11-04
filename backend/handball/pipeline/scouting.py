@@ -169,6 +169,12 @@ class ScoutingReport:
     fal_vedok_minta: dict = field(default_factory=dict)
     fal_kockak: int = 0
     kk_lovok: list = field(default_factory=list)
+    # Engedett lövő (play_simulation.allowed_shooters_from): a lövőik,
+    # akikre NEM kell kilépni (minden tanult távoli sávjuk gyenge) — a
+    # kép az összegzett lövő-mintából (lsp_lovo_minta) származtatott, a
+    # scout_team és a combine_reports végén ÚJRASZÁMOLVA; új tárolt
+    # mező nem kell.
+    el_lovok: list = field(default_factory=list)
     # Kapus-választás (play_simulation.keeper_choice_from): a SAJÁT
     # kapusaik kapusonkénti sáv-mérlege {kapus mez (str): {sáv: [kaputra
     # érkezett, védett]}} — meccsek közt összeadódik; a kép (kc_kapusok:
@@ -10742,6 +10748,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Engedett lövő: akire NEM kell kilépni — a távoli lövése kevesebbet
+    # ér, mint a helyzete (play_simulation.allowed_shooters_from; a mondat
+    # a motoré).
+    try:
+        _el = (rep.el_lovok or [None])[0]
+        if _el and _el.get("verdict"):
+            keys.append(f"Engedett lövőjük: {_el['verdict']}.")
+    except Exception:
+        pass
+
     # Kapus-választás: a kapusaik gyenge sávja kapusonként — ha X áll a
     # kapuban, onnan lőjetek (play_simulation.keeper_choice_from
     # mintája; a sáv-szorzó LOVO_FELIRAT_ELTERES felett hír).
@@ -13546,6 +13562,10 @@ def _scout_team_cached(match: Match, team: Team,
     except Exception:
         rep.kk_lovok = []
     try:
+        rep.el_lovok = _el_lovok_of(rep)
+    except Exception:
+        rep.el_lovok = []
+    try:
         rep.kc_kapusok = _kc_kapusok_of(rep)
     except Exception:
         rep.kc_kapusok = []
@@ -13591,6 +13611,16 @@ def _kk_lovok_of(rep: "ScoutingReport") -> list:
             for p in shooter_defender_pairs(
                 AttackModel._modell_mintabol(rep.lsp_lovo_minta or {}),
                 rep.kk_lovo_savok or {}, [])]
+
+
+def _el_lovok_of(rep: "ScoutingReport") -> list:
+    """Az engedett lövőik a (összegzett) lövő-mintából
+    (play_simulation.allowed_shooters_from): [{"mez", "sav", "szorzo",
+    "lovesek", "gol", "kozel", "betores", "verdict"}, …] — a scout_team és
+    a combine_reports végén újraszámolva."""
+    from .play_simulation import AttackModel, allowed_shooters_from
+    minta = rep.lsp_lovo_minta or {}
+    return allowed_shooters_from(AttackModel._modell_mintabol(minta), minta)
 
 
 def _kk_parok_of(own: "ScoutingReport", opp: "ScoutingReport") -> list:
@@ -15635,6 +15665,29 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 474) Engedett lövő: az ő gyenge távoli lövőjük (akire nem kell
+    # kilépni) × a TI kilépő védőtök (a tanult falatokban van, aki
+    # rendre kilép, KITKINEK_KILEPO felett) — a reflex-kilépés ellene
+    # pazarlás: ő maradjon hátul vele szemben.
+    try:
+        from .play_simulation import (KITKINEK_KILEPO, _vedok_mintabol,
+                                      mezszam_nevelovel)
+        _el474 = (opp.el_lovok or [None])[0]
+        if _el474 and _el474.get("verdict"):
+            _kil474 = [v for v in _vedok_mintabol(own.fal_vedok_minta or {},
+                                                  own.fal_kockak or 0)
+                       if v.get("press_rate") is not None
+                       and v["press_rate"] >= KITKINEK_KILEPO]
+            if _kil474:
+                _v474 = max(_kil474, key=lambda v: (v["press_rate"], -v["mez"]))
+                plan.append(
+                    f"Engedett lövő: {_el474['verdict']} — a ti kilépőtök, "
+                    f"{mezszam_nevelovel(_v474['mez'])} "
+                    f"({_v474['press_rate'] * 100:.0f}%) vele szemben "
+                    "maradjon hátul, a kilépést a veszélyes lövőre tartsa.")
     except Exception:
         pass
 
@@ -24648,6 +24701,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rep.kk_lovok = _kk_lovok_of(rep)
     except Exception:
         rep.kk_lovok = []
+    try:
+        rep.el_lovok = _el_lovok_of(rep)
+    except Exception:
+        rep.el_lovok = []
     try:
         rep.kc_kapusok = _kc_kapusok_of(rep)
     except Exception:

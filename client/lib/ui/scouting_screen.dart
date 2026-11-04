@@ -9003,6 +9003,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "sávból (${p["lovesek"]} lövés) · a sávjában a kilépő védőtök álljon";
   }
 
+  // Engedett lövő: akire NEM kell kilépni — a backend play_simulation
+  // allowed_shooters_from képe (el_lovok: a tanult lövőik gyenge távoli
+  // sávja; a küszöbök a backendé, itt csak a sor).
+  String? _allowedShooters(Map<String, dynamic> r) {
+    final l = r["el_lovok"];
+    if (l is! List || l.isEmpty || l.first is! Map) return null;
+    final p = (l.first as Map).cast<String, dynamic>();
+    final mez = p["mez"];
+    final sz = (p["szorzo"] as num?)?.toDouble();
+    if (mez == null || sz == null) return null;
+    final sav = p["sav"] == "far" ? "távolról" : "közepes távolságból";
+    final kozel = (p["kozel"] as num?)?.toDouble();
+    final zaradek = p["betores"] == true && kozel != null
+        ? "a betörését viszont zárjátok (közelről "
+            "${kozel.toStringAsFixed(1).replaceAll(".", ",")}×)"
+        : "a fal maradjon hátul vele szemben";
+    return "a $mez-es ellen nem kell kilépni: $sav "
+        "${sz.toStringAsFixed(1).replaceAll(".", ",")}× annyit lő be, mint "
+        "amennyit a helyzetei érnek (${p["lovesek"]} lövés, ${p["gol"]} gól) "
+        "· $zaradek";
+  }
+
   // Utolsó labda: kire és honnan — a backend play_simulation
   // last_shot_choice képe (lsp_pick: a tanult lövőik × átlagos kapus; a
   // mondat a backendé, itt nincs küszöb).
@@ -12266,6 +12288,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Utolsó labda: kire", _lastShotPick(r)!],
       if (_shooterDefenderMatchup(r) != null)
         ["Kit kinek: távoli lövőjük", _shooterDefenderMatchup(r)!],
+      if (_allowedShooters(r) != null)
+        ["Engedett lövőjük: a fal ne lépjen ki", _allowedShooters(r)!],
       if (_keeperChoice(r) != null)
         ["Kapusaik sávonként", _keeperChoice(r)!],
       if (_defenseSystemChoice(r) != null)

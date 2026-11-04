@@ -1811,6 +1811,22 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő kit kinek (GET /matches/{id}/live-kit-kinek): a 15., 30. és 45.
+  /// percben az addig látott falunk védői × az ellenfél tanult lövői (a
+  /// szezon korábbi meccseiből) — ki álljon a veszélyes távoli lövővel
+  /// szemben, és kire ne lépjünk ki — [{t, t_s, perc, team, team_name,
+  /// fajta, lovo_mez, vedo_mez, javasolt_mez, verdict, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveMatchup(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-kit-kinek"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az élő kit kinek", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// A 3D pálya védekezés-panelje (GET /matches/{id}/defence-timeline):
   /// {"rows": [{"t","s","defending","label","goal_x"}], "formations":
   /// {név: [[mélység, y], …]}} — a sablonok a bal kapu előtt.

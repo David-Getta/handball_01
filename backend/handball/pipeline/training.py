@@ -1562,6 +1562,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 494) Engedett lövő: az ellenfél távoli lövője, aki a helyzeteinél
+    # érdemben kevesebbet lő be (a tanult lövő-modell gyenge sávja) — rá
+    # a falnak NEM kell kilépnie; a hátul maradást (és a betörés zárását)
+    # a saját fal ellene edzésen gyakorolja, mert a kilépés reflex.
+    _szabaly = 494
+    try:
+        from .play_simulation import allowed_shooters
+        el494 = allowed_shooters(match, config)
+        for side in ("home", "away"):
+            p494 = el494.get(side)
+            if not p494 or not p494.get("verdict"):
+                continue
+            add(side, "védekezés", "Hátul maradás az engedett lövő ellen",
+                p494["verdict"],
+                "6 a 6 ellen: a fal a gyenge távoli lövővel szemben hátul "
+                "marad, lőhet 9 méterről — a kapus a távoli lövésre áll, a "
+                "védők a betörést és a beállós beadást zárják; kilépés csak "
+                "a veszélyes lövőre (a kit-kinek párosítás szerint)")
+    except Exception:
+        pass
+
     # 493) Falválasztás: az ellenfél visszatérő figurái ellen a
     # szimulációban egy másik rendszerünk érdemben kevesebbet enged, mint
     # a mostani — a váltást (az új rendszer a saját szokásainkkal, a

@@ -1083,6 +1083,112 @@ def test_a_falvalasztas_a_felderitesben_es_az_edzestervben(monkeypatch):
     assert (f"falválasztása: {p['verdict']}." in szoveg) == bool(p["valt"])
 
 
+def test_az_engedett_lovo_a_kesz_modellbol():
+    """Engedett lövő a kész modellből: akinek MINDEN tanult távoli /
+    közepes sávja legfeljebb LOVO_GYENGE_SZORZO; a leggyengébb sáv kerül
+    a sorba a lövésszámmal és a góllal (a minta kulcsa int vagy str);
+    közelről veszélyes lövőnél (KITKINEK_LOVO_SZORZO) a mondat a betörés
+    zárásáról szól; a jó, a félig jó vagy a csak közelről tanult lövő
+    kimarad; modell nélkül üres."""
+    from handball.pipeline.play_simulation import (KITKINEK_LOVO_SZORZO,
+                                                   LOVO_GYENGE_SZORZO,
+                                                   AttackModel,
+                                                   allowed_shooters_from)
+
+    assert (LOVO_GYENGE_SZORZO, KITKINEK_LOVO_SZORZO) == (0.85, 1.1)
+    tamadas = AttackModel(lovok={
+        7: {"far": 0.8, "mid": 0.85, "close": 1.2},   # gyenge távolról, betörő
+        9: {"far": 1.2},                              # veszélyes — kit kinek
+        10: {"mid": 0.7, "far": 0.9},                 # a far sávja nem gyenge
+        11: {"close": 0.7},                           # nincs távoli sávja
+        12: {"mid": 0.75}})                           # gyenge; betörése ismeretlen
+    minta = {7: {"far": [6, 1, 2.1], "mid": [4, 1, 1.5], "close": [5, 4, 2.0]},
+             "12": {"mid": [5, 1, 1.6]}}
+    ki = allowed_shooters_from(tamadas, minta)
+    assert [(r["mez"], r["sav"], r["szorzo"], r["lovesek"], r["gol"],
+             r["kozel"], r["betores"]) for r in ki] == [
+        (12, "mid", 0.75, 5, 1, None, False),
+        (7, "far", 0.8, 6, 1, 1.2, True)]
+    assert ki[1]["verdict"] == (
+        "a 7-es ellen nem kell kilépni: távolról 0,8× annyit lő be, mint "
+        "amennyit a helyzetei érnek (6 lövés, 1 gól) — a távoli lövése "
+        "ajándék, a betörését viszont zárni kell: közelről 1,2×")
+    assert ki[0]["verdict"] == (
+        "a 12-es ellen nem kell kilépni: közepes távolságból 0,8× annyit "
+        "lő be, mint amennyit a helyzetei érnek (5 lövés, 1 gól) — a "
+        "közepes távolságú lövése ajándék, a fal maradjon hátul vele "
+        "szemben")
+    assert allowed_shooters_from(None, {}) == []
+    assert allowed_shooters_from(AttackModel(), {}) == []
+
+
+def test_az_engedett_lovo_a_meccsbol_a_felderitesben_es_az_edzestervben(
+        monkeypatch):
+    """A meccs-szintű réteg a VÉDEKEZŐ oldalról nevez (a vendég fala a
+    hazai gyenge távoli lövőjét kapja, a hazaié semmit); a felderítés
+    képe az összegzett lövő-mintából újraszámolódik (két meccsből dupla
+    lövésszám), a kulcs, a meccsterv (474 — csak ha a ti falatokban van
+    kilépő védő), az edzésterv (494) és az összefoglaló a motor mondatát
+    hozza; a másik oldalon semmi."""
+    import handball.pipeline.play_simulation as ps
+    import handball.pipeline.training as tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import allowed_shooters
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.pipeline.training import training_focus
+
+    # A hazai 7-es: távolról 6 lövés 1 gól (2,0 xG → 0,75×), közelről 5
+    # lövés 4 gól (2,0 xG → 1,45×, a felső korlát 1,3-ra szorítja); a
+    # vendég nem lő.
+    monkeypatch.setattr(ps, "_lovo_minta", lambda match, team, config: (
+        {7: {"far": [6, 1, 2.0], "close": [5, 4, 2.0]}}
+        if team == Team.HOME else {}))
+    m = _proba_match()
+    el = allowed_shooters(m)
+    assert el["home"] == {"lovok": [], "verdict": None}
+    [sor] = el["away"]["lovok"]
+    assert (sor["mez"], sor["sav"], sor["szorzo"], sor["lovesek"], sor["gol"],
+            sor["kozel"], sor["betores"]) == (7, "far", 0.75, 6, 1, 1.3, True)
+    assert el["away"]["verdict"] == sor["verdict"]
+    assert sor["verdict"].startswith(
+        "a 7-es ellen nem kell kilépni: távolról 0,8×")
+    assert sor["verdict"].endswith("zárni kell: közelről 1,3×")
+
+    opp = scout_team(m, Team.HOME)
+    assert [(r["mez"], r["lovesek"]) for r in opp.el_lovok] == [(7, 6)]
+    assert f"Engedett lövőjük: {sor['verdict']}." in opp.keys_to_game
+    own = scout_team(m, Team.AWAY)
+    assert own.el_lovok == []
+    assert not any(k.startswith("Engedett lövőjük") for k in own.keys_to_game)
+    ketto = combine_reports([opp, opp])
+    assert [(r["mez"], r["lovesek"], r["gol"]) for r in ketto.el_lovok] == [
+        (7, 12, 2)]
+    # A meccsterv csak kilépő védővel szól (különben a fal úgyis hátul
+    # marad): a falatok tanult védői a (patchelt) védőnkénti mintából.
+    monkeypatch.setattr(ps, "_vedok_mintabol", lambda minta, kockak: [
+        {"mez": 5, "y": 7.0, "press_rate": 0.2}])
+    assert not [s for s in matchup_plan(own, opp)
+                if s.startswith("Engedett lövő:")]
+    monkeypatch.setattr(ps, "_vedok_mintabol", lambda minta, kockak: [
+        {"mez": 4, "y": 10.0, "press_rate": 0.6},
+        {"mez": 5, "y": 7.0, "press_rate": 0.2}])
+    [terv] = [s for s in matchup_plan(own, opp) if s.startswith("Engedett lövő:")]
+    assert terv == (f"Engedett lövő: {sor['verdict']} — a ti kilépőtök, a 4-es "
+                    "(60%) vele szemben maradjon hátul, a kilépést a veszélyes "
+                    "lövőre tartsa.")
+    assert not [s for s in matchup_plan(opp, own)
+                if s.startswith("Engedett lövő:")]
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+    cim = "Hátul maradás az engedett lövő ellen"
+    tetel = [i for i in training_focus(m)["away"] if i["title"] == cim]
+    assert len(tetel) == 1 and tetel[0]["why"] == sor["verdict"]
+    assert tetel[0]["area"] == "védekezés"
+    assert not [i for i in training_focus(m)["home"] if i["title"] == cim]
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert f"falának engedett lövője: {sor['verdict']}." in szoveg
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba
@@ -1416,6 +1522,57 @@ def test_az_elo_utolso_labda_a_hajraban_szoros_allasnal():
     assert live_last_shot_alerts(m)["alerts"] == []
     assert live_last_shot_alerts(_proba_match(ismetles=10), tamadas=tam,
                                  kapus=kap)["alerts"] == []
+
+
+def test_az_elo_kit_kinek_az_addig_latott_falbol(monkeypatch):
+    """A 3. percben (küszöb átállítva) a vendég addig látott, mezszámos
+    fala védői × a megadott (szezon-) lövő-modell: a veszélyes távoli
+    lövőre a kit-kinek párja (a sávjában a ritkán kilépő 7-es, a kilépő
+    5-ös álljon elé), a gyenge távolira az engedett-lövő sora — a motor
+    mondataival; a hazai nem védekezik → semmi; a 6. percben ugyanaz a
+    fal ugyanazt mondaná → nem ismétlődik; csak az addigi kockákból;
+    rövid meccsnél üres; modell nélkül az addig látott kockákból tanul
+    (mezszám és lövés nélküli meccsen → üres)."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   _tanulas_minta,
+                                                   allowed_shooters_from,
+                                                   live_matchup_alerts,
+                                                   shooter_defender_pairs)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    nev = m.meta.away_team
+    tam = AttackModel(lovok={9: {"far": 1.3}, 7: {"far": 0.8, "close": 1.2}})
+    sav = {9: [5, 1, 0]}
+    minta = {7: {"far": [6, 1, 2.1]}}
+    be = dict(tamadas={"away": tam}, savok={"away": sav}, mintak={"away": minta})
+    r = live_matchup_alerts(m, **be)["alerts"]
+    assert [(a["perc"], a["team"], a["fajta"]) for a in r] == [
+        (3, "away", "engedett"), (3, "away", "kit_kinek")]
+    hatar = m.frames[0].t + 3 * 60 * 25
+    eddig = Match(m.meta, [f for f in m.frames if f.t <= hatar])
+    vedok = DefenseModel._modell_mintabol(
+        _tanulas_minta(eddig, Team.AWAY, TacticsConfig())).vedok
+    assert len(vedok) == 6
+    par = shooter_defender_pairs(tam, sav, vedok)[0]
+    eng = allowed_shooters_from(tam, minta)[0]
+    e, k = r
+    assert (k["lovo_mez"], k["vedo_mez"], k["javasolt_mez"], k["verdict"]) == (
+        9, 7, 5, par["verdict"])
+    assert k["team_name"] == nev
+    assert k["text"] == f"Kit kinek (3. perc): {nev} eddig látott fala — {par['verdict']}"
+    assert (e["lovo_mez"], e["vedo_mez"], e["javasolt_mez"], e["verdict"]) == (
+        7, None, None, eng["verdict"])
+    assert e["text"] == (f"Engedett lövő (3. perc): {nev} eddig látott fala — "
+                         f"{eng['verdict']}")
+    assert e["t"] == k["t"] == hatar and e["t_s"] == hatar / 25
+    # csak az addigi kockák: az első 3 perc önmagában ugyanazt adja
+    assert live_matchup_alerts(eddig, **be)["alerts"] == r
+    assert live_matchup_alerts(Match(m.meta, m.frames[:1000]), **be)["alerts"] == []
+    assert live_matchup_alerts(_proba_match(ismetles=40))["alerts"] == []
 
 
 def test_az_elo_utolso_labda_okszeru_es_az_allast_nezi(monkeypatch):

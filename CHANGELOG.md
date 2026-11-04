@@ -5,6 +5,39 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **Élő kit kinek** (motor + végpont + élő képernyő): az élő képernyő a
+  15., 30. és 45. percben a VÉDŐ kispadnak megmondja, az ADDIG látott
+  falunk védői és az ellenfél tanult lövői szerint ki álljon a veszélyes
+  távoli lövővel szemben — "Kit kinek (30. perc): Szeged eddig látott
+  fala — a 9-es (távolról 1,3× annyit lő be, mint amennyit a helyzetei
+  érnek) a szélső sávból lő (5 lövés); ott a 3-as áll, aki ritkán lép
+  ki (12%) — a 6-os (kilépő, 62%) álljon vele szemben" — és kire ne
+  pazaroljuk a kilépést: "Engedett lövő (30. perc): … a 7-es ellen nem
+  kell kilépni: távolról 0,8× …". A lövőik a könyvtár KORÁBBI
+  meccseiből (ez a meccs nélkül — okszerű), ahol nincs, az addig látott
+  kockákból; a falunk a percig látott kockákból (legalább 300 védekező
+  kocka). Ugyanaz a mondat nem ismétlődik: egy oldal egy fajta jelzése
+  csak akkor szól újra, ha a tartalma változott (más védő került a
+  sávba). Új végpont: /matches/{id}/live-kit-kinek.
+
+- **Engedett lövő: kire NE lépjünk ki** (`allowed_shooters` — motor +
+  API + összefoglaló + felderítés + meccsterv + edzésterv +
+  kliens-csempe): a kit-kinek párja. Az ellenfél tanult lövői közül az,
+  akinek MINDEN tanult távoli / közepes sávja gyenge (a sáv szorzója
+  legfeljebb 0,85, legalább három lövésből): rá a kilépés pazarlás — a
+  távoli lövése ajándék, a kilépés mögé viszont betörhet. "A 7-es ellen
+  nem kell kilépni: távolról 0,8× annyit lő be, mint amennyit a
+  helyzetei érnek (6 lövés, 1 gól) — a távoli lövése ajándék, a
+  betörését viszont zárni kell: közelről 1,2×" (ha közelről legalább
+  1,1×; különben "a fal maradjon hátul vele szemben"). A VÉDEKEZŐ oldal
+  szemszögéből nevez; több engedett lövőnél a leggyengébb elöl.
+  Felületek: `/analyze` és a meccs-csomag (`allowed_shooters`), az
+  összefoglaló mondata, a felderítés kulcsa (az összegzett lövő-mintából
+  újraszámolt kép, új tárolt mező nélkül), a meccsterv 474. szabálya (az
+  ő engedett lövőjük × a ti kilépő védőtök: ő maradjon hátul vele
+  szemben), az edzés-fókusz 494. szabálya (a hátul maradás gyakorlása),
+  a felderítő csempe.
+
 - **Játékos-edzésterv: befejezés a gyenge sávból** (egyéni edzés-
   fókusz): a tanult lövő-modell a játékos lapjára is kerül — ha egy
   távolságsávból (közelről / közepes távolságból / távolról) a

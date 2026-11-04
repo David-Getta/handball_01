@@ -2312,6 +2312,196 @@ def shooter_defender_matchup(match: Match,
     return out
 
 
+# ---- Engedett lövő: kire NE lépjünk ki -------------------------------------
+# A kit-kinek párja. Ott a távolról VESZÉLYES lövő elé állítunk kilépő
+# védőt; itt az, akire a kilépés pazarlás: a tanult lövő-modellben
+# (AttackModel) a lövő MINDEN tanult távoli / közepes sávja legfeljebb
+# LOVO_GYENGE_SZORZO — a helyzeteinél kevesebbet lő be onnan. Ellene a
+# fal maradjon hátul: a távoli lövése ajándék, a kilépés mögé viszont
+# betörhet — főleg, ha közelről legalább KITKINEK_LOVO_SZORZO (ekkor a
+# mondat külön szól a betörés zárásáról). A tanult sáv legalább
+# LOVO_MIN_LOVES lövés; egy ilyen lövő sem → üres lista, a modell nem
+# találgat.
+ENGEDETT_SAVOK = ("far", "mid")
+
+
+def allowed_shooters_from(tamadas, minta: dict) -> list:
+    """Engedett lövők a kész modellből: `tamadas` (AttackModel — az ő
+    lövőik), `minta` (a nyers lövő-minta, _lovo_minta alakban, mezszám-
+    kulccsal — a lövésszámhoz és a gólhoz). Visszaad: [{"mez", "sav"
+    ("far" / "mid" — a leggyengébb), "szorzo", "lovesek", "gol", "kozel"
+    (a közeli sáv szorzója vagy None), "betores" (igaz, ha közelről
+    veszélyes), "verdict"}, …] a szorzó szerint növekvőben (a leggyengébb
+    távoli lövő elöl, holtversenyben mezszám); üres, ha nincs ilyen."""
+    ki: list = []
+    if tamadas is None:
+        return ki
+    for mez, bands in tamadas.lovok.items():
+        tavoli = [(float(bands[b]), b) for b in ENGEDETT_SAVOK if b in bands]
+        if not tavoli or max(v for v, _ in tavoli) > LOVO_GYENGE_SZORZO:
+            continue
+        szorzo, sav = min(tavoli)
+        n, gol, _xg = ((minta.get(mez) or minta.get(str(mez)) or {})
+                       .get(sav) or [0, 0, 0.0])
+        kozel = bands.get("close")
+        betores = kozel is not None and float(kozel) >= KITKINEK_LOVO_SZORZO
+        sor = {"mez": int(mez), "sav": sav, "szorzo": round(szorzo, 3),
+               "lovesek": int(n), "gol": int(gol),
+               "kozel": round(float(kozel), 3) if kozel is not None else None,
+               "betores": bool(betores)}
+        sz = f"{szorzo:.1f}".replace(".", ",")
+        v = (f"{mezszam_nevelovel(sor['mez'])} ellen nem kell kilépni: "
+             f"{KAPUS_SAV_NEV[sav]} {sz}× annyit lő be, mint amennyit a "
+             f"helyzetei érnek ({sor['lovesek']} lövés, {sor['gol']} gól) — "
+             f"a {UTOLSO_LOVES_SAV_JELZO[sav]} lövése ajándék")
+        if betores:
+            kz = f"{float(kozel):.1f}".replace(".", ",")
+            v += f", a betörését viszont zárni kell: közelről {kz}×"
+        else:
+            v += ", a fal maradjon hátul vele szemben"
+        sor["verdict"] = v
+        ki.append(sor)
+    ki.sort(key=lambda r: (r["szorzo"], r["mez"]))
+    return ki
+
+
+def allowed_shooters(match: Match, config: TacticsConfig | None = None) -> dict:
+    """Engedett lövő — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az
+    ellenfél lövői, akik távolról / közepes távolságból a helyzeteiknél
+    érdemben kevesebbet lőnek be (az ő tanult lövőik, AttackModel.learn:
+    minden tanult távoli sávjuk legfeljebb LOVO_GYENGE_SZORZO) — rájuk
+    nem kell kilépni (allowed_shooters_from).
+
+    Edzőileg: a kit-kinek fordítottja — "kire NE lépjünk ki?" A gyenge
+    távoli lövőt hagyni kell lőni: a kilépés mögé betörne, a lövése
+    viszont ajándék. Ha közelről veszélyes (KITKINEK_LOVO_SZORZO
+    felett), a mondat a betörés zárásáról is szól.
+
+    Visszaad csapatonként: {"lovok": [...], "verdict"} — a verdict az
+    első (leggyengébb) lövő mondata, None, ha nincs ilyen lövőjük (kevés
+    minta — a modell nem találgat)."""
+    config = config or TacticsConfig()
+    out = {}
+    for side, masik in (("home", Team.AWAY), ("away", Team.HOME)):
+        lovok = allowed_shooters_from(AttackModel.learn(match, masik, config),
+                                      _lovo_minta(match, masik, config))
+        out[side] = {"lovok": lovok,
+                     "verdict": lovok[0]["verdict"] if lovok else None}
+    return out
+
+
+# ---- Élő kit kinek: a lövőik × az addig látott falunk ----------------------
+# A LIVE_AJANLO_PERCEK perceiben (mint a figura-ajánló), ha az addig
+# látott kockákból a falunk már tanulható (LIVE_AJANLO_MIN_KOCKA): az
+# ellenfél tanult lövői (a szezon korábbi meccseiből — ahol nincs, az
+# addig látott kockákból) × a falunk ADDIG látott védői → ki álljon a
+# veszélyes távoli lövővel szemben (shooter_defender_pairs), és kire ne
+# lépjünk ki (allowed_shooters_from). Ugyanaz a mondat nem ismétlődik:
+# egy oldal egy fajta jelzése csak akkor szól újra, ha a tartalma
+# változott (a fal átállt, más védő került a sávba). Okszerű: csak a
+# percig látott kockák.
+LIVE_KITKINEK_FAJTA = {"kit_kinek": "Kit kinek", "engedett": "Engedett lövő"}
+
+
+def lovo_minta_many(meccsek: list, config: TacticsConfig | None = None) -> dict:
+    """TÖBB meccs nyers lövő-mintája összeadva (`meccsek` = [(match, a
+    csapat oldala), …]) — az AttackModel.learn_many párja a lövésszámhoz
+    és a gólhoz (allowed_shooters_from). Üres listára üres."""
+    config = config or TacticsConfig()
+    return _lovo_mintak_osszege([_lovo_minta(m, t, config) for m, t in meccsek])
+
+
+def lovo_sav_minta_many(meccsek: list,
+                        config: TacticsConfig | None = None) -> dict:
+    """TÖBB meccs lövő sáv-mintája összeadva ({mezszám: [lövés sávonként]},
+    _lovo_sav_minta alakban) — a shooter_defender_pairs `savok` bemenete
+    a szezonból. Üres listára üres."""
+    config = config or TacticsConfig()
+    ossz: dict = {}
+    for m, t in meccsek:
+        for mez, db in _lovo_sav_minta(m, t, config).items():
+            r = ossz.setdefault(int(mez), [0] * KITKINEK_SAVOK)
+            for i, x in enumerate(db):
+                r[i] += int(x)
+    return ossz
+
+
+def live_matchup_alerts(match: Match, config: TacticsConfig | None = None, *,
+                        tamadas: dict | None = None,
+                        savok: dict | None = None,
+                        mintak: dict | None = None) -> dict:
+    """Élő kit kinek: a LIVE_AJANLO_PERCEK perceiben csapatonként (a VÉDŐ
+    oldal, akinek a faláról szó van) a falunk addig látott védői
+    (DefenseModel a kezdettől a percig) × az ellenfél tanult lövői:
+    - "kit_kinek": a veszélyes távoli lövőjük és a sávjában álló védőnk,
+      csere-javaslattal a kilépőre (shooter_defender_pairs első párja);
+    - "engedett": a gyenge távoli lövőjük, akire nem kell kilépni
+      (allowed_shooters_from első sora).
+    `tamadas` ({"home" / "away": AttackModel}), `savok` ({…: a lövőik
+    sáv-mintája}) és `mintak` ({…: a nyers lövő-mintájuk}) oldalanként az
+    ADOTT fal ELLEN támadó csapatról, a szezon korábbi meccseiből; ahol
+    nincs, az addig látott kockákból tanul (okszerű).
+
+    Edzőileg: a félidei / időkérési emberfogás-döntés — ki álljon a 9-es
+    elé, és kire ne pazaroljuk a kilépést — az addig látott falunkból,
+    nem a meccs végéből.
+
+    Visszaad: {"alerts": [{"t" (kocka), "t_s", "perc", "team",
+    "team_name", "fajta" ("kit_kinek" / "engedett"), "lovo_mez",
+    "vedo_mez" és "javasolt_mez" (csak a kit kinek-nél, különben None),
+    "verdict", "text"}, …]} t, csapat és fajta szerint; egy oldal egy
+    fajtája csak változásnál szól újra; üres, ha a fal még nem tanulható
+    vagy nincs tanult lövőjük."""
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    t0 = match.frames[0].t
+    utolso: dict = {}
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [f for f in match.frames if f.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                                  ("away", Team.AWAY, Team.HOME)):
+            minta = _tanulas_minta(resz, team, config)
+            if minta["kockak"] < LIVE_AJANLO_MIN_KOCKA:
+                continue
+            vedok = DefenseModel._modell_mintabol(minta).vedok
+            tam = (tamadas or {}).get(side)
+            if tam is None:
+                tam = AttackModel.learn(resz, masik, config)
+            sav = (savok or {}).get(side)
+            if sav is None:
+                sav = _lovo_sav_minta(resz, masik, config)
+            nyers = (mintak or {}).get(side)
+            if nyers is None:
+                nyers = _lovo_minta(resz, masik, config)
+            nev = (match.meta.home_team if side == "home"
+                   else match.meta.away_team)
+            parok = shooter_defender_pairs(tam, sav, vedok) if vedok else []
+            engedett = allowed_shooters_from(tam, nyers)
+            for fajta, sor in (("kit_kinek", parok[0] if parok else None),
+                               ("engedett", engedett[0] if engedett else None)):
+                if sor is None or utolso.get((side, fajta)) == sor["verdict"]:
+                    continue
+                utolso[(side, fajta)] = sor["verdict"]
+                alerts.append({
+                    "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc,
+                    "team": side, "team_name": nev, "fajta": fajta,
+                    "lovo_mez": sor.get("lovo_mez", sor.get("mez")),
+                    "vedo_mez": sor.get("vedo_mez"),
+                    "javasolt_mez": sor.get("javasolt_mez"),
+                    "verdict": sor["verdict"],
+                    "text": (f"{LIVE_KITKINEK_FAJTA[fajta]} ({perc}. perc): "
+                             f"{nev} eddig látott fala — {sor['verdict']}")})
+    alerts.sort(key=lambda a: (a["t"], a["team"], a["fajta"]))
+    return {"alerts": alerts}
+
+
 # ---- Kapus-választás: melyik kapusunk az ő lövőik ellen --------------------
 # Kapusonként (mezszám) a kaputra érkező lövések sávonkénti mérlege (a
 # goalkeeper_timeline szolgálat-szakaszai szerint: ki védett a lövés
