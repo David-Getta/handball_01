@@ -2608,6 +2608,150 @@ def player_shooter_profile(match: Match, player_id: int,
             "felirat": "; ".join(reszek), "elosztas": elosztas}
 
 
+# ---- A lövő-modell próbája: előre jelez-e ----------------------------------
+# A csapat meccsei időrendben: minden meccs lövéseit a KORÁBBI meccsekből
+# tanult lövő-modell (AttackModel) becsli — lövő × sáv csoportonként a
+# becsült gól = a csoport xG-je × a tanult szorzó —, és két viszonyítással
+# vetjük össze: a nyers xG-vel és a CSAPAT korábbi befejezésével (egy
+# szorzó mindenkire, ugyanúgy simítva és szorítva, mint a lövőé). Az
+# összevetés az abszolút eltérés a csoport tényleges góljaitól,
+# csoportonként összegezve. Csak az a csoport számít, ahol a korábbi
+# meccsekből van tanult szorzó. Az EGYÉNI képesség akkor látszik, ha a
+# lövő-modell a csapat-szorzót is veri: különben a javulás a csapat
+# befejezése (vagy a helyzet-érték torzítása), nem az egyes lövőké.
+# Legalább PROBA_MIN_CSOPORT csoport kell az ítélethez; a PROBA_ITELET_PCT-
+# nél kisebb különbség "nagyjából ugyanolyan pontos".
+PROBA_MIN_CSOPORT = 5
+PROBA_ITELET_PCT = 5.0
+
+
+def _csapat_szorzo(minta: dict) -> float:
+    """A csapat egyetlen befejezési szorzója a (összeadott) lövő-mintából
+    — mint a lövőé (_lovo_szorzo): a gól és az xG hányadosa, LOVO_SULY
+    átlagos értékű lövéssel simítva, a LOVO_SZORZO sávba szorítva; 1, ha
+    nincs lövés."""
+    n = gol = xg = 0.0
+    for savok in minta.values():
+        for v in savok.values():
+            n += float(v[0])
+            gol += float(v[1])
+            xg += float(v[2])
+    if n <= 0 or xg <= 0:
+        return 1.0
+    atlag = xg / n
+    arany = (gol + LOVO_SULY * atlag) / (xg + LOVO_SULY * atlag)
+    return max(LOVO_SZORZO_MIN, min(LOVO_SZORZO_MAX, arany))
+
+
+def shooter_model_backtest(mintak: list) -> dict | None:
+    """A lövő-modell próbája egy csapat meccsein: `mintak` — a csapat
+    meccsenkénti nyers lövő-mintái IDŐRENDBEN ([{mez: {sáv: [lövés, gól,
+    xG]}}, …] — _lovo_minta vagy player_model_sample["lovo"] alakban).
+    A k. meccs csoportjait az első k−1 meccsből tanult modell becsli.
+
+    Edzőileg: a bizalom kérdése — érdemes-e a "a 7-es távolról 1,3×"
+    mondatra építeni a meccstervet? Ha a korábbi meccsekből tanult EGYÉNI
+    szorzó a következő meccsen pontosabban becsüli a gólokat, mint a nyers
+    helyzet-érték ÉS a csapat átlagos befejezése, a lövő-modell valódi
+    egyéni képességet mér, nem véletlent.
+
+    Visszaad: {"meccsek", "csoportok" (hány lövő × sáv csoportot becsült
+    tanult szorzóval), "lovesek", "xg_hiba", "csapat_hiba",
+    "modell_hiba" (az abszolút eltérések összege, gólban), "javulas_pct"
+    (a modell hibája mennyivel kisebb, mint a nyers xG-é), "egyeni_pct"
+    (mennyivel kisebb, mint a csapat-szorzóé), "verdict"} — None, ha
+    kevesebb mint PROBA_MIN_CSOPORT csoport becsülhető (kevés meccs vagy
+    lövés)."""
+    csoportok = 0
+    lovesek = 0
+    xg_hiba = 0.0
+    csapat_hiba = 0.0
+    modell_hiba = 0.0
+    for k in range(1, len(mintak)):
+        elozo = _lovo_mintak_osszege(mintak[:k])
+        tam = AttackModel._modell_mintabol(elozo)
+        csz = _csapat_szorzo(elozo)
+        for mez, savok in sorted((mintak[k] or {}).items(),
+                                 key=lambda kv: int(kv[0])):
+            tanult = tam.lovok.get(int(mez)) or {}
+            for sav, (n, gol, xg) in sorted(savok.items()):
+                if sav not in tanult:
+                    continue
+                csoportok += 1
+                lovesek += int(n)
+                xg_hiba += abs(float(gol) - float(xg))
+                csapat_hiba += abs(float(gol) - float(xg) * csz)
+                modell_hiba += abs(float(gol) - float(xg) * float(tanult[sav]))
+    if csoportok < PROBA_MIN_CSOPORT or xg_hiba <= 0:
+        return None
+    javulas = round(100.0 * (xg_hiba - modell_hiba) / xg_hiba, 1)
+    egyeni = (round(100.0 * (csapat_hiba - modell_hiba) / csapat_hiba, 1)
+              if csapat_hiba > 0 else 0.0)
+    alap = (f"({csoportok} lövő × sáv csoport, {lovesek} lövés, "
+            f"{len(mintak)} meccs)")
+    eleje = ("a korábbi meccsekből tanult lövő-modell a következő meccs "
+             "góljait ")
+    if javulas >= PROBA_ITELET_PCT and egyeni >= PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{javulas:.0f}%-kal pontosabban becsülte, mint a "
+                   f"nyers várható gól, és {egyeni:.0f}%-kal, mint a csapat "
+                   f"átlagos befejezése {alap} — az egyéni szorzókra lehet "
+                   "építeni")
+    elif javulas >= PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{javulas:.0f}%-kal pontosabban becsülte, mint a "
+                   "nyers várható gól, de a csapat átlagos befejezésénél nem "
+                   f"jobban {alap} — a különbség a csapat befejezése, nem "
+                   "az egyes lövőké: az egyéni szorzót óvatosan kell olvasni")
+    elif javulas <= -PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{-javulas:.0f}%-kal pontatlanabbul becsülte, "
+                   f"mint a nyers várható gól {alap} — a lövők formája "
+                   "meccsről meccsre változik, a szorzót óvatosan kell "
+                   "olvasni")
+    else:
+        verdict = (f"{eleje}nagyjából ugyanolyan pontosan becsülte, mint a "
+                   f"nyers várható gól {alap}")
+    return {"meccsek": len(mintak), "csoportok": csoportok,
+            "lovesek": lovesek, "xg_hiba": round(xg_hiba, 2),
+            "csapat_hiba": round(csapat_hiba, 2),
+            "modell_hiba": round(modell_hiba, 2), "javulas_pct": javulas,
+            "egyeni_pct": egyeni, "verdict": verdict}
+
+
+def shooter_model_backtest_summary(sorok: list) -> dict | None:
+    """Több csapat próbájának (shooter_model_backtest sorai) összege: a
+    csoportok, a lövések és a két hiba összeadva, a javulás az összegből
+    — {"csapatok", "csoportok", "lovesek", "xg_hiba", "modell_hiba",
+    "javulas_pct", "verdict"}; None, ha nincs sor."""
+    sorok = [r for r in (sorok or []) if r]
+    if not sorok:
+        return None
+    xh = sum(float(r["xg_hiba"]) for r in sorok)
+    ch = sum(float(r.get("csapat_hiba", r["xg_hiba"])) for r in sorok)
+    mh = sum(float(r["modell_hiba"]) for r in sorok)
+    cs = sum(int(r["csoportok"]) for r in sorok)
+    lv = sum(int(r["lovesek"]) for r in sorok)
+    javulas = round(100.0 * (xh - mh) / xh, 1) if xh > 0 else 0.0
+    egyeni = round(100.0 * (ch - mh) / ch, 1) if ch > 0 else 0.0
+    irany = ("pontosabban" if javulas >= PROBA_ITELET_PCT else
+             "pontatlanabbul" if javulas <= -PROBA_ITELET_PCT else
+             "nagyjából ugyanolyan pontosan")
+    mennyi = (f"{abs(javulas):.0f}%-kal " if irany != "nagyjából ugyanolyan "
+              "pontosan" else "")
+    egyeni_mondat = (f", és {egyeni:.0f}%-kal, mint a csapatok átlagos "
+                     "befejezése" if javulas >= PROBA_ITELET_PCT
+                     and egyeni >= PROBA_ITELET_PCT else
+                     ", de a csapatok átlagos befejezésénél nem jobban"
+                     if javulas >= PROBA_ITELET_PCT else "")
+    return {"csapatok": len(sorok), "csoportok": cs, "lovesek": lv,
+            "xg_hiba": round(xh, 2), "csapat_hiba": round(ch, 2),
+            "modell_hiba": round(mh, 2), "javulas_pct": javulas,
+            "egyeni_pct": egyeni,
+            "verdict": (f"a könyvtár {len(sorok)} csapatán a korábbi "
+                        f"meccsekből tanult lövő-modell a következő meccs "
+                        f"góljait {mennyi}{irany} becsülte, mint a nyers "
+                        f"várható gól{egyeni_mondat} ({cs} lövő × sáv "
+                        f"csoport, {lv} lövés)")}
+
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a

@@ -1233,6 +1233,57 @@ def test_egy_jatekos_lovo_modellje_es_a_helye_az_elosztasban(monkeypatch):
         s: v[0] for s, v in minta[mez].items()}
 
 
+def test_a_lovo_modell_probaja_a_kovetkezo_meccsen():
+    """A lövő-modell próbája: következetes lövőknél (minden meccsen
+    ugyanaz a túl- / alulteljesítés) a korábbiakból tanult szorzó a
+    következő meccs góljait pontosabban becsüli, mint a nyers xG; meccsről
+    meccsre váltakozó formánál pontatlanabbul; kevés becsülhető csoportnál
+    (PROBA_MIN_CSOPORT alatt) None; a könyvtár-összeg a csapatok
+    hibáinak összegéből; a minta szöveg-kulcsa (a tárból) is megy."""
+    from handball.pipeline.play_simulation import (
+        PROBA_ITELET_PCT, PROBA_MIN_CSOPORT, shooter_model_backtest,
+        shooter_model_backtest_summary)
+
+    assert (PROBA_MIN_CSOPORT, PROBA_ITELET_PCT) == (5, 5.0)
+    jo = {7: {"close": [6, 5, 3.0]}, 9: {"far": [6, 1, 2.4]},
+          10: {"mid": [5, 2, 2.0]}}
+    r = shooter_model_backtest([jo, jo, jo, jo])
+    assert (r["meccsek"], r["csoportok"], r["lovesek"]) == (4, 9, 51)
+    assert r["xg_hiba"] == 10.2 and r["modell_hiba"] < r["xg_hiba"]
+    assert r["javulas_pct"] >= PROBA_ITELET_PCT
+    assert r["verdict"].startswith(
+        "a korábbi meccsekből tanult lövő-modell a következő meccs góljait "
+        f"{r['javulas_pct']:.0f}%-kal pontosabban becsülte")
+    # Az egyéni képesség: a csapat-szorzót is veri.
+    assert r["egyeni_pct"] >= PROBA_ITELET_PCT
+    assert r["modell_hiba"] < r["csapat_hiba"]
+    assert r["verdict"].endswith("az egyéni szorzókra lehet építeni")
+    # Mindenki ugyanannyival teljesít túl: a csapat-szorzó ugyanolyan jó
+    # — a javulás a csapat befejezése, nem az egyes lövőké.
+    c = {7: {"close": [8, 6, 4.0]}, 9: {"far": [8, 3, 2.0]},
+         10: {"mid": [8, 4, 2.0]}}
+    rc = shooter_model_backtest([c, c, c, c])
+    assert rc["javulas_pct"] >= PROBA_ITELET_PCT
+    assert rc["egyeni_pct"] < PROBA_ITELET_PCT
+    assert "de a csapat átlagos befejezésénél nem jobban" in rc["verdict"]
+    a = {7: {"close": [6, 6, 3.0]}, 9: {"far": [6, 4, 2.4]},
+         10: {"mid": [5, 5, 2.0]}}
+    b = {7: {"close": [6, 0, 3.0]}, 9: {"far": [6, 0, 2.4]},
+         10: {"mid": [5, 0, 2.0]}}
+    r2 = shooter_model_backtest([a, b, a, b])
+    assert r2["javulas_pct"] <= -PROBA_ITELET_PCT
+    assert "pontatlanabbul" in r2["verdict"]
+    assert shooter_model_backtest([jo]) is None
+    assert shooter_model_backtest([jo, jo]) is None        # 3 csoport < 5
+    szoveg = [{str(k): v for k, v in m.items()} for m in (jo, jo, jo, jo)]
+    assert shooter_model_backtest(szoveg) == r
+    o = shooter_model_backtest_summary([r, r2])
+    assert (o["csapatok"], o["csoportok"]) == (2, 18)
+    assert o["xg_hiba"] == round(r["xg_hiba"] + r2["xg_hiba"], 2)
+    assert o["verdict"].startswith("a könyvtár 2 csapatán")
+    assert shooter_model_backtest_summary([]) is None
+
+
 def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():
     """A két időszak tanult szorzói: csak a mindkét időszakban tanult sáv
     és csak FEJLODES_ELTERES feletti változás hír; a lövőnél a nagyobb,

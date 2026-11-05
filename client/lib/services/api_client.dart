@@ -2045,6 +2045,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A lövő-modell próbája (GET /library/player-model-check): csapatonként
+  /// a korábbi meccsekből tanult lövő-modell a következő meccs góljait
+  /// pontosabban becsüli-e, mint a nyers várható gól — {teams: [{team,
+  /// meccsek, csoportok, lovesek, xg_hiba, modell_hiba, javulas_pct,
+  /// verdict}], osszes}. Hibánál üres (a szezon-kép nélküle is teljes).
+  Future<Map<String, dynamic>> fetchPlayerModelCheck() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/player-model-check"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) return const {};
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Keret-lap (GET /library/roster?team=...): a csapat ÖSSZES ismert
   /// mezszáma egy táblában — meccs-darabszámmal és szezon-összegekkel.
   /// A toplisták az öt legjobbat adják, ez MINDENKIT, aki mezszámmal

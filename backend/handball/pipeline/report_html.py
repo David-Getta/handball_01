@@ -5154,7 +5154,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        figure_library: dict | None = None,
                        repertoire: dict | None = None,
                        jatekos_modell: dict | None = None,
-                       fejlodes: dict | None = None) -> str:
+                       fejlodes: dict | None = None,
+                       modell_proba: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
 
@@ -5168,11 +5169,22 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     {"lovok": a lövők sora (play_simulation.lovo_felirat), "kapus": a
     kapus sora (kapus_felirat), "meccsek": hány meccsből}; a szakasz
     csak akkor jelenik meg, ha legalább egyik sor nem üres.
+    `modell_proba` (opcionális): a lövő-modell próbája a szezon meccsein
+    (play_simulation.shooter_model_backtest) — a "verdict" mondata.
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
     """
     table = _trend_metrics_table(tr)
+    proba_html = ""
+    if (modell_proba or {}).get("verdict"):
+        proba_html = (
+            "<h2>A lövő-modell próbája</h2>"
+            f"<p>{escape(str(modell_proba['verdict']))}.</p>"
+            '<p class="note">A szezon meccseit időrendben vesszük: minden '
+            "meccs lövő × sáv csoportjainak gólját a KORÁBBI meccsekből "
+            "tanult szorzóval becsüljük, és a nyers várható gólhoz mérjük — "
+            "melyik van közelebb a valódi gólokhoz.</p>")
     fejl_html = ""
     fj = fejlodes or {}
     fj_sorok = list(fj.get("lovo_sorok") or []) + list(fj.get("kapus_sorok") or [])
@@ -5352,6 +5364,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {opponents_html}
 {leaders_html}
 {modell_html}
+{proba_html}
 {fejl_html}
 {figures_html}
 <h2>Fejlődés a szezonon belül</h2>

@@ -43,6 +43,8 @@ class _SeasonScreenState extends State<SeasonScreen> {
   String? _error;
   Map<String, dynamic> _summary = {};
   Map<String, dynamic> _leaders = {};
+  // A lövő-modell próbája (a könyvtáron): üres, ha nem becsülhető.
+  Map<String, dynamic> _modelCheck = {};
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
         _leaders = l;
         _loading = false;
       });
+      _loadModelCheck();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -107,6 +110,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
               _leaderBoards(),
               ..._figureLibraries(),
               ..._repertoireChanges(),
+              ..._modelCheckSection(),
               const SizedBox(height: AppSpacing.lg),
               Text("RIPORTOK", style: AppText.sectionLabel),
               const SizedBox(height: AppSpacing.sm),
@@ -146,6 +150,48 @@ class _SeasonScreenState extends State<SeasonScreen> {
         if (vanValtozas) setState(() => _repertoire[t] = rep);
       } catch (_) {}
     }
+  }
+
+  /// A lövő-modell próbája — külön kérés, hibánál csendben kimarad.
+  Future<void> _loadModelCheck() async {
+    try {
+      final mc = await _api.fetchPlayerModelCheck();
+      if (!mounted) return;
+      setState(() => _modelCheck = mc);
+    } catch (_) {}
+  }
+
+  /// A LÖVŐ-MODELL PRÓBÁJA: a könyvtár összesítője és csapatonként a
+  /// motor mondata (play_simulation.shooter_model_backtest). Nincs
+  /// becsülhető csapat → a szakasz elmarad.
+  List<Widget> _modelCheckSection() {
+    final teams = ((_modelCheck["teams"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    if (teams.isEmpty) return const [];
+    final osszes = (_modelCheck["osszes"] as Map?)?.cast<String, dynamic>();
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text("A LÖVŐ-MODELL PRÓBÁJA", style: AppText.sectionLabel),
+      const SizedBox(height: 4),
+      Text("A meccsek időrendjében: minden meccs góljait a KORÁBBI "
+          "meccsekből tanult lövő-szorzóval becsüljük, és a nyers várható "
+          "gólhoz mérjük. Ha a modell közelebb van a valódi gólokhoz, a "
+          "\"7-es távolról 1,3×\" mondatokra lehet építeni.",
+          style: AppText.label),
+      const SizedBox(height: AppSpacing.sm),
+      if (osszes?["verdict"] is String)
+        Text("${osszes!["verdict"]}.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      const SizedBox(height: 4),
+      for (final t in teams)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text("${t["team"]}: ${t["verdict"]}.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ),
+    ];
   }
 
   // Csapatonként a repertoár-változás a szezon két fele között — csak

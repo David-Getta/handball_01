@@ -3,6 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.190 óta)
+
+- **A lövő-modell próbája: előre jelez-e** (motor + végpont + szezon-
+  riport + szezon-képernyő): az AI mondja is, mennyire bízhatunk benne. A
+  csapat meccseit időrendben vesszük: minden meccs lövő × sáv
+  csoportjainak gólját a KORÁBBI meccsekből tanult szorzóval becsüljük,
+  és két viszonyítással vetjük össze — a nyers várható góllal és a
+  csapat korábbi átlagos befejezésével (egy szorzó mindenkire). "A
+  korábbi meccsekből tanult lövő-modell a következő meccs góljait 48%-kal
+  pontosabban becsülte, mint a nyers várható gól, és 49%-kal, mint a
+  csapat átlagos befejezése — az egyéni szorzókra lehet építeni"; ha csak
+  a nyers xG-t veri, a különbség a csapat befejezése, nem az egyes
+  lövőké ("az egyéni szorzót óvatosan kell olvasni"); váltakozó formánál
+  "pontatlanabbul". Legalább öt becsülhető csoport kell. Felületek: új
+  végpont /library/player-model-check (csapatonként és a könyvtár
+  összesítője), a szezon-riport "A lövő-modell próbája" szakasza, a
+  szezon-képernyő "A LÖVŐ-MODELL PRÓBÁJA" sora
+  (play_simulation.shooter_model_backtest).
+
 ## v0.1.190 — kiadva (2026-11-05)
 
 > Kiadás-jegyzet: A JÁTÉKOS-MODELL A MECCSEN — élőben, emberre és a

@@ -291,3 +291,49 @@ def test_a_szezon_jatekos_lap_vegpont_a_szezon_lovo_modelljevel():
     finally:
         os.environ["HANDBALL_DATA_DIR"] = _tmp
         shutil.rmtree(tmp2, ignore_errors=True)
+
+
+def test_a_lovo_modell_probaja_vegpont_a_konyvtaron():
+    """GET /library/player-model-check: csapatonként a meccsek
+    időrendjében a korábbiakból tanult lövő-modell próbája — a valódi
+    láncon (három szimulált meccs) a hazai csapat sora ugyanaz, mint a
+    motor a player_model_sample-ökből; a vendég nem lő → nincs sora; az
+    összesítő a sorokból."""
+    import shutil
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (
+        player_model_sample, shooter_model_backtest,
+        shooter_model_backtest_summary)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    tmp2 = tempfile.mkdtemp(prefix="handball_mcheck_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    try:
+        d = Path(tmp2) / "data" / "matches"
+        d.mkdir(parents=True, exist_ok=True)
+        meccsek = []
+        for seed in (1, 2, 3):
+            m = simulate_ground_truth(duration_s=600, fps=25.0, seed=seed,
+                                      shots_per_min=8, halftime_break_s=30)
+            m.meta.match_id = f"mc{seed}"
+            m.meta.date = f"2026-10-0{seed}"
+            meccsek.append(m)
+            (d / f"mc{seed}.json").write_text(json.dumps(m.to_dict()),
+                                              encoding="utf-8")
+        vart = shooter_model_backtest(
+            [json.loads(json.dumps(player_model_sample(m, Team.HOME)))["lovo"]
+             for m in meccsek])
+        from handball.api.app import create_app
+        j = TestClient(create_app()).get("/library/player-model-check").json()
+        sorok = {r["team"]: r for r in j["teams"]}
+        nev = meccsek[0].meta.home_team
+        if vart is None:
+            assert nev not in sorok
+        else:
+            assert {k: v for k, v in sorok[nev].items() if k != "team"} == vart
+        assert meccsek[0].meta.away_team not in sorok
+        assert j["osszes"] == shooter_model_backtest_summary(j["teams"])
+    finally:
+        os.environ["HANDBALL_DATA_DIR"] = _tmp
+        shutil.rmtree(tmp2, ignore_errors=True)

@@ -640,3 +640,20 @@ def test_a_sav_kep_a_nyers_mintabol():
         {"sav": "far", "sav_nev": "távolról", "kaputra": 9, "vedes": 2,
          "szorzo": _kapus_szorzo(km)["far"]}]
     assert shooter_bands_from({}) == [] and keeper_bands_from({}) == []
+
+
+def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
+    """A szezon-riport "A lövő-modell próbája" szakasza a motor
+    mondatával; ítélet nélkül elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    v = ("a korábbi meccsekből tanult lövő-modell a következő meccs góljait "
+         "48%-kal pontosabban becsülte, mint a nyers várható gól")
+    html = season_report_html("Szeged", tr, [], 4,
+                              modell_proba={"verdict": v})
+    assert "A lövő-modell próbája" in html and f"<p>{v}.</p>" in html
+    for ures in (None, {}, {"verdict": ""}):
+        assert "A lövő-modell próbája" not in season_report_html(
+            "Szeged", tr, [], 4, modell_proba=ures)

@@ -8016,6 +8016,16 @@ def create_app():
                                   "meccsek": len(mintak)}
         except Exception:
             jatekos_modell = None
+        # A lövő-modell próbája: a meccsek időrendjében (az entries
+        # rendezett) a korábbiakból tanult modell a következő meccsen —
+        # hibatűrően; None, ha kevés a becsülhető csoport.
+        modell_proba = None
+        try:
+            from ..pipeline.play_simulation import shooter_model_backtest
+            modell_proba = shooter_model_backtest(
+                [m_.get("lovo") or {} for m_ in mintak])
+        except Exception:
+            modell_proba = None
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8043,7 +8053,8 @@ def create_app():
             team, tr, focuses, len(entries), timeline=timeline,
             venue=venue, leaders=leaders, opponents=opponents,
             figure_library=figure_library, repertoire=repertoire,
-            jatekos_modell=jatekos_modell, fejlodes=fejlodes))
+            jatekos_modell=jatekos_modell, fejlodes=fejlodes,
+            modell_proba=modell_proba))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
@@ -8631,6 +8642,38 @@ def create_app():
                     d[k] = d.get(k, 0) + sor[2]
         return osszes
 
+
+    @app.get("/library/player-model-check")
+    def get_player_model_check():
+        """A lövő-modell próbája a könyvtáron: csapatonként (legalább két
+        meccs) a korábbi meccsekből tanult lövő-modell a következő meccs
+        góljait pontosabban becsüli-e, mint a nyers várható gól
+        (play_simulation.shooter_model_backtest — a meccsenkénti nyers
+        minta a lemezes eredmény-tárból, a meccsek időrendjében). Válasz:
+        {"teams": [{"team", "meccsek", "csoportok", "lovesek", "xg_hiba",
+        "modell_hiba", "javulas_pct", "verdict"}, …] (csak a becsülhető
+        csapatok, a javulás szerint csökkenőben, holtversenyben név),
+        "osszes": a csapatok összege (shooter_model_backtest_summary) vagy
+        None}."""
+        from ..pipeline.play_simulation import (shooter_model_backtest,
+                                                shooter_model_backtest_summary)
+        nevek = sorted({n for m_ in _season_matches()
+                        for n in (m_.meta.home_team, m_.meta.away_team) if n})
+        sorok = []
+        for nev in nevek:
+            try:
+                par = _csapat_meccsei(nev)
+            except HTTPException:
+                continue
+            if len(par) < 2:
+                continue
+            r = shooter_model_backtest(
+                [_jatekos_minta_of(m_, t_.value).get("lovo") or {}
+                 for m_, t_ in par])
+            if r:
+                sorok.append({"team": nev, **r})
+        sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
+        return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok)}
 
     @app.get("/library/leaders")
     def library_leaders():
