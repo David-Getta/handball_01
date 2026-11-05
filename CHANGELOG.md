@@ -5,6 +5,41 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **AI-előrejelzések sora és az esély-zuhanás élőben** (motor + élő
+  végpontok + élő képernyő): a meccs eleji AI-megbízhatóság mellé
+  csapatonként egy második sor az előrejelző modellek próbáiról a csapat
+  többi meccsén — "AI-előrejelzések (Hazai, 6 korábbi meccs):
+  eredmény-előrejelzés: pontosabb a formánál (+22%); gólszerzők: …; élő
+  esély: pontosít az álláshoz (+14%); fal-becslés: 12 meccsből 10
+  talált; napi forma: nem tart ki (a modell a jobb tipp)". És az élő
+  esély időkérést javasol, ha egy csapat győzelmi esélye az előző mérési
+  pont óta legalább 20 százalékponttal esett: "… — Vendég esélye a 15.
+  perc óta 24 százalékponttal esett: érdemes időt kérni". Edzőileg: a
+  padon látszik, melyik előrejelzésre lehet építeni, és az esély
+  zuhanása modell-alapú jel az időkéréshez (play_simulation.
+  forecast_trust_summary, live_forecast_alerts "eses" mezője).
+
+- **AI-döntés-edzés: ahol a pálya igazolta a modellt** (motor + könyvtári
+  edzés-fókusz + edzésterv-képernyő): nem a modell véleménye kerül az
+  edzéstervbe, hanem az, amit a pálya igazolt — az a döntés-helyzet,
+  ahol a könyvtár döntés-próbája szerint a modell legjobb opciója után
+  több gól jön, és a csapat mégis a döntései kevesebb mint felében
+  választja: "Döntés-edzés: kilépnek rá — a pálya igazolta — ha ránk
+  lépnek, a modell legjobb opcióját csak a döntéseink 29%-ában
+  választjuk, pedig utána 50% a gól, máskor 10% (42 döntés a könyvtár
+  meccseiből)", a helyzet gyakorlatával. Az edzésterv-képernyőn a
+  visszatérő fókuszok előtt, "AI · a pálya igazolta" jelzéssel (a
+  /library/training-focus "ai_dontes" mezője, training.
+  proven_decision_drills).
+
+- **Előrejelzés az egymás-elleni riportban** (egymás-elleni riport +
+  nyomtatható meccsterv): a visszavágó előtti lap is hozza a következő
+  meccs előrejelzését — a várakozást és az esélyeket, a két csapat
+  várható gólszerzőit és kulcsemberét, a várható védekezésüket, a próbák
+  mondatával —, a csapatnevekkel címkézve. A nyomtatható meccsterv a
+  saját várható védekezésünket is kiírja. A két lap ugyanazt a blokkot
+  használja (report_html._elorejelzes_blokk).
+
 - **Várakozás és valóság a meccs után** (motor + végpont + meccs-jelentés
   + meccs-képernyő): hol lepett meg minket a meccs? A meccs előtti
   várakozás — CSAK a két csapat korábbi meccseiből: a várható eredmény,

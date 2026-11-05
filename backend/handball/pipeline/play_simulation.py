@@ -2960,6 +2960,50 @@ def model_trust_summary(lovo: dict | None, kapus: dict | None,
     return "; ".join(reszek) if reszek else None
 
 
+def forecast_trust_summary(elore: dict | None = None,
+                           golszerzo: dict | None = None,
+                           elo: dict | None = None,
+                           vedekezes: dict | None = None,
+                           forma: dict | None = None) -> str | None:
+    """Az előrejelző modellek próbái egy sorban — az élő képernyő meccs
+    eleji második AI-sorához: az eredmény-előrejelzés és a gólszerzők a
+    formához (forecast_rows_summary / scorer_forecast_backtest
+    "javulas_pct"), az élő esély az álláshoz (in_play_backtest), a
+    fal-becslés találata (defense_system_backtest), a napi forma
+    (hot_hand_backtest "itelet"). Az ítélet a PROBA_ITELET_PCT
+    küszöbével. None, ha egyik próba sem ítélt."""
+    def sz(x):
+        return f"{x:+.0f}%"
+
+    def forma_mel(cim, p):
+        j = float(p["javulas_pct"])
+        if j >= PROBA_ITELET_PCT:
+            return f"{cim}: pontosabb a formánál ({sz(j)})"
+        if j <= -PROBA_ITELET_PCT:
+            return f"{cim}: pontatlanabb a formánál ({sz(j)})"
+        return f"{cim}: nagyjából olyan, mint a forma"
+
+    reszek = []
+    if elore:
+        reszek.append(forma_mel("eredmény-előrejelzés", elore))
+    if golszerzo:
+        reszek.append(forma_mel("gólszerzők", golszerzo))
+    if elo:
+        j = float(elo["javulas_pct"])
+        reszek.append(f"élő esély: pontosít az álláshoz ({sz(j)})"
+                      if j >= PROBA_ITELET_PCT else
+                      f"élő esély: ront az álláshoz ({sz(j)})"
+                      if j <= -PROBA_ITELET_PCT else
+                      "élő esély: nem tesz hozzá az álláshoz")
+    if vedekezes:
+        reszek.append(f"fal-becslés: {vedekezes['meccsek']} meccsből "
+                      f"{vedekezes['talalat']} talált")
+    if forma:
+        reszek.append("napi forma: kitart" if forma.get("itelet") == "kitart"
+                      else "napi forma: nem tart ki (a modell a jobb tipp)")
+    return "; ".join(reszek) if reszek else None
+
+
 # ---- Az élő jelzések önkalibrálása ------------------------------------------
 # Egy élő jelzés (kit kinek, lövés-elosztás, kapus-választás, döntés-
 # figyelő) annyit ér, amennyit a mögötte álló modell a csapat KORÁBBI
@@ -3170,6 +3214,10 @@ def match_forecast_text(hazai_nev: str, vendeg_nev: str,
 ELO_MECCS_PERC = 60
 ELO_ELOZETES_PERC = 60
 ELO_ELTERES_GOL = 1.5
+# Esély-zuhanás: ha egy csapat győzelmi esélye az előző mérési pont (a
+# meccs eleje, illetve az előző perc) óta legalább ennyi százalékponttal
+# esett, az élő esély időkérést javasol.
+ELO_ESES_PP = 20.0
 
 
 def in_play_odds(f: dict, perc: float, gh: int, ga: int) -> dict:
@@ -3283,9 +3331,12 @@ def live_forecast_alerts(match: Match, f: dict | None,
     esélye (in_play_odds), és ha egy csapat ELO_ELTERES_GOL-lal a
     várakozása felett vagy alatt jár, az is. Edzőileg: a "hol tartunk a
     várakozáshoz képest" — a félidei / időkérési beszéd alapja.
+    Ha egy csapat győzelmi esélye az előző mérési pont óta legalább
+    ELO_ESES_PP százalékponttal esett, a mondat időkérést javasol
+    ("eses": {"team", "pp"}, különben None).
     Visszatérés: {"alerts": [{"t" (kocka), "t_s", "perc", "home_goals",
     "away_goals", "p_home", "p_draw", "p_away", "elteres_home",
-    "elteres_away", "text"}]} — üres előrejelzés nélkül."""
+    "elteres_away", "eses", "text"}]} — üres előrejelzés nélkül."""
     from .event_detection import EventType, detect_shots
     config = config or TacticsConfig()
     alerts: list = []
@@ -3294,6 +3345,8 @@ def live_forecast_alerts(match: Match, f: dict | None,
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
     t0 = match.frames[0].t
     hn, vn = match.meta.home_team, match.meta.away_team
+    elozo = {"home": f["p_home"], "away": f["p_away"], "perc": None} \
+        if "p_home" in f else None
     for perc in LIVE_AJANLO_PERCEK:
         hatar = t0 + int(round(perc * 60 * fps))
         eddig = [fr for fr in match.frames if fr.t <= hatar]
@@ -3317,9 +3370,25 @@ def live_forecast_alerts(match: Match, f: dict | None,
             irany = "felett" if el > 0 else "alatt"
             szam = f"{abs(el):.1f}".replace(".", ",")
             szoveg += f"; {nagy[1]} {szam} góllal a várt {irany}"
+        eses = None
+        if elozo is not None:
+            for side, nev in (("home", hn), ("away", vn)):
+                d = (elozo[side] - o[f"p_{side}"]) * 100.0
+                if d >= ELO_ESES_PP and (eses is None or d > eses["pp"]):
+                    eses = {"team": side, "pp": round(d, 1)}
+            if eses is not None:
+                ep = elozo["perc"]
+                mikor = ("a meccs eleje" if ep is None else
+                         f"{'az' if ep in (1, 5) or 50 <= ep < 60 else 'a'} "
+                         f"{ep}. perc")
+                szoveg += (f" — {hn if eses['team'] == 'home' else vn} "
+                           f"esélye {mikor} óta {eses['pp']:.0f} "
+                           "százalékponttal esett: érdemes időt kérni")
+            elozo = {"home": o["p_home"], "away": o["p_away"], "perc": perc}
         alerts.append({"t": hatar, "t_s": round(hatar / fps, 1),
                        "perc": perc, "home_goals": gol["home"],
-                       "away_goals": gol["away"], **o, "text": szoveg})
+                       "away_goals": gol["away"], **o, "eses": eses,
+                       "text": szoveg})
     return {"alerts": alerts}
 
 

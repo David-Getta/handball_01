@@ -153,6 +153,68 @@ def rank_focus(items: list, limit: Optional[int] = None) -> list:
     return out
 
 
+# A döntés-helyzetek a saját csapat szemszögéből ("ha ránk lépnek") és a
+# helyzet gyakorlata — a 488. szabály és az AI-döntés-edzés közös szövege.
+HELYZET_MIKOR = {"kilépnek rá": "ránk lépnek",
+                 "szabad a 6 m-es társ": "szabad a 6 m-es társunk",
+                 "szabad lőhely": "szabad lőhelyen kapjuk a labdát"}
+HELYZET_GYAKORLAT = {
+    "kilépnek rá": "döntés kilépő védő ellen: 2 a 2 a beállóval, a "
+                   "védő a labdásra lép — a labdás a kilépés "
+                   "mögötti teret keresi (beálló vagy áttörés), "
+                   "visszajátszás csak jelre",
+    "szabad a 6 m-es társ": "beálló-észlelés: 3 a 3 beállóval, a "
+                            "beálló szabadulásakor az edző jelez, "
+                            "és a labdásnak egy másodpercen belül "
+                            "be kell játszania",
+    "szabad lőhely": "döntés szabad lőhelyről: befutás 9 m-re, az "
+                     "edző jelére változó védő-helyzettel — "
+                     "azonnali lövés, vagy a 6 m-es passz, ha ott "
+                     "a jobb opció",
+}
+
+# AI-döntés-edzés: az a helyzet kerül az edzéstervbe, ahol a könyvtár
+# döntés-próbája szerint a modell legjobb opciója a pályán is több gólt
+# hoz (decisions.decision_model_check "helyzetek": legalább
+# DONTES_PROBA_PP százalékpont), a csapat mégis a döntései
+# AI_DONTES_ARANY-nál kisebb részében választja.
+AI_DONTES_ARANY = 0.5
+
+
+def proven_decision_drills(minta: dict) -> list:
+    """AI-döntés-edzés a könyvtárból: `minta` a csapat meccseinek
+    összegzett döntés-mintája (decisions.decision_samples_sum). Mit
+    jelent edzőileg: nem a modell VÉLEMÉNYE kerül az edzéstervbe, hanem
+    az, amit a pálya igazolt — ahol a modell tanácsa után több gól jött,
+    és a csapat mégis ritkán választja. Visszatérés helyzetenként (a
+    nagyobb gól-különbség elöl): [{"title", "area", "sit", "arany_pct"
+    (a legjobb opció aránya a döntésekben), "kulonbseg_pp", "why",
+    "drill"}] — üres, ha nincs ilyen helyzet (kevés döntés is)."""
+    from .decisions import DONTES_PROBA_PP, decision_model_check
+    proba = decision_model_check(minta or {})
+    ki = []
+    for h in (proba or {}).get("helyzetek") or []:
+        sit = h["sit"]
+        n = h["jo_dontes"] + h["rossz_dontes"]
+        arany = h["jo_dontes"] / n if n else 0.0
+        if h["kulonbseg_pp"] < DONTES_PROBA_PP or arany >= AI_DONTES_ARANY \
+                or sit not in HELYZET_GYAKORLAT:
+            continue
+        ki.append({
+            "title": f"Döntés-edzés: {sit} — a pálya igazolta",
+            "area": "támadás", "sit": sit,
+            "arany_pct": round(arany * 100.0, 1),
+            "kulonbseg_pp": h["kulonbseg_pp"],
+            "why": (f"ha {HELYZET_MIKOR[sit]}, a modell legjobb opcióját "
+                    f"csak a döntéseink {arany * 100:.0f}%-ában választjuk, "
+                    f"pedig utána {h['jo_gol_pct']:.0f}% a gól, máskor "
+                    f"{h['rossz_gol_pct']:.0f}% ({n} döntés a könyvtár "
+                    "meccseiből)"),
+            "drill": HELYZET_GYAKORLAT[sit]})
+    ki.sort(key=lambda r: (-r["kulonbseg_pp"], r["sit"]))
+    return ki
+
+
 def training_focus(match: Match,
                    config: Optional[TacticsConfig] = None) -> dict:
     """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}).
@@ -1773,24 +1835,9 @@ def _training_focus_cached(match: Match,
     _szabaly = 488
     try:
         from .decisions import sit_article, situational_decisions
-        mikor488 = {"kilépnek rá": "ránk lépnek",
-                    "szabad a 6 m-es társ": "szabad a 6 m-es társunk",
-                    "szabad lőhely": "szabad lőhelyen kapjuk a labdát"}
+        mikor488 = HELYZET_MIKOR
         sit488 = situational_decisions(match, config)
-        gyak488 = {
-            "kilépnek rá": "döntés kilépő védő ellen: 2 a 2 a beállóval, a "
-                           "védő a labdásra lép — a labdás a kilépés "
-                           "mögötti teret keresi (beálló vagy áttörés), "
-                           "visszajátszás csak jelre",
-            "szabad a 6 m-es társ": "beálló-észlelés: 3 a 3 beállóval, a "
-                                    "beálló szabadulásakor az edző jelez, "
-                                    "és a labdásnak egy másodpercen belül "
-                                    "be kell játszania",
-            "szabad lőhely": "döntés szabad lőhelyről: befutás 9 m-re, az "
-                             "edző jelére változó védő-helyzettel — "
-                             "azonnali lövés, vagy a 6 m-es passz, ha ott "
-                             "a jobb opció",
-        }
+        gyak488 = HELYZET_GYAKORLAT
         for side in ("home", "away"):
             rec488 = sit488.get(side) or {}
             s488 = rec488.get("situation")

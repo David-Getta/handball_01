@@ -7797,10 +7797,17 @@ def create_app():
                 jatekos_modell = jm
         except Exception:
             jatekos_modell = None
+        # Előrejelzés a következő meccsre (a két csapat könyvtári
+        # meccseiből) — hibatűrően.
+        try:
+            elorejelzes = _elorejelzes_lap(team_a, team_b)
+        except Exception:
+            elorejelzes = None
         from ..pipeline.report_html import h2h_report_html
         return HTMLResponse(content=h2h_report_html(
             team_a, team_b, stats, timeline, matchup=matchup,
-            scorers=scorers, jatekos_modell=jatekos_modell))
+            scorers=scorers, jatekos_modell=jatekos_modell,
+            elorejelzes=elorejelzes))
 
     def _season_halves(team: str):
         """A csapat szezon-meccsei időrendben, két félre vágva.
@@ -8733,7 +8740,7 @@ def create_app():
             [_jatekos_minta_of(m_, t_.value).get("formak") or {}
              for m_, t_ in par])
 
-    def _vedekezes_proba(csapat: str | None = None):
+    def _vedekezes_proba(csapat: str | None = None, kiveve: str | None = None):
         """A várható védekezés próbája a könyvtár időrendjében
         (play_simulation.defense_system_backtest — a `csapat`
         megadásával csak a csapat meccsei)."""
@@ -8743,15 +8750,18 @@ def create_app():
              "away": m_.meta.away_team,
              "minta": {"home": _jatekos_minta_of(m_, "home"),
                        "away": _jatekos_minta_of(m_, "away")}}
-            for m_ in _idorendben(_season_matches())], csapat)
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
 
-    def _golszerzo_proba(csapat: str | None = None):
+    def _golszerzo_proba(csapat: str | None = None, kiveve: str | None = None):
         """A várható gólszerzők próbája a könyvtár időrendjében
         (play_simulation.scorer_forecast_backtest — a `csapat`
         megadásával csak a csapat lövői)."""
         from ..pipeline.play_simulation import scorer_forecast_backtest
         meccsek = []
         for m_ in _idorendben(_season_matches()):
+            if m_.meta.match_id == kiveve:
+                continue
             meccsek.append({
                 "match_id": m_.meta.match_id, "home": m_.meta.home_team,
                 "away": m_.meta.away_team,
@@ -8759,7 +8769,7 @@ def create_app():
                           "away": _jatekos_minta_of(m_, "away")}})
         return scorer_forecast_backtest(meccsek, csapat)
 
-    def _elo_esely_proba(csapat: str | None = None):
+    def _elo_esely_proba(csapat: str | None = None, kiveve: str | None = None):
         """Az élő esély próbája a könyvtár időrendjében (play_simulation.
         in_play_backtest — a `csapat` megadásával csak a csapat
         meccsei)."""
@@ -8767,7 +8777,8 @@ def create_app():
         return in_play_backtest([
             {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
              "away": m_.meta.away_team, "minta": _elorejelzes_minta_of(m_)}
-            for m_ in _idorendben(_season_matches())], csapat)
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
 
     def _elorejelzes_proba(kiveve: str | None = None):
         """Az előrejelzés próbája a könyvtáron (play_simulation.
@@ -9197,7 +9208,10 @@ def create_app():
         egyszeri kisiklás, hanem visszatérő gyengeség — az edzéstervezés
         első számú jelöltje. Visszatérés:
         {"teams": {csapatnév: [{"title","area","count","why","drill"}]},
-         "matches": {csapatnév: meccsek száma}}."""
+         "matches": {csapatnév: meccsek száma}, "ai_dontes": {csapatnév:
+         [AI-döntés-edzés tételek — training.proven_decision_drills: ahol
+         a pálya igazolta a modell tanácsát, és a csapat ritkán
+         választja]}}."""
         from ..pipeline.training import training_focus
         agg: dict = {}
         counts: dict = {}
@@ -9236,7 +9250,26 @@ def create_app():
                                key=lambda r: -r["count"])
             if recurring:
                 teams[name] = recurring
-        return {"teams": teams, "matches": counts}
+        # AI-döntés-edzés: ahol a könyvtár döntés-próbája szerint a
+        # modell tanácsa a pályán is gólt hoz, és a csapat mégis ritkán
+        # választja (training.proven_decision_drills) — hibatűrően.
+        ai_dontes = {}
+        try:
+            from ..pipeline.decisions import decision_samples_sum
+            from ..pipeline.training import proven_decision_drills
+            for name in sorted(counts):
+                try:
+                    par = _csapat_meccsei(name)
+                except HTTPException:
+                    continue
+                d = proven_decision_drills(decision_samples_sum(
+                    [_dontes_minta_of(m_).get(t_.value) or {}
+                     for m_, t_ in par]))
+                if d:
+                    ai_dontes[name] = d
+        except Exception:
+            ai_dontes = {}
+        return {"teams": teams, "matches": counts, "ai_dontes": ai_dontes}
 
     @app.get("/library/training-focus/export")
     def library_training_focus_export(team: str):
@@ -14272,6 +14305,7 @@ def create_app():
                 "kulcs_ok": key_player_text(g_ok),
                 "kulcs_mi": key_player_text(g_mi),
                 "vedekezes": defense_system_text(_vedekezes_varhato(ok)),
+                "vedekezes_mi": defense_system_text(_vedekezes_varhato(mi)),
                 "golszerzo_proba": (f"A gólszerző-becslés próbája: "
                                     f"{gp['verdict']}" if gp else None)}
 
@@ -14561,11 +14595,16 @@ def create_app():
         lövő-, a kapus- és a döntés-modell (shooter_model_backtest,
         keeper_model_backtest, decisions.decision_model_check — a
         lemezes mintatárból, ez a meccs nélkül). Az élő jelzések súlyát
-        mondja meg: melyik mondatra lehet építeni. Válasz: {"alerts":
-        [{"t", "t_s", "team", "team_name", "meccsek", "lovo", "kapus",
-        "dontes", "text"}]} — csak ahol legalább egy próba ítélt. 404:
-        nincs ilyen meccs."""
-        from ..pipeline.play_simulation import model_trust_summary
+        mondja meg: melyik mondatra lehet építeni. Mellette ("fajta":
+        "elorejelzesek") az előrejelző modellek próbái a csapat többi
+        meccsén (play_simulation.forecast_trust_summary: eredmény,
+        gólszerzők, élő esély, fal, napi forma). Válasz: {"alerts": [{"t",
+        "t_s", "team", "team_name", "meccsek", "fajta" ("modellek" /
+        "elorejelzesek"), ("lovo", "kapus", "dontes"), "text"}]} — csak
+        ahol legalább egy próba ítélt. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (forecast_rows_summary,
+                                                forecast_trust_summary,
+                                                model_trust_summary)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -14577,15 +14616,35 @@ def create_app():
             pr = _modell_probak(match_id, nev)
             lp, kp, dp, n = (pr["lovo"], pr["kapus"], pr["dontes"],
                              pr["meccsek"])
-            sor = model_trust_summary(lp, kp, dp)
-            if not sor:
+            if n < 2:
                 continue
-            alerts.append({
-                "t": t0, "t_s": round(t0 / fps, 1), "team": side,
-                "team_name": nev, "meccsek": n, "lovo": lp,
-                "kapus": kp, "dontes": dp,
-                "text": (f"AI-megbízhatóság ({nev}, {n} korábbi "
-                         f"meccs): {sor}")})
+            sor = model_trust_summary(lp, kp, dp)
+            if sor:
+                alerts.append({
+                    "t": t0, "t_s": round(t0 / fps, 1), "team": side,
+                    "team_name": nev, "meccsek": n, "fajta": "modellek",
+                    "lovo": lp, "kapus": kp, "dontes": dp,
+                    "text": (f"AI-megbízhatóság ({nev}, {n} korábbi "
+                             f"meccs): {sor}")})
+            # Az előrejelző modellek próbái a csapat többi meccsén.
+            try:
+                ep = forecast_rows_summary(
+                    (_elorejelzes_proba(match_id) or {}).get("sorok") or [],
+                    nev)
+                prob = {"elore": ep,
+                        "golszerzo": _golszerzo_proba(nev, match_id),
+                        "elo": _elo_esely_proba(nev, match_id),
+                        "vedekezes": _vedekezes_proba(nev, match_id),
+                        "forma": _forma_proba(kiveve=match_id, csapat=nev)}
+                sor2 = forecast_trust_summary(**prob)
+            except Exception:
+                sor2 = None
+            if sor2:
+                alerts.append({
+                    "t": t0, "t_s": round(t0 / fps, 1), "team": side,
+                    "team_name": nev, "meccsek": n, "fajta": "elorejelzesek",
+                    "text": (f"AI-előrejelzések ({nev}, {n} korábbi "
+                             f"meccs): {sor2}")})
         return {"alerts": alerts}
 
     @app.get("/matches/{match_id}/live-kapus-valasztas")

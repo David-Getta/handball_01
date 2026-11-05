@@ -520,6 +520,37 @@ def _players(key_players: list) -> str:
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
+# Az előrejelzés-szakasz sorainak alap-címkéi (a meccsterv "mi · ők"
+# szemszögéből); az egymás-elleni riport a csapatnevekkel cseréli.
+ELOREJELZES_CIMKEK = (
+    ("ok", "Az ő várható gólszerzőik"),
+    ("kulcs_ok", "Kulcsemberük — vegyétek ki a játékból"),
+    ("mi", "A mi várható gólszerzőink"),
+    ("kulcs_mi", "Kulcsemberünk — juttassátok lövéshez"),
+    ("vedekezes", "Várható védekezésük"),
+    ("vedekezes_mi", "A mi várható védekezésünk"),
+)
+
+
+def _elorejelzes_blokk(ej: dict | None, cim: str,
+                       cimkek: tuple = ELOREJELZES_CIMKEK) -> str:
+    """Az előrejelzés-szakasz HTML-je (a meccsterv-exportban és az
+    egymás-elleni riportban): `ej` = {"text", "proba", "golszerzo_proba"
+    és a `cimkek` kulcsai}; az üres mezők kimaradnak, üres adatnál ""."""
+    ej = ej or {}
+    sorok = [(c_, ej.get(k_)) for k_, c_ in cimkek if ej.get(k_)]
+    if not ej.get("text") and not sorok:
+        return ""
+    return ("<h2>" + escape(cim) + "</h2>"
+            + (f"<p><b>{escape(str(ej['text']))}</b></p>"
+               if ej.get("text") else "")
+            + ("<ul>" + "".join(f"<li>{escape(c_)}: {escape(str(v_))}.</li>"
+                                for c_, v_ in sorok) + "</ul>"
+               if sorok else "")
+            + "".join(f'<p class="note">{escape(str(ej[k_]))}.</p>'
+                      for k_ in ("proba", "golszerzo_proba") if ej.get(k_)))
+
+
 def scouting_report_html(rep: ScoutingReport,
                          playbook_match: dict | None = None,
                          matchup: list[str] | None = None,
@@ -550,24 +581,8 @@ def scouting_report_html(rep: ScoutingReport,
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
-    ej = elorejelzes or {}
-    ej_sorok = [(c_, ej.get(k_)) for c_, k_ in (
-        ("Az ő várható gólszerzőik", "ok"),
-        ("Kulcsemberük — vegyétek ki a játékból", "kulcs_ok"),
-        ("A mi várható gólszerzőink", "mi"),
-        ("Kulcsemberünk — juttassátok lövéshez", "kulcs_mi"),
-        ("Várható védekezésük", "vedekezes")) if ej.get(k_)]
-    elorejelzes_html = ""
-    if ej.get("text") or ej_sorok:
-        elorejelzes_html = (
-            "<h2>Előrejelzés (a csapat-modellekből)</h2>"
-            + (f"<p><b>{escape(str(ej['text']))}</b></p>"
-               if ej.get("text") else "")
-            + ("<ul>" + "".join(f"<li>{escape(c_)}: {escape(str(v_))}.</li>"
-                                for c_, v_ in ej_sorok) + "</ul>"
-               if ej_sorok else "")
-            + "".join(f'<p class="note">{escape(str(ej[k_]))}.</p>'
-                      for k_ in ("proba", "golszerzo_proba") if ej.get(k_)))
+    elorejelzes_html = _elorejelzes_blokk(
+        elorejelzes, "Előrejelzés (a csapat-modellekből)")
 
     # Mennyire hihető a jelentés ALAPANYAGA. A meccsterv az, ami alapján
     # az edző dönt — ha a mögötte lévő feldolgozás gyenge volt, azt a lap
@@ -5465,9 +5480,15 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
                     timeline: list[dict],
                     matchup: list[str] | None = None,
                     scorers: dict | None = None,
-                    jatekos_modell: dict | None = None) -> str:
+                    jatekos_modell: dict | None = None,
+                    elorejelzes: dict | None = None) -> str:
     """Egymás ellen: a két csapat egymás elleni mérlege a könyvtárból
     — győzelmi mérleg, gól-mérleg és meccs-lista főcímekkel.
+
+    `elorejelzes` (opcionális): a következő meccs előrejelzése a két
+    csapat könyvtári meccseiből (a meccsterv-export adatai: "mi" a
+    `team_a`, "ok" a `team_b`) — "Előrejelzés a következő meccsre"
+    szakaszként, a csapatnevekkel címkézve.
 
     `jatekos_modell` (opcionális): a KÖZÖS meccsekből tanult játékos-
     modell csapatonként — {csapat: {"lovok", "kapus", "utolso",
@@ -5516,6 +5537,14 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
             "gólfelelősei)</h2>"
             "<table><tr><th>Csapat</th><th>Top gólszerzők</th></tr>"
             + "".join(sc_rows) + "</table>")
+    elorejelzes_html = _elorejelzes_blokk(
+        elorejelzes, "Előrejelzés a következő meccsre", (
+            ("ok", f"{team_b} várható gólszerzői"),
+            ("kulcs_ok", f"{team_b} kulcsembere"),
+            ("mi", f"{team_a} várható gólszerzői"),
+            ("kulcs_mi", f"{team_a} kulcsembere"),
+            ("vedekezes", f"{team_b} várható védekezése"),
+            ("vedekezes_mi", f"{team_a} várható védekezése")))
     matchup_html = ""
     if matchup:
         items = "".join(f"<li>{escape(p_)}</li>" for p_ in matchup)
@@ -5577,6 +5606,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 {scorers_html}
 {modell_html}
 {matchup_html}
+{elorejelzes_html}
 <footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
 meccsterv.txt, a felderítő képernyőn pedig a több-meccses
 ellenfél-profil.</footer>

@@ -1329,3 +1329,35 @@ def test_az_edzes_fokusz_tetelei_3d_jelenet_tipust_kapnak():
         "a lövéses szimuláció fedezés-tétele jelenetet kap"
     for it in tetelek:
         assert it["scene"] == scene_for_focus(it)
+
+
+def test_ai_dontes_edzes_ahol_a_palya_igazolta():
+    """training.proven_decision_drills: az a helyzet kerül az edzéstervbe,
+    ahol a könyvtár döntés-próbája szerint a modell legjobb opciója után
+    több gól jön (legalább DONTES_PROBA_PP), és a csapat mégis a döntései
+    AI_DONTES_ARANY-nál kisebb részében választja — a 488. szabály
+    gyakorlatával; ahol gyakran választja, vagy a pálya nem igazolja,
+    nincs tétel; kevés döntésnél üres."""
+    from handball.pipeline.training import (AI_DONTES_ARANY,
+                                            HELYZET_GYAKORLAT,
+                                            proven_decision_drills)
+
+    minta = {"jo": [42, 15], "rossz": [42, 6], "helyzetek": {
+        # Ritkán választják, pedig igazolja: tétel.
+        "kilépnek rá": {"jo": [12, 6], "rossz": [30, 3]},
+        # Gyakran választják: nincs tétel.
+        "szabad lőhely": {"jo": [30, 9], "rossz": [12, 3]}}}
+    [t] = proven_decision_drills(minta)
+    assert t["sit"] == "kilépnek rá" and t["area"] == "támadás"
+    assert t["title"] == "Döntés-edzés: kilépnek rá — a pálya igazolta"
+    assert t["arany_pct"] == round(12 / 42 * 100, 1) < AI_DONTES_ARANY * 100
+    assert t["kulonbseg_pp"] == 40.0
+    assert t["why"] == ("ha ránk lépnek, a modell legjobb opcióját csak a "
+                        "döntéseink 29%-ában választjuk, pedig utána 50% a "
+                        "gól, máskor 10% (42 döntés a könyvtár meccseiből)")
+    assert t["drill"] == HELYZET_GYAKORLAT["kilépnek rá"]
+    # A pálya nem igazolja (a legjobb opció után kevesebb gól): nincs.
+    nem = {"jo": [42, 6], "rossz": [42, 15], "helyzetek": {
+        "kilépnek rá": {"jo": [12, 1], "rossz": [30, 9]}}}
+    assert proven_decision_drills(nem) == []
+    assert proven_decision_drills({}) == []

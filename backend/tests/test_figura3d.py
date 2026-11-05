@@ -1468,7 +1468,8 @@ def test_az_elo_ai_megbizhatosag_vegpont_a_korabbi_meccsekbol(tmp_path,
         dp = decision_model_check(decision_samples_sum(
             [decision_outcome_sample(m)[side] for m in korabbi]))
         sor = model_trust_summary(lp, kp, dp)
-        talalt = [a for a in j["alerts"] if a["team"] == side]
+        talalt = [a for a in j["alerts"]
+                  if a["team"] == side and a["fajta"] == "modellek"]
         if sor is None:
             assert talalt == []
         else:
@@ -1784,6 +1785,38 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
     assert mc["golszerzo_proba"] == gp
     assert mc["vedekezes_proba"] == vp
+    # A meccs eleji második AI-sor: az előrejelző modellek próbái a csapat
+    # többi (hat) meccsén — a motor ugyanazokból a mintákból.
+    from handball.pipeline.play_simulation import (forecast_rows_summary,
+                                                   forecast_trust_summary,
+                                                   hot_hand_backtest,
+                                                   in_play_backtest,
+                                                   shooter_form_sample)
+    hat = [{"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
+            "minta": jm[i]} for i in range(6)]
+    # Hat rövid meccsen a fal-becslés próbája három jósolt meccstől ítél —
+    # így a sor biztosan megszólal (a motor és a végpont ugyanazt látja).
+    import handball.pipeline.play_simulation as ps_
+    monkeypatch.setattr(ps_, "VR_PROBA_MIN", 3)
+    assert defense_system_backtest(hat, a) is not None
+    for side, nev in (("home", h), ("away", a)):
+        sor2 = forecast_trust_summary(
+            elore=forecast_rows_summary(p6["sorok"], nev) if p6 else None,
+            golszerzo=scorer_forecast_backtest(hat, nev),
+            elo=in_play_backtest(lista(range(6)), nev),
+            vedekezes=defense_system_backtest(hat, nev),
+            forma=hot_hand_backtest(
+                [json.loads(json.dumps(shooter_form_sample(m, Team(s_))))
+                 for m in meccsek[:6] for s_, n_ in (("home", h), ("away", a))
+                 if n_ == nev]))
+        kap = [x for x in c.get("/matches/gt7/live-modell-proba").json()[
+            "alerts"] if x["team"] == side and x["fajta"] == "elorejelzesek"]
+        if sor2 is None:
+            assert kap == []
+        else:
+            assert [x["text"] for x in kap] == [
+                f"AI-előrejelzések ({nev}, 6 korábbi meccs): {sor2}"]
+
     # Az élő esély próbája: a két perces felvételen fél percenként.
     import handball.pipeline.play_simulation as ps
     from handball.pipeline.play_simulation import in_play_backtest
@@ -1799,7 +1832,7 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
     "Előrejelzés" szakasz — a két csapat (az items oldalainak neve)
     könyvtári meccseiből a várakozás és a két csapat várható gólszerzői,
     a valódi láncon ugyanaz, mint a motor a mintákból; "own" nélkül nincs
-    szakasz."""
+    szakasz. Az egymás-elleni riport ugyanezt hozza a csapatnevekkel."""
     import json
     from html import escape
 
@@ -1863,6 +1896,15 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
         assert "Kulcsemberünk" not in r.text
     r2 = c.post("/scouting/export", json={"items": items})
     assert "Előrejelzés (a csapat-modellekből)" not in r2.text
+    # Az egymás-elleni riport is hozza, a csapatnevekkel címkézve.
+    hr = c.get("/head-to-head/report", params={"team_a": h, "team_b": a})
+    assert hr.status_code == 200
+    assert "Előrejelzés a következő meccsre" in hr.text
+    assert f"<p><b>{escape(match_forecast_text(h, a, f))}</b></p>" in hr.text
+    assert (f"<li>{escape(h)} várható gólszerzői: "
+            f"{escape(scorer_forecast_text(mi))}.</li>") in hr.text
+    assert (f"<li>{escape(a)} várható védekezése: "
+            f"{escape(defense_system_text(vo))}.</li>") in hr.text
 
 
 def test_az_elo_napi_forma_vegpont_a_valodi_lancon(tmp_path, monkeypatch):
@@ -1975,6 +2017,39 @@ def test_varakozas_es_valosag_vegpont_es_jelentes(tmp_path, monkeypatch):
     assert r.status_code == 200
     assert "Várakozás és valóság" in r.text
     assert f"<li>{escape(vart['sorok'][0])}.</li>" in r.text
+
+
+def test_az_ai_dontes_edzes_a_konyvtari_edzesfokuszban(tmp_path, monkeypatch):
+    """GET /library/training-focus "ai_dontes": csapatonként a meccsek
+    döntés-mintáinak összegéből (decisions.decision_outcome_sample) a
+    training.proven_decision_drills tételei — a valódi láncon ugyanaz,
+    mint a motor; a régi kulcsok változatlanok."""
+    import json
+
+    from handball.pipeline.decisions import (decision_outcome_sample,
+                                             decision_samples_sum)
+    from handball.pipeline.training import proven_decision_drills
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2):
+        m = simulate_ground_truth(duration_s=180, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    j = TestClient(app).get("/library/training-focus").json()
+    assert set(j) == {"teams", "matches", "ai_dontes"}
+    dm = [json.loads(json.dumps(decision_outcome_sample(m))) for m in meccsek]
+    vart = {}
+    for side, nev in (("home", meccsek[0].meta.home_team),
+                      ("away", meccsek[0].meta.away_team)):
+        d = proven_decision_drills(decision_samples_sum([x[side] for x in dm]))
+        if d:
+            vart[nev] = d
+    assert j["ai_dontes"] == vart
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

@@ -1344,6 +1344,26 @@ def test_az_ai_megbizhatosag_egy_sorban():
         "döntés-tanácsok: óvatosan (-8 százalékpont)")
 
 
+def test_az_elorejelzo_modellek_probai_egy_sorban():
+    """forecast_trust_summary: az eredmény-előrejelzés és a gólszerzők a
+    formához, az élő esély az álláshoz (a PROBA_ITELET_PCT küszöbével),
+    a fal-becslés találata, a napi forma ítélete; ítélet nélkül None."""
+    from handball.pipeline.play_simulation import forecast_trust_summary
+
+    assert forecast_trust_summary() is None
+    assert forecast_trust_summary(
+        elore={"javulas_pct": 22.0}, golszerzo={"javulas_pct": -9.0},
+        elo={"javulas_pct": 1.0}, vedekezes={"meccsek": 12, "talalat": 10},
+        forma={"itelet": "visszaall"}) == (
+        "eredmény-előrejelzés: pontosabb a formánál (+22%); gólszerzők: "
+        "pontatlanabb a formánál (-9%); élő esély: nem tesz hozzá az "
+        "álláshoz; fal-becslés: 12 meccsből 10 talált; napi forma: nem "
+        "tart ki (a modell a jobb tipp)")
+    assert forecast_trust_summary(elo={"javulas_pct": 14.0},
+                                  forma={"itelet": "kitart"}) == (
+        "élő esély: pontosít az álláshoz (+14%); napi forma: kitart")
+
+
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
     """trust_levels: a három próba szintje (a lövőnél "csapat", ha csak a
     csapat-szint javít; a kapusnál "egeszeben", ha a sávok nélküli szorzó
@@ -1894,6 +1914,44 @@ def test_az_elo_eltero_vedekezes_jelzes():
     # Ugyanarra a rendszerre csak egyszer szól.
     assert len({a["most"] for a in ki}) == len(ki)
     assert all(a["most"] != most for a in egyezo)
+
+
+def test_az_elo_esely_zuhanasa_idokerest_javasol():
+    """live_forecast_alerts: ha egy csapat győzelmi esélye az előző mérési
+    pont (a meccs eleje, illetve az előző perc) óta legalább ELO_ESES_PP
+    százalékponttal esett, a mondat időkérést javasol, és az "eses" mező
+    megnevezi; ha nem esett, nincs ilyen mondat."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (in_play_odds,
+                                                   live_forecast_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=150, fps=25.0, seed=2,
+                              shots_per_min=8)
+    f = {"home_goals": 25.0, "away_goals": 25.0, "p_home": 0.45,
+         "p_draw": 0.1, "p_away": 0.45}
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "LIVE_AJANLO_PERCEK", (1, 2))
+        ki = live_forecast_alerts(m, f)["alerts"]
+        # Az előrejelzés esélyei nélkül nincs viszonyítás: nincs zuhanás.
+        regi = live_forecast_alerts(
+            m, {"home_goals": 25.0, "away_goals": 25.0})["alerts"]
+    finally:
+        mp.undo()
+    # A szimulált meccsen csak a hazai támad és talál: a vendég esélye
+    # az első percben zuhan.
+    elso = ki[0]
+    o = in_play_odds(f, 1, elso["home_goals"], elso["away_goals"])
+    assert (f["p_away"] - o["p_away"]) * 100 >= ps.ELO_ESES_PP
+    assert elso["eses"]["team"] == "away"
+    assert elso["text"].endswith(
+        f"{m.meta.away_team} esélye a meccs eleje óta "
+        f"{elso['eses']['pp']:.0f} százalékponttal esett: érdemes időt kérni")
+    # A második percben már nincs mit esnie.
+    assert ki[1]["eses"] is None and "időt kérni" not in ki[1]["text"]
+    assert all(a["eses"] is None for a in regi)
 
 
 def test_az_elorejelzes_meccs_mintaja():

@@ -41,6 +41,8 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
 
   // Szezon-nézet: csapatnév → visszatérő fókuszok, és meccs-darabszám.
   Map<String, List<Map<String, dynamic>>> _teams = {};
+  // AI-döntés-edzés csapatonként (a /library/training-focus "ai_dontes").
+  Map<String, List<Map<String, dynamic>>> _aiDrills = {};
   Map<String, int> _matchCounts = {};
   String? _team;
 
@@ -80,8 +82,17 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       for (final e in ((lib["matches"] as Map?) ?? {}).entries) {
         counts[e.key as String] = (e.value as num).toInt();
       }
+      // AI-döntés-edzés: ahol a pálya igazolta a modell tanácsát.
+      final ai = <String, List<Map<String, dynamic>>>{};
+      for (final e in ((lib["ai_dontes"] as Map?) ?? {}).entries) {
+        ai[e.key as String] = [
+          for (final it in (e.value as List? ?? []))
+            Map<String, dynamic>.from(it as Map)
+        ];
+      }
       setState(() {
         _teams = teams;
+        _aiDrills = ai;
         _matchCounts = counts;
         _matches = ms;
         // A csapat-választó MINDEN csapatot kínál, nem csak azokat,
@@ -289,6 +300,13 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                 "ide az kerül, ami legalább két meccsen előjött. Egy "
                 "meccs fókuszait az \"Egy meccs\" nézetben látod.",
                 style: AppText.label),
+          // Előbb az AI-döntés-edzés: a könyvtár döntés-próbája szerint
+          // itt a modell tanácsa a pályán is gólt hoz.
+          for (final it in _aiDrills[_team] ?? const <Map<String, dynamic>>[])
+            ...[
+            _focusCard(it, badge: "AI · a pálya igazolta"),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           for (final it in items) ...[
             _focusCard(it, badge: "${it["count"]} meccsen"),
             const SizedBox(height: AppSpacing.sm),
