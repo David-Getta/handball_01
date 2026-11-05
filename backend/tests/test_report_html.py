@@ -651,9 +651,17 @@ def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
           "newer_matches": 2}
     v = ("a korábbi meccsekből tanult lövő-modell a következő meccs góljait "
          "48%-kal pontosabban becsülte, mint a nyers várható gól")
+    k = ("a korábbi meccsekből tanult kapus-modell a következő meccs kapott "
+         "góljait 51%-kal pontosabban becsülte, mint az átlagos kapus")
     html = season_report_html("Szeged", tr, [], 4,
-                              modell_proba={"verdict": v})
-    assert "A lövő-modell próbája" in html and f"<p>{v}.</p>" in html
-    for ures in (None, {}, {"verdict": ""}):
+                              modell_proba={"verdict": v, "kapus_verdict": k})
+    assert "A lövő-modell próbája" in html
+    assert f"<p><b>Lövők:</b> {v}.</p>" in html
+    assert f"<p><b>Kapus:</b> {k}.</p>" in html
+    csak = season_report_html("Szeged", tr, [], 4,
+                              modell_proba={"verdict": None, "kapus_verdict": k})
+    assert "<b>Lövők:</b>" not in csak and f"<p><b>Kapus:</b> {k}.</p>" in csak
+    for ures in (None, {}, {"verdict": ""}, {"verdict": None,
+                                              "kapus_verdict": None}):
         assert "A lövő-modell próbája" not in season_report_html(
             "Szeged", tr, [], 4, modell_proba=ures)

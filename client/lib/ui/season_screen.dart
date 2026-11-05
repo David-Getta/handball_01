@@ -165,12 +165,17 @@ class _SeasonScreenState extends State<SeasonScreen> {
   /// motor mondata (play_simulation.shooter_model_backtest). Nincs
   /// becsülhető csapat → a szakasz elmarad.
   List<Widget> _modelCheckSection() {
-    final teams = ((_modelCheck["teams"] as List?) ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    if (teams.isEmpty) return const [];
+    List<Map<String, dynamic>> sorok(String k) =>
+        ((_modelCheck[k] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+    final teams = sorok("teams");
+    final kapusok = sorok("kapusok");
+    if (teams.isEmpty && kapusok.isEmpty) return const [];
     final osszes = (_modelCheck["osszes"] as Map?)?.cast<String, dynamic>();
+    final kOsszes =
+        (_modelCheck["kapus_osszes"] as Map?)?.cast<String, dynamic>();
     return [
       const SizedBox(height: AppSpacing.lg),
       Text("A LÖVŐ-MODELL PRÓBÁJA", style: AppText.sectionLabel),
@@ -189,6 +194,17 @@ class _SeasonScreenState extends State<SeasonScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Text("${t["team"]}: ${t["verdict"]}.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ),
+      if (kOsszes?["verdict"] is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("${kOsszes!["verdict"]}.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      for (final t in kapusok)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text("${t["team"]} kapusa: ${t["verdict"]}.",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ),
     ];

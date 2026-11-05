@@ -8021,9 +8021,14 @@ def create_app():
         # hibatűrően; None, ha kevés a becsülhető csoport.
         modell_proba = None
         try:
-            from ..pipeline.play_simulation import shooter_model_backtest
-            modell_proba = shooter_model_backtest(
-                [m_.get("lovo") or {} for m_ in mintak])
+            from ..pipeline.play_simulation import (keeper_model_backtest,
+                                                    shooter_model_backtest)
+            lp = shooter_model_backtest([m_.get("lovo") or {} for m_ in mintak])
+            kp = keeper_model_backtest([m_.get("kapus") or {} for m_ in mintak])
+            if lp or kp:
+                modell_proba = {"verdict": (lp or {}).get("verdict"),
+                                "kapus_verdict": (kp or {}).get("verdict"),
+                                "lovo": lp, "kapus": kp}
         except Exception:
             modell_proba = None
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
@@ -8655,11 +8660,14 @@ def create_app():
         csapatok, a javulás szerint csökkenőben, holtversenyben név),
         "osszes": a csapatok összege (shooter_model_backtest_summary) vagy
         None}."""
-        from ..pipeline.play_simulation import (shooter_model_backtest,
+        from ..pipeline.play_simulation import (keeper_model_backtest,
+                                                keeper_model_backtest_summary,
+                                                shooter_model_backtest,
                                                 shooter_model_backtest_summary)
         nevek = sorted({n for m_ in _season_matches()
                         for n in (m_.meta.home_team, m_.meta.away_team) if n})
         sorok = []
+        kapus_sorok = []
         for nev in nevek:
             try:
                 par = _csapat_meccsei(nev)
@@ -8667,13 +8675,18 @@ def create_app():
                 continue
             if len(par) < 2:
                 continue
-            r = shooter_model_backtest(
-                [_jatekos_minta_of(m_, t_.value).get("lovo") or {}
-                 for m_, t_ in par])
+            mintak = [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]
+            r = shooter_model_backtest([m.get("lovo") or {} for m in mintak])
             if r:
                 sorok.append({"team": nev, **r})
+            k = keeper_model_backtest([m.get("kapus") or {} for m in mintak])
+            if k:
+                kapus_sorok.append({"team": nev, **k})
         sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
-        return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok)}
+        kapus_sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
+        return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok),
+                "kapusok": kapus_sorok,
+                "kapus_osszes": keeper_model_backtest_summary(kapus_sorok)}
 
     @app.get("/library/leaders")
     def library_leaders():

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **A kapus-modell próbája** (motor + végpont + szezon-riport +
+  szezon-képernyő): ugyanez a kapusra — a kapus korábbi meccsekből
+  tanult sáv-szorzója a következő meccs kapott góljait pontosabban
+  becsüli-e, mint az átlagos kapus ÉS a kapus egyetlen, sávok nélküli
+  szorzója. "A korábbi meccsekből tanult kapus-modell a következő meccs
+  kapott góljait 51%-kal pontosabban becsülte, mint az átlagos kapus, és
+  55%-kal, mint a kapus sávok nélküli szorzója — a kapus sávjaira lehet
+  építeni"; ha csak az átlagost veri, "a kapus formája az egész kapura
+  szól, a sávokat óvatosan kell olvasni" — a kapus-edzést ilyenkor nem
+  sávra, hanem az egész kapura kell szabni. A /library/player-model-check
+  "kapusok" és "kapus_osszes" mezője, a szezon-riport próba-szakaszának
+  "Kapus" sora, a szezon-képernyő kapus-sorai
+  (play_simulation.keeper_model_backtest).
+
 - **A lövő-modell próbája: előre jelez-e** (motor + végpont + szezon-
   riport + szezon-képernyő): az AI mondja is, mennyire bízhatunk benne. A
   csapat meccseit időrendben vesszük: minden meccs lövő × sáv

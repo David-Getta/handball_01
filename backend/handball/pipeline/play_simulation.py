@@ -2752,6 +2752,146 @@ def shooter_model_backtest_summary(sorok: list) -> dict | None:
                         f"csoport, {lv} lövés)")}
 
 
+# ---- A kapus-modell próbája --------------------------------------------------
+# Mint a lövőké: a csapat meccsei időrendben, minden meccs kapus-sávjainak
+# kapott gólját (kaputra érkezett − védett) a KORÁBBI meccsekből tanult
+# kapus-szorzó becsli — kaputra × KAPUS_ALAP_GOL[sáv] × a sáv szorzója —,
+# két viszonyítással: az átlagos kapus (szorzó 1) és a kapus EGYETLEN,
+# sávok nélküli szorzója (_kapus_osszes_szorzo). A sávok akkor érnek
+# valamit, ha a sávonkénti szorzó ezt is veri. Csoport = egy meccs egy
+# tanult sávja; a küszöbök a lövőké (PROBA_MIN_CSOPORT, PROBA_ITELET_PCT).
+
+
+def _kapus_osszes_szorzo(minta: dict) -> float:
+    """A kapus egyetlen, sávok nélküli szorzója a (összeadott) sáv-
+    mintából: a kapott gól és az átlagos kapus várt kapott góljának
+    hányadosa, KAPUS_SULY képzelt átlagos lövéssel simítva, a KAPUS_SZORZO
+    sávba szorítva; 1, ha nincs lövés."""
+    faced = gol = vart = 0.0
+    for sav, (f, sv) in minta.items():
+        alap = KAPUS_ALAP_GOL.get(sav)
+        if alap is None:
+            continue
+        faced += float(f)
+        gol += float(f) - float(sv)
+        vart += float(f) * alap
+    if faced <= 0 or vart <= 0:
+        return 1.0
+    atlag = vart / faced
+    arany = (gol + KAPUS_SULY * atlag) / (faced + KAPUS_SULY) / atlag
+    return max(KAPUS_SZORZO_MIN, min(KAPUS_SZORZO_MAX, arany))
+
+
+def keeper_model_backtest(mintak: list) -> dict | None:
+    """A kapus-modell próbája egy csapat meccsein: `mintak` — a csapat
+    kapusának meccsenkénti nyers sáv-mintái IDŐRENDBEN ([{sáv: [kaputra
+    érkezett, védett]}, …] — _kapus_minta vagy player_model_sample
+    ["kapus"] alakban). A k. meccs sávjait az első k−1 meccsből tanult
+    kapus-szorzó becsli.
+
+    Edzőileg: igaz-e a "távolról 1,2× annyit kap" mondat, vagy a kapus
+    egyszerűen jó / rossz formában van — a kapus-edzést a sávra vagy az
+    egész kapura kell-e szabni.
+
+    Visszaad: {"meccsek", "csoportok" (meccs × tanult sáv), "lovesek"
+    (kaputra érkezett), "atlag_hiba", "osszes_hiba", "modell_hiba" (az
+    abszolút eltérések összege, gólban), "javulas_pct" (az átlagos
+    kapushoz), "sav_pct" (a sávok nélküli szorzóhoz), "verdict"} — None,
+    ha kevesebb mint PROBA_MIN_CSOPORT csoport becsülhető."""
+    csoportok = 0
+    lovesek = 0
+    atlag_hiba = 0.0
+    osszes_hiba = 0.0
+    modell_hiba = 0.0
+    for k in range(1, len(mintak)):
+        elozo: dict = {}
+        for m in mintak[:k]:
+            for sav, (f, sv) in (m or {}).items():
+                r = elozo.setdefault(sav, [0, 0])
+                r[0] += int(f)
+                r[1] += int(sv)
+        ksz = _kapus_szorzo(elozo)
+        osz = _kapus_osszes_szorzo(elozo)
+        for sav, (f, sv) in sorted((mintak[k] or {}).items()):
+            if sav not in ksz or sav not in KAPUS_ALAP_GOL:
+                continue
+            gol = float(f) - float(sv)
+            vart = float(f) * KAPUS_ALAP_GOL[sav]
+            csoportok += 1
+            lovesek += int(f)
+            atlag_hiba += abs(gol - vart)
+            osszes_hiba += abs(gol - vart * osz)
+            modell_hiba += abs(gol - vart * float(ksz[sav]))
+    if csoportok < PROBA_MIN_CSOPORT or atlag_hiba <= 0:
+        return None
+    javulas = round(100.0 * (atlag_hiba - modell_hiba) / atlag_hiba, 1)
+    sav_pct = (round(100.0 * (osszes_hiba - modell_hiba) / osszes_hiba, 1)
+               if osszes_hiba > 0 else 0.0)
+    alap = (f"({csoportok} meccs × sáv, {lovesek} kapura tartó lövés, "
+            f"{len(mintak)} meccs)")
+    eleje = ("a korábbi meccsekből tanult kapus-modell a következő meccs "
+             "kapott góljait ")
+    if javulas >= PROBA_ITELET_PCT and sav_pct >= PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{javulas:.0f}%-kal pontosabban becsülte, mint az "
+                   f"átlagos kapus, és {sav_pct:.0f}%-kal, mint a kapus "
+                   f"sávok nélküli szorzója {alap} — a kapus sávjaira lehet "
+                   "építeni")
+    elif javulas >= PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{javulas:.0f}%-kal pontosabban becsülte, mint az "
+                   "átlagos kapus, de a sávok nélküli szorzójánál nem "
+                   f"jobban {alap} — a kapus formája az egész kapura szól, "
+                   "a sávokat óvatosan kell olvasni")
+    elif javulas <= -PROBA_ITELET_PCT:
+        verdict = (f"{eleje}{-javulas:.0f}%-kal pontatlanabbul becsülte, "
+                   f"mint az átlagos kapus {alap} — a kapus meccsről "
+                   "meccsre másképp véd, a sávokat óvatosan kell olvasni")
+    else:
+        verdict = (f"{eleje}nagyjából ugyanolyan pontosan becsülte, mint az "
+                   f"átlagos kapus {alap}")
+    return {"meccsek": len(mintak), "csoportok": csoportok,
+            "lovesek": lovesek, "atlag_hiba": round(atlag_hiba, 2),
+            "osszes_hiba": round(osszes_hiba, 2),
+            "modell_hiba": round(modell_hiba, 2), "javulas_pct": javulas,
+            "sav_pct": sav_pct, "verdict": verdict}
+
+
+
+def keeper_model_backtest_summary(sorok: list) -> dict | None:
+    """Több csapat kapus-próbájának (keeper_model_backtest sorai) összege
+    — {"csapatok", "csoportok", "lovesek", "atlag_hiba", "osszes_hiba",
+    "modell_hiba", "javulas_pct", "sav_pct", "verdict"}; None, ha nincs
+    sor."""
+    sorok = [r for r in (sorok or []) if r]
+    if not sorok:
+        return None
+    ah = sum(float(r["atlag_hiba"]) for r in sorok)
+    oh = sum(float(r["osszes_hiba"]) for r in sorok)
+    mh = sum(float(r["modell_hiba"]) for r in sorok)
+    cs = sum(int(r["csoportok"]) for r in sorok)
+    lv = sum(int(r["lovesek"]) for r in sorok)
+    javulas = round(100.0 * (ah - mh) / ah, 1) if ah > 0 else 0.0
+    sav_pct = round(100.0 * (oh - mh) / oh, 1) if oh > 0 else 0.0
+    if javulas >= PROBA_ITELET_PCT:
+        irany = f"{javulas:.0f}%-kal pontosabban"
+    elif javulas <= -PROBA_ITELET_PCT:
+        irany = f"{-javulas:.0f}%-kal pontatlanabbul"
+    else:
+        irany = "nagyjából ugyanolyan pontosan"
+    sav = ""
+    if javulas >= PROBA_ITELET_PCT:
+        sav = (f", és {sav_pct:.0f}%-kal, mint a kapusok sávok nélküli "
+               "szorzója" if sav_pct >= PROBA_ITELET_PCT else
+               ", de a sávok nélküli szorzónál nem jobban")
+    return {"csapatok": len(sorok), "csoportok": cs, "lovesek": lv,
+            "atlag_hiba": round(ah, 2), "osszes_hiba": round(oh, 2),
+            "modell_hiba": round(mh, 2), "javulas_pct": javulas,
+            "sav_pct": sav_pct,
+            "verdict": (f"a könyvtár {len(sorok)} csapatán a korábbi "
+                        "meccsekből tanult kapus-modell a következő meccs "
+                        f"kapott góljait {irany} becsülte, mint az átlagos "
+                        f"kapus{sav} ({cs} meccs × sáv, {lv} kapura tartó "
+                        "lövés)")}
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a

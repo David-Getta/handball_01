@@ -334,6 +334,19 @@ def test_a_lovo_modell_probaja_vegpont_a_konyvtaron():
             assert {k: v for k, v in sorok[nev].items() if k != "team"} == vart
         assert meccsek[0].meta.away_team not in sorok
         assert j["osszes"] == shooter_model_backtest_summary(j["teams"])
+        # A kapus-próba: a vendég kapusa (a hazai lő rá) a mintájából.
+        from handball.pipeline.play_simulation import (
+            keeper_model_backtest, keeper_model_backtest_summary)
+        kvart = keeper_model_backtest(
+            [json.loads(json.dumps(player_model_sample(m, Team.AWAY)))["kapus"]
+             for m in meccsek])
+        ksorok = {r["team"]: r for r in j["kapusok"]}
+        vnev = meccsek[0].meta.away_team
+        if kvart is None:
+            assert vnev not in ksorok
+        else:
+            assert {k: v for k, v in ksorok[vnev].items() if k != "team"} == kvart
+        assert j["kapus_osszes"] == keeper_model_backtest_summary(j["kapusok"])
     finally:
         os.environ["HANDBALL_DATA_DIR"] = _tmp
         shutil.rmtree(tmp2, ignore_errors=True)

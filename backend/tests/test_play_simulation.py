@@ -1284,6 +1284,40 @@ def test_a_lovo_modell_probaja_a_kovetkezo_meccsen():
     assert shooter_model_backtest_summary([]) is None
 
 
+def test_a_kapus_modell_probaja_a_kovetkezo_meccsen():
+    """A kapus-modell próbája: ha a kapus egy sávban következetesen
+    gyengébb, a korábbiakból tanult sáv-szorzó a következő meccs kapott
+    góljait pontosabban becsüli, mint az átlagos kapus ÉS a sávok nélküli
+    szorzó; ha minden sávban egyformán jó, csak az átlagos kapusnál
+    pontosabb ("az egész kapura szól"); váltakozó formánál pontatlanabb;
+    kevés csoportnál None; a könyvtár-összeg a csapatok hibáiból."""
+    from handball.pipeline.play_simulation import (
+        PROBA_ITELET_PCT, keeper_model_backtest, keeper_model_backtest_summary)
+
+    sav = {"far": [10, 3], "close": [8, 4], "mid": [6, 3]}
+    r = keeper_model_backtest([sav] * 4)
+    assert (r["meccsek"], r["csoportok"], r["lovesek"]) == (4, 9, 72)
+    assert r["javulas_pct"] >= PROBA_ITELET_PCT
+    assert r["sav_pct"] >= PROBA_ITELET_PCT
+    assert r["verdict"].endswith("a kapus sávjaira lehet építeni")
+    egyforma = {"far": [10, 8], "close": [8, 4], "mid": [6, 4]}
+    e = keeper_model_backtest([egyforma] * 4)
+    assert e["javulas_pct"] >= PROBA_ITELET_PCT > e["sav_pct"]
+    assert "az egész kapura szól" in e["verdict"]
+    a = {"far": [10, 9], "close": [8, 7], "mid": [6, 5]}
+    b = {"far": [10, 2], "close": [8, 0], "mid": [6, 1]}
+    v = keeper_model_backtest([a, b, a, b])
+    assert v["javulas_pct"] <= -PROBA_ITELET_PCT
+    assert "pontatlanabbul" in v["verdict"]
+    assert keeper_model_backtest([sav, sav]) is None
+    assert keeper_model_backtest([]) is None
+    o = keeper_model_backtest_summary([r, e])
+    assert o["csapatok"] == 2 and o["csoportok"] == 18
+    assert o["atlag_hiba"] == round(r["atlag_hiba"] + e["atlag_hiba"], 2)
+    assert o["verdict"].startswith("a könyvtár 2 csapatán")
+    assert keeper_model_backtest_summary([]) is None
+
+
 def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():
     """A két időszak tanult szorzói: csak a mindkét időszakban tanult sáv
     és csak FEJLODES_ELTERES feletti változás hír; a lövőnél a nagyobb,

@@ -5169,21 +5169,27 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     {"lovok": a lövők sora (play_simulation.lovo_felirat), "kapus": a
     kapus sora (kapus_felirat), "meccsek": hány meccsből}; a szakasz
     csak akkor jelenik meg, ha legalább egyik sor nem üres.
-    `modell_proba` (opcionális): a lövő-modell próbája a szezon meccsein
-    (play_simulation.shooter_model_backtest) — a "verdict" mondata.
+    `modell_proba` (opcionális): a lövő- és a kapus-modell próbája a
+    szezon meccsein (play_simulation.shooter_model_backtest,
+    keeper_model_backtest) — a "verdict" és a "kapus_verdict" mondata.
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
     """
     table = _trend_metrics_table(tr)
     proba_html = ""
-    if (modell_proba or {}).get("verdict"):
+    mp = modell_proba or {}
+    if mp.get("verdict") or mp.get("kapus_verdict"):
         proba_html = (
             "<h2>A lövő-modell próbája</h2>"
-            f"<p>{escape(str(modell_proba['verdict']))}.</p>"
-            '<p class="note">A szezon meccseit időrendben vesszük: minden '
-            "meccs lövő × sáv csoportjainak gólját a KORÁBBI meccsekből "
-            "tanult szorzóval becsüljük, és a nyers várható gólhoz mérjük — "
+            + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
+               if mp.get("verdict") else "")
+            + (f"<p><b>Kapus:</b> {escape(str(mp['kapus_verdict']))}.</p>"
+               if mp.get("kapus_verdict") else "")
+            + '<p class="note">A szezon meccseit időrendben vesszük: minden '
+            "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
+            "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "
+            "(az átlagos kapushoz) meg a csapat egyetlen szorzójához mérjük — "
             "melyik van közelebb a valódi gólokhoz.</p>")
     fejl_html = ""
     fj = fejlodes or {}
