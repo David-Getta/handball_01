@@ -260,7 +260,8 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                     hetes_irany: dict | None = None,
                     hetes_irany_proba: dict | None = None,
                     idokeres_proba: dict | None = None,
-                    kapus_forma_proba: dict | None = None) -> list:
+                    kapus_forma_proba: dict | None = None,
+                    het_a_hat_proba: dict | None = None) -> list:
     """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
     modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
     az ő várható faluk ellen (`vedekezes`, play_simulation.
@@ -276,8 +277,10 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
     próbája, `hetes_proba`, nem mond ellent), a kapus felkészítése az ő
     dobóik hetes-irányaira (`hetes_irany`: seven_direction_profile — csak
     ha a `hetes_irany_proba` szerint jósolható), az időkérés-szabály a
-    sorozat ellen (`idokeres_proba`: timeout_run_backtest) és a
-    kapus-csere szabálya (`kapus_forma_proba`: keeper_hot_hand_backtest).
+    sorozat ellen (`idokeres_proba`: timeout_run_backtest), a
+    kapus-csere szabálya (`kapus_forma_proba`: keeper_hot_hand_backtest)
+    és a hajrá szabálya (`het_a_hat_proba`: seven_six_backtest — a 7 a 6
+    mérlege; "egyenlo" ítéletnél nincs tétel).
     Mit jelent edzőileg: a meccs előtti hét edzéseinek váza és a pad
     szabályai, minden tétel mögött a modell indoka. Visszatérés:
     [{"title", "area", "why", "drill"}] — legfeljebb KOV_MECCS_MAX."""
@@ -384,6 +387,18 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                       + ("rossz félidő után csere" if kitart else
                          "egy gyenge szakasz miatt nem cserélünk — a kapus "
                          "kapjon még lövéseket"))})
+    if het_a_hat_proba and het_a_hat_proba.get("itelet") in ("megeri", "nem"):
+        megeri = het_a_hat_proba["itelet"] == "megeri"
+        ki.append({
+            "title": ("Hajrá: 7 a 6 hátrányban" if megeri else
+                      "Hajrá: 6 a 6 marad hátrányban is"),
+            "area": "taktika", "why": het_a_hat_proba["verdict"],
+            "drill": ("a 7 a 6 figura és a kapus-csere gyors lebonyolítása "
+                      "(csere-zóna, a hetedik ember beállása), a labdavesztés "
+                      "utáni visszafutással" if megeri else
+                      "a hátrányos hajrá 6 a 6-tal: gyors középkezdés, "
+                      "biztos lövőhelyzet, a kapus marad — a 7 a 6 csak "
+                      "kivételesen, kész figurával")})
     return ki[:KOV_MECCS_MAX]
 
 

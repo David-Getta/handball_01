@@ -1498,3 +1498,23 @@ def test_ai_edzesterv_a_dontes_probakkal():
     assert len(v) == KOV_MECCS_MAX == 8
     assert v[0]["title"] == "Támadás az 5-1 fal ellen"
     assert v[-1]["title"] == "Kapus a hetesre: a dobóik irányai"
+
+
+
+def test_ai_edzesterv_a_hajra_7_a_6_szabalyaval():
+    """training.next_match_plan `het_a_hat_proba`: "megeri" → 7 a 6 a
+    hajrára, "nem" → 6 a 6 marad, "egyenlo" vagy None → nincs tétel."""
+    from handball.pipeline.training import next_match_plan
+
+    t = next_match_plan("Vendég", het_a_hat_proba={"itelet": "megeri",
+                                                   "verdict": "V"})
+    assert [(x["title"], x["area"], x["why"]) for x in t] == [
+        ("Hajrá: 7 a 6 hátrányban", "taktika", "V")]
+    assert t[0]["drill"].startswith("a 7 a 6 figura és a kapus-csere")
+    u = next_match_plan("Vendég", het_a_hat_proba={"itelet": "nem",
+                                                   "verdict": "W"})
+    assert [x["title"] for x in u] == ["Hajrá: 6 a 6 marad hátrányban is"]
+    assert "a kapus marad" in u[0]["drill"]
+    assert next_match_plan("Vendég", het_a_hat_proba={
+        "itelet": "egyenlo", "verdict": "X"}) == []
+    assert next_match_plan("Vendég") == []

@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **AI-edzésterv: a hajrá szabálya** (motor + végpont + meccsterv): a
+  következő meccs AI-edzésterve a csapat saját 7 a 6 mérlegéből szabályt
+  ad a hátrányos hajrára — "Hajrá: 7 a 6 hátrányban" (gyakorlat: a 7 a 6
+  figura és a kapus-csere gyors lebonyolítása), vagy "Hajrá: 6 a 6 marad
+  hátrányban is", ha a 7 a 6 többe került, mint amennyit hozott; döntetlen
+  mérlegnél nincs tétel (training.next_match_plan `het_a_hat_proba`).
+
 - **A pad döntései: a 7 a 6 is** (motor + végpont + meccs-jelentés +
   meccs-képernyő): a meccs utáni "pad döntései" értékelés a 7 a 6-ot is
   nézi — "7 a 6: 3 szakasz, 2 lőtt gól, 1 kapott üres kapura — a könyvtár

@@ -14670,7 +14670,8 @@ def create_app():
         csapat könyvtári meccseiből (várható fal, kulcsember és hiánya,
         visszatérő figura a próbával, kapus, a saját AI-tételeink, a
         hetes-dobónk és az ő dobóik hetes-irányai a próbáikkal, az
-        időkérés- és a kapus-csere szabálya a saját próbáinkból).
+        időkérés- és a kapus-csere szabálya, és a hajrá 7 a 6 szabálya a
+        saját próbáinkból).
         Minden darab hibatűrő: ami nem számolható, kimarad."""
         from ..pipeline.decisions import decision_samples_sum
         from ..pipeline.play_simulation import (key_player_absence,
@@ -14713,7 +14714,8 @@ def create_app():
             hetes_irany=biztos(lambda: _hetes_irany_profil(ok)),
             hetes_irany_proba=biztos(lambda: _hetes_irany_proba(csapat=ok)),
             idokeres_proba=biztos(lambda: _idokeres_proba(csapat=mi)),
-            kapus_forma_proba=biztos(lambda: _kapusforma_proba(csapat=mi)))
+            kapus_forma_proba=biztos(lambda: _kapusforma_proba(csapat=mi)),
+            het_a_hat_proba=biztos(lambda: _het_a_hat_proba(csapat=mi)))
 
     def _items_csapat(items) -> str | None:
         """A felderítés `items` listájának csapata ({"match_id", "team"}
