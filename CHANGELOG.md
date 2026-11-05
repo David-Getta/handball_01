@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.191 óta)
+## v0.1.192 — kiadva (2026-11-05)
+
+> Kiadás-jegyzet: AZ AI A MECCS KÖRÜL — előtte, közben és utána. Előtte:
+> AI-edzésterv a következő meccsre (az ő faluk, a kulcsemberük és a
+> hiánya, a visszatérő figurájuk, a kapusunk, a pálya által igazolt
+> döntés-edzésünk), a meccs előtti kapus-választás, a kulcsember
+> gól-értéke a cserénél, és az előrejelzés az egymás-elleni riportban is.
+> Közben: a meccs eleji második AI-sor (az előrejelzések próbái), a
+> napi forma a forró kéz próbája szerinti tanáccsal — mindkét kispadnak
+> —, a félidei várakozás és valóság, és ha az élő esély zuhan,
+> időkérés-javaslat. Utána: várakozás és valóság a meccs-jelentésben és
+> az összefoglalóban. Új próbák: a védő-modell, a forró kéz és a
+> figuráik visszatérése; az önkalibrált párosítás a védő-modellel; a
+> szezon-riportban a kulcsemberek és a modellek próbája egy szakaszban,
+> a kezdőlapon az AI-próbák összképe ("9 próbából 6 bizonyított").
 
 - **Az AI-próbák összképe** (motor + végpont + kezdőlap + szezon-képernyő):
   egy pillantásra, mennyire lehet a klub saját könyvtárán az AI-ra
