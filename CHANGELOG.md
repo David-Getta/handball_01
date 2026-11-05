@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **A döntés-modell próbája** (motor + végpont + szezon-riport +
+  szezon-képernyő): a "mi lett volna a jobb döntés" mondatoknak akkor van
+  súlya, ha a pályán is igaz. A besorolt döntéseket (kilépnek rá, szabad
+  a 6 m-es társ, szabad lőhely) két csoportba osztjuk — a modell szerinti
+  legjobb opciót választók és a többiek —, és megnézzük, hogy a döntés
+  után 8 mp-en belül a csapat gólt szerzett-e: "a modell legjobb
+  opcióját választó 40 döntés után 8 mp-en belül 30%-ban jött gól, a
+  többi 60 után 10%-ban — a modell legjobb opciója 20 százalékponttal
+  több gólt hoz: a döntés-edzést rá lehet építeni". A modell itt a meccs
+  saját lövő-szorzói NÉLKÜL számol (a meccsből tanult szorzó a gólokat
+  már ismerné); mindkét csoportban legalább 20 döntés kell, 5
+  százalékpont alatt "nagyjából ugyanannyi". A /library/player-model-check
+  "dontesek" és "dontes_osszes" mezője (a meccsenkénti minta a lemezes
+  eredmény-tárból), a szezon-riport próba-szakaszának "Döntések" sora, a
+  szezon-képernyő döntés-sorai (decisions.decision_outcome_sample,
+  decision_model_check).
+
 - **A kapus-modell próbája** (motor + végpont + szezon-riport +
   szezon-képernyő): ugyanez a kapusra — a kapus korábbi meccsekből
   tanult sáv-szorzója a következő meccs kapott góljait pontosabban

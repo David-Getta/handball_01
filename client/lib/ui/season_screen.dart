@@ -172,7 +172,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
             .toList();
     final teams = sorok("teams");
     final kapusok = sorok("kapusok");
-    if (teams.isEmpty && kapusok.isEmpty) return const [];
+    final dontesek = sorok("dontesek");
+    if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty) {
+      return const [];
+    }
+    final dOsszes =
+        (_modelCheck["dontes_osszes"] as Map?)?.cast<String, dynamic>();
     final osszes = (_modelCheck["osszes"] as Map?)?.cast<String, dynamic>();
     final kOsszes =
         (_modelCheck["kapus_osszes"] as Map?)?.cast<String, dynamic>();
@@ -205,6 +210,17 @@ class _SeasonScreenState extends State<SeasonScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Text("${t["team"]} kapusa: ${t["verdict"]}.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ),
+      if (dOsszes?["verdict"] is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Döntések a könyvtárban: ${dOsszes!["verdict"]}.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      for (final t in dontesek)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text("${t["team"]} döntései: ${t["verdict"]}.",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ),
     ];

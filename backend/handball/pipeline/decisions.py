@@ -1448,6 +1448,96 @@ def situational_decisions(match: Match,
 LIVE_SIT_MIN = 6
 
 
+# ---- A döntés-modell próbája ------------------------------------------------
+# Többet ér-e a modell legjobb opciója a pályán: a besorolt döntések
+# (situational_decisions, a játékos-modell NÉLKÜL — a meccsből tanult
+# lövő-szorzó a meccs góljait már ismerné, ez szivárgás volna) két
+# csoportban: a legjobb opciót választók ("jó") és a többiek; mindkettőnél
+# az, hogy a döntés után DONTES_KIMENET_S-en belül a döntő csapat gólt
+# szerzett-e. A minta darabszám-alapú (meccsek közt összeadható); az
+# ítélethez mindkét csoportban legalább DONTES_PROBA_MIN döntés kell, és
+# DONTES_PROBA_PP százalékpont különbség alatt "nagyjából ugyanannyi".
+DONTES_KIMENET_S = 8.0
+DONTES_PROBA_MIN = 20
+DONTES_PROBA_PP = 5.0
+
+
+def decision_outcome_sample(match: Match,
+                            config: Optional[TacticsConfig] = None) -> dict:
+    """A döntés-modell próbájának NYERS, JSON-barát mintája egy meccsről:
+    {"home" / "away": {"jo": [döntés, gól utána], "rossz": [döntés, gól
+    utána]}} — a "jó" döntés a modell szerinti legjobb opció
+    (situational_decisions, modell nélkül), a "gól utána" a döntő csapat
+    gólja a döntés után DONTES_KIMENET_S-en belül."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    ablak = int(round(DONTES_KIMENET_S * fps))
+    recs: list = []
+    situational_decisions(match, config, records_out=recs, modellek=False)
+    golok = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.team.value in golok:
+            golok[e.team.value].append(e.t)
+    for v in golok.values():
+        v.sort()
+    out = {s: {"jo": [0, 0], "rossz": [0, 0]} for s in ("home", "away")}
+    for r in sorted(recs, key=lambda r: (r["t"], r["side"])):
+        cs = "jo" if r["good"] else "rossz"
+        gol = any(r["t"] <= g <= r["t"] + ablak for g in golok[r["side"]])
+        out[r["side"]][cs][0] += 1
+        out[r["side"]][cs][1] += int(gol)
+    return out
+
+
+def decision_model_check(minta: dict) -> dict | None:
+    """A döntés-modell próbája az (összegzett) mintából (`minta` =
+    {"jo": [döntés, gól], "rossz": [döntés, gól]}): {"jo_dontes",
+    "jo_gol_pct", "rossz_dontes", "rossz_gol_pct", "kulonbseg_pp",
+    "verdict"} — None, ha bármelyik csoportban kevesebb mint
+    DONTES_PROBA_MIN döntés van.
+
+    Edzőileg: a "mi lett volna a jobb döntés" mondatoknak akkor van
+    súlya, ha a pályán is igaz — ha a modell legjobb opcióját választó
+    döntések után gyakrabban jön gól, a döntés-edzés irányát lehet rá
+    építeni."""
+    jn, jg = (int(x) for x in (minta.get("jo") or [0, 0]))
+    rn, rg = (int(x) for x in (minta.get("rossz") or [0, 0]))
+    if jn < DONTES_PROBA_MIN or rn < DONTES_PROBA_MIN:
+        return None
+    jp = 100.0 * jg / jn
+    rp = 100.0 * rg / rn
+    kul = round(jp - rp, 1)
+    alap = (f"a modell legjobb opcióját választó {jn} döntés után "
+            f"{DONTES_KIMENET_S:.0f} mp-en belül {jp:.0f}%-ban jött gól, a "
+            f"többi {rn} után {rp:.0f}%-ban")
+    if kul >= DONTES_PROBA_PP:
+        verdict = (f"{alap} — a modell legjobb opciója {kul:.0f} "
+                   "százalékponttal több gólt hoz: a döntés-edzést rá lehet "
+                   "építeni")
+    elif kul <= -DONTES_PROBA_PP:
+        verdict = (f"{alap} — a modell legjobb opciója itt nem hozott több "
+                   "gólt: a döntés-mondatokat óvatosan kell olvasni")
+    else:
+        verdict = (f"{alap} — nagyjából ugyanannyi: a modell legjobb "
+                   "opciója itt nem válik el a többitől")
+    return {"jo_dontes": jn, "jo_gol_pct": round(jp, 1), "rossz_dontes": rn,
+            "rossz_gol_pct": round(rp, 1), "kulonbseg_pp": kul,
+            "verdict": verdict}
+
+
+def decision_samples_sum(mintak: list) -> dict:
+    """Több decision_outcome_sample-oldal ({"jo": [n, g], "rossz": [n, g]})
+    összege."""
+    ossz = {"jo": [0, 0], "rossz": [0, 0]}
+    for m in mintak:
+        for k in ("jo", "rossz"):
+            n, g = (m or {}).get(k) or [0, 0]
+            ossz[k][0] += int(n)
+            ossz[k][1] += int(g)
+    return ossz
+
+
 def live_decision_alerts(match: Match,
                          config: Optional[TacticsConfig] = None, *,
                          modellek: Optional[dict] = None) -> dict:

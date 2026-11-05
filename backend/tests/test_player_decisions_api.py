@@ -347,6 +347,20 @@ def test_a_lovo_modell_probaja_vegpont_a_konyvtaron():
         else:
             assert {k: v for k, v in ksorok[vnev].items() if k != "team"} == kvart
         assert j["kapus_osszes"] == keeper_model_backtest_summary(j["kapusok"])
+        # A döntés-próba: csapatonként a meccsek mintáinak összege.
+        from handball.pipeline.decisions import (decision_model_check,
+                                                 decision_outcome_sample,
+                                                 decision_samples_sum)
+        dm = [decision_outcome_sample(m) for m in meccsek]
+        dvart = decision_model_check(decision_samples_sum(
+            [x["home"] for x in dm]))
+        dsorok = {r["team"]: r for r in j["dontesek"]}
+        if dvart is None:
+            assert nev not in dsorok
+        else:
+            assert {k: v for k, v in dsorok[nev].items() if k != "team"} == dvart
+        assert j["dontes_osszes"] == decision_model_check(decision_samples_sum(
+            [x[s] for x in dm for s in ("home", "away")]))
     finally:
         os.environ["HANDBALL_DATA_DIR"] = _tmp
         shutil.rmtree(tmp2, ignore_errors=True)

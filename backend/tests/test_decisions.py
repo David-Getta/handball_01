@@ -1418,3 +1418,74 @@ def test_tired_turnover_players_silent_without_jump():
     rec = tired_turnover_players(
         _fto_match([7, 7, 7], [7]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_a_dontes_modell_probaja_a_mintabol():
+    """A döntés-modell próbája: ha a legjobb opciót választók után
+    gyakrabban jön gól (DONTES_PROBA_PP felett), "rá lehet építeni";
+    fordítva "óvatosan"; közel egyformán "nagyjából ugyanannyi"; bármelyik
+    csoportban DONTES_PROBA_MIN alatt None; a minták összege."""
+    from handball.pipeline.decisions import (DONTES_KIMENET_S,
+                                             DONTES_PROBA_MIN,
+                                             DONTES_PROBA_PP,
+                                             decision_model_check,
+                                             decision_samples_sum)
+
+    assert (DONTES_KIMENET_S, DONTES_PROBA_MIN, DONTES_PROBA_PP) == (8.0, 20, 5.0)
+    jo = decision_model_check({"jo": [40, 12], "rossz": [60, 6]})
+    assert (jo["jo_gol_pct"], jo["rossz_gol_pct"], jo["kulonbseg_pp"]) == (
+        30.0, 10.0, 20.0)
+    assert jo["verdict"] == (
+        "a modell legjobb opcióját választó 40 döntés után 8 mp-en belül "
+        "30%-ban jött gól, a többi 60 után 10%-ban — a modell legjobb opciója "
+        "20 százalékponttal több gólt hoz: a döntés-edzést rá lehet építeni")
+    rossz = decision_model_check({"jo": [40, 4], "rossz": [60, 12]})
+    assert rossz["kulonbseg_pp"] < 0 and "óvatosan" in rossz["verdict"]
+    egy = decision_model_check({"jo": [40, 8], "rossz": [60, 12]})
+    assert "nagyjából ugyanannyi" in egy["verdict"]
+    assert decision_model_check({"jo": [19, 5], "rossz": [60, 6]}) is None
+    assert decision_model_check({}) is None
+    assert decision_samples_sum([{"jo": [3, 1], "rossz": [2, 0]}, {},
+                                 {"jo": [1, 1]}]) == {"jo": [4, 2],
+                                                      "rossz": [2, 0]}
+
+
+def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
+    """A meccs-minta: a besorolt döntések (modell NÉLKÜL — a hívás
+    modellek=False) jó / többi csoportban, és utánuk DONTES_KIMENET_S-en
+    belül a döntő csapat gólja; a másik csapat gólja nem számít; a valódi
+    láncon (gól nélküli fixture) a darabszám a besorolt döntéseké."""
+    import handball.pipeline.decisions as dec
+    import handball.pipeline.event_detection as ev
+    from handball.pipeline.decisions import decision_outcome_sample
+
+    hivas = {}
+
+    def _sit(match, config=None, records_out=None, modellek=None):
+        hivas["modellek"] = modellek
+        records_out.extend([
+            {"t": 10, "side": "home", "good": 1},
+            {"t": 100, "side": "home", "good": 0},
+            {"t": 300, "side": "away", "good": 1}])
+        return {}
+
+    class _E:
+        def __init__(self, t, team):
+            self.t, self.team, self.type = t, team, ev.EventType.GOAL
+
+    monkeypatch.setattr(dec, "situational_decisions", _sit)
+    monkeypatch.setattr(ev, "detect_shots", lambda m, c=None: [
+        _E(15, Team.HOME), _E(250, Team.HOME), _E(310, Team.HOME)])
+    m = _sit_match()
+    d = decision_outcome_sample(m)
+    assert hivas["modellek"] is False
+    assert d == {"home": {"jo": [1, 1], "rossz": [1, 1]},
+                 "away": {"jo": [1, 0], "rossz": [0, 0]}}
+    monkeypatch.undo()
+    valodi = decision_outcome_sample(_sit_match())
+    recs: list = []
+    from handball.pipeline.decisions import situational_decisions
+    situational_decisions(_sit_match(), records_out=recs, modellek=False)
+    assert sum(valodi["home"]["jo"][:1] + valodi["home"]["rossz"][:1]) == \
+        sum(1 for r in recs if r["side"] == "home")
+    assert valodi["home"]["jo"][1] == valodi["home"]["rossz"][1] == 0

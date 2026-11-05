@@ -5179,13 +5179,16 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     table = _trend_metrics_table(tr)
     proba_html = ""
     mp = modell_proba or {}
-    if mp.get("verdict") or mp.get("kapus_verdict"):
+    if mp.get("verdict") or mp.get("kapus_verdict") \
+            or mp.get("dontes_verdict"):
         proba_html = (
             "<h2>A lövő-modell próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
                if mp.get("verdict") else "")
             + (f"<p><b>Kapus:</b> {escape(str(mp['kapus_verdict']))}.</p>"
                if mp.get("kapus_verdict") else "")
+            + (f"<p><b>Döntések:</b> {escape(str(mp['dontes_verdict']))}.</p>"
+               if mp.get("dontes_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "

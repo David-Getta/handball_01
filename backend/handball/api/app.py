@@ -8023,12 +8023,18 @@ def create_app():
         try:
             from ..pipeline.play_simulation import (keeper_model_backtest,
                                                     shooter_model_backtest)
+            from ..pipeline.decisions import (decision_model_check,
+                                              decision_samples_sum)
             lp = shooter_model_backtest([m_.get("lovo") or {} for m_ in mintak])
             kp = keeper_model_backtest([m_.get("kapus") or {} for m_ in mintak])
-            if lp or kp:
+            dp = decision_model_check(decision_samples_sum(
+                [_dontes_minta_of(kilincs[mid_]).get(side_) or {}
+                 for _d, mid_, side_ in entries if mid_ in kilincs]))
+            if lp or kp or dp:
                 modell_proba = {"verdict": (lp or {}).get("verdict"),
                                 "kapus_verdict": (kp or {}).get("verdict"),
-                                "lovo": lp, "kapus": kp}
+                                "dontes_verdict": (dp or {}).get("verdict"),
+                                "lovo": lp, "kapus": kp, "dontes": dp}
         except Exception:
             modell_proba = None
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
@@ -8506,6 +8512,15 @@ def create_app():
                     [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]),
                 len(par))
 
+    def _dontes_minta_of(m_) -> dict:
+        """EGY meccs döntés-próba mintája (decisions.decision_outcome_sample:
+        oldalanként a jó / többi döntés és utánuk a gól) — a lemezes
+        eredmény-tárból, hogy a könyvtár-szintű próba második hívása ne
+        töltse vissza a hideg meccseket."""
+        from ..pipeline.decisions import decision_outcome_sample
+        return _cached_result(m_.meta.match_id, "dontes-minta-v1",
+                              lambda: decision_outcome_sample(m_))
+
     def _jatekos_minta_of(m_, side: str) -> dict:
         """EGY meccs nyers játékos-modell mintája az adott oldalra
         (play_simulation.player_model_sample: lövők, sávok, kapus, fal) —
@@ -8666,8 +8681,12 @@ def create_app():
                                                 shooter_model_backtest_summary)
         nevek = sorted({n for m_ in _season_matches()
                         for n in (m_.meta.home_team, m_.meta.away_team) if n})
+        from ..pipeline.decisions import (decision_model_check,
+                                          decision_samples_sum)
         sorok = []
         kapus_sorok = []
+        dontes_sorok = []
+        dontes_ossz = {"jo": [0, 0], "rossz": [0, 0]}
         for nev in nevek:
             try:
                 par = _csapat_meccsei(nev)
@@ -8682,11 +8701,19 @@ def create_app():
             k = keeper_model_backtest([m.get("kapus") or {} for m in mintak])
             if k:
                 kapus_sorok.append({"team": nev, **k})
+            dm = [_dontes_minta_of(m_).get(t_.value) or {} for m_, t_ in par]
+            dontes_ossz = decision_samples_sum([dontes_ossz] + dm)
+            d = decision_model_check(decision_samples_sum(dm))
+            if d:
+                dontes_sorok.append({"team": nev, **d})
         sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
         kapus_sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
+        dontes_sorok.sort(key=lambda r: (-r["kulonbseg_pp"], r["team"]))
         return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok),
                 "kapusok": kapus_sorok,
-                "kapus_osszes": keeper_model_backtest_summary(kapus_sorok)}
+                "kapus_osszes": keeper_model_backtest_summary(kapus_sorok),
+                "dontesek": dontes_sorok,
+                "dontes_osszes": decision_model_check(dontes_ossz)}
 
     @app.get("/library/leaders")
     def library_leaders():
