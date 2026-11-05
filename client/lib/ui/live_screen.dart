@@ -214,6 +214,15 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "ai", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Kapus-forma: a saját szokásos szintje felett / alatt védő kapus — a
+    // tanács a kapus napi formájának próbájától függ.
+    try {
+      for (final a in await _api.fetchLiveKeeperForm(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Napi forma: a modell várakozása felett / alatt járó lövő — a tanács
     // a forró kéz próbájától függ (kitart-e a napi forma a könyvtárban).
     try {

@@ -4203,6 +4203,200 @@ def live_form_alerts(match: Match, tamadas: dict | None = None,
     return {"alerts": alerts}
 
 
+# ---- A kapus napi formája: kitart-e ----------------------------------------
+# A kapus napi formája a várt felett / alatt védett gól: (várt kapott gól
+# − kapott gól) / kaputra érkezett lövés, ahol a várt kapott gól az
+# átlagos kapus sávonkénti gól-aránya (KAPUS_ALAP_GOL). A próba a
+# könyvtár kapus × meccs párjain (félidőnként legalább KF_MIN_LOVES
+# kaputra érkezett lövés): az első félidőben forró (KF_KUSZOB felett) és
+# hideg kapusok második félideje — ha a forróké FORMA_ITELET_PP
+# százalékponttal jobb, a kapus napi formája kitart. Élőben a 15., 30.
+# és 45. percben szól, ha a kapuban álló kapus legalább KF_MIN_LOVES
+# lövésből KF_ELO_GOL góllal a saját szokásos szintje felett vagy alatt
+# jár (a szezon kapus-szorzójával).
+KF_MIN_LOVES = 6
+KF_KUSZOB = 0.12
+KF_MIN_PAR = 6
+KF_ELO_GOL = 1.5
+
+
+def _kapus_varhato(minta: dict, szorzo: dict | None = None) -> float:
+    """Egy kapus sávonkénti mintájából ({sáv: [kaputra érkezett,
+    védett]}) a várt kapott gól: kaputra × KAPUS_ALAP_GOL[sáv] × a kapus
+    szorzója a sávban (üres: átlagos kapus)."""
+    return sum(int(v[0]) * KAPUS_ALAP_GOL.get(s, 0.55)
+               * float((szorzo or {}).get(s, 1.0))
+               for s, v in (minta or {}).items())
+
+
+def keeper_form_sample(match: Match, team: Team,
+                       config: TacticsConfig | None = None) -> dict:
+    """A kapus napi formájának NYERS, JSON-barát meccs-mintája: a `team`
+    kapusai félidőnként — {kapus mez (str): [[kaputra, kapott, várt
+    kapott] az 1. félidőben, ugyanez a 2.-ban]}; a várt kapott az
+    átlagos kapusé (_kapus_varhato). A félidő-határ a felismert szünet,
+    különben a felvétel közepe."""
+    from .halftime import detect_halftime
+    config = config or TacticsConfig()
+    if not match.frames:
+        return {}
+    try:
+        ht = detect_halftime(match)
+    except Exception:
+        ht = None
+    if ht is None:
+        ht = match.frames[len(match.frames) // 2].t
+    ki: dict = {}
+    for i, frames in enumerate(([f for f in match.frames if f.t < ht],
+                                [f for f in match.frames if f.t >= ht])):
+        if len(frames) < 2:
+            continue
+        resz = Match(meta=match.meta, frames=frames)
+        for mez, minta in _kapus_minta_kapusonkent(resz, team, config).items():
+            faced = sum(int(v[0]) for v in minta.values())
+            kapott = sum(int(v[0]) - int(v[1]) for v in minta.values())
+            r = ki.setdefault(str(mez), [[0, 0, 0.0], [0, 0, 0.0]])[i]
+            r[0] += faced
+            r[1] += kapott
+            r[2] = round(r[2] + _kapus_varhato(minta), 3)
+    return ki
+
+
+def keeper_hot_hand_backtest(mintak: list) -> dict | None:
+    """A kapus napi formájának próbája: `mintak` a könyvtár kapus-forma
+    mintái (keeper_form_sample, csapat × meccs). A félidőnként legalább
+    KF_MIN_LOVES lövéses párok közül az első félidőben forró (várt
+    kapott − kapott lövésenként ≥ KF_KUSZOB) és hideg (≤ −KF_KUSZOB)
+    kapusok második félideje, százalékpontban. Mit jelent edzőileg: a
+    "rossz napja van, cseréljük" döntés csak akkor jó, ha a kapus napi
+    formája kitart — különben a szokásos szintje a jobb tipp.
+    Visszatérés: {"forro", "hideg", "forro_pp", "hideg_pp",
+    "kulonbseg_pp", "itelet" ("kitart" / "visszaall"), "verdict"} —
+    None, ha valamelyik csoportban KF_MIN_PAR-nál kevesebb pár van."""
+    forro, hideg = [], []
+    for m in mintak:
+        for _mez, (f1, f2) in (m or {}).items():
+            if int(f1[0]) < KF_MIN_LOVES or int(f2[0]) < KF_MIN_LOVES:
+                continue
+            r1 = (float(f1[2]) - int(f1[1])) / int(f1[0])
+            r2 = (float(f2[2]) - int(f2[1])) / int(f2[0])
+            if r1 >= KF_KUSZOB:
+                forro.append(r2)
+            elif r1 <= -KF_KUSZOB:
+                hideg.append(r2)
+    if len(forro) < KF_MIN_PAR or len(hideg) < KF_MIN_PAR:
+        return None
+    fp = sum(forro) / len(forro) * 100.0
+    hp = sum(hideg) / len(hideg) * 100.0
+    k = fp - hp
+    kitart = k >= FORMA_ITELET_PP
+    return {"forro": len(forro), "hideg": len(hideg),
+            "forro_pp": round(fp, 1), "hideg_pp": round(hp, 1),
+            "kulonbseg_pp": round(k, 1),
+            "itelet": "kitart" if kitart else "visszaall",
+            "verdict": (f"az első félidőben jól védő kapusok ({len(forro)} "
+                        f"pár) a második félidőben lövésenként {fp:+.0f} "
+                        f"százalékponttal védtek a vártnál többet (a "
+                        f"gyengén védők, {len(hideg)} pár: {hp:+.0f}) — "
+                        + ("a kapus napi formája kitart: a rossz napon "
+                           "érdemes kapust cserélni" if kitart else
+                           "a kapus napi formája nem tart ki: egy gyenge "
+                           "félidő miatt nem kell kapust cserélni"))}
+
+
+def live_keeper_form_alerts(match: Match, kapus_szorzok: dict | None = None,
+                            proba: dict | None = None,
+                            config: TacticsConfig | None = None) -> dict:
+    """Élő kapus-forma: a LIVE_AJANLO_PERCEK perceiben az a kapus, aki az
+    addigi lövésekből (CSAK az addigi kockák — okszerű; legalább
+    KF_MIN_LOVES kaputra érkezett) KF_ELO_GOL góllal a SAJÁT szokásos
+    szintje (a szezon kapus-szorzója, `kapus_szorzok`: {"home" / "away":
+    {kapus mez: {sáv: szorzó}}}; ismeretlenben az átlagos kapus) felett
+    vagy alatt véd. A tanács a kapus napi formájának próbájától
+    (`proba`, keeper_hot_hand_backtest) függ, mindkét kispadnak: a
+    sajátnak ("sajat": maradjon / érdemes cserélni / ne cseréljétek egy
+    szakasz miatt) és az ellenfélnek ("ellenfel": jobb helyzetekből /
+    lőjetek bátran). Kapusonként és irányonként egyszer. Visszatérés:
+    {"alerts": [{"t", "t_s", "perc", "team" (akinek szól), "team_name",
+    "nezopont", "kapus_team", "mez", "kaputra", "vedett", "vart_vedes",
+    "irany" ("forro" / "hideg"), "text"}]}."""
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    itelet = (proba or {}).get("itelet")
+    szolt: set = set()
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [fr for fr in match.frames if fr.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+            masik = "away" if side == "home" else "home"
+            szorzok = (kapus_szorzok or {}).get(side) or {}
+            for mez, minta in sorted(_kapus_minta_kapusonkent(
+                    resz, team, config).items()):
+                faced = sum(int(v[0]) for v in minta.values())
+                if faced < KF_MIN_LOVES:
+                    continue
+                kapott = sum(int(v[0]) - int(v[1]) for v in minta.values())
+                vart = _kapus_varhato(minta, szorzok.get(int(mez))
+                                      or szorzok.get(str(mez)))
+                elteres = vart - kapott
+                if abs(elteres) < KF_ELO_GOL:
+                    continue
+                irany = "forro" if elteres > 0 else "hideg"
+                if (side, mez, irany) in szolt:
+                    continue
+                szolt.add((side, mez, irany))
+                vedett = faced - kapott
+                vv = f"{faced - vart:.1f}".replace(".", ",")
+                alap = (f"{mezszam_nevelovel(int(mez))} ma {vedett}/{faced} "
+                        f"védés (a szokásos szintje szerint {vv})")
+                cim = "Forró" if irany == "forro" else "Hideg"
+                if itelet == "kitart":
+                    sajat = ("a napi formája kitart: maradjon a kapuban"
+                             if irany == "forro" else
+                             "a napi formája kitart: érdemes kapust cserélni")
+                    ellen = ("a napi formája kitart: jobb helyzetekből "
+                             "lőjetek, ne távolról" if irany == "forro" else
+                             "a napi formája kitart: lőjetek többet")
+                elif itelet == "visszaall":
+                    sajat = ("a napi formája nem tart ki: ne építsetek rá, a "
+                             "védekezés maradjon szoros" if irany == "forro"
+                             else "a napi formája nem tart ki: egy gyenge "
+                             "szakasz miatt nem kell kapust cserélni")
+                    ellen = ("a napi formája nem tart ki: lőjetek bátran "
+                             "tovább" if irany == "forro" else
+                             "a napi formája nem tart ki: ne a kapusra "
+                             "építsetek")
+                else:
+                    sajat = ellen = ("a könyvtár még nem dönti el, kitart-e "
+                                     "a kapus napi formája")
+                kozos = {"t": hatar, "t_s": round(hatar / fps, 1),
+                         "perc": perc, "kapus_team": side, "mez": int(mez),
+                         "kaputra": faced, "vedett": vedett,
+                         "vart_vedes": round(faced - vart, 1),
+                         "irany": irany}
+                alerts.append({**kozos, "team": side,
+                               "team_name": nevek[side], "nezopont": "sajat",
+                               "text": (f"{cim} kapus ({perc}. perc): "
+                                        f"{nevek[side]} — {alap} — {sajat}")})
+                alerts.append({**kozos, "team": masik,
+                               "team_name": nevek[masik],
+                               "nezopont": "ellenfel",
+                               "text": (f"{cim} kapus az ellenfélnél "
+                                        f"({perc}. perc): {nevek[side]} — "
+                                        f"{alap} — {ellen}")})
+    alerts.sort(key=lambda a: (a["t"], a["kapus_team"], a["mez"],
+                               a["nezopont"]))
+    return {"alerts": alerts}
+
+
 # ---- Várható védekezési rendszer -------------------------------------------
 # Az ellenfél védekezési rendszere a következő meccsen a KORÁBBI meccsei
 # védekező kockáiból (detect_formation — a _tanulas_minta "formak"

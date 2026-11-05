@@ -1983,6 +1983,61 @@ def test_a_forro_kez_probaja_es_az_elo_napi_forma():
         "a könyvtár még nem dönti el, kitart-e a napi forma") for x in nincs)
 
 
+def test_a_kapus_napi_formaja_es_az_elo_kapus_forma():
+    """keeper_hot_hand_backtest: ha az első félidőben jól védő kapus a
+    másodikban is a várt felett véd, a napi forma kitart; ha visszaáll,
+    nem; kevés párnál None. keeper_form_sample: a kapusok félidőnként.
+    live_keeper_form_alerts: a szimulált meccsen minden lövés gól — a
+    vendég kapusa a szokásos szintje alatt (hideg), mindkét kispadnak."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (KF_MIN_PAR,
+                                                   keeper_form_sample,
+                                                   keeper_hot_hand_backtest,
+                                                   live_keeper_form_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    jo = {"1": [[10, 2, 5.0], [10, 2, 5.0]]}       # +0,3 / lövés mindkétszer
+    rossz = {"12": [[10, 8, 5.0], [10, 8, 5.0]]}   # −0,3 / lövés mindkétszer
+    p = keeper_hot_hand_backtest([jo, rossz] * KF_MIN_PAR)
+    assert p["itelet"] == "kitart" and p["kulonbseg_pp"] == 60.0
+    assert "érdemes kapust cserélni" in p["verdict"]
+    q = keeper_hot_hand_backtest(
+        [{"1": [[10, 2, 5.0], [10, 5, 5.0]]}, {"12": [[10, 8, 5.0],
+                                                     [10, 5, 5.0]]}]
+        * KF_MIN_PAR)
+    assert q["itelet"] == "visszaall" and "nem kell kapust cserélni" in \
+        q["verdict"]
+    assert keeper_hot_hand_backtest([jo, rossz]) is None
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    mi = keeper_form_sample(m, Team.AWAY)
+    assert mi and all(v[0][1] == v[0][0] and v[1][1] == v[1][0]
+                      for v in mi.values())      # minden lövés gól
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "LIVE_AJANLO_PERCEK", (2, 4))
+        ki = live_keeper_form_alerts(m, proba=q)["alerts"]
+    finally:
+        mp.undo()
+    sajat = [a for a in ki if a["nezopont"] == "sajat"]
+    ellen = [a for a in ki if a["nezopont"] == "ellenfel"]
+    assert sajat and all(a["team"] == "away" and a["irany"] == "hideg"
+                         for a in sajat)
+    assert [(a["mez"], a["perc"]) for a in ellen] == [
+        (a["mez"], a["perc"]) for a in sajat]
+    assert sajat[0]["text"].startswith(
+        f"Hideg kapus ({sajat[0]['perc']}. perc): {m.meta.away_team} — ")
+    assert sajat[0]["text"].endswith(
+        "egy gyenge szakasz miatt nem kell kapust cserélni")
+    assert ellen[0]["team"] == "home" and ellen[0]["text"].endswith(
+        "ne a kapusra építsetek")
+    # Kapusonként és irányonként egyszer.
+    assert len({(a["mez"], a["nezopont"]) for a in ki}) == len(ki)
+
+
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
     """defense_system_forecast: a korábbi meccsek védekező kockáinak
     eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);

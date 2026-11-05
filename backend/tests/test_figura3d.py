@@ -2243,6 +2243,57 @@ def test_az_ai_edzesterv_vegpont_a_valodi_lancon(tmp_path, monkeypatch):
                  params={"home": a, "away": "Nincs"}).status_code == 404
 
 
+def test_az_elo_kapus_forma_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-kapus-forma: a kapusok szokásos szintje a
+    csapat TÖBBI meccséből, a próba a többi meccs kapus-forma mintáiból —
+    a valódi láncon ugyanaz, mint a motor; a /library/player-model-check
+    "kapus_forma_proba" mezője; 404."""
+    import json
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (_kapus_szorzo,
+                                                   keeper_form_sample,
+                                                   keeper_hot_hand_backtest,
+                                                   live_keeper_form_alerts,
+                                                   player_model_sample,
+                                                   player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (2, 4))
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=300, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    tobbi = meccsek[:2]
+    szorzok = {}
+    for s_ in ("home", "away"):
+        mod = player_models_from_samples(
+            [json.loads(json.dumps(player_model_sample(m, Team(s_))))
+             for m in tobbi])
+        szorzok[s_] = {int(k): _kapus_szorzo(v)
+                       for k, v in (mod.get("kapusok") or {}).items()}
+    proba = keeper_hot_hand_backtest(
+        [json.loads(json.dumps(keeper_form_sample(m, Team(s_))))
+         for m in tobbi for s_ in ("home", "away")])
+    vart = live_keeper_form_alerts(meccsek[2], kapus_szorzok=szorzok,
+                                   proba=proba)["alerts"]
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-kapus-forma").json()
+    assert vart and [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert j["proba"] == proba
+    assert c.get("/matches/nincs/live-kapus-forma").status_code == 404
+    assert c.get("/library/player-model-check").json()[
+        "kapus_forma_proba"] == keeper_hot_hand_backtest(
+            [json.loads(json.dumps(keeper_form_sample(m, Team(s_))))
+             for m in meccsek for s_ in ("home", "away")])
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

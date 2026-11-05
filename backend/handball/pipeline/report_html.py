@@ -5305,6 +5305,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Napi forma:</b> "
                f"{escape(str(mp['forma_verdict']))}.</p>"
                if mp.get("forma_verdict") else "")
+            + (f"<p><b>Kapus napi formája:</b> "
+               f"{escape(str(mp['kapus_forma_verdict']))}.</p>"
+               if mp.get("kapus_forma_verdict") else "")
             + (f"<p><b>Figurák:</b> "
                f"{escape(str(mp['figura_verdict']))}.</p>"
                if mp.get("figura_verdict") else "")

@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # A kapusaik napi formájának próbája — hibatűrően.
+        try:
+            kf_ = _kapusforma_proba(csapat=team)
+            if kf_:
+                modell_proba = {**(modell_proba or {}), "kapus_forma": kf_,
+                                "kapus_forma_verdict": kf_["verdict"]}
+        except Exception:
+            pass
         # A figuráik próbája a csapat meccsein — hibatűrően.
         try:
             gp_ = _figura_proba(csapat=team)
@@ -8778,6 +8786,29 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _kapusforma_minta_of(m_, side: str) -> dict:
+        """EGY meccs kapus-forma mintája az adott oldalra (play_simulation.
+        keeper_form_sample) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import keeper_form_sample
+        return _cached_result(m_.meta.match_id, f"kapusforma-minta-v1-{side}",
+                              lambda: keeper_form_sample(m_, Team(side)))
+
+    def _kapusforma_proba(kiveve: str | None = None,
+                          csapat: str | None = None):
+        """A kapus napi formájának próbája a könyvtáron (play_simulation.
+        keeper_hot_hand_backtest — a `kiveve` meccs nélkül; a `csapat`
+        megadásával csak a csapat kapusai)."""
+        from ..pipeline.play_simulation import keeper_hot_hand_backtest
+        mintak = []
+        for m_ in _idorendben(_season_matches()):
+            if m_.meta.match_id == kiveve:
+                continue
+            for side, nev in (("home", m_.meta.home_team),
+                              ("away", m_.meta.away_team)):
+                if csapat is None or nev == csapat:
+                    mintak.append(_kapusforma_minta_of(m_, side))
+        return keeper_hot_hand_backtest(mintak)
+
     def _figura_proba(csapat: str | None = None, kiveve: str | None = None):
         """A figuráik próbája a könyvtár időrendjében (setplays.
         figure_recurrence_backtest — a meccsenkénti figura-alakok a
@@ -9087,6 +9118,7 @@ def create_app():
                 "elo_esely_proba": _elo_esely_proba(),
                 "vedekezes_proba": _vedekezes_proba(),
                 "forma_proba": _forma_proba(),
+                "kapus_forma_proba": _kapusforma_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -14695,6 +14727,31 @@ def create_app():
         {"eredmeny", "lovok", "vedekezes", "sorok", "korabbi_meccsek"}.
         404: nincs ilyen meccs."""
         return _varakozas_valosag(match_id)
+
+    @app.get("/matches/{match_id}/live-kapus-forma")
+    def get_live_keeper_form(match_id: str):
+        """ÉLŐ kapus-forma: a 15., 30. és 45. percben az a kapus, aki a
+        saját szokásos szintje (a csapat könyvtári TÖBBI meccséből
+        tanult kapusonkénti szorzó) felett vagy alatt véd — mindkét
+        kispadnak, a kapus napi formájának próbája szerinti tanáccsal
+        (play_simulation.live_keeper_form_alerts — csak az addigi
+        kockák). Válasz: {"alerts": [...], "proba"}. 404: nincs ilyen
+        meccs."""
+        from ..pipeline.play_simulation import (_kapus_szorzo,
+                                                live_keeper_form_alerts)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        szorzok = {}
+        for side, nev in (("home", match.meta.home_team),
+                          ("away", match.meta.away_team)):
+            sajat, n_s = _korabbi_modellek(match_id, nev)
+            if n_s:
+                szorzok[side] = {int(k): _kapus_szorzo(v)
+                                 for k, v in (sajat.get("kapusok") or {}).items()}
+        proba = _kapusforma_proba(match_id)
+        return {**live_keeper_form_alerts(match, kapus_szorzok=szorzok,
+                                          proba=proba), "proba": proba}
 
     @app.get("/matches/{match_id}/live-forma")
     def get_live_form(match_id: str):

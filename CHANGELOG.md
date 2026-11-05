@@ -3,6 +3,30 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.192 óta)
+
+- **A kapus napi formája** (motor + élő végpont + élő képernyő +
+  szezon-riport + szezon-képernyő): kitart-e egy jó vagy rossz félidő a
+  kapuban? A próba a könyvtár kapus × meccs párjain nézi meg (félidőnként
+  legalább 6 kaputra érkezett lövés): az első félidőben a vártnál
+  lövésenként legalább 12 százalékponttal jobban vagy rosszabbul védő
+  kapusok a második félidőben hogyan védtek — "az első félidőben jól
+  védő kapusok (8 pár) a második félidőben lövésenként +9
+  százalékponttal védtek a vártnál többet (a gyengén védők, 7 pár: −2) —
+  a kapus napi formája kitart: a rossz napon érdemes kapust cserélni".
+  Élőben a 15., 30. és 45. percben szól, ha a kapuban álló kapus másfél
+  góllal a SAJÁT szokásos szintje (a szezon kapus-szorzója) felett vagy
+  alatt véd ("Hideg kapus (30. perc): Vendég — a 12-es ma 3/11 védés (a
+  szokásos szintje szerint 5,2) — …"), mindkét kispadnak: a sajátnak
+  (maradjon / érdemes cserélni / egy gyenge szakasz miatt nem kell
+  cserélni) és az ellenfélnek (jobb helyzetekből / lőjetek bátran) —
+  a tanács a próba ítéletéből. Okszerű: csak az addigi kockák, a próba a
+  meccs nélkül. A /matches/{id}/live-kapus-forma, az élő képernyő
+  taktika-jelzése, a /library/player-model-check "kapus_forma_proba"
+  mezője, a szezon-képernyő és a szezon-riport "A kapus napi formája"
+  sora (play_simulation.keeper_form_sample, keeper_hot_hand_backtest,
+  live_keeper_form_alerts).
+
 ## v0.1.192 — kiadva (2026-11-05)
 
 > Kiadás-jegyzet: AZ AI A MECCS KÖRÜL — előtte, közben és utána. Előtte:

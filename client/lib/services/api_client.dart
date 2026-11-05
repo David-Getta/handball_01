@@ -1811,6 +1811,21 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő kapus-forma (GET /matches/{id}/live-kapus-forma): a saját
+  /// szokásos szintje felett / alatt védő kapus, mindkét kispadnak — a
+  /// kapus napi formájának próbája szerinti tanáccsal.
+  Future<List<Map<String, dynamic>>> fetchLiveKeeperForm(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-kapus-forma"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a kapus-forma", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő napi forma (GET /matches/{id}/live-forma): a 15., 30., 45.
   /// percben a modell várakozása felett / alatt járó lövő, a forró kéz
   /// próbája szerinti tanáccsal — [{t, t_s, perc, team, team_name, mez,

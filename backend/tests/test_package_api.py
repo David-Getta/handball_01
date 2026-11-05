@@ -367,6 +367,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
                 figm.append({**x, "alakok": json.loads(json.dumps(
                     setplay_shapes(mm)))})
         fp = figure_recurrence_backtest(figm, "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            keeper_form_sample, keeper_hot_hand_backtest)
+        kp = keeper_hot_hand_backtest([json.loads(json.dumps(
+            keeper_form_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team.HOME))) for x in lista])
         r = TestClient(create_app()).get("/season/report",
                                          params={"team": "Szimu Hazai"})
     finally:
@@ -398,6 +404,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert f"<p><b>Figurák:</b> {fp['verdict']}.</p>" in r.text
     else:
         assert "<b>Figurák:</b>" not in r.text
+    # A kapusaik napi formájának próbája (a motorral egyezik; a félperces
+    # meccseken kevés a lövés egy félidőre — a sor elmarad).
+    if kp:
+        assert f"<p><b>Kapus napi formája:</b> {kp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Kapus napi formája:</b>" not in r.text
 
 
 def test_season_report_leaders_section():
