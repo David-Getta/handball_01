@@ -5970,20 +5970,25 @@ def decision_review(nevek: dict, idokeres_minta: dict | None,
                     idokeres_proba: dict | None = None,
                     hetes_javaslat: dict | None = None,
                     kapus_javaslat: dict | None = None,
-                    kapusforma_proba: dict | None = None) -> dict:
+                    kapusforma_proba: dict | None = None,
+                    het_a_hat_mintak: dict | None = None,
+                    het_a_hat_proba: dict | None = None) -> dict:
     """A pad döntései a könyvtár tükrében: `idokeres_minta` a meccs
     run_timeout_sample-je, `hetes_mintak` és `kapusforma_mintak`
     oldalanként a seven_taker_sample / keeper_form_sample; `idokeres_proba`
     oldalanként (timeout_run_backtest, a csapat saját időkérései),
     `hetes_javaslat` oldalanként (seven_taker_choice a többi meccsből),
     `kapus_javaslat` oldalanként (keeper_choice_from a többi meccsből),
-    `kapusforma_proba` oldalanként (keeper_hot_hand_backtest). Mit jelent
+    `kapusforma_proba` oldalanként (keeper_hot_hand_backtest),
+    `het_a_hat_mintak` oldalanként (seven_six_sample) és
+    `het_a_hat_proba` oldalanként (seven_six_backtest). Mit jelent
     edzőileg: a meccs utáni értekezlet pad-oldali tényei — mi volt a
     döntés, és mit mond rá a klub könyvtára. Visszatérés oldalanként:
     {"sorok": [mondatok], "idokeres": {"sorozat", "kert", "tores_kert",
     "tores_nem"} vagy None, "hetes": {"dobok": [[mez, dobás, gól]],
     "konyvtar_dobo"} vagy None, "kapus": {"kezdo", "masodik", "hideg",
-    "csere"} vagy None}."""
+    "csere"} vagy None, "het_a_hat": {"ablak", "lott", "kapott"} vagy
+    None}."""
     ki: dict = {}
     helyzetek = _sorozat_helyzetek(idokeres_minta or {})
     for side in ("home", "away"):
@@ -6085,8 +6090,26 @@ def decision_review(nevek: dict, idokeres_minta: dict | None,
                         sor += (" — a próba szerint helyes: egy gyenge félidő "
                                 "miatt nem kell cserélni")
                 sorok.append(sor)
+        # 7 a 6: ha lehozták a kapust, mit hozott, és mit mond a mérleg.
+        hm7 = (het_a_hat_mintak or {}).get(side) or {}
+        het = None
+        if int(hm7.get("ablak", 0)) > 0:
+            het = {k: int(hm7.get(k, 0)) for k in ("ablak", "lott", "kapott")}
+            sor = (f"7 a 6: {het['ablak']} szakasz, {het['lott']} lőtt gól, "
+                   f"{het['kapott']} kapott üres kapura")
+            pr = (het_a_hat_proba or {}).get(side)
+            it = pr.get("itelet") if pr else None
+            if it == "megeri":
+                sor += " — a könyvtár szerint a 7 a 6 megéri: jó döntés"
+            elif it == "nem":
+                sor += (" — a könyvtár szerint a 7 a 6 többe kerül, mint "
+                        "amennyit hoz")
+            elif it == "egyenlo":
+                sor += (" — a könyvtár szerint annyit hoz, mint a 6 a 6: a "
+                        "figurán múlik")
+            sorok.append(sor)
         ki[side] = {"sorok": sorok, "idokeres": ido, "hetes": hetes,
-                    "kapus": kapus}
+                    "kapus": kapus, "het_a_hat": het}
     return ki
 
 # ---- Élő kapus-választás ----------------------------------------------------

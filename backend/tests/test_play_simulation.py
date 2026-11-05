@@ -2482,7 +2482,24 @@ def test_a_pad_dontesei_a_konyvtar_tukreben():
         "gyenge félidő miatt nem kell cserélni")
     ures = decision_review(nevek, None, None, None)
     assert ures["home"] == {"sorok": [], "idokeres": None, "hetes": None,
-                            "kapus": None}
+                            "kapus": None, "het_a_hat": None}
+    # 7 a 6: a szakaszok mérlege a könyvtár ítéletével; 7 a 6 nélkül
+    # nincs sor.
+    r3 = decision_review(
+        nevek, None, None, None,
+        het_a_hat_mintak={"home": {"ablak": 3, "lott": 2, "kapott": 1},
+                          "away": {"ablak": 0}},
+        het_a_hat_proba={"home": {"itelet": "nem"}})
+    assert r3["home"]["het_a_hat"] == {"ablak": 3, "lott": 2, "kapott": 1}
+    assert r3["home"]["sorok"] == [
+        "7 a 6: 3 szakasz, 2 lőtt gól, 1 kapott üres kapura — a könyvtár "
+        "szerint a 7 a 6 többe kerül, mint amennyit hoz"]
+    assert r3["away"]["sorok"] == [] and r3["away"]["het_a_hat"] is None
+    assert decision_review(nevek, None, None, None, het_a_hat_mintak={
+        "home": {"ablak": 1, "lott": 1, "kapott": 0}},
+        het_a_hat_proba={"home": {"itelet": "megeri"}})["home"]["sorok"] == [
+        "7 a 6: 1 szakasz, 1 lőtt gól, 0 kapott üres kapura — a könyvtár "
+        "szerint a 7 a 6 megéri: jó döntés"]
 
 
 def test_a_dontes_probak_egy_sorban():

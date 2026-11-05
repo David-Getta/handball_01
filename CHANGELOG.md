@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **A pad döntései: a 7 a 6 is** (motor + végpont + meccs-jelentés +
+  meccs-képernyő): a meccs utáni "pad döntései" értékelés a 7 a 6-ot is
+  nézi — "7 a 6: 3 szakasz, 2 lőtt gól, 1 kapott üres kapura — a könyvtár
+  szerint a 7 a 6 többe kerül, mint amennyit hoz" (a mérleg a meccs
+  nélkül, a csapat saját 7 a 6-ából; play_simulation.decision_review
+  "het_a_hat").
+
 - **Megéri-e a 7 a 6?** (motor + élő végpont + élő képernyő + szezon-riport
   + szezon-képernyő): a hátrányos hajrá klasszikus döntése, a klub
   könyvtárából — a 7 a 6 szakaszok nettó hozama (a lőtt gólok mínusz az

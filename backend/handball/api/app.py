@@ -15015,10 +15015,10 @@ def create_app():
 
     def _pad_dontesei(match_id: str) -> dict:
         """A pad döntései a könyvtár tükrében (play_simulation.
-        decision_review): a meccs időkérés-, hetes- és kapus-forma mintái
-        a könyvtár próbáihoz és javaslataihoz mérve — a próbák és a
+        decision_review): a meccs időkérés-, hetes-, kapus-forma és 7 a 6
+        mintái a könyvtár próbáihoz és javaslataihoz mérve — a próbák és a
         javaslatok a meccs NÉLKÜL. Válasz: {"home", "away" (sorok, idokeres,
-        hetes, kapus), "nevek"}. 404: nincs ilyen meccs."""
+        hetes, kapus, het_a_hat), "nevek"}. 404: nincs ilyen meccs."""
         from ..pipeline.play_simulation import decision_review
         match = _store.get(match_id)
         if match is None:
@@ -15044,7 +15044,11 @@ def create_app():
                 nevek[s_], nevek["away" if s_ == "home" else "home"], match_id))
                 for s_ in ("home", "away")},
             kapusforma_proba={s_: biztos(lambda s_=s_: _kapusforma_proba(
-                kiveve=match_id, csapat=nevek[s_])) for s_ in ("home", "away")})
+                kiveve=match_id, csapat=nevek[s_])) for s_ in ("home", "away")},
+            het_a_hat_mintak={s_: biztos(lambda s_=s_: _hetahat_minta_of(
+                match, s_)) for s_ in ("home", "away")},
+            het_a_hat_proba={s_: biztos(lambda s_=s_: _het_a_hat_proba(
+                nevek[s_], match_id)) for s_ in ("home", "away")})
         return {**r, "nevek": nevek}
 
     @app.get("/matches/{match_id}/decision-review")

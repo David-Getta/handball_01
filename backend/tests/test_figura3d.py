@@ -2526,8 +2526,9 @@ def test_a_pad_dontesei_vegpont(tmp_path, monkeypatch):
     from handball.pipeline.play_simulation import (
         _kapus_mintak_osszege, _lovo_mintak_osszege, decision_review,
         keeper_choice_from, keeper_form_sample, keeper_hot_hand_backtest,
-        player_model_sample, run_timeout_sample, seven_taker_choice,
-        seven_taker_sample, timeout_run_backtest)
+        player_model_sample, run_timeout_sample, seven_six_backtest,
+        seven_six_sample, seven_taker_choice, seven_taker_sample,
+        timeout_run_backtest)
     from handball.sim.match_simulator import simulate_ground_truth
 
     app = _app(tmp_path, monkeypatch)
@@ -2562,6 +2563,14 @@ def test_a_pad_dontesei_vegpont(tmp_path, monkeypatch):
             for s_, o_ in (("home", "away"), ("away", "home"))},
         kapusforma_proba={s_: keeper_hot_hand_backtest(
             [jj(keeper_form_sample(m, Team(s_))) for m in tobbi])
+            for s_ in ("home", "away")},
+        het_a_hat_mintak={s_: jj(seven_six_sample(m3, Team(s_)))
+                          for s_ in ("home", "away")},
+        het_a_hat_proba={s_: seven_six_backtest(
+            [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+              "away": m.meta.away_team,
+              "minta": {t_: jj(seven_six_sample(m, Team(t_)))
+                        for t_ in ("home", "away")}} for m in tobbi], nevek[s_])
             for s_ in ("home", "away")})
     assert vart["home"]["sorok"] or vart["away"]["sorok"]
     c = TestClient(app)
