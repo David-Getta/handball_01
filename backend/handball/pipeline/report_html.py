@@ -529,6 +529,7 @@ ELOREJELZES_CIMKEK = (
     ("kulcs_mi", "Kulcsemberünk — juttassátok lövéshez"),
     ("vedekezes", "Várható védekezésük"),
     ("vedekezes_mi", "A mi várható védekezésünk"),
+    ("kapus_mi", "Kapus ellenük"),
 )
 
 
@@ -5247,7 +5248,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     if mp.get("verdict") or mp.get("kapus_verdict") \
             or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict") \
             or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict") \
-            or mp.get("vedekezes_verdict") or mp.get("forma_verdict"):
+            or mp.get("vedekezes_verdict") or mp.get("forma_verdict") \
+            or mp.get("figura_verdict"):
         proba_html = (
             "<h2>A modellek próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
@@ -5276,6 +5278,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Napi forma:</b> "
                f"{escape(str(mp['forma_verdict']))}.</p>"
                if mp.get("forma_verdict") else "")
+            + (f"<p><b>Figurák:</b> "
+               f"{escape(str(mp['figura_verdict']))}.</p>"
+               if mp.get("figura_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "
@@ -5544,7 +5549,8 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
             ("mi", f"{team_a} várható gólszerzői"),
             ("kulcs_mi", f"{team_a} kulcsembere"),
             ("vedekezes", f"{team_b} várható védekezése"),
-            ("vedekezes_mi", f"{team_a} várható védekezése")))
+            ("vedekezes_mi", f"{team_a} várható védekezése"),
+            ("kapus_mi", f"{team_a} kapusa {team_b} ellen")))
     matchup_html = ""
     if matchup:
         items = "".join(f"<li>{escape(p_)}</li>" for p_ in matchup)

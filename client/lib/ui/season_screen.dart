@@ -180,10 +180,11 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final eloSzoveg = (_modelCheck["elo_esely_proba"] as Map?)?["verdict"];
     final vedSzoveg = (_modelCheck["vedekezes_proba"] as Map?)?["verdict"];
     final formaSzoveg = (_modelCheck["forma_proba"] as Map?)?["verdict"];
+    final figSzoveg = (_modelCheck["figura_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
         eloSzoveg is! String && vedSzoveg is! String &&
-        formaSzoveg is! String) {
+        formaSzoveg is! String && figSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -271,6 +272,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (formaSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Napi forma: $formaSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // A figuráik próbája: visszatérnek-e a felderítés figurái.
+      if (figSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Figurák: $figSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
     ];

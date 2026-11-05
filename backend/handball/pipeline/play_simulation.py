@@ -2964,13 +2964,15 @@ def forecast_trust_summary(elore: dict | None = None,
                            golszerzo: dict | None = None,
                            elo: dict | None = None,
                            vedekezes: dict | None = None,
-                           forma: dict | None = None) -> str | None:
+                           forma: dict | None = None,
+                           figura: dict | None = None) -> str | None:
     """Az előrejelző modellek próbái egy sorban — az élő képernyő meccs
     eleji második AI-sorához: az eredmény-előrejelzés és a gólszerzők a
     formához (forecast_rows_summary / scorer_forecast_backtest
     "javulas_pct"), az élő esély az álláshoz (in_play_backtest), a
     fal-becslés találata (defense_system_backtest), a napi forma
-    (hot_hand_backtest "itelet"). Az ítélet a PROBA_ITELET_PCT
+    (hot_hand_backtest "itelet"), a visszatérő figurák újra-jövése
+    (setplays.figure_recurrence_backtest). Az ítélet a PROBA_ITELET_PCT
     küszöbével. None, ha egyik próba sem ítélt."""
     def sz(x):
         return f"{x:+.0f}%"
@@ -3001,6 +3003,9 @@ def forecast_trust_summary(elore: dict | None = None,
     if forma:
         reszek.append("napi forma: kitart" if forma.get("itelet") == "kitart"
                       else "napi forma: nem tart ki (a modell a jobb tipp)")
+    if figura:
+        reszek.append(f"figurák: {figura['visszatero']} esetből "
+                      f"{figura['visszatero_jott']} jött újra")
     return "; ".join(reszek) if reszek else None
 
 

@@ -1034,6 +1034,73 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
     return out
 
 
+# A figuráik próbája: legalább ennyi előre jelzett visszatérő figura kell
+# az ítélethez; a visszatérő és az egyszeri figurák újra-jövési aránya
+# között legalább FIG_PROBA_PP százalékpont a "rá lehet készülni".
+FIG_PROBA_MIN = 5
+FIG_PROBA_PP = 20.0
+
+
+def figure_recurrence_backtest(meccsek: list,
+                               csapat: str | None = None) -> dict | None:
+    """A figuráik próbája: `meccsek` időrendben [{"match_id", "home",
+    "away", "alakok": {"home" / "away": setplay_shapes sorai}}]. Minden
+    meccsen és oldalon, ahol a csapatnak legalább két korábbi meccse
+    van, a korábbiakból a VISSZATÉRŐ figurák (setplay_library
+    "recurring": legalább SPL_MIN_MATCHES meccsen) és az EGYSZER látottak
+    — és hogy a meccsen újra eljátszották-e őket (egy alakja
+    SPL_MERGE_THRESHOLD-on belül). A `csapat` megadásával csak a csapat
+    meccsei. Mit jelent edzőileg: a felderítés figurái akkor érnek
+    valamit, ha a csapat meccsről meccsre tényleg hozza őket — és a
+    visszatérők többször jönnek, mint a véletlen egyszeriek.
+    Visszatérés: {"visszatero", "visszatero_jott", "egyszeri",
+    "egyszeri_jott", "kulonbseg_pp", "verdict"} — None, ha
+    FIG_PROBA_MIN-nél kevesebb visszatérő figura jósolható."""
+    tort: dict = {}
+    vn = vj = en = ej = 0
+    for m in meccsek:
+        alakok = m.get("alakok") or {}
+        for side in ("home", "away"):
+            nev = m.get(side)
+            sorok = [{**r, "match_id": mid}
+                     for mid, rs in tort.get(nev, []) for r in rs]
+            mostani = [list(r.get("shape") or [])
+                       for r in alakok.get(side) or [] if r.get("shape")]
+            if (len(tort.get(nev, [])) >= 2 and mostani
+                    and (csapat is None or nev == csapat)):
+                lib = setplay_library(sorok)
+
+                def jott(f):
+                    return any(_distance(f["shape"], a) <= SPL_MERGE_THRESHOLD
+                               for a in mostani)
+                for f in lib.get("figures") or []:
+                    if f["matches"] >= SPL_MIN_MATCHES:
+                        vn += 1
+                        vj += int(jott(f))
+                    else:
+                        en += 1
+                        ej += int(jott(f))
+        for side in ("home", "away"):
+            tort.setdefault(m.get(side), []).append(
+                (m.get("match_id"), alakok.get(side) or []))
+    if vn < FIG_PROBA_MIN:
+        return None
+    vp = 100.0 * vj / vn
+    ep = 100.0 * ej / en if en else None
+    k = round(vp - ep, 1) if ep is not None else None
+    itelet = ("a visszatérő figuráikra érdemes készülni"
+              if vp >= 50.0 and (k is None or k >= FIG_PROBA_PP) else
+              "a figuráik meccsről meccsre cserélődnek: a felderítés "
+              "figuráit óvatosan kell venni")
+    return {"visszatero": vn, "visszatero_jott": vj, "egyszeri": en,
+            "egyszeri_jott": ej, "kulonbseg_pp": k,
+            "verdict": (f"a korábbi meccseikből visszatérő figurák {vn} "
+                        f"esetből {vj} alkalommal jöttek újra a következő "
+                        f"meccsen" + (f" (az egyszer látottak {en} esetből "
+                                      f"{ej} alkalommal)" if en else "")
+                        + f" — {itelet}")}
+
+
 def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
                     min_matches: int = SPL_MIN_MATCHES) -> dict:
     """Figura-könyvtár: több meccs figura-alakjaiból a csapat VISSZATÉRŐ

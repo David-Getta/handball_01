@@ -354,6 +354,19 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         gp = scorer_forecast_backtest(jm, "Szimu Hazai")
         ip = in_play_backtest(lista, "Szimu Hazai")
         assert ip is not None
+        from handball.models.tracking import Match
+        from handball.pipeline.primitive_cache import primitive_cache
+        from handball.pipeline.setplays import (figure_recurrence_backtest,
+                                                setplay_shapes)
+        figm = []
+        for x in lista:
+            mm = Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8")))
+            with primitive_cache(mm):
+                figm.append({**x, "alakok": json.loads(json.dumps(
+                    setplay_shapes(mm)))})
+        fp = figure_recurrence_backtest(figm, "Szimu Hazai")
         r = TestClient(create_app()).get("/season/report",
                                          params={"team": "Szimu Hazai"})
     finally:
@@ -371,6 +384,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert "<b>Gólszerzők:</b>" not in r.text
     # Az élő esély próbája a csapat meccsein (in_play_backtest).
     assert f"<p><b>Élő esély:</b> {ip['verdict']}.</p>" in r.text
+    # A figuráik próbája a csapat meccsein (a motorral egyezik; kevés
+    # figuránál a sor elmarad).
+    if fp:
+        assert f"<p><b>Figurák:</b> {fp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Figurák:</b>" not in r.text
 
 
 def test_season_report_leaders_section():

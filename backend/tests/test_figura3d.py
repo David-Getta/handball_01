@@ -1794,6 +1794,16 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
                                                    shooter_form_sample)
     hat = [{"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
             "minta": jm[i]} for i in range(6)]
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.setplays import (figure_recurrence_backtest,
+                                            setplay_shapes)
+
+    def alak(m):
+        with primitive_cache(m):
+            return json.loads(json.dumps(setplay_shapes(m)))
+    fig = [{"match_id": m.meta.match_id, "home": h, "away": a,
+            "alakok": alak(m)} for m in meccsek]
+    assert mc["figura_proba"] == figure_recurrence_backtest(fig)
     # Hat rövid meccsen a fal-becslés próbája három jósolt meccstől ítél —
     # így a sor biztosan megszólal (a motor és a végpont ugyanazt látja).
     import handball.pipeline.play_simulation as ps_
@@ -1808,7 +1818,8 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
             forma=hot_hand_backtest(
                 [json.loads(json.dumps(shooter_form_sample(m, Team(s_))))
                  for m in meccsek[:6] for s_, n_ in (("home", h), ("away", a))
-                 if n_ == nev]))
+                 if n_ == nev]),
+            figura=figure_recurrence_backtest(fig[:6], nev))
         kap = [x for x in c.get("/matches/gt7/live-modell-proba").json()[
             "alerts"] if x["team"] == side and x["fajta"] == "elorejelzesek"]
         if sor2 is None:
@@ -2050,6 +2061,47 @@ def test_az_ai_dontes_edzes_a_konyvtari_edzesfokuszban(tmp_path, monkeypatch):
         if d:
             vart[nev] = d
     assert j["ai_dontes"] == vart
+
+
+def test_a_meccs_elotti_kapus_valasztas_a_konyvtarbol(tmp_path, monkeypatch):
+    """GET /library/forecast "kapus_javaslat": a csapat kapusai
+    (kapusonként, az összes könyvtári meccséből) a másik csapat tanult
+    lövői ellen — a valódi láncon ugyanaz, mint a keeper_choice_from a
+    mintákból; egyetlen kapusnál None."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (keeper_choice_from,
+                                                   player_model_sample,
+                                                   player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        if seed > 1:
+            # A vendég kapusa a 2. és a 3. meccsen más mezben: két kapus.
+            for f in m.frames:
+                for p in f.players:
+                    if p.team == Team.AWAY and p.role == "kapus":
+                        p.jersey_number = 12
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    jm = [{side: json.loads(json.dumps(player_model_sample(m, Team(side))))
+           for side in ("home", "away")} for m in meccsek]
+    vart = keeper_choice_from(
+        player_models_from_samples([x["home"] for x in jm])["lovo"],
+        player_models_from_samples([x["away"] for x in jm])["kapusok"])
+    assert vart is not None and {vart["kapus_mez"], vart["masik_mez"]} == {1, 12}
+    j = TestClient(app).get("/library/forecast",
+                            params={"home": h, "away": a}).json()
+    assert j["kapus_javaslat"]["away"] == vart
+    assert j["kapus_javaslat"]["home"] is None     # a hazainak egy kapusa van
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

@@ -5,6 +5,32 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **A figuráik próbája: visszatérnek-e** (motor + végpontok + meccsterv +
+  élő képernyő + szezon-riport + szezon-képernyő): a felderítés figurái
+  akkor érnek valamit, ha a csapat meccsről meccsre tényleg hozza őket. A
+  könyvtár időrendjében minden meccsen a csapat korábbi meccseiből
+  visszatérő figurái (legalább két meccsen) és az egyszer látottak —
+  jöttek-e újra: "a korábbi meccseikből visszatérő figurák 10 esetből 7
+  alkalommal jöttek újra a következő meccsen (az egyszer látottak 20
+  esetből 4 alkalommal) — a visszatérő figuráikra érdemes készülni"; ha
+  nem válnak el, "a figuráik meccsről meccsre cserélődnek". Legalább öt
+  jósolt visszatérő figura kell. A /library/player-model-check és a
+  /library/forecast "figura_proba" mezője (szezon-képernyő, meccsterv
+  kártya), a szezon-riport "Figurák" sora a csapat meccsein és az élő
+  AI-előrejelzések sora (setplays.figure_recurrence_backtest).
+
+- **Meccs előtti kapus-választás** (végpont + meccsterv + nyomtatható
+  meccsterv + egymás-elleni riport): melyik kapusunk álljon az ő lövőik
+  ellen — a kapusaink kapusonkénti sáv-mérlege és az ő tanult lövőik a
+  két csapat összes könyvtári meccséből: "Kapus ellenük: a 12-es álljon
+  a kapuban az ő lövőik ellen: 0,31 várható gól lövésenként (az 1-es:
+  0,36) — távolról 0,8× annyit kap, mint az átlag". Edzőileg: a
+  kapus-kérdés nem általában dől el, hanem az ellenfél lövői szerint —
+  eddig csak élőben szólt, most a meccs előtti estén is. Két tanult
+  kapus kell. A /library/forecast "kapus_javaslat" mezője, a meccsterv
+  ELŐREJELZÉS kártyája, a nyomtatható meccsterv és az egymás-elleni
+  riport sora (play_simulation.keeper_choice_from).
+
 - **AI-előrejelzések sora és az esély-zuhanás élőben** (motor + élő
   végpontok + élő képernyő): a meccs eleji AI-megbízhatóság mellé
   csapatonként egy második sor az előrejelző modellek próbáiról a csapat

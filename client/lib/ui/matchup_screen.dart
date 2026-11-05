@@ -288,6 +288,10 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final gProba = (_forecast?["golszerzo_proba"] as Map?)?["verdict"];
     final vedOk = ((_forecast?["vedekezes_text"] as Map?) ?? const {})["away"];
     final kulcs = (_forecast?["kulcsember_text"] as Map?) ?? const {};
+    // Melyik kapusunk álljon az ő lövőik ellen ("home" = MI).
+    final kapus = ((_forecast?["kapus_javaslat"] as Map?)?["home"]
+        as Map?)?["verdict"];
+    final figProba = (_forecast?["figura_proba"] as Map?)?["verdict"];
     final vedProba = (_forecast?["vedekezes_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
@@ -353,6 +357,18 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (vedProba is String) ...[
                   const SizedBox(height: 4),
                   Text("A védekezés-becslés próbája: $vedProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                if (kapus is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("Kapus ellenük: $kapus.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                // A figura-felderítés súlya: visszatérnek-e a figurák.
+                if (figProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A figura-felderítés próbája: $figProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
               ]),

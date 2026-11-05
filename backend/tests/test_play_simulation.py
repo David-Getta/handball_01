@@ -1362,6 +1362,9 @@ def test_az_elorejelzo_modellek_probai_egy_sorban():
     assert forecast_trust_summary(elo={"javulas_pct": 14.0},
                                   forma={"itelet": "kitart"}) == (
         "élő esély: pontosít az álláshoz (+14%); napi forma: kitart")
+    assert forecast_trust_summary(figura={"visszatero": 10,
+                                          "visszatero_jott": 7}) == (
+        "figurák: 10 esetből 7 jött újra")
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():

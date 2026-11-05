@@ -8089,6 +8089,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # A figuráik próbája a csapat meccsein — hibatűrően.
+        try:
+            gp_ = _figura_proba(csapat=team)
+            if gp_:
+                modell_proba = {**(modell_proba or {}), "figura": gp_,
+                                "figura_verdict": gp_["verdict"]}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8753,6 +8761,51 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _figura_proba(csapat: str | None = None, kiveve: str | None = None):
+        """A figuráik próbája a könyvtár időrendjében (setplays.
+        figure_recurrence_backtest — a meccsenkénti figura-alakok a
+        lemezes eredmény-tárból; a `kiveve` meccs nélkül, a `csapat`
+        megadásával csak a csapat meccsei)."""
+        from ..pipeline.setplays import figure_recurrence_backtest
+        meccsek = []
+        for m_ in _idorendben(_season_matches()):
+            if m_.meta.match_id == kiveve:
+                continue
+            try:
+                alakok = _cached_result(m_.meta.match_id, "setplay-shapes",
+                                        lambda m_=m_: _shapes_of(m_))
+            except Exception:
+                alakok = _shapes_of(m_)
+            meccsek.append({"match_id": m_.meta.match_id,
+                            "home": m_.meta.home_team,
+                            "away": m_.meta.away_team, "alakok": alakok})
+        return figure_recurrence_backtest(meccsek, csapat)
+
+    def _kapus_javaslat(nev: str, ellen: str):
+        """Meccs előtti kapus-választás: a `nev` csapat kapusai
+        (kapusonkénti sáv-minta) az `ellen` csapat tanult lövői ellen
+        (play_simulation.keeper_choice_from) — mindkettő a két csapat
+        ÖSSZES könyvtári meccséből, a lemezes mintatárból. None: nincs
+        két tanult kapus vagy tanult lövő."""
+        from ..pipeline.play_simulation import (_kapus_mintak_osszege,
+                                                _lovo_mintak_osszege,
+                                                keeper_choice_from)
+
+        def mintak(cs):
+            try:
+                return [_jatekos_minta_of(m_, t_.value)
+                        for m_, t_ in _csapat_meccsei(cs)]
+            except HTTPException:
+                return None
+        sajat, ok = mintak(nev), mintak(ellen)
+        if not sajat or not ok:
+            return None
+        # A két összeg közvetlenül (a player_models_from_samples is így
+        # adja a "lovo" és a "kapusok" mezőt).
+        return keeper_choice_from(
+            _lovo_mintak_osszege([m.get("lovo") or {} for m in ok]),
+            _kapus_mintak_osszege([m.get("kapusok") or {} for m in sajat]))
+
     def _golszerzo_proba(csapat: str | None = None, kiveve: str | None = None):
         """A várható gólszerzők próbája a könyvtár időrendjében
         (play_simulation.scorer_forecast_backtest — a `csapat`
@@ -8961,7 +9014,8 @@ def create_app():
         az élő esély próbája (in_play_backtest) vagy None,
         "vedekezes_proba": a várható védekezési rendszer próbája
         (defense_system_backtest) vagy None, "forma_proba": a forró kéz
-        próbája (hot_hand_backtest) vagy None}."""
+        próbája (hot_hand_backtest) vagy None, "figura_proba": a figuráik
+        próbája (setplays.figure_recurrence_backtest) vagy None}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -9008,7 +9062,8 @@ def create_app():
                 "golszerzo_proba": _golszerzo_proba(),
                 "elo_esely_proba": _elo_esely_proba(),
                 "vedekezes_proba": _vedekezes_proba(),
-                "forma_proba": _forma_proba()}
+                "forma_proba": _forma_proba(),
+                "figura_proba": _figura_proba()}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):
@@ -9023,7 +9078,9 @@ def create_app():
         {"home", "away"}, "golszerzo_proba", "vedekezes": {"home",
         "away"} (a várható védekezési rendszer, defense_system_forecast),
         "vedekezes_text", "vedekezes_proba", "kulcsember_text": {"home",
-        "away"} (a legnagyobb gól-értékű lövő, key_player_text)}. 400:
+        "away"} (a legnagyobb gól-értékű lövő, key_player_text),
+        "kapus_javaslat": {"home", "away"} (melyik kapusa álljon a másik
+        lövői ellen, keeper_choice_from — None: nincs két tanult kapus)}. 400:
         hiányzó csapatnév; 404: nincs ilyen csapat a könyvtárban."""
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 match_forecast,
@@ -9053,7 +9110,10 @@ def create_app():
                                    for k, v in ved.items()},
                 "vedekezes_proba": _vedekezes_proba(),
                 "kulcsember_text": {k: key_player_text(v)
-                                    for k, v in gsz.items()}}
+                                    for k, v in gsz.items()},
+                "kapus_javaslat": {"home": _kapus_javaslat(home, away),
+                                   "away": _kapus_javaslat(away, home)},
+                "figura_proba": _figura_proba()}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14306,6 +14366,7 @@ def create_app():
                 "kulcs_mi": key_player_text(g_mi),
                 "vedekezes": defense_system_text(_vedekezes_varhato(ok)),
                 "vedekezes_mi": defense_system_text(_vedekezes_varhato(mi)),
+                "kapus_mi": (_kapus_javaslat(mi, ok) or {}).get("verdict"),
                 "golszerzo_proba": (f"A gólszerző-becslés próbája: "
                                     f"{gp['verdict']}" if gp else None)}
 
@@ -14635,7 +14696,8 @@ def create_app():
                         "golszerzo": _golszerzo_proba(nev, match_id),
                         "elo": _elo_esely_proba(nev, match_id),
                         "vedekezes": _vedekezes_proba(nev, match_id),
-                        "forma": _forma_proba(kiveve=match_id, csapat=nev)}
+                        "forma": _forma_proba(kiveve=match_id, csapat=nev),
+                        "figura": _figura_proba(nev, match_id)}
                 sor2 = forecast_trust_summary(**prob)
             except Exception:
                 sor2 = None

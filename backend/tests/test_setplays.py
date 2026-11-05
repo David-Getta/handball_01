@@ -1964,3 +1964,39 @@ def test_a_dosszie_a_kliensen_es_a_jelentesben_is_ott_van():
     assert "bal oldal" in html and "Mikor:" in html and "Fal:" in html
     assert "Sorrend:" in html
     assert _figure_dossier_rows({}).startswith('<p class="empty"')
+
+
+
+def test_a_figuraik_probaja_visszaternek_e():
+    """figure_recurrence_backtest: a korábbi meccsekből visszatérő
+    figurák (legalább két meccsen) és az egyszer látottak a következő
+    meccsen újra jönnek-e (egy alak az összevonási távolságon belül);
+    csak a két korábbi meccses csapat-meccsek; a csapat-szűrő; kevés
+    jósolt figuránál None."""
+    from handball.pipeline.setplays import (FIG_PROBA_MIN,
+                                            figure_recurrence_backtest)
+
+    alap = [0.0] * 8
+
+    def alak(i, eltol=0.0):
+        a = list(alap)
+        a[i] = 1.0 + eltol
+        return {"shape": a, "attacks": 4, "shots": 2, "goals": 1}
+
+    meccsek = []
+    for k in range(8):
+        # A: a 0. figura mindig, mellette meccsenként egy egyszeri.
+        meccsek.append({"match_id": f"m{k}", "home": "A", "away": "B",
+                        "alakok": {"home": [alak(0), alak(1 + k % 7, 5.0 * k)],
+                                   "away": []}})
+    p = figure_recurrence_backtest(meccsek)
+    # A 3. meccstől (két korábbi) a 0. figura visszatérő, és mindig jön.
+    assert p["visszatero"] == 6 and p["visszatero_jott"] == 6
+    assert p["egyszeri"] > 0 and p["egyszeri_jott"] == 0
+    assert p["kulonbseg_pp"] == 100.0
+    assert p["verdict"].startswith(
+        "a korábbi meccseikből visszatérő figurák 6 esetből 6 alkalommal "
+        "jöttek újra a következő meccsen")
+    assert p["verdict"].endswith("a visszatérő figuráikra érdemes készülni")
+    assert figure_recurrence_backtest(meccsek, "B") is None
+    assert figure_recurrence_backtest(meccsek[:FIG_PROBA_MIN]) is None
