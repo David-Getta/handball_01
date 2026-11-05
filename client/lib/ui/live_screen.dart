@@ -214,6 +214,24 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "ai", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Időkérés a sorozat ellen: a 3-0-s sorozat pillanatában — a tanács
+    // az időkérés könyvtári próbájától függ (megtöri-e a sorozatot).
+    try {
+      for (final a in await _api.fetchLiveTimeoutAdvice(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "momentum", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Időkérés-jegyzet: a felismert időkérések kezdetén az utolsó 5 perc
+    // állása, a kérő elleni sorozat a próbával, a várakozás eddig.
+    try {
+      for (final j in await _api.fetchLiveTimeoutBriefs(matchId)) {
+        out.add(_FeedEntry(
+            (j["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "ai", "${j["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Kapus-forma: a saját szokásos szintje felett / alatt védő kapus — a
     // tanács a kapus napi formájának próbájától függ.
     try {
@@ -609,6 +627,39 @@ class _LiveScreenState extends State<LiveScreen> {
     return out;
   }
 
+  /// Időkérés-jegyzet az aktuális percre (a pad kér időt): a backend
+  /// jegyzete a folyam elejére; hibánál egy rövid jelzés.
+  Future<void> _timeoutBriefNow(Match match, String kero) async {
+    final id = _selectedId;
+    if (id == null || match.frames.isEmpty) return;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final perc = (match.frames[_frameIndex].t - match.frames.first.t) /
+        fps /
+        60.0;
+    List<Map<String, dynamic>> jegyzetek;
+    try {
+      jegyzetek = await _api.fetchLiveTimeoutBriefs(id, perc: perc, kero: kero);
+    } catch (_) {
+      jegyzetek = const [];
+    }
+    if (!mounted) return;
+    setState(() {
+      if (jegyzetek.isEmpty) {
+        _feed.insert(
+            0,
+            _FeedEntry(_frameIndex,
+                const Suggestion(3, "ai", "Időkérés-jegyzet: még nincs adat")));
+      }
+      for (final j in jegyzetek) {
+        _feed.insert(0,
+            _FeedEntry(_frameIndex, Suggestion(5, "ai", "${j["text"] ?? ""}")));
+      }
+      while (_feed.length > _feedMax) {
+        _feed.removeLast();
+      }
+    });
+  }
+
   void _togglePlay() {
     final match = _match;
     if (match == null || match.frames.isEmpty) return;
@@ -822,6 +873,25 @@ class _LiveScreenState extends State<LiveScreen> {
             onChanged: (v) => setState(() => _frameIndex = v.round()),
           ),
         ),
+        // Időkérés-jegyzet MOST: a pad kér időt — a kérő csapat
+        // választásával a jegyzet az aktuális percre a folyam elejére.
+        if (_selectedId != null)
+          PopupMenuButton<String>(
+            tooltip: "Időkérés-jegyzet most",
+            color: AppColors.surface,
+            onSelected: (kero) => _timeoutBriefNow(match, kero),
+            itemBuilder: (_) => [
+              for (final side in const ["home", "away"])
+                PopupMenuItem(
+                  value: side,
+                  child: Text(
+                      "${side == "home" ? match.meta.homeTeam : match.meta.awayTeam} kér időt",
+                      style: AppText.value),
+                ),
+            ],
+            icon: const Icon(Icons.pan_tool, color: AppColors.textSecondary,
+                size: 20),
+          ),
         // Lejátszási sebesség (0,5–4×) — mint a meccs-elemzőben.
         PopupMenuButton<double>(
           tooltip: "Sebesség",

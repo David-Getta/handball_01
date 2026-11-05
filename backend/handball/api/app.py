@@ -8110,6 +8110,14 @@ def create_app():
                                 "kapus_forma_verdict": kf_["verdict"]}
         except Exception:
             pass
+        # Az időkéréseik próbája a sorozat ellen — hibatűrően.
+        try:
+            ip_ = _idokeres_proba(csapat=team)
+            if ip_:
+                modell_proba = {**(modell_proba or {}), "idokeres": ip_,
+                                "idokeres_verdict": ip_["verdict"]}
+        except Exception:
+            pass
         # A figuráik próbája a csapat meccsein — hibatűrően.
         try:
             gp_ = _figura_proba(csapat=team)
@@ -8809,6 +8817,25 @@ def create_app():
                     mintak.append(_kapusforma_minta_of(m_, side))
         return keeper_hot_hand_backtest(mintak)
 
+    def _idokeres_minta_of(m_) -> dict:
+        """EGY meccs időkérés-mintája (play_simulation.run_timeout_sample:
+        a gólok és az időkérések időrendben) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import run_timeout_sample
+        return _cached_result(m_.meta.match_id, "idokeres-minta-v1",
+                              lambda: run_timeout_sample(m_))
+
+    def _idokeres_proba(kiveve: str | None = None,
+                        csapat: str | None = None):
+        """Az időkérés próbája a sorozat ellen a könyvtáron
+        (play_simulation.timeout_run_backtest — a `kiveve` meccs nélkül; a
+        `csapat` megadásával csak a csapat sorozat-kapó helyzetei)."""
+        from ..pipeline.play_simulation import timeout_run_backtest
+        return timeout_run_backtest(
+            [{"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+              "away": m_.meta.away_team, "minta": _idokeres_minta_of(m_)}
+             for m_ in _idorendben(_season_matches())
+             if m_.meta.match_id != kiveve], csapat)
+
     def _figura_proba(csapat: str | None = None, kiveve: str | None = None):
         """A figuráik próbája a könyvtár időrendjében (setplays.
         figure_recurrence_backtest — a meccsenkénti figura-alakok a
@@ -9062,7 +9089,10 @@ def create_app():
         az élő esély próbája (in_play_backtest) vagy None,
         "vedekezes_proba": a várható védekezési rendszer próbája
         (defense_system_backtest) vagy None, "forma_proba": a forró kéz
-        próbája (hot_hand_backtest) vagy None, "figura_proba": a figuráik
+        próbája (hot_hand_backtest) vagy None, "kapus_forma_proba": a
+        kapus napi formájának próbája (keeper_hot_hand_backtest) vagy
+        None, "idokeres_proba": az időkérés próbája a sorozat ellen
+        (timeout_run_backtest) vagy None, "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
@@ -9119,6 +9149,7 @@ def create_app():
                 "vedekezes_proba": _vedekezes_proba(),
                 "forma_proba": _forma_proba(),
                 "kapus_forma_proba": _kapusforma_proba(),
+                "idokeres_proba": _idokeres_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -14691,6 +14722,56 @@ def create_app():
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
 
+    def _elo_varakozas(match):
+        """A meccs előtti várakozás élőben: a két csapat könyvtári TÖBBI
+        meccséből az eredmény-előrejelzés, a várható gólszerzők és a
+        várható fal — (nevek, f, gólszerzők, védekezés); a félidei
+        összevetés és az időkérés-jegyzet közös bemenete."""
+        from ..pipeline.play_simulation import match_forecast
+        mid = match.meta.match_id
+        h, a = match.meta.home_team, match.meta.away_team
+        f = match_forecast(_elorejelzes_tortenet(h, mid),
+                           _elorejelzes_tortenet(a, mid))
+        gsz = {"home": _golszerzok(h, a, mid), "away": _golszerzok(a, h, mid)}
+        ved = {"home": _vedekezes_varhato(h, mid),
+               "away": _vedekezes_varhato(a, mid)}
+        return {"home": h, "away": a}, f, gsz, ved
+
+    @app.get("/matches/{match_id}/live-idokeres-jegyzet")
+    def get_live_timeout_brief(match_id: str, perc: float | None = None,
+                               kero: str | None = None):
+        """ÉLŐ időkérés-jegyzet: a felismert időkérések kezdetén — vagy a
+        `perc` kérésre (a pad "most kérünk időt" pillanata; `kero`: "home"
+        / "away") — elöl az utolsó 5 perc állása, ha sorozat fut a kérő
+        ellen, az időkérés könyvtári próbája, aztán a meccs előtti
+        várakozás (a két csapat TÖBBI meccséből) az addig látottakhoz
+        mérve (play_simulation.live_timeout_briefs / timeout_brief — csak
+        az addigi kockák). Válasz: {"jegyzetek": [{"t", "t_s", "perc",
+        "ora", "kero", "sorok", "text"}]} — `perc` kérésre egy elem, vagy
+        üres, ha a meccs még nem ért idáig. 404: nincs ilyen meccs; 422:
+        rossz `kero` vagy negatív `perc`."""
+        from ..pipeline.play_simulation import (live_timeout_briefs,
+                                                timeout_brief,
+                                                timeout_brief_text)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        if kero is not None and kero not in ("home", "away"):
+            raise HTTPException(status_code=422,
+                                detail="kero: 'home' vagy 'away'")
+        if perc is not None and perc < 0:
+            raise HTTPException(status_code=422, detail="perc >= 0")
+        nevek, f, gsz, ved = _elo_varakozas(match)
+        proba = _idokeres_proba(match_id)
+        if perc is None:
+            return live_timeout_briefs(match, nevek, f, golszerzok=gsz,
+                                       vedekezes=ved, idokeres_proba=proba)
+        b = timeout_brief(match, perc, nevek, f, golszerzok=gsz,
+                          vedekezes=ved, kero=kero, idokeres_proba=proba)
+        if not b["sorok"]:
+            return {"jegyzetek": []}
+        return {"jegyzetek": [{**b, "text": timeout_brief_text(b, nevek)}]}
+
     @app.get("/matches/{match_id}/live-felido")
     def get_live_halftime_review(match_id: str):
         """ÉLŐ félidei várakozás és valóság: a félidőben (FELIDO_PERC) a
@@ -14700,19 +14781,12 @@ def create_app():
         addigi kockák). Válasz: {"alerts": [{"t", "t_s", "perc", "sorok",
         "text"}]} — üres, ha nincs várakozás vagy a meccs még nem ért a
         félidőig. 404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import halftime_review, match_forecast
+        from ..pipeline.play_simulation import halftime_review
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        h, a = match.meta.home_team, match.meta.away_team
-        f = match_forecast(_elorejelzes_tortenet(h, match_id),
-                           _elorejelzes_tortenet(a, match_id))
-        gsz = {"home": _golszerzok(h, a, match_id),
-               "away": _golszerzok(a, h, match_id)}
-        ved = {"home": _vedekezes_varhato(h, match_id),
-               "away": _vedekezes_varhato(a, match_id)}
-        r = halftime_review(match, {"home": h, "away": a}, f,
-                            golszerzok=gsz, vedekezes=ved)
+        nevek, f, gsz, ved = _elo_varakozas(match)
+        r = halftime_review(match, nevek, f, golszerzok=gsz, vedekezes=ved)
         if not r["sorok"] or r["t"] is None:
             return {"alerts": []}
         return {"alerts": [{"t": r["t"], "t_s": r["t_s"], "perc": r["perc"],
@@ -14752,6 +14826,21 @@ def create_app():
         proba = _kapusforma_proba(match_id)
         return {**live_keeper_form_alerts(match, kapus_szorzok=szorzok,
                                           proba=proba), "proba": proba}
+
+    @app.get("/matches/{match_id}/live-idokeres")
+    def get_live_timeout(match_id: str):
+        """ÉLŐ időkérés-tanács a sorozat ellen: amikor egy csapat 3
+        válasz nélküli gólhoz ér, mindkét kispadnak — a sorozatot kapónak
+        (kérjetek időt / váltással együtt kérjétek) és a sorozatot
+        futónak — az időkérés könyvtári próbája szerint (play_simulation.
+        live_timeout_alerts; a próba ennek a meccsnek a kihagyásával).
+        Válasz: {"alerts": [...], "proba"}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import live_timeout_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        proba = _idokeres_proba(match_id)
+        return {**live_timeout_alerts(match, proba=proba), "proba": proba}
 
     @app.get("/matches/{match_id}/live-forma")
     def get_live_form(match_id: str):

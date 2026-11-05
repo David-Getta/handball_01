@@ -1826,6 +1826,42 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő időkérés-tanács (GET /matches/{id}/live-idokeres): a 3-0-s
+  /// sorozat pillanatában mindkét kispadnak — a sorozatot kapónak
+  /// (kérjetek időt / váltással együtt kérjétek) és a sorozatot futónak —
+  /// az időkérés könyvtári próbája szerint.
+  Future<List<Map<String, dynamic>>> fetchLiveTimeoutAdvice(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-idokeres"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az időkérés-tanács", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Élő időkérés-jegyzet (GET /matches/{id}/live-idokeres-jegyzet): a
+  /// felismert időkérések kezdetén — vagy a [perc] kérésre (a pad "most
+  /// kérünk időt" pillanata, [kero]: "home" / "away") — az utolsó 5 perc
+  /// állása, a kérő elleni sorozat a próbával, a várakozás eddig.
+  Future<List<Map<String, dynamic>>> fetchLiveTimeoutBriefs(String matchId,
+      {double? perc, String? kero}) async {
+    final q = <String, String>{};
+    if (perc != null) q["perc"] = perc.toStringAsFixed(2);
+    if (kero != null) q["kero"] = kero;
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-idokeres-jegyzet")
+            .replace(queryParameters: q.isEmpty ? null : q))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az időkérés-jegyzet", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["jegyzetek"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő napi forma (GET /matches/{id}/live-forma): a 15., 30., 45.
   /// percben a modell várakozása felett / alatt járó lövő, a forró kéz
   /// próbája szerinti tanáccsal — [{t, t_s, perc, team, team_name, mez,

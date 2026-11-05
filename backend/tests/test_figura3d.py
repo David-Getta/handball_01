@@ -2189,6 +2189,72 @@ def test_az_elo_felidei_varakozas_vegpont(tmp_path, monkeypatch):
     assert TestClient(app).get("/matches/nincs/live-felido").status_code == 404
 
 
+def test_az_elo_idokeres_jegyzet_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-idokeres-jegyzet: a `perc` kérésre a
+    várakozás a két csapat TÖBBI meccséből, az időkérés próbája a többi
+    meccs mintáiból — a valódi láncon ugyanaz, mint a motor; kérés
+    nélkül a felismert időkérések (a szimulált meccsen nincs); 422, 404."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (defense_system_forecast,
+                                                   live_timeout_briefs,
+                                                   match_forecast,
+                                                   match_forecast_sample,
+                                                   player_model_sample,
+                                                   run_timeout_sample,
+                                                   scorer_forecast,
+                                                   timeout_brief,
+                                                   timeout_brief_text,
+                                                   timeout_run_backtest)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=180, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    nevek = {"home": h, "away": a}
+    tobbi = meccsek[:2]
+    fm = [json.loads(json.dumps(match_forecast_sample(m))) for m in tobbi]
+    jm = [{s_: json.loads(json.dumps(player_model_sample(m, Team(s_))))
+           for s_ in ("home", "away")} for m in tobbi]
+    f = match_forecast([(x["home"], x["away"]) for x in fm],
+                       [(x["away"], x["home"]) for x in fm])
+    gsz = {s_: scorer_forecast([x[s_]["lovo"] for x in jm],
+                               [x[o_]["kapus"] for x in jm])
+           for s_, o_ in (("home", "away"), ("away", "home"))}
+    ved = {s_: defense_system_forecast([x[s_]["formak"] for x in jm])
+           for s_ in ("home", "away")}
+    proba = timeout_run_backtest(
+        [{"home": m.meta.home_team, "away": m.meta.away_team,
+          "minta": json.loads(json.dumps(run_timeout_sample(m)))}
+         for m in tobbi])
+    vart = timeout_brief(meccsek[2], 1.5, nevek, f, golszerzok=gsz,
+                         vedekezes=ved, kero="away", idokeres_proba=proba)
+    assert len(vart["sorok"]) >= 3
+    c = TestClient(app)
+    [j] = c.get("/matches/gt3/live-idokeres-jegyzet",
+                params={"perc": 1.5, "kero": "away"}).json()["jegyzetek"]
+    assert j["sorok"] == vart["sorok"] and j["t"] == vart["t"]
+    assert j["text"] == timeout_brief_text(vart, nevek)
+    assert c.get("/matches/gt3/live-idokeres-jegyzet").json() == \
+        live_timeout_briefs(meccsek[2], nevek, f, golszerzok=gsz,
+                            vedekezes=ved, idokeres_proba=proba)
+    assert c.get("/matches/gt3/live-idokeres-jegyzet",
+                 params={"perc": 99}).json() == {"jegyzetek": []}
+    assert c.get("/matches/gt3/live-idokeres-jegyzet",
+                 params={"kero": "x"}).status_code == 422
+    assert c.get("/matches/gt3/live-idokeres-jegyzet",
+                 params={"perc": -1}).status_code == 422
+    assert c.get("/matches/nincs/live-idokeres-jegyzet").status_code == 404
+
+
 def test_az_ai_edzesterv_vegpont_a_valodi_lancon(tmp_path, monkeypatch):
     """GET /library/next-match-plan: a mi csapatunk (itt a vendég, két
     kapussal) az ellenfél ellen — a valódi láncon a tételek a motor
@@ -2292,6 +2358,44 @@ def test_az_elo_kapus_forma_vegpont(tmp_path, monkeypatch):
         "kapus_forma_proba"] == keeper_hot_hand_backtest(
             [json.loads(json.dumps(keeper_form_sample(m, Team(s_))))
              for m in meccsek for s_ in ("home", "away")])
+
+
+def test_az_elo_idokeres_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-idokeres: a próba a TÖBBI meccs időkérés-
+    mintáiból — a valódi láncon ugyanaz, mint a motor; a /library/
+    player-model-check "idokeres_proba" mezője a könyvtár mintáiból; 404."""
+    import json
+
+    from handball.pipeline.play_simulation import (live_timeout_alerts,
+                                                   run_timeout_sample,
+                                                   timeout_run_backtest)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=300, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": json.loads(json.dumps(run_timeout_sample(m)))}
+                for m in ms]
+
+    proba = timeout_run_backtest(lista(meccsek[:2]))
+    vart = live_timeout_alerts(meccsek[2], proba=proba)["alerts"]
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-idokeres").json()
+    assert vart and [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert j["proba"] == proba
+    assert c.get("/matches/nincs/live-idokeres").status_code == 404
+    assert c.get("/library/player-model-check").json()[
+        "idokeres_proba"] == timeout_run_backtest(lista(meccsek))
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

@@ -3954,33 +3954,31 @@ def forecast_review(nevek: dict, f: dict | None, golok: dict,
 FELIDO_PERC = 30
 
 
-def halftime_review(match: Match, nevek: dict, f: dict | None,
-                    golszerzok: dict | None = None,
-                    vedekezes: dict | None = None,
-                    config: TacticsConfig | None = None) -> dict:
-    """Várakozás és valóság a FÉLIDŐBEN: a meccs előtti várakozás (`f`,
-    `golszerzok`, `vedekezes` — a korábbi meccsekből) a FELIDO_PERC-ig
-    látott valósághoz mérve (CSAK az addigi kockák — okszerű): az
-    eredmény és a lövők várakozása a perc-arányos részre (fele), a fal a
-    félidő fő rendszere (forecast_review). Mit jelent edzőileg: a
-    félidei beszéd tényei — ki jár a várt felett / alatt, más fallal
-    jöttek-e. Visszatérés: {"t", "t_s", "perc", "sorok", …a
-    forecast_review mezői} — üres "sorok", ha a meccs még nem ért el a
-    félidőig."""
+def _review_until(match: Match, perc: float, nevek: dict, f: dict | None,
+                  golszerzok: dict | None = None,
+                  vedekezes: dict | None = None,
+                  config: TacticsConfig | None = None) -> dict:
+    """Várakozás és valóság a `perc`. percig (CSAK az addigi kockák —
+    okszerű): a meccs előtti várakozás (`f`, `golszerzok`, `vedekezes` —
+    a korábbi meccsekből) az eredményre és a lövőkre a perc-arányos
+    részre (perc / ELO_MECCS_PERC), a fal az addigi fő rendszer
+    (forecast_review). A félidei összevetés és az időkérés-jegyzet közös
+    magja. Visszatérés: {"t", "t_s", "perc", "sorok", …a forecast_review
+    mezői} — üres "sorok" és None "t", ha a meccs még nem ért el idáig."""
     from .event_detection import EventType, detect_shots
     config = config or TacticsConfig()
-    ures = {"t": None, "t_s": None, "perc": FELIDO_PERC, "eredmeny": None,
+    ures = {"t": None, "t_s": None, "perc": perc, "eredmeny": None,
             "lovok": [], "vedekezes": [], "sorok": []}
     if not match.frames:
         return ures
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
     t0 = match.frames[0].t
-    hatar = t0 + int(round(FELIDO_PERC * 60 * fps))
+    hatar = t0 + int(round(perc * 60 * fps))
     eddig = [fr for fr in match.frames if fr.t <= hatar]
     if len(eddig) < 2 or eddig[-1].t < hatar - fps:
         return ures
     resz = Match(meta=match.meta, frames=eddig)
-    arany = FELIDO_PERC / ELO_MECCS_PERC
+    arany = perc / ELO_MECCS_PERC
     golok = {"home": 0, "away": 0}
     for e in detect_shots(resz, config):
         if e.type == EventType.GOAL and e.team.value in golok:
@@ -3996,14 +3994,131 @@ def halftime_review(match: Match, nevek: dict, f: dict | None,
                         lovo_valodi={k: v["lovo"] for k, v in minta.items()},
                         vedekezes=vedekezes,
                         formak_valodi={k: v["formak"] for k, v in minta.items()})
+    return {**r, "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc}
+
+
+def halftime_review(match: Match, nevek: dict, f: dict | None,
+                    golszerzok: dict | None = None,
+                    vedekezes: dict | None = None,
+                    config: TacticsConfig | None = None) -> dict:
+    """Várakozás és valóság a FÉLIDŐBEN: a meccs előtti várakozás (`f`,
+    `golszerzok`, `vedekezes` — a korábbi meccsekből) a FELIDO_PERC-ig
+    látott valósághoz mérve (_review_until — CSAK az addigi kockák): az
+    eredmény és a lövők várakozása a perc-arányos részre (fele), a fal a
+    félidő fő rendszere. Mit jelent edzőileg: a félidei beszéd tényei —
+    ki jár a várt felett / alatt, más fallal jöttek-e. Visszatérés: {"t",
+    "t_s", "perc", "sorok", …a forecast_review mezői} — üres "sorok", ha a
+    meccs még nem ért el a félidőig."""
+    r = _review_until(match, FELIDO_PERC, nevek, f, golszerzok=golszerzok,
+                      vedekezes=vedekezes, config=config)
     # A mondatok a félidőre szólnak (a forecast_review a meccs végére).
     sorok = [x.replace("Várakozás: ", "Félidei várakozás: ", 1)
               .replace(" — lett: ", " — a félidőben: ", 1)
               .replace("A meccs nagyjából a várakozás szerint alakult",
                        "Az első félidő nagyjából a várakozás szerint alakult")
              for x in r["sorok"]]
-    return {**r, "sorok": sorok, "t": hatar, "t_s": round(hatar / fps, 1),
-            "perc": FELIDO_PERC}
+    return {**r, "sorok": sorok}
+
+
+# ---- Időkérés-jegyzet ------------------------------------------------------
+# Az időkérés egy perce a padon: a jegyzet elöl az utolsó IDO_JEGYZET_S
+# másodperc állása, ha sorozat fut a kérő ellen, az időkérés próbájának
+# ítélete, aztán a meccs előtti várakozás (a korábbi meccsekből) az
+# időkérésig látott valósághoz mérve, a perc-arányos részre (mint a
+# félidei összevetés).
+IDO_JEGYZET_S = 300.0
+
+
+def timeout_brief(match: Match, perc: float, nevek: dict, f: dict | None,
+                  golszerzok: dict | None = None,
+                  vedekezes: dict | None = None, kero: str | None = None,
+                  idokeres_proba: dict | None = None,
+                  config: TacticsConfig | None = None) -> dict:
+    """Időkérés-jegyzet a `perc`. percben (CSAK az addigi kockák —
+    okszerű): elöl az utolsó IDO_JEGYZET_S másodperc állása; ha a `kero`
+    ("home" / "away", a kérő oldal) ellen legalább IDO_SOROZAT gólos
+    sorozat fut, a sorozat és az időkérés próbájának ítélete
+    (`idokeres_proba`, timeout_run_backtest); aztán a várakozás és
+    valóság eddig (_review_until — a mondatok "eddig"-re fordítva). Mit
+    jelent edzőileg: az időkérés egy percében a padnak a tények — mi
+    történt az utolsó percekben, ki jár a várt felett, más fallal
+    jöttek-e. Visszatérés: {"t", "t_s", "perc", "ora" ("pp:mm"), "kero",
+    "sorok", …a forecast_review mezői} — üres "sorok", ha a meccs még nem
+    ért el idáig."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    r = _review_until(match, perc, nevek, f, golszerzok=golszerzok,
+                      vedekezes=vedekezes, config=config)
+    mp = int(round(perc * 60))
+    ki = {**r, "ora": f"{mp // 60:02d}:{mp % 60:02d}", "kero": kero}
+    if r["t"] is None:
+        return ki
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    hatar = r["t"]
+    tol = hatar - IDO_JEGYZET_S * fps
+    utolso = {"home": 0, "away": 0}
+    cur, hossz = None, 0
+    for e in sorted(detect_shots(match, config), key=lambda e: e.t):
+        if e.type != EventType.GOAL or e.team.value not in utolso \
+                or e.t > hatar:
+            continue
+        if e.t > tol:
+            utolso[e.team.value] += 1
+        if e.team.value == cur:
+            hossz += 1
+        else:
+            cur, hossz = e.team.value, 1
+    elol = [f"Az utolsó {IDO_JEGYZET_S / 60:.0f} percben: {nevek['home']} "
+            f"{utolso['home']}–{utolso['away']} {nevek['away']}"]
+    if kero in ("home", "away") and cur not in (None, kero) \
+            and hossz >= IDO_SOROZAT:
+        sor = f"{nevek[cur]} {hossz}-0-s sorozatban van"
+        if idokeres_proba and idokeres_proba.get("verdict"):
+            sor += f" — {idokeres_proba['verdict']}"
+        elol.append(sor)
+    sorok = [x.replace("Várakozás: ", "Várakozás eddig: ", 1)
+              .replace(" — lett: ", " — eddig: ", 1)
+              .replace("A meccs nagyjából a várakozás szerint alakult",
+                       "A meccs eddig nagyjából a várakozás szerint alakult")
+             for x in r["sorok"]]
+    return {**ki, "sorok": elol + sorok}
+
+
+def live_timeout_briefs(match: Match, nevek: dict, f: dict | None,
+                        golszerzok: dict | None = None,
+                        vedekezes: dict | None = None,
+                        idokeres_proba: dict | None = None,
+                        config: TacticsConfig | None = None) -> dict:
+    """Élő időkérés-jegyzetek: minden felismert időkérés (stoppages.
+    detect_stoppages "időkérés" fajtája) kezdetén a timeout_brief, a
+    valószínű kérő oldallal. Visszatérés: {"jegyzetek": [{…timeout_brief,
+    "text"}]} — időrendben."""
+    from .stoppages import detect_stoppages
+    config = config or TacticsConfig()
+    out: list = []
+    if not match.frames:
+        return {"jegyzetek": out}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    for st in detect_stoppages(match, config):
+        if st.get("kind") != "időkérés":
+            continue
+        b = timeout_brief(match, (st["start_frame"] - t0) / fps / 60.0,
+                          nevek, f, golszerzok=golszerzok,
+                          vedekezes=vedekezes, kero=st.get("likely_team"),
+                          idokeres_proba=idokeres_proba, config=config)
+        if b["sorok"]:
+            out.append({**b, "text": timeout_brief_text(b, nevek)})
+    return {"jegyzetek": out}
+
+
+def timeout_brief_text(b: dict, nevek: dict) -> str:
+    """Az időkérés-jegyzet egy sora: "Időkérés-jegyzet (pp:mm, a kérő):
+    mondat; mondat; …"."""
+    kero = nevek.get(b.get("kero")) if b.get("kero") else None
+    return (f"Időkérés-jegyzet ({b.get('ora')}"
+            + (f", {kero} kér időt" if kero else "") + "): "
+            + "; ".join(b.get("sorok") or []))
 
 
 # ---- A forró kéz próbája: kitart-e a napi forma ----------------------------
@@ -4396,6 +4511,189 @@ def live_keeper_form_alerts(match: Match, kapus_szorzok: dict | None = None,
                                a["nezopont"]))
     return {"alerts": alerts}
 
+
+
+# ---- Időkérés a sorozat ellen: megtöri-e -----------------------------------
+# Az edző egyik leggyakoribb meccs közbeni döntése, hogy a sorozat ellen
+# időt kér-e. A próba a könyvtár meccsein: valahányszor egy csapat
+# IDO_SOROZAT válasz nélküli gólhoz ér, a sorozatot kapó csapat vagy kér
+# időt (IDO_ABLAK_S-en belül, a következő gól előtt), vagy nem — és ki
+# szerzi a következő gólt. Ha időkérés után legalább IDO_ITELET_PP
+# százalékponttal gyakrabban a sorozatot kapó csapat szerez, az időkérés
+# megtöri a sorozatot. Élőben a sorozat IDO_SOROZAT-adik góljánál szól,
+# mindkét kispadnak, a próba ítéletével.
+IDO_SOROZAT = 3          # válasz nélküli gól = sorozat (mint momentum.RUN_MIN)
+IDO_ABLAK_S = 120.0      # a sorozat-gól után eddig kért idő szól a sorozat ellen
+IDO_MIN_ESET = 5         # csoportonként (kért / nem kért) legalább ennyi helyzet
+IDO_ITELET_PP = 10.0     # a "megtöri" ítélethez kell ennyi százalékpont
+
+
+def run_timeout_sample(match: Match,
+                       config: TacticsConfig | None = None) -> dict:
+    """Az időkérés-próba NYERS, JSON-barát meccs-mintája: a gólok
+    időrendben ({"golok": [[perc, "home" / "away"], …]}, event_detection.
+    detect_shots) és az időkérések ({"idokeresek": [[perc, a valószínű
+    kérő "home" / "away" / None], …]}, stoppages.detect_stoppages
+    "időkérés" fajtája) — a perc a felvétel kezdetétől."""
+    from .event_detection import EventType, detect_shots
+    from .stoppages import detect_stoppages
+    config = config or TacticsConfig()
+    if not match.frames:
+        return {"golok": [], "idokeresek": []}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    golok = [[round((e.t - t0) / fps / 60.0, 2), e.team.value]
+             for e in sorted(detect_shots(match, config), key=lambda e: e.t)
+             if e.type == EventType.GOAL and e.team.value in ("home", "away")]
+    ido = [[round((st["start_frame"] - t0) / fps / 60.0, 2),
+            st.get("likely_team")]
+           for st in detect_stoppages(match, config)
+           if st.get("kind") == "időkérés"]
+    return {"golok": golok, "idokeresek": ido}
+
+
+def _sorozat_helyzetek(minta: dict) -> list:
+    """Egy meccs-mintából (run_timeout_sample) a sorozat-helyzetek: amikor
+    egy csapat IDO_SOROZAT válasz nélküli gólhoz ér — [(perc, a sorozatot
+    futó oldal, a következő gól oldala vagy None, kért-e időt a sorozatot
+    kapó csapat a sorozat-gól után IDO_ABLAK_S-en belül, a következő gól
+    előtt)]."""
+    golok = sorted(((float(p), str(s)) for p, s in
+                    (minta or {}).get("golok") or []), key=lambda g: g[0])
+    ido = [(float(p), s) for p, s in (minta or {}).get("idokeresek") or []]
+    ki: list = []
+    cur, hossz = None, 0
+    for i, (p, s) in enumerate(golok):
+        if s == cur:
+            hossz += 1
+        else:
+            cur, hossz = s, 1
+        if hossz != IDO_SOROZAT:
+            continue
+        kapo = "away" if s == "home" else "home"
+        kov = golok[i + 1] if i + 1 < len(golok) else None
+        veg = kov[0] if kov else float("inf")
+        kert = any(sk == kapo and p <= pk < veg
+                   and (pk - p) * 60.0 <= IDO_ABLAK_S for pk, sk in ido)
+        ki.append((p, s, kov[1] if kov else None, kert))
+    return ki
+
+
+def timeout_run_backtest(meccsek: list,
+                         csapat: str | None = None) -> dict | None:
+    """Az időkérés próbája a sorozat ellen: `meccsek` = [{"home", "away",
+    "minta" (run_timeout_sample)}]. Minden sorozat-helyzetben
+    (_sorozat_helyzetek; ami a meccs végéig gól nélkül maradt, kimarad):
+    kért-e időt a sorozatot kapó csapat, és ő szerezte-e a következő
+    gólt (megtört a sorozat). A `csapat` megadásával csak az ő
+    sorozat-kapó helyzetei (a saját időkérés-döntéseik). Mit jelent
+    edzőileg: a "most kérjünk időt" döntés a könyvtár meccsein igazolt-e,
+    vagy a sorozat az időkérés után is ugyanúgy folytatódik. Visszatérés:
+    {"kert", "kert_tores", "nem_kert", "nem_kert_tores", "kert_pct",
+    "nem_kert_pct", "kulonbseg_pp", "itelet" ("megtori" / "nem_tori"),
+    "verdict"} — None, ha valamelyik csoportban IDO_MIN_ESET-nél kevesebb
+    a helyzet."""
+    kert: list = []
+    nem: list = []
+    for m in meccsek or []:
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for _p, s, kov, k in _sorozat_helyzetek(m.get("minta")):
+            if kov is None:
+                continue
+            kapo = "away" if s == "home" else "home"
+            if csapat is not None and nevek[kapo] != csapat:
+                continue
+            (kert if k else nem).append(kov == kapo)
+    if len(kert) < IDO_MIN_ESET or len(nem) < IDO_MIN_ESET:
+        return None
+    kp = sum(kert) / len(kert) * 100.0
+    np_ = sum(nem) / len(nem) * 100.0
+    d = kp - np_
+    megtori = d >= IDO_ITELET_PP
+    return {"kert": len(kert), "kert_tores": sum(kert),
+            "nem_kert": len(nem), "nem_kert_tores": sum(nem),
+            "kert_pct": round(kp, 1), "nem_kert_pct": round(np_, 1),
+            "kulonbseg_pp": round(d, 1),
+            "itelet": "megtori" if megtori else "nem_tori",
+            "verdict": (f"a sorozat elleni időkérés után a következő gólt "
+                        f"{len(kert)} esetből {sum(kert)} alkalommal a "
+                        f"sorozatot kapó csapat szerezte ({kp:.0f}%), "
+                        f"időkérés nélkül {len(nem)} esetből {sum(nem)} "
+                        f"alkalommal ({np_:.0f}%) — "
+                        + ("az időkérés megtöri a sorozatot: kérjetek időt"
+                           if megtori else
+                           "az időkérés önmagában nem töri meg a "
+                           "sorozatot: ha kértek, váltással (védekezés, "
+                           "csere) együtt kérjétek"))}
+
+
+def live_timeout_alerts(match: Match, proba: dict | None = None,
+                        config: TacticsConfig | None = None) -> dict:
+    """Élő időkérés-tanács a sorozat ellen: amikor egy csapat IDO_SOROZAT
+    válasz nélküli gólhoz ér (a gól pillanatában, CSAK az addigi gólokból
+    — okszerű), mindkét kispadnak szól: a sorozatot kapónak ("kapo":
+    kérjetek időt / váltással együtt kérjétek) és a sorozatot futónak
+    ("futo": készüljetek az időkérés utáni figurájukra / tartsátok a
+    tempót). A tanács a `proba` (timeout_run_backtest) ítéletéből; ítélet
+    nélkül a jelzés ezt mondja ki. Visszatérés: {"alerts": [{"t", "t_s",
+    "perc", "team" (akinek szól), "team_name", "nezopont",
+    "sorozat_team", "hossz", "allas" ([hazai, vendég]), "text"}]}."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    p = proba or {}
+    itelet = p.get("itelet")
+    if itelet == "megtori":
+        kapo_txt = (f"a könyvtárban a sorozat elleni időkérés után "
+                    f"{float(p['kert_pct']):.0f}%-ban a sorozatot kapó csapat "
+                    f"szerezte a következő gólt (időkérés nélkül "
+                    f"{float(p['nem_kert_pct']):.0f}%): kérjetek időt")
+        futo_txt = ("a könyvtár szerint az időkérés megtöri a sorozatokat: "
+                    "ha időt kérnek, készüljetek az utána jövő figurájukra")
+    elif itelet == "nem_tori":
+        kapo_txt = (f"a könyvtárban az időkérés önmagában nem törte meg a "
+                    f"sorozatokat ({float(p['kert_pct']):.0f}%, időkérés "
+                    f"nélkül {float(p['nem_kert_pct']):.0f}%): ha kértek, "
+                    f"váltással (védekezés, csere) együtt kérjétek")
+        futo_txt = ("a könyvtár szerint az időkérés önmagában nem töri meg "
+                    "a sorozatot: tartsátok a tempót")
+    else:
+        kapo_txt = futo_txt = ("a könyvtár még nem dönti el, megtöri-e az "
+                               "időkérés a sorozatot")
+    allas = {"home": 0, "away": 0}
+    cur, hossz = None, 0
+    for e in sorted(detect_shots(match, config), key=lambda e: e.t):
+        if e.type != EventType.GOAL or e.team.value not in allas:
+            continue
+        s = e.team.value
+        allas[s] += 1
+        if s == cur:
+            hossz += 1
+        else:
+            cur, hossz = s, 1
+        if hossz != IDO_SOROZAT:
+            continue
+        kapo = "away" if s == "home" else "home"
+        perc = int((e.t - t0) / fps // 60) + 1
+        at = f"{allas['home']}–{allas['away']}"
+        kozos = {"t": e.t, "t_s": round(e.t / fps, 1), "perc": perc,
+                 "sorozat_team": s, "hossz": hossz,
+                 "allas": [allas["home"], allas["away"]]}
+        alerts.append({**kozos, "team": kapo, "team_name": nevek[kapo],
+                       "nezopont": "kapo",
+                       "text": (f"Sorozat ellenetek ({perc}. perc, {at}): "
+                                f"{nevek[s]} {hossz}-0-s sorozata — "
+                                f"{kapo_txt}")})
+        alerts.append({**kozos, "team": s, "team_name": nevek[s],
+                       "nezopont": "futo",
+                       "text": (f"Sorozatban vagytok ({perc}. perc, {at}): "
+                                f"{hossz}-0 nektek — {futo_txt}")})
+    return {"alerts": alerts}
 
 # ---- Várható védekezési rendszer -------------------------------------------
 # Az ellenfél védekezési rendszere a következő meccsen a KORÁBBI meccsei

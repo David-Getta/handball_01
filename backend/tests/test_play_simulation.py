@@ -2038,6 +2038,119 @@ def test_a_kapus_napi_formaja_es_az_elo_kapus_forma():
     assert len({(a["mez"], a["nezopont"]) for a in ki}) == len(ki)
 
 
+def test_az_idokeres_probaja_a_sorozat_ellen_es_az_elo_tanacs():
+    """_sorozat_helyzetek: a 3. válasz nélküli gólnál egy helyzet; az
+    időkérés csak a sorozatot kapótól, a következő gól előtt és
+    IDO_ABLAK_S-en belül számít. timeout_run_backtest: ha időkérés után a
+    sorozatot kapó szerez, "megtori"; ha nem jobb, "nem_tori"; kevés
+    helyzetnél None; a `csapat` szűr. live_timeout_alerts: a szimulált
+    meccsen a 3. hazai gólnál mindkét kispadnak, a próba szerinti
+    tanáccsal."""
+    from handball.pipeline.play_simulation import (IDO_ABLAK_S,
+                                                   IDO_MIN_ESET,
+                                                   _sorozat_helyzetek,
+                                                   live_timeout_alerts,
+                                                   timeout_run_backtest)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    gol3 = [[1.0, "home"], [2.0, "home"], [3.0, "home"]]
+    assert _sorozat_helyzetek({"golok": gol3 + [[5.0, "away"]],
+                               "idokeresek": [[3.5, "away"]]}) == [
+        (3.0, "home", "away", True)]
+    kesoi = 3.0 + IDO_ABLAK_S / 60.0 + 0.5
+    for ido in ([[kesoi, "away"]],      # túl későn
+                [[3.5, "home"]],        # a sorozatot futó kérte
+                [[2.5, "away"]],        # a sorozat-gól előtt
+                [[5.5, "away"]]):       # a következő gól után
+        assert _sorozat_helyzetek({"golok": gol3 + [[9.0, "away"]],
+                                   "idokeresek": ido})[0][3] is False
+    # A meccs végéig gól nélkül: a következő gól None; két gól: nincs helyzet.
+    assert _sorozat_helyzetek({"golok": gol3, "idokeresek": []}) == [
+        (3.0, "home", None, False)]
+    assert _sorozat_helyzetek({"golok": gol3[:2], "idokeresek": []}) == []
+
+    def meccs(kert, tores, home="A", away="B"):
+        return {"home": home, "away": away, "minta": {
+            "golok": gol3 + [[4.0, "away" if tores else "home"]],
+            "idokeresek": [[3.2, "away"]] if kert else []}}
+
+    jo = ([meccs(True, True)] * IDO_MIN_ESET
+          + [meccs(False, False)] * IDO_MIN_ESET)
+    p = timeout_run_backtest(jo)
+    assert p["itelet"] == "megtori" and p["kulonbseg_pp"] == 100.0
+    assert p["kert"] == p["kert_tores"] == IDO_MIN_ESET
+    assert p["verdict"].endswith("megtöri a sorozatot: kérjetek időt")
+    q = timeout_run_backtest([meccs(True, False)] * IDO_MIN_ESET
+                             + [meccs(False, True)] * IDO_MIN_ESET)
+    assert q["itelet"] == "nem_tori" and "váltással" in q["verdict"]
+    assert timeout_run_backtest(jo[1:]) is None
+    # A csapat-szűrő a sorozatot KAPÓ csapatra: a "B" helyzetei igen, az
+    # "A"-éi nincsenek.
+    assert timeout_run_backtest(jo, "B") == p
+    assert timeout_run_backtest(jo, "A") is None
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    ki = live_timeout_alerts(m)["alerts"]
+    assert [a["nezopont"] for a in ki] == ["kapo", "futo"]
+    assert ki[0]["team"] == "away" and ki[1]["team"] == "home"
+    assert ki[0]["allas"] == [3, 0] and ki[0]["hossz"] == 3
+    assert ki[0]["text"].startswith(
+        f"Sorozat ellenetek ({ki[0]['perc']}. perc, 3–0): "
+        f"{m.meta.home_team} 3-0-s sorozata — ")
+    assert ki[0]["text"].endswith("megtöri-e az időkérés a sorozatot")
+    k2 = live_timeout_alerts(m, proba=p)["alerts"]
+    assert k2[0]["text"].endswith("(időkérés nélkül 0%): kérjetek időt")
+    assert "készüljetek az utána jövő figurájukra" in k2[1]["text"]
+    k3 = live_timeout_alerts(m, proba=q)["alerts"]
+    assert "váltással (védekezés, csere) együtt kérjétek" in k3[0]["text"]
+    assert k3[1]["text"].endswith("tartsátok a tempót")
+
+
+def test_az_idokeres_jegyzet(monkeypatch):
+    """timeout_brief: elöl az utolsó öt perc állása, a kérő elleni
+    sorozat a próba ítéletével (a sorozatot futó kérésénél nincs ilyen
+    sor), aztán a várakozás "eddig"; a meccs vége után üres.
+    live_timeout_briefs: a felismert időkérés percében, a kérővel."""
+    import handball.pipeline.stoppages as stp
+    from handball.pipeline.play_simulation import (live_timeout_briefs,
+                                                   timeout_brief)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    nevek = {"home": m.meta.home_team, "away": m.meta.away_team}
+    f = {"home_goals": 30.0, "away_goals": 30.0}
+    pr = {"verdict": "az időkérés megtöri a sorozatot: kérjetek időt"}
+    b = timeout_brief(m, 2.0, nevek, f, kero="away", idokeres_proba=pr)
+    assert b["ora"] == "02:00" and b["kero"] == "away"
+    gh = b["eredmeny"]["home"]
+    assert gh >= 3 and b["eredmeny"]["away"] == 0
+    assert b["sorok"][0] == (f"Az utolsó 5 percben: {nevek['home']} "
+                             f"{gh}–0 {nevek['away']}")
+    assert b["sorok"][1] == (f"{nevek['home']} {gh}-0-s sorozatban van — "
+                             f"{pr['verdict']}")
+    assert b["sorok"][2].startswith(f"Várakozás eddig: {nevek['home']} 1–1 "
+                                    f"{nevek['away']} — eddig: {gh}–0")
+    # A sorozatot futó kér időt: nincs sorozat-sor; próba nélkül a sor
+    # ítélet nélkül áll.
+    assert len(timeout_brief(m, 2.0, nevek, f, kero="home")["sorok"]) == 2
+    assert timeout_brief(m, 2.0, nevek, None, kero="away")["sorok"] == [
+        b["sorok"][0], f"{nevek['home']} {gh}-0-s sorozatban van"]
+    assert timeout_brief(m, 9.0, nevek, f)["sorok"] == []
+    # A felismert időkérésnél (a felismerés helyett itt beadva).
+    t0 = m.frames[0].t
+    monkeypatch.setattr(stp, "detect_stoppages", lambda match, config=None: [
+        {"start_frame": t0 + 3000, "kind": "időkérés", "likely_team": "away"},
+        {"start_frame": t0 + 4000, "kind": "hosszú megszakítás",
+         "likely_team": "home"}])
+    [j] = live_timeout_briefs(m, nevek, f, idokeres_proba=pr)["jegyzetek"]
+    assert j["ora"] == "02:00" and j["kero"] == "away"
+    assert j["sorok"] == b["sorok"]
+    assert j["text"] == (f"Időkérés-jegyzet (02:00, {nevek['away']} kér "
+                         f"időt): " + "; ".join(b["sorok"]))
+
+
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
     """defense_system_forecast: a korábbi meccsek védekező kockáinak
     eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);

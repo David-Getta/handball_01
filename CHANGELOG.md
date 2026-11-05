@@ -5,6 +5,41 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **Időkérés a sorozat ellen** (motor + élő végpont + élő képernyő +
+  szezon-riport + szezon-képernyő): a 3-0-s sorozat ellen kért időkérés
+  tényleg megtöri-e a sorozatot? A próba a könyvtár meccsein minden
+  sorozat-helyzetet megnéz (egy csapat a 3. válasz nélküli góljánál):
+  kért-e időt a sorozatot kapó csapat (két percen belül, a következő gól
+  előtt), és ki szerezte a következő gólt — "a sorozat elleni időkérés
+  után a következő gólt 9 esetből 6 alkalommal a sorozatot kapó csapat
+  szerezte (67%), időkérés nélkül 14 esetből 6 alkalommal (43%) — az
+  időkérés megtöri a sorozatot: kérjetek időt". Ha az időkérés nem jobb,
+  a tanács: "ha kértek, váltással (védekezés, csere) együtt kérjétek".
+  Élőben a sorozat 3. góljának pillanatában szól, mindkét kispadnak:
+  "Sorozat ellenetek (34. perc, 12–15): Vendég 3-0-s sorozata — …" és
+  "Sorozatban vagytok …: ha időt kérnek, készüljetek az utána jövő
+  figurájukra / tartsátok a tempót". A /matches/{id}/live-idokeres (a
+  próba a meccs nélkül), az élő képernyő momentum-jelzése, a
+  /library/player-model-check "idokeres_proba" mezője, a szezon-képernyő
+  és a szezon-riport "Időkérés a sorozat ellen" sora (a csapat saját
+  időkérései; play_simulation.run_timeout_sample, timeout_run_backtest,
+  live_timeout_alerts).
+
+- **Időkérés-jegyzet** (motor + élő végpont + élő képernyő): az időkérés
+  egy percében a padnak a tények, egy sorban — "Időkérés-jegyzet (34:10,
+  Hazai kér időt): Az utolsó 5 percben: Hazai 1–4 Vendég; Vendég 3-0-s
+  sorozatban van — a sorozat elleni időkérés után … kérjetek időt;
+  Várakozás eddig: Hazai 15–14 Vendég — eddig: 12–15 (Vendég 2,4 góllal
+  a várt felett); Vendég: a 9-es 4 gólt lőtt a várt 2,1 helyett; Vendég
+  5-1 fallal védekezik a várt 6-0 helyett". A várakozás a két csapat
+  korábbi meccseiből, a percre arányosan (mint a félidei összevetés);
+  csak az addigi kockák. Az élő képernyőn a felismert időkérések
+  kezdetén automatikusan, és a vezérlősor új "Időkérés-jegyzet most"
+  gombjával (a kérő csapat választásával) bármelyik pillanatban. A
+  /matches/{id}/live-idokeres-jegyzet (perc, kero kérésre is;
+  play_simulation.timeout_brief, live_timeout_briefs — a félidei
+  összevetéssel közös _review_until magon).
+
 - **A kapus napi formája** (motor + élő végpont + élő képernyő +
   szezon-riport + szezon-képernyő): kitart-e egy jó vagy rossz félidő a
   kapuban? A próba a könyvtár kapus × meccs párjain nézi meg (félidőnként
