@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.189 óta)
+## v0.1.190 — kiadva (2026-11-05)
+
+> Kiadás-jegyzet: A JÁTÉKOS-MODELL A MECCSEN — élőben, emberre és a
+> szezonra. Négy új réteg: Kapus-választás (melyik kapusunk álljon az ő
+> lövőik ellen), Falválasztás (melyik rendszerünk zárja a figuráikat),
+> Engedett lövő (kire ne lépjünk ki) és Lövés-elosztás (ki lő túl sokat
+> és ki túl keveset) — mind a felderítésben, a meccstervben és az
+> edzéstervben. Az élő képernyő a 15., 30. és 45. percben a kit kinek-et,
+> az engedett lövőt, a lövés-elosztást és a kapus-választást is jelzi, a
+> szezon korábbi meccseiből tanult lövőkkel és kapusokkal, okszerűen; a
+> döntés-figyelő is a szezon modelljével számol. A játékos lapjára új
+> tételek kerülnek (befejezés a gyenge sávból, kilépés a sávod lövőjére,
+> vállalj több lövést / lövés-választás, a kapus gyenge sávja); a
+> Döntések panelen és a szezon játékos-lapon a játékos saját
+> lövő-modellje; a szezon-riport a modell fejlődését, az egymás-elleni
+> riport a két csapat modelljét is hozza.
 
 - **Szezon játékos-lap: honnan lősz be, hol kapsz gólt** (nyomtatható
   játékos-lap): a játékos szezonból tanult sáv-képe két táblában — a

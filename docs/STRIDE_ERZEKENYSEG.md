@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **517 réteg** összevetve, ebből **20 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **521 réteg** összevetve, ebből **21 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -42,6 +42,10 @@ háromszor annyi valós időt követelnek.
 - `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 17 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 - `home.pairs[2].verdict`: sűrűn `a(z) beálló közelről fejez be (átl. 6.0 m) — őt ki kell zárni` → ritkítva `a(z) beálló közelről fejez be (átl. 5.9 m) — őt ki kell zárni`
 - `home.pairs[4].verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `a(z) 1. figurájuk indításainak 100%-a a(z) beálló posztról jön — amint a labda odaér, zárni kell a kiinduló passzsávot, és a figura el sem indul`
+
+### `defense_system_choice`
+
+- `away.verdict`: sűrűn `a figuráik ellen a 3-2-1 zár jobban: 25% lövőhelyzet a mostani 6-0 31%-a helyett (6 százalékponttal kevesebb, 2 figurájukból)` → ritkítva `a figuráik ellen a 3-2-1 zár jobban: 22% lövőhelyzet a mostani 6-0 34%-a helyett (12 százalékponttal kevesebb, 1 figurájukból)`
 
 ### `high_steal_roles`
 
