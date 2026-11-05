@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **A kapus-választás próbája** (motor + végpontok + meccsterv +
+  szezon-riport + szezon-képernyő + összkép): a meccs előtti "ki álljon
+  a kapuban az ő lövőik ellen" tanács igazolódik-e a klub saját meccsein?
+  A próba a könyvtár időrendjében minden meccsre a KORÁBBI meccsekből
+  javasol kapust (a kapusaink sáv-mérlege × az ő lövőik mintája), és
+  megnézi, a meccsen a javasolt kapus lövésenként kevesebbet kapott-e a
+  másiknál (mindkettő legalább 5 kaputra érkezett lövéssel) — a
+  viszonyítás a sima szezon-mérleg szerinti kapus: "a meccs előtti
+  kapus-választás 8 meccsből 6 alkalommal igazolódott (a javasolt kapus
+  lövésenként átlag +7,5 százalékponttal kevesebb gólt kapott a
+  másiknál; a sima szezon-mérleg szerinti választás 8 meccsből 4
+  alkalommal) — a lövők szerinti kapus-választásra lehet építeni". Ha a
+  sima mérleg ugyanannyit tud: "a szokásos kapus is jó"; ha nem
+  igazolódik: "a kapus-kérdést a napi forma döntse el". A
+  /library/forecast és a /library/player-model-check
+  "kapus_valasztas_proba" mezője, a meccsterv ELŐREJELZÉS kártyájának
+  sora a kapus-tanács alatt, a szezon-képernyő és a szezon-riport
+  "Kapus-választás" sora (a csapat saját választásai), az AI-próbák
+  összképének új sora (play_simulation.keeper_choice_backtest).
+
 - **Időkérés a sorozat ellen** (motor + élő végpont + élő képernyő +
   szezon-riport + szezon-képernyő): a 3-0-s sorozat ellen kért időkérés
   tényleg megtöri-e a sorozatot? A próba a könyvtár meccsein minden

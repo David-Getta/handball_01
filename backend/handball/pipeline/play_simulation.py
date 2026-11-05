@@ -3100,7 +3100,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     ("megbizhato" / "igazolt"), a védő-modell a csapatok többségén, az
     eredmény-előrejelzés, a gólszerzők és az élő esély a PROBA_ITELET_PCT
     javulástól, a fal-becslés a liga-viszonyításnál több találattal, a
-    figura-felderítés, ha a visszatérő figurákra érdemes készülni. Mit
+    kapus-választás, ha a lövők szerinti választás a sima mérlegnél
+    többet tud (keeper_choice_backtest), a figura-felderítés, ha a
+    visszatérő figurákra érdemes készülni. Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3132,6 +3134,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     v = mc.get("vedekezes_proba")
     if v:
         add("fal-becslés", int(v["talalat"]) > int(v["liga_talalat"]))
+    kv = mc.get("kapus_valasztas_proba")
+    if kv:
+        add("kapus-választás", kv.get("itelet") == "igazolt")
     f = mc.get("figura_proba")
     if f:
         add("figura-felderítés", "érdemes készülni" in str(f.get("verdict")))
@@ -5251,6 +5256,117 @@ def keeper_choice(match: Match, config: TacticsConfig | None = None) -> dict:
             _kapus_minta_kapusonkent(match, team, config))
     return out
 
+
+
+# ---- A kapus-választás próbája ---------------------------------------------
+# A meccs előtti kapus-választás (keeper_choice_from: melyik kapusunk
+# álljon az ő lövőik ellen) a könyvtár időrendjében: minden meccsre a
+# KORÁBBI meccsekből (a mi kapusaink sáv-mérlege, az ő lövőik mintája)
+# javasolt kapus — és a meccsen a két kapus lövésenként kapott gólja
+# (mindkettő legalább KV_PROBA_MIN_LOVES kaputra érkezett lövéssel). A
+# viszonyítás a sima szezon-mérleg (a korábbi meccseken összességében
+# kevesebbet kapó kapus) — a lövők szerinti súlyozás ennél tud-e többet.
+KV_PROBA_MIN_LOVES = 5
+KV_PROBA_MIN = 5
+
+
+def _kapott_arany(minta: dict) -> float | None:
+    """Egy kapus sáv-mintájából ({sáv: [kaputra, védett]}) a lövésenként
+    kapott gól — None, ha nincs kaputra érkezett lövés."""
+    faced = sum(int(v[0]) for v in (minta or {}).values())
+    if faced <= 0:
+        return None
+    return (faced - sum(int(v[1]) for v in minta.values())) / faced
+
+
+def keeper_choice_backtest(meccsek: list,
+                           csapat: str | None = None) -> dict | None:
+    """A kapus-választás próbája: `meccsek` = [{"match_id", "home", "away",
+    "minta": {"home", "away"} (player_model_sample: "lovo", "kapusok")}]
+    időrendben. Minden meccsre és oldalra a KORÁBBI meccsekből a
+    keeper_choice_from javaslata (ha érdemi, "dontes"); a meccsen a
+    javasolt és a másik kapus lövésenként kapott gólja (mindkettő
+    legalább KV_PROBA_MIN_LOVES lövéssel) — igazolt, ha a javasolt
+    kevesebbet kapott. Viszonyítás: a sima szezon-mérleg szerinti kapus
+    (a korábbi meccseken összességében kevesebbet kapó). A `csapat`
+    megadásával csak az ő kapus-választásai. Mit jelent edzőileg: a
+    "ki álljon a kapuban" tanács a klub saját meccsein igazolt-e, vagy a
+    szokásos kapus is ugyanannyit tud. Visszatérés: {"meccsek",
+    "igazolt", "naiv_meccsek", "naiv_igazolt", "atlag_pp", "sorok",
+    "itelet" ("igazolt" / "egyenlo" / "nem"), "verdict"} — None, ha
+    KV_PROBA_MIN-nél kevesebb a mérhető kapus-választás."""
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            mi = nevek[side]
+            ok = nevek["away" if side == "home" else "home"]
+            if not mi or not ok or (csapat is not None and mi != csapat):
+                continue
+            kapusok = _kapus_mintak_osszege(
+                [(x["minta"].get(s) or {}).get("kapusok") or {}
+                 for x in meccsek[:i] for s in ("home", "away")
+                 if x.get(s) == mi])
+            lovok = _lovo_mintak_osszege(
+                [(x["minta"].get(s) or {}).get("lovo") or {}
+                 for x in meccsek[:i] for s in ("home", "away")
+                 if x.get(s) == ok])
+            kc = keeper_choice_from(lovok, kapusok)
+            if not kc or not kc.get("dontes"):
+                continue
+            most = {int(k): v for k, v in
+                    ((m["minta"].get(side) or {}).get("kapusok") or {}).items()}
+            jav, masik = int(kc["kapus_mez"]), int(kc["masik_mez"])
+            if any(sum(int(v[0]) for v in (most.get(k) or {}).values())
+                   < KV_PROBA_MIN_LOVES for k in (jav, masik)):
+                continue
+            rj, rm = _kapott_arany(most[jav]), _kapott_arany(most[masik])
+            # A sima mérleg: a korábbi meccseken összességében kevesebbet
+            # kapó kapus a kettő közül (holtversenyben nincs naiv tipp).
+            kj, km = _kapott_arany(kapusok.get(jav)), _kapott_arany(
+                kapusok.get(masik))
+            naiv = None
+            if kj is not None and km is not None and kj != km:
+                naiv = jav if kj < km else masik
+            sorok.append({
+                "match_id": m.get("match_id"), "team": mi,
+                "javasolt": jav, "masik": masik,
+                "javasolt_pct": round(rj * 100.0, 1),
+                "masik_pct": round(rm * 100.0, 1),
+                "elteres_pp": round((rm - rj) * 100.0, 1),
+                "igazolt": rj < rm, "naiv": naiv,
+                "naiv_igazolt": (None if naiv is None else
+                                 (rj < rm) if naiv == jav else (rm < rj))})
+    n = len(sorok)
+    if n < KV_PROBA_MIN:
+        return None
+    k = sum(1 for r in sorok if r["igazolt"])
+    naiv_sorok = [r for r in sorok if r["naiv"] is not None]
+    nm = sum(1 for r in naiv_sorok if r["naiv_igazolt"])
+    atlag = sum(r["elteres_pp"] for r in sorok) / n
+    # A modell többségében igazolt ÉS jobb arányban, mint a sima mérleg.
+    jobb_mint_naiv = (not naiv_sorok) or (k / n > nm / len(naiv_sorok))
+    if 2 * k > n and atlag > 0 and jobb_mint_naiv:
+        itelet = "igazolt"
+    elif 2 * k > n and atlag > 0:
+        itelet = "egyenlo"
+    else:
+        itelet = "nem"
+    pp = f"{atlag:+.1f}".replace(".", ",")
+    verdict = (f"a meccs előtti kapus-választás {n} meccsből {k} alkalommal "
+               f"igazolódott (a javasolt kapus lövésenként átlag {pp} "
+               f"százalékponttal kevesebb gólt kapott a másiknál; a sima "
+               f"szezon-mérleg szerinti választás {len(naiv_sorok)} "
+               f"meccsből {nm} alkalommal) — "
+               + {"igazolt": "a lövők szerinti kapus-választásra lehet "
+                             "építeni",
+                  "egyenlo": "a lövők szerinti választás nem tud többet a "
+                             "sima mérlegnél: a szokásos kapus is jó",
+                  "nem": "a meccs előtti kapus-választás nem igazolódott: "
+                         "a kapus-kérdést a napi forma döntse el"}[itelet])
+    return {"meccsek": n, "igazolt": k, "naiv_meccsek": len(naiv_sorok),
+            "naiv_igazolt": nm, "atlag_pp": round(atlag, 1), "sorok": sorok,
+            "itelet": itelet, "verdict": verdict}
 
 # ---- Élő kapus-választás ----------------------------------------------------
 # A LIVE_AJANLO_PERCEK perceiben a VÉDŐ kispadnak: az ő lövőik nyers

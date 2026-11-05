@@ -2137,6 +2137,16 @@ def test_a_meccs_elotti_kapus_valasztas_a_konyvtarbol(tmp_path, monkeypatch):
                             params={"home": h, "away": a}).json()
     assert j["kapus_javaslat"]["away"] == vart
     assert j["kapus_javaslat"]["home"] is None     # a hazainak egy kapusa van
+    # A kapus-választás próbája a könyvtár időrendjében — a valódi láncon
+    # ugyanaz, mint a motor a mintákból (a /library/forecast és a
+    # /library/player-model-check mezője).
+    from handball.pipeline.play_simulation import keeper_choice_backtest
+    kvp = keeper_choice_backtest(
+        [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+          "away": m.meta.away_team, "minta": x} for m, x in zip(meccsek, jm)])
+    assert j["kapus_valasztas_proba"] == kvp
+    assert TestClient(app).get("/library/player-model-check").json()[
+        "kapus_valasztas_proba"] == kvp
 
 
 def test_az_elo_felidei_varakozas_vegpont(tmp_path, monkeypatch):

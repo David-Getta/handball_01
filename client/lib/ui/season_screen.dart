@@ -184,12 +184,15 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final figSzoveg = (_modelCheck["figura_proba"] as Map?)?["verdict"];
     final kfSzoveg = (_modelCheck["kapus_forma_proba"] as Map?)?["verdict"];
     final idoSzoveg = (_modelCheck["idokeres_proba"] as Map?)?["verdict"];
+    final kvSzoveg =
+        (_modelCheck["kapus_valasztas_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
         vedok.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
         eloSzoveg is! String && vedSzoveg is! String &&
         formaSzoveg is! String && figSzoveg is! String &&
-        kfSzoveg is! String && idoSzoveg is! String) {
+        kfSzoveg is! String && idoSzoveg is! String &&
+        kvSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -290,6 +293,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (formaSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Napi forma: $formaSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // A kapus-választás próbája: a lövők szerinti választás a sima
+      // mérlegnél többet tud-e.
+      if (kvSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Kapus-választás: $kvSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
       // A kapus napi formájának próbája: kitart-e egy jó / rossz félidő.

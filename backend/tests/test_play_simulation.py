@@ -1415,14 +1415,19 @@ def test_az_ai_probak_osszkepe():
           "golszerzo_proba": {"javulas_pct": -4.0},
           "elo_esely_proba": None,
           "vedekezes_proba": {"talalat": 10, "liga_talalat": 6},
+          "kapus_valasztas_proba": {"itelet": "igazolt"},
           "figura_proba": {"verdict": "… — a visszatérő figuráikra érdemes "
                                       "készülni"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (8, 5)
+    assert (o["itelt"], o["bizonyitott"]) == (9, 6)
     assert o["verdict"] == (
-        "8 próbából 5 bizonyított: lövő-szorzók, döntés-tanácsok, "
-        "eredmény-előrejelzés, fal-becslés, figura-felderítés; még nem: "
-        "kapus-sávok, védő-modell, gólszerzők")
+        "9 próbából 6 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "eredmény-előrejelzés, fal-becslés, kapus-választás, "
+        "figura-felderítés; még nem: kapus-sávok, védő-modell, gólszerzők")
+    # A kapus-választás csak az "igazolt" ítélettel bizonyított.
+    o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
+        "itelet": "egyenlo"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (9, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2149,6 +2154,74 @@ def test_az_idokeres_jegyzet(monkeypatch):
     assert j["sorok"] == b["sorok"]
     assert j["text"] == (f"Időkérés-jegyzet (02:00, {nevek['away']} kér "
                          f"időt): " + "; ".join(b["sorok"]))
+
+
+def test_a_kapus_valasztas_probaja():
+    """keeper_choice_backtest: a korábbi meccsekből javasolt kapus (a
+    lövők szerint) a meccsen kevesebbet kapott-e a másiknál; a sima
+    szezon-mérleg a viszonyítás; a csapat-szűrő; kevés mérhető
+    választásnál None; a meccsen kevés lövéses kapus kimarad."""
+    from handball.pipeline.play_simulation import (KV_PROBA_MIN,
+                                                   keeper_choice_backtest)
+
+    # Az 1-es távolról jó, közelről rossz; a 12-es közelről és középről
+    # jobb, és a sima mérlege sokkal jobb (45/60 védés a 12/30 ellen) —
+    # az ellenfél távolról lő, ezért a lövők szerint az 1-es a javaslat,
+    # a sima mérleg szerint végig a 12-es.
+    korabbi = {"1": {"far": [10, 6], "mid": [10, 4], "close": [10, 2]},
+               "12": {"far": [10, 2], "mid": [20, 16], "close": [30, 27]}}
+    egyforma = {"1": {"far": [10, 6], "mid": [10, 4], "close": [10, 2]},
+                "12": {"far": [10, 2], "mid": [10, 4], "close": [10, 6]}}
+    lovok = {"9": {"far": [12, 5, 3.0]}, "7": {"far": [8, 3, 2.0],
+                                               "mid": [4, 2, 1.6]}}
+    jo = {"1": {"far": [8, 5], "mid": [2, 1]}, "12": {"far": [6, 2],
+                                                        "mid": [2, 0]}}
+    # A "rossz" meccsen az 1-es középről kap sokat (távolról nem — a
+    # javaslat marad), a 12-es összességében kevesebbet kap.
+    rossz = {"1": {"far": [5, 4], "mid": [5, 0]}, "12": {"far": [5, 1],
+                                                           "mid": [3, 3]}}
+    keves = {"1": {"far": [8, 5]}, "12": {"far": [3, 1]}}
+
+    def meccs(i, kapusok):
+        return {"match_id": f"m{i}", "home": "A", "away": "B",
+                "minta": {"home": {"lovo": {}, "kapusok": kapusok},
+                          "away": {"lovo": lovok, "kapusok": {}}}}
+
+    ms = [meccs(0, korabbi)] + [meccs(i, jo) for i in range(1, 7)]
+    p = keeper_choice_backtest(ms)
+    assert (p["meccsek"], p["igazolt"], p["itelet"]) == (6, 6, "igazolt")
+    assert p["sorok"][0] == {
+        "match_id": "m1", "team": "A", "javasolt": 1, "masik": 12,
+        "javasolt_pct": 40.0, "masik_pct": 75.0, "elteres_pp": 35.0,
+        "igazolt": True, "naiv": 12, "naiv_igazolt": False}
+    assert (p["naiv_meccsek"], p["naiv_igazolt"]) == (6, 0)
+    assert p["verdict"] == (
+        "a meccs előtti kapus-választás 6 meccsből 6 alkalommal igazolódott "
+        "(a javasolt kapus lövésenként átlag +35,0 százalékponttal kevesebb "
+        "gólt kapott a másiknál; a sima szezon-mérleg szerinti választás 6 "
+        "meccsből 0 alkalommal) — a lövők szerinti kapus-választásra lehet "
+        "építeni")
+    # Egyforma sima mérlegnél az első meccsen nincs naiv tipp, utána a
+    # sima mérleg is az 1-est mondja — ugyanannyit tud: "egyenlo".
+    e = keeper_choice_backtest([meccs(0, egyforma)]
+                               + [meccs(i, jo) for i in range(1, 7)])
+    assert (e["igazolt"], e["naiv_meccsek"], e["naiv_igazolt"],
+            e["itelet"]) == (6, 5, 5, "egyenlo")
+    assert e["sorok"][0]["naiv"] is None
+    assert e["verdict"].endswith("a szokásos kapus is jó")
+    # Ha a javasolt kapus többet kap, nem igazolódik.
+    q = keeper_choice_backtest([meccs(0, korabbi)]
+                               + [meccs(i, rossz) for i in range(1, 7)])
+    assert q["igazolt"] == 0 and q["itelet"] == "nem"
+    assert q["verdict"].endswith("a kapus-kérdést a napi forma döntse el")
+    # Kevés lövéses kapus a meccsen: a választás nem mérhető → None.
+    assert keeper_choice_backtest([meccs(0, korabbi)]
+                                  + [meccs(i, keves) for i in range(1, 7)]) \
+        is None
+    assert keeper_choice_backtest(ms[:KV_PROBA_MIN]) is None
+    # A csapat-szűrő: a "B" csapatnak nincs kapus-választása.
+    assert keeper_choice_backtest(ms, "A") == p
+    assert keeper_choice_backtest(ms, "B") is None
 
 
 def test_a_varhato_vedekezesi_rendszer_es_probaja():

@@ -373,6 +373,8 @@ def test_season_report_elorejelzes_sora(monkeypatch):
             keeper_form_sample(Match.from_dict(json.loads(
                 (matches_dir / f"{x['match_id']}.json").read_text(
                     encoding="utf-8"))), Team.HOME))) for x in lista])
+        from handball.pipeline.play_simulation import keeper_choice_backtest
+        kvp = keeper_choice_backtest(jm, "Szimu Hazai")
         from handball.pipeline.play_simulation import (
             run_timeout_sample, timeout_run_backtest)
         tp = timeout_run_backtest([{**x, "minta": json.loads(json.dumps(
@@ -416,6 +418,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert f"<p><b>Kapus napi formája:</b> {kp['verdict']}.</p>" in r.text
     else:
         assert "<b>Kapus napi formája:</b>" not in r.text
+    # A kapus-választásuk próbája (a motorral egyezik; egy kapusnál a sor
+    # elmarad).
+    if kvp:
+        assert f"<p><b>Kapus-választás:</b> {kvp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Kapus-választás:</b>" not in r.text
     # Az időkéréseik próbája a sorozat ellen (a motorral egyezik; a
     # szimulált meccseken nincs időkérés — a sor elmarad).
     if tp:
