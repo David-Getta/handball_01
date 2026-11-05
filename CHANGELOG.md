@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **AI-edzésterv a döntés-próbákkal** (motor + végpont + meccsterv +
+  nyomtatható meccsterv): a következő meccs AI-edzésterve négy új tétellel
+  — "Hetes-dobó: a 9-es" (a könyvtár dobója, ha a próba nem mond
+  ellent; gyakorlat: hetes-sorozat minden edzés végén, fáradtan is, a
+  második dobó is dob tízet), "Kapus a hetesre: a dobóik irányai" (ha a
+  hetes-irány próbája szerint jósolható), és a pad két szabálya a saját
+  próbáinkból: "Időkérés-szabály a sorozat ellen" (időkérés, vagy csak
+  védekezés-váltással / cserével együtt) és "Kapus-csere szabálya" (rossz
+  félidő után csere, vagy egy gyenge szakasz miatt nem cserélünk). A lista
+  legfeljebb nyolc tétel, a meccs-specifikusak elöl. Edzőileg: a hét
+  edzésének váza mellé a pad szabályai is a könyvtár próbáiból jönnek. A
+  /library/next-match-plan, a meccsterv "EDZÉSTERV A MECCSRE (AI)" kártyái
+  és a nyomtatható meccsterv szakasza (training.next_match_plan).
+
 - **Hetes-irány: merre lő a dobó** (motor + élő végpont + élő képernyő +
   meccsterv + nyomtatható meccsterv + szezon-riport + szezon-képernyő +
   összkép): a kapus felkészítése a hetesre — a dobók fő iránya a

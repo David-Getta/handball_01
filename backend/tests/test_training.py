@@ -1431,3 +1431,70 @@ def test_ai_edzesterv_a_kovetkezo_meccsre():
                                       "meccsre cserélődnek"},
                         kapus={**kapus, "dontes": False})
     assert u == []
+
+
+def test_ai_edzesterv_a_dontes_probakkal():
+    """training.next_match_plan döntés-próba tételei: a hetes-dobónk (a
+    próba nélkül is, ellentmondó próbánál nem), a kapus felkészítése az ő
+    dobóik irányaira (csak jósolható próbánál), az időkérés- és a
+    kapus-csere szabálya a próba ítélete szerint; a lista KOV_MECCS_MAX
+    tételnél elvágva."""
+    from handball.pipeline.training import KOV_MECCS_MAX, next_match_plan
+
+    hetes = {"mez": 9, "dobas": 13, "gol": 11, "arany": 84.6,
+             "masik": {"mez": 7, "dobas": 9, "gol": 6},
+             "verdict": "a hetest a 9-es dobja (11/13 a könyvtárban, 85%); "
+                        "a második a 7-es (6/9)"}
+    irany = {"dobok": [{"mez": 4}], "csapat": None,
+             "verdict": "hetes-irányaik (a dobó felől nézve): a 4-es 70% "
+                        "jobbra (7/10)"}
+    ido = {"itelet": "megtori", "verdict": "az időkérés megtöri a sorozatot: "
+                                           "kérjetek időt"}
+    kf = {"itelet": "visszaall", "verdict": "a kapus napi formája nem tart ki"}
+    t = next_match_plan("Vendég", hetes=hetes, hetes_irany=irany,
+                        idokeres_proba=ido, kapus_forma_proba=kf)
+    assert [x["title"] for x in t] == [
+        "Hetes-dobó: a 9-es", "Kapus a hetesre: a dobóik irányai",
+        "Időkérés-szabály a sorozat ellen", "Kapus-csere szabálya"]
+    assert [x["area"] for x in t] == ["támadás", "kapus", "taktika", "kapus"]
+    assert t[0]["why"] == hetes["verdict"]
+    assert t[0]["drill"].endswith("; a második dobó a 7-es is dob tízet")
+    assert t[1]["drill"].startswith("hetes-védés az ő dobóik fő irányaira")
+    assert t[2]["drill"].startswith("a padon a 3-0-s sorozatnál a szabály: "
+                                    "időkérés — ")
+    assert t[3]["drill"].endswith("egy gyenge szakasz miatt nem cserélünk — "
+                                  "a kapus kapjon még lövéseket")
+    # A próbák ítélete: igazolt hetes-dobó a próba mondatával, "nem"
+    # ítéletnél a tétel kimarad; az irány csak jósolhatóan; a szabályok a
+    # másik ítélettel.
+    u = next_match_plan("Vendég", hetes=hetes,
+                        hetes_proba={"itelet": "igazolt", "verdict": "P"},
+                        hetes_irany=irany,
+                        hetes_irany_proba={"itelet": "nem", "verdict": "Q"},
+                        idokeres_proba={"itelet": "nem_tori", "verdict": "R"},
+                        kapus_forma_proba={"itelet": "kitart", "verdict": "S"})
+    assert [x["title"] for x in u] == [
+        "Hetes-dobó: a 9-es", "Időkérés-szabály a sorozat ellen",
+        "Kapus-csere szabálya"]
+    assert u[0]["why"] == hetes["verdict"] + "; P"
+    assert "csak védekezés-váltással vagy cserével együtt" in u[1]["drill"]
+    assert u[2]["drill"].endswith("rossz félidő után csere")
+    assert next_match_plan("Vendég", hetes=hetes,
+                           hetes_proba={"itelet": "nem", "verdict": "P"}) == []
+    # Minden tétel együtt: a lista KOV_MECCS_MAX-nál elvágva, a
+    # meccs-specifikus tételek elöl.
+    ved = {"fo": "5-1", "eloszlas": {"5-1": 0.7, "6-0": 0.3}}
+    gsz = [{"mez": 9, "vart_gol": 5.2, "vart_loves": 9.0, "ertek": 1.4,
+            "fo_sav": "far", "szorzo": 1.3, "kapus_szorzo": 1.0}]
+    v = next_match_plan(
+        "Vendég", vedekezes=ved, golszerzok=gsz,
+        figura={"zone": "jobb oldal", "matches": 3, "goals": 5, "name": None},
+        kapus={"kapus_mez": 12, "dontes": True, "verdict": "k"},
+        dontes_drills=[{"title": "D", "area": "támadás", "why": "w",
+                        "drill": "d"}],
+        loves_drill={"title": "L", "area": "támadás", "why": "w", "drill": "d"},
+        hetes=hetes, hetes_irany=irany, idokeres_proba=ido,
+        kapus_forma_proba=kf)
+    assert len(v) == KOV_MECCS_MAX == 8
+    assert v[0]["title"] == "Támadás az 5-1 fal ellen"
+    assert v[-1]["title"] == "Kapus a hetesre: a dobóik irányai"

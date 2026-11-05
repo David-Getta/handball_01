@@ -14631,7 +14631,9 @@ def create_app():
         """AI-edzésterv a következő meccsre (training.next_match_plan): a
         `mi` csapat a `ok` ellen — a modellek meccs előtti képe a két
         csapat könyvtári meccseiből (várható fal, kulcsember és hiánya,
-        visszatérő figura a próbával, kapus, a saját AI-tételeink).
+        visszatérő figura a próbával, kapus, a saját AI-tételeink, a
+        hetes-dobónk és az ő dobóik hetes-irányai a próbáikkal, az
+        időkérés- és a kapus-csere szabálya a saját próbáinkból).
         Minden darab hibatűrő: ami nem számolható, kimarad."""
         from ..pipeline.decisions import decision_samples_sum
         from ..pipeline.play_simulation import (key_player_absence,
@@ -14668,7 +14670,13 @@ def create_app():
                 decision_samples_sum([_dontes_minta_of(m_).get(t_.value) or {}
                                       for m_, t_ in par]))),
             loves_drill=biztos(lambda: season_shot_allocation_drill(
-                mod["tamadas"], mod["lovo"], len(par))) if mod else None)
+                mod["tamadas"], mod["lovo"], len(par))) if mod else None,
+            hetes=biztos(lambda: _hetes_javaslat(mi)),
+            hetes_proba=biztos(lambda: _hetes_proba(csapat=mi)),
+            hetes_irany=biztos(lambda: _hetes_irany_profil(ok)),
+            hetes_irany_proba=biztos(lambda: _hetes_irany_proba(csapat=ok)),
+            idokeres_proba=biztos(lambda: _idokeres_proba(csapat=mi)),
+            kapus_forma_proba=biztos(lambda: _kapusforma_proba(csapat=mi)))
 
     def _items_csapat(items) -> str | None:
         """A felderítés `items` listájának csapata ({"match_id", "team"}

@@ -32,10 +32,16 @@ to objective match analysis.
 - **Explainable AI chain**: every verdict is backed by an explicit,
   inspectable threshold — no black boxes (GDPR / AI Act friendly).
   With few samples the system stays silent rather than guessing.
+- **Self-checking match decisions**: keeper choice, seven-metre taker
+  and direction, timeout against a scoring run, keeper hot/cold streaks
+  and the scouting report itself are each back-tested on the club's own
+  match library — earlier matches only, against a naive baseline — and
+  the product states which of its checks are proven before the coach
+  acts on them.
 - **On-premise processing**: no video upload, no cloud dependency —
   critical for clubs working with minors.
 - **521 analysis layers** across attack, defence, goalkeeping, rules,
-  momentum and physical load; **2,946 automated tests** and a
+  momentum and physical load; **2,947 automated tests** and a
   reproducible benchmark guard the quality of every release. (Live
   figures, generated from the codebase: `docs/SZAMOK.md`; per-layer
   catalogue: `docs/RETEG_KATALOGUS.md`.)

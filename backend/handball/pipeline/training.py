@@ -244,7 +244,7 @@ def season_shot_allocation_drill(tamadas, minta: dict,
 
 
 # Az AI-edzésterv a következő meccsre legfeljebb ennyi tételt ad.
-KOV_MECCS_MAX = 6
+KOV_MECCS_MAX = 8
 
 
 def next_match_plan(ok: str, *, vedekezes: dict | None = None,
@@ -254,7 +254,13 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                     figura_proba: dict | None = None,
                     kapus: dict | None = None,
                     dontes_drills: list | None = None,
-                    loves_drill: dict | None = None) -> list:
+                    loves_drill: dict | None = None,
+                    hetes: dict | None = None,
+                    hetes_proba: dict | None = None,
+                    hetes_irany: dict | None = None,
+                    hetes_irany_proba: dict | None = None,
+                    idokeres_proba: dict | None = None,
+                    kapus_forma_proba: dict | None = None) -> list:
     """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
     modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
     az ő várható faluk ellen (`vedekezes`, play_simulation.
@@ -265,10 +271,16 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
     csak ha a figuráik próbája, `figura_proba`, nem mond ellent), a kapus
     (`kapus`: keeper_choice_from, ha érdemi a különbség), és a saját
     AI-tételeink (`dontes_drills`: proven_decision_drills, az első;
-    `loves_drill`: season_shot_allocation_drill). Mit jelent edzőileg:
-    a meccs előtti hét edzéseinek váza, minden tétel mögött a modell
-    indoka. Visszatérés: [{"title", "area", "why", "drill"}] — legfeljebb
-    KOV_MECCS_MAX."""
+    `loves_drill`: season_shot_allocation_drill), és a döntés-próbák
+    tételei: a hetes-dobónk (`hetes`: seven_taker_choice — csak ha a
+    próbája, `hetes_proba`, nem mond ellent), a kapus felkészítése az ő
+    dobóik hetes-irányaira (`hetes_irany`: seven_direction_profile — csak
+    ha a `hetes_irany_proba` szerint jósolható), az időkérés-szabály a
+    sorozat ellen (`idokeres_proba`: timeout_run_backtest) és a
+    kapus-csere szabálya (`kapus_forma_proba`: keeper_hot_hand_backtest).
+    Mit jelent edzőileg: a meccs előtti hét edzéseinek váza és a pad
+    szabályai, minden tétel mögött a modell indoka. Visszatérés:
+    [{"title", "area", "why", "drill"}] — legfeljebb KOV_MECCS_MAX."""
     from .play_simulation import (KAPUS_SAV_NEV, KULCS_MIN_ERTEK,
                                   _rendszer_nevelovel, defense_system_text,
                                   key_player_text, mezszam_nevelovel)
@@ -325,6 +337,53 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                    for k in ("title", "area", "why", "drill")})
     if loves_drill:
         ki.append({k: loves_drill[k] for k in ("title", "area", "why", "drill")})
+    # A döntés-próbák tételei: a hetes-dobónk, ha a könyvtár dobója a
+    # próbán is jobb (próba nélkül is szól — a tanács akkor a könyvtáré).
+    if hetes and (hetes_proba is None or hetes_proba.get("itelet") == "igazolt"):
+        ki.append({
+            "title": f"Hetes-dobó: {mezszam_nevelovel(hetes['mez'])}",
+            "area": "támadás",
+            "why": hetes["verdict"]
+            + (f"; {hetes_proba['verdict']}" if hetes_proba else ""),
+            "drill": (f"hetes-sorozat {mezszam_nevelovel(hetes['mez'])} "
+                      "részére minden edzés végén, fáradtan is"
+                      + (f"; a második dobó "
+                         f"{mezszam_nevelovel(hetes['masik']['mez'])} is "
+                         "dob tízet" if hetes.get("masik") else ""))})
+    # A kapus felkészítése az ő dobóik fő irányára — csak ha jósolható.
+    if hetes_irany and (hetes_irany_proba is None
+                        or hetes_irany_proba.get("itelet") == "josolhato"):
+        ki.append({
+            "title": "Kapus a hetesre: a dobóik irányai",
+            "area": "kapus",
+            "why": hetes_irany["verdict"]
+            + (f"; {hetes_irany_proba['verdict']}" if hetes_irany_proba
+               else ""),
+            "drill": ("hetes-védés az ő dobóik fő irányaira: a kapus a "
+                      "könyvtár irányára készül, és a dobó mozdulatát "
+                      "utána olvassa — dobónként tíz hetes")})
+    # A pad szabályai a könyvtár próbáiból.
+    if idokeres_proba:
+        megtori = idokeres_proba.get("itelet") == "megtori"
+        ki.append({
+            "title": "Időkérés-szabály a sorozat ellen",
+            "area": "taktika", "why": idokeres_proba["verdict"],
+            "drill": ("a padon a 3-0-s sorozatnál a szabály: "
+                      + ("időkérés" if megtori else
+                         "időkérés csak védekezés-váltással vagy cserével "
+                         "együtt")
+                      + " — a megállított játék utáni első támadás "
+                      "begyakorlása a második csapat ellen")})
+    if kapus_forma_proba:
+        kitart = kapus_forma_proba.get("itelet") == "kitart"
+        ki.append({
+            "title": "Kapus-csere szabálya",
+            "area": "kapus", "why": kapus_forma_proba["verdict"],
+            "drill": ("a kapusok félidős mérlegét a padon vezetjük; a "
+                      "szabály: "
+                      + ("rossz félidő után csere" if kitart else
+                         "egy gyenge szakasz miatt nem cserélünk — a kapus "
+                         "kapjon még lövéseket"))})
     return ki[:KOV_MECCS_MAX]
 
 
