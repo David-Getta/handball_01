@@ -309,19 +309,23 @@ def test_season_report_elorejelzes_sora():
     """A szezon-riport próba-szakaszának "Előrejelzés" sora: a könyvtári
     meccs-előrejelzés próbájából a csapat sorai (forecast_rows_summary) —
     a valódi láncon (hét rövid meccs, időrendben) ugyanaz, mint a motor
-    a meccs-mintákból."""
+    a meccs-mintákból; a "Gólszerzők" sor a csapat lövőinek próbája
+    (scorer_forecast_backtest)."""
     import shutil
 
+    from handball.models.tracking import Team
     from handball.pipeline.play_simulation import (forecast_backtest,
                                                    forecast_backtest_text,
                                                    forecast_rows_summary,
-                                                   match_forecast_sample)
+                                                   match_forecast_sample,
+                                                   player_model_sample,
+                                                   scorer_forecast_backtest)
     tmp2 = tempfile.mkdtemp(prefix="handball_elorejelzes_test_")
     os.environ["HANDBALL_DATA_DIR"] = tmp2
     try:
         matches_dir = Path(tmp2) / "data" / "matches"
         matches_dir.mkdir(parents=True, exist_ok=True)
-        lista = []
+        lista, jm = [], []
         for seed in range(1, 8):
             m = simulate_ground_truth(duration_s=30, fps=10.0, seed=seed,
                                       shots_per_min=8)
@@ -333,9 +337,15 @@ def test_season_report_elorejelzes_sora():
                           "home": m.meta.home_team, "away": m.meta.away_team,
                           "minta": json.loads(json.dumps(
                               match_forecast_sample(m)))})
+            jm.append({"match_id": m.meta.match_id,
+                       "home": m.meta.home_team, "away": m.meta.away_team,
+                       "minta": {side: json.loads(json.dumps(
+                           player_model_sample(m, t))) for side, t in (
+                               ("home", Team.HOME), ("away", Team.AWAY))}})
         ep = forecast_rows_summary(forecast_backtest(lista)["sorok"],
                                    "Szimu Hazai")
         assert ep is not None
+        gp = scorer_forecast_backtest(jm, "Szimu Hazai")
         r = TestClient(create_app()).get("/season/report",
                                          params={"team": "Szimu Hazai"})
     finally:
@@ -345,6 +355,12 @@ def test_season_report_elorejelzes_sora():
     assert "A lövő-modell próbája" in r.text
     assert (f"<p><b>Előrejelzés:</b> {forecast_backtest_text(ep)}.</p>"
             in r.text)
+    # A várható gólszerzők próbája a csapat lövőire (a motorral egyezik;
+    # kevés párnál a sor elmarad).
+    if gp:
+        assert f"<p><b>Gólszerzők:</b> {gp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Gólszerzők:</b>" not in r.text
 
 
 def test_season_report_leaders_section():

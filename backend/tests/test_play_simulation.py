@@ -1540,6 +1540,85 @@ def test_az_elo_esely_a_meccs_elotti_varakozasbol_es_az_allasbol():
     assert live_forecast_alerts(m, None) == {"alerts": []}
 
 
+def test_a_varhato_golszerzok_a_lovo_es_a_kapus_mintabol():
+    """scorer_forecast: a lövő meccsenkénti lövései (csak ahol lőtt) ×
+    xG / lövés × a tanult szorzója × a szemközti kapus szorzója a
+    sávban; az egy meccsen lőtt lövő kimarad; csökkenő sorrend; a mondat
+    a legveszélyesebb okával."""
+    from handball.pipeline.play_simulation import (_kapus_szorzo,
+                                                   _lovo_mintak_osszege,
+                                                   _lovo_szorzo,
+                                                   scorer_forecast,
+                                                   scorer_forecast_text)
+
+    lovo = [{"7": {"far": [4, 2, 1.2]}, "10": {"close": [2, 1, 1.0]},
+             "3": {"mid": [3, 1, 1.2]}},
+            {"7": {"far": [4, 2, 1.2]}, "10": {"close": [2, 1, 1.0]}},
+            {"10": {"close": [2, 1, 1.0]}}]
+    kapus = [{"far": [10, 5]}, {"far": [10, 5]}]
+    sorok = scorer_forecast(lovo, kapus)
+    assert [r["mez"] for r in sorok] == [7, 10]      # a 3-as egy meccsen lőtt
+    ls = _lovo_szorzo(_lovo_mintak_osszege(lovo))
+    ks = _kapus_szorzo({"far": [20, 10]})
+    hetes = sorok[0]
+    assert hetes["meccsek"] == 2 and hetes["vart_loves"] == 4.0
+    assert hetes["fo_sav"] == "far"
+    assert hetes["vart_gol"] == round(4 * 0.3 * ls[7]["far"] * ks["far"], 1)
+    assert (hetes["szorzo"], hetes["kapus_szorzo"]) == (ls[7]["far"],
+                                                         ks["far"])
+    tizes = sorok[1]
+    assert tizes["meccsek"] == 3 and tizes["vart_loves"] == 2.0
+    assert tizes["kapus_szorzo"] == 1.0         # közelről nincs kapus-minta
+    szoveg = scorer_forecast_text(sorok)
+    assert szoveg.startswith("a 7-es " + f"{hetes['vart_gol']:.1f}".replace(
+        ".", ",") + " gól (főleg távolról: ")
+    assert "a szemközti kapus ott" in szoveg
+    assert szoveg.endswith(", a 10-es " + f"{tizes['vart_gol']:.1f}".replace(
+        ".", ",") + " gól")
+    assert scorer_forecast([], kapus) == [] and scorer_forecast_text([]) is None
+
+
+def test_a_varhato_golszerzok_probaja_idorendben():
+    """scorer_forecast_backtest: a lövő várható gólja csak a korábbi
+    meccsekből, összevetve a meccsen lőtt góljaival (csak aki lőtt); a
+    viszonyítás a lövő korábbi gólátlaga; a csapat-szűrő; kevés párnál
+    None."""
+    from handball.pipeline.play_simulation import (GOLSZERZO_PROBA_MIN,
+                                                   scorer_forecast,
+                                                   scorer_forecast_backtest)
+
+    def minta(mez_gol):
+        return {"lovo": {str(m): {"mid": [4, g, 1.6]} for m, g in mez_gol},
+                "kapus": {"mid": [8, 4]}}
+
+    meccsek = []
+    for i in range(12):
+        h, v = ("A", "B") if i % 2 == 0 else ("B", "A")
+        meccsek.append({"match_id": f"m{i}", "home": h, "away": v,
+                        "minta": {"home": minta([(7, 2 + i % 2), (9, 1)]),
+                                  "away": minta([(4, 1), (11, 2)])}})
+    p = scorer_forecast_backtest(meccsek)
+    assert p is not None
+    # Párok: minden meccsen és oldalon az a lövő, akinek már van
+    # becslése (legalább két korábbi meccsen lőtt) és most is lőtt.
+    vart = 0
+    lovo_t: dict = {}
+    for m in meccsek:
+        for side in ("home", "away"):
+            nev = m[side]
+            kor = lovo_t.get(nev, [])
+            becsult = {r["mez"] for r in scorer_forecast(kor, [])}
+            vart += sum(1 for mez in m["minta"][side]["lovo"]
+                        if int(mez) in becsult)
+        for side in ("home", "away"):
+            lovo_t.setdefault(m[side], []).append(m["minta"][side]["lovo"])
+    assert p["parok"] == vart >= GOLSZERZO_PROBA_MIN
+    assert p["verdict"].startswith(f"a lövők várható gólja {vart} lövő ×")
+    csak_a = scorer_forecast_backtest(meccsek, "A")
+    assert csak_a is None or csak_a["parok"] < p["parok"]
+    assert scorer_forecast_backtest(meccsek[:3]) is None
+
+
 def test_az_elorejelzes_meccs_mintaja():
     """match_forecast_sample: oldalanként a látott lövések (xg.match_xg)
     sávonként, az összes felismert gól (a nem látott is) és a látott

@@ -8050,6 +8050,14 @@ def create_app():
                                     forecast_backtest_text(ep)}
         except Exception:
             pass
+        # A várható gólszerzők próbája a csapat lövőire — hibatűrően.
+        try:
+            gp = _golszerzo_proba(team)
+            if gp:
+                modell_proba = {**(modell_proba or {}), "golszerzo": gp,
+                                "golszerzo_verdict": gp["verdict"]}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8591,6 +8599,37 @@ def create_app():
             ki.append((mi.get(t_.value) or {}, mi.get(masik) or {}))
         return ki
 
+    def _golszerzok(nev: str, ellen: str, kiveve: str | None = None):
+        """A `nev` csapat várható gólszerzői az `ellen` csapat ellen
+        (play_simulation.scorer_forecast): a csapat lövő-mintái és az
+        ellenfél kapus-mintái a könyvtári meccseikből (a `kiveve` meccs
+        nélkül; a meccsenkénti minta a lemezes eredmény-tárból)."""
+        from ..pipeline.play_simulation import scorer_forecast
+
+        def mintak(cs):
+            try:
+                return [_jatekos_minta_of(m_, t_.value)
+                        for m_, t_ in _csapat_meccsei(cs)
+                        if m_.meta.match_id != kiveve]
+            except HTTPException:
+                return []
+        return scorer_forecast([m.get("lovo") or {} for m in mintak(nev)],
+                               [m.get("kapus") or {} for m in mintak(ellen)])
+
+    def _golszerzo_proba(csapat: str | None = None):
+        """A várható gólszerzők próbája a könyvtár időrendjében
+        (play_simulation.scorer_forecast_backtest — a `csapat`
+        megadásával csak a csapat lövői)."""
+        from ..pipeline.play_simulation import scorer_forecast_backtest
+        meccsek = []
+        for m_ in _idorendben(_season_matches()):
+            meccsek.append({
+                "match_id": m_.meta.match_id, "home": m_.meta.home_team,
+                "away": m_.meta.away_team,
+                "minta": {"home": _jatekos_minta_of(m_, "home"),
+                          "away": _jatekos_minta_of(m_, "away")}})
+        return scorer_forecast_backtest(meccsek, csapat)
+
     def _elorejelzes_proba(kiveve: str | None = None):
         """Az előrejelzés próbája a könyvtáron (play_simulation.
         forecast_backtest — a meccsek időrendjében, a `kiveve` meccs
@@ -8767,7 +8806,8 @@ def create_app():
         "osszes": a csapatok összege (shooter_model_backtest_summary) vagy
         None, … "elorejelzes": a meccs-előrejelzés próbája a könyvtár
         időrendjében (play_simulation.forecast_backtest) vagy None,
-        "elorejelzes_text"}."""
+        "elorejelzes_text", "golszerzo_proba": a várható gólszerzők
+        próbája (scorer_forecast_backtest) vagy None}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -8810,7 +8850,8 @@ def create_app():
                 "dontesek": dontes_sorok,
                 "dontes_osszes": decision_model_check(dontes_ossz),
                 "elorejelzes": elore,
-                "elorejelzes_text": forecast_backtest_text(elore)}
+                "elorejelzes_text": forecast_backtest_text(elore),
+                "golszerzo_proba": _golszerzo_proba()}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):
@@ -8818,9 +8859,12 @@ def create_app():
         nevű csapat ÖSSZES könyvtári meccséből tanult csapat-modell
         (play_simulation.match_forecast) — a várható gólok, az esélyek, a
         forma (naiv) mellé, és a könyvtári próba (forecast_backtest).
-        Válasz: {"home", "away", "forecast" (vagy None: kevés meccs),
-        "text", "proba", "proba_text"}. 400: hiányzó csapatnév; 404:
-        nincs ilyen csapat a könyvtárban."""
+        És a két csapat várható gólszerzői a másik ellen (scorer_forecast)
+        a próbájukkal (scorer_forecast_backtest). Válasz: {"home",
+        "away", "forecast" (vagy None: kevés meccs), "text", "proba",
+        "proba_text", "golszerzok": {"home", "away"}, "golszerzok_text":
+        {"home", "away"}, "golszerzo_proba"}. 400: hiányzó csapatnév;
+        404: nincs ilyen csapat a könyvtárban."""
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 match_forecast,
                                                 match_forecast_text)
@@ -8832,9 +8876,15 @@ def create_app():
         f = match_forecast(_elorejelzes_tortenet(home),
                            _elorejelzes_tortenet(away))
         proba = _elorejelzes_proba()
+        from ..pipeline.play_simulation import scorer_forecast_text
+        gsz = {"home": _golszerzok(home, away), "away": _golszerzok(away, home)}
         return {"home": home, "away": away, "forecast": f,
                 "text": match_forecast_text(home, away, f),
-                "proba": proba, "proba_text": forecast_backtest_text(proba)}
+                "proba": proba, "proba_text": forecast_backtest_text(proba),
+                "golszerzok": gsz,
+                "golszerzok_text": {k: scorer_forecast_text(v)
+                                    for k, v in gsz.items()},
+                "golszerzo_proba": _golszerzo_proba()}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14187,7 +14237,8 @@ def create_app():
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 live_forecast_alerts,
                                                 match_forecast,
-                                                match_forecast_text)
+                                                match_forecast_text,
+                                                scorer_forecast_text)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -14207,9 +14258,17 @@ def create_app():
         # Az élő esély a 15., 30. és 45. percben: a meccs előtti
         # várakozás és az addigi állás (play_simulation.
         # live_forecast_alerts — csak az addigi kockák).
-        return {"alerts": [{"t": t0, "t_s": round(t0 / fps, 1),
-                            "forecast": f, "proba": proba, "text": szoveg}]
-                + live_forecast_alerts(match, f)["alerts"]}
+        alerts = [{"t": t0, "t_s": round(t0 / fps, 1), "forecast": f,
+                   "proba": proba, "text": szoveg}]
+        # A két csapat várható gólszerzői a másik ellen (a meccs nélkül).
+        for side, nev, ellen in (("home", h, a), ("away", a, h)):
+            sorok = _golszerzok(nev, ellen, match_id)
+            gt = scorer_forecast_text(sorok)
+            if gt:
+                alerts.append({"t": t0, "t_s": round(t0 / fps, 1),
+                               "team": side, "golszerzok": sorok,
+                               "text": f"Várható gólszerzők ({nev}): {gt}"})
+        return {"alerts": alerts + live_forecast_alerts(match, f)["alerts"]}
 
     @app.get("/matches/{match_id}/live-modell-proba")
     def get_live_model_trust(match_id: str):

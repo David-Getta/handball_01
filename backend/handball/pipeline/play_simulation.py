@@ -3329,6 +3329,171 @@ def forecast_backtest_text(p: dict | None) -> str | None:
             f"előre jelzett meccs) — {itelet}")
 
 
+# ---- Várható gólszerzők: ki dönthet a következő meccsen -------------------
+# A lövő várható gólja a következő meccsen a csapat KORÁBBI meccseiből:
+# sávonként a meccsenkénti lövései (csak azokon a meccseken, ahol lőtt —
+# a hiányzó lövő nem húzza le) × az xG / lövése × a tanult szorzója
+# (_lovo_szorzo; tanulatlan sávban 1) × az ellenfél kapusának szorzója a
+# sávban (_kapus_szorzo, az ellenfél korábbi meccseiből; ismeretlenben
+# 1). Legalább GOLSZERZO_MIN_MECCS meccsen kellett lőnie; a mondat a
+# GOLSZERZO_MAX legveszélyesebbet sorolja. A próbához (scorer_forecast_
+# backtest) legalább GOLSZERZO_PROBA_MIN lövő × meccs pár kell.
+GOLSZERZO_MIN_MECCS = 2
+GOLSZERZO_MAX = 3
+GOLSZERZO_PROBA_MIN = 20
+
+
+def scorer_forecast(lovo_mintak: list, kapus_mintak: list) -> list:
+    """Várható gólszerzők a következő meccsen: `lovo_mintak` a csapat
+    korábbi meccseinek nyers lövő-mintái (player_model_sample "lovo",
+    meccsenként), `kapus_mintak` az ellenfél korábbi meccseinek kapus-
+    mintái (player_model_sample "kapus"). Mit jelent edzőileg: kire
+    figyeljen a védekezés (az ő gólszerzőik) / kire járassuk a labdát
+    (a mieink) — a lövő szokásos lövés-mennyiségéből, -helyéből, a
+    befejezéséből és a szemközti kapus sávjaiból. Visszatérés a várható
+    gól szerint csökkenőben (holtversenyben mezszám): [{"mez",
+    "vart_gol", "vart_loves", "meccsek" (ahány meccsen lőtt), "fo_sav"
+    (a legtöbb várható gólt adó sáv), "szorzo" (a lövő szorzója ott),
+    "kapus_szorzo" (az ellenfél kapusáé ott)}] — üres, ha senki sem
+    lőtt legalább GOLSZERZO_MIN_MECCS meccsen."""
+    ossz = _lovo_mintak_osszege(lovo_mintak)
+    meccsek: dict = {}
+    for m in lovo_mintak:
+        for mez, savok in (m or {}).items():
+            if any(int(v[0]) > 0 for v in savok.values()):
+                meccsek[int(mez)] = meccsek.get(int(mez), 0) + 1
+    szorzo = _lovo_szorzo(ossz)
+    kap: dict = {}
+    for m in kapus_mintak:
+        for sav, (faced, saves) in (m or {}).items():
+            r = kap.setdefault(sav, [0, 0])
+            r[0] += int(faced)
+            r[1] += int(saves)
+    kszorzo = _kapus_szorzo(kap)
+    ki = []
+    for mez in sorted(ossz):
+        db = meccsek.get(mez, 0)
+        if db < GOLSZERZO_MIN_MECCS:
+            continue
+        gol = loves = 0.0
+        fo = (0.0, None)
+        for sav, (n, _g, xg) in sorted(ossz[mez].items()):
+            if n <= 0:
+                continue
+            ls = szorzo.get(mez, {}).get(sav, 1.0)
+            ks = kszorzo.get(sav, 1.0)
+            g = (n / db) * (xg / n) * ls * ks
+            gol += g
+            loves += n / db
+            if g > fo[0]:
+                fo = (g, sav)
+        ki.append({"mez": mez, "vart_gol": round(gol, 1),
+                   "vart_loves": round(loves, 1), "meccsek": db,
+                   "fo_sav": fo[1],
+                   "szorzo": szorzo.get(mez, {}).get(fo[1], 1.0),
+                   "kapus_szorzo": kszorzo.get(fo[1], 1.0)})
+    ki.sort(key=lambda r: (-r["vart_gol"], r["mez"]))
+    return ki
+
+
+def scorer_forecast_text(sorok: list) -> str | None:
+    """A várható gólszerzők egy mondatban (a GOLSZERZO_MAX első): "a 9-es
+    5,2 gól (főleg távolról: 1,3× befejező, a szemközti kapus ott 1,2×
+    annyi gólt kap, mint az átlag), a 7-es 4,1 gól, a 11-es 3,0 gól" — a
+    záradék csak az elsőnél, és csak a
+    LOVO_FELIRAT_ELTERES-nél jobban eltérő szorzóval. None üres listára."""
+    if not sorok:
+        return None
+
+    def sz(x):
+        return f"{x:.1f}".replace(".", ",")
+
+    reszek = []
+    for i, r in enumerate(sorok[:GOLSZERZO_MAX]):
+        resz = f"{mezszam_nevelovel(r['mez'])} {sz(r['vart_gol'])} gól"
+        if i == 0 and r.get("fo_sav"):
+            ok = []
+            if abs(r["szorzo"] - 1.0) >= LOVO_FELIRAT_ELTERES:
+                ok.append(f"{sz(r['szorzo'])}× befejező")
+            if abs(r["kapus_szorzo"] - 1.0) >= LOVO_FELIRAT_ELTERES:
+                ok.append(f"a szemközti kapus ott {sz(r['kapus_szorzo'])}× "
+                          "annyi gólt kap, mint az átlag")
+            if ok:
+                resz += (f" (főleg {KAPUS_SAV_NEV[r['fo_sav']]}: "
+                         + ", ".join(ok) + ")")
+        reszek.append(resz)
+    return ", ".join(reszek)
+
+
+def scorer_forecast_backtest(meccsek: list,
+                             csapat: str | None = None) -> dict | None:
+    """A várható gólszerzők próbája: `meccsek` időrendben [{"match_id",
+    "home", "away" (csapatnevek), "minta": {"home" / "away":
+    player_model_sample}}]. Minden meccsen és oldalon a lövők várható
+    gólja CSAK a korábbi meccsekből (scorer_forecast: a csapat korábbi
+    lövő-mintái, az ellenfél korábbi kapus-mintái), összevetve a meccsen
+    lőtt góljaival — azokra a lövőkre, akik a meccsen lőttek. A
+    viszonyítás a lövő korábbi meccsenkénti gólátlaga (a "forma").
+    A `csapat` megadásával csak a csapat lövőinek párjai számítanak (a
+    szezon-riport csapat-sora). Edzőileg: mennyire lehet a "rá
+    figyeljetek" mondatra építeni.
+    Visszatérés: {"parok" (lövő × meccs), "modell_hiba", "naiv_hiba"
+    (átlagos abszolút hiba, gól), "javulas_pct", "verdict"} — None
+    GOLSZERZO_PROBA_MIN-nél kevesebb párnál."""
+    lovo_t: dict = {}
+    kapus_t: dict = {}
+    gol_t: dict = {}
+    hm = hn = 0.0
+    parok = 0
+    for m in meccsek:
+        mi = m.get("minta") or {}
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side, masik in (("home", "away"), ("away", "home")):
+            nev, ellen = nevek[side], nevek[masik]
+            if csapat is not None and nev != csapat:
+                continue
+            sorok = {r["mez"]: r for r in scorer_forecast(
+                lovo_t.get(nev, []), kapus_t.get(ellen, []))}
+            for mez, savok in ((mi.get(side) or {}).get("lovo") or {}).items():
+                mez = int(mez)
+                if mez not in sorok or not any(int(v[0]) > 0
+                                               for v in savok.values()):
+                    continue
+                valodi = sum(int(v[1]) for v in savok.values())
+                kor = gol_t.get((nev, mez), [])
+                naiv = sum(kor) / len(kor) if kor else 0.0
+                hm += abs(sorok[mez]["vart_gol"] - valodi)
+                hn += abs(naiv - valodi)
+                parok += 1
+        for side, masik in (("home", "away"), ("away", "home")):
+            nev = nevek[side]
+            minta = mi.get(side) or {}
+            lovo_t.setdefault(nev, []).append(minta.get("lovo") or {})
+            kapus_t.setdefault(nev, []).append(minta.get("kapus") or {})
+            for mez, savok in (minta.get("lovo") or {}).items():
+                if any(int(v[0]) > 0 for v in savok.values()):
+                    gol_t.setdefault((nev, int(mez)), []).append(
+                        sum(int(v[1]) for v in savok.values()))
+    if parok < GOLSZERZO_PROBA_MIN:
+        return None
+    mh, nh = hm / parok, hn / parok
+    j = (nh - mh) / nh * 100.0 if nh > 0 else 0.0
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    itelet = (f"a modell {j:.0f}%-kal pontosabb a formánál"
+              if j >= PROBA_ITELET_PCT else
+              f"a modell {-j:.0f}%-kal pontatlanabb a formánál"
+              if j <= -PROBA_ITELET_PCT else
+              "a modell nagyjából olyan pontos, mint a forma")
+    return {"parok": parok, "modell_hiba": round(mh, 2),
+            "naiv_hiba": round(nh, 2), "javulas_pct": round(j, 1),
+            "verdict": (f"a lövők várható gólja {parok} lövő × meccs páron "
+                        f"átlagosan {sz(mh)} góllal tért el (a formáé "
+                        f"{sz(nh)}) — {itelet}")}
+
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a

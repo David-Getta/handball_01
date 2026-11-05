@@ -1665,11 +1665,16 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     könyvtár időrendjében a motor próbája."""
     import json
 
+    from handball.models.tracking import Team
     from handball.pipeline.play_simulation import (forecast_backtest,
                                                    forecast_backtest_text,
                                                    match_forecast,
                                                    match_forecast_sample,
-                                                   match_forecast_text)
+                                                   match_forecast_text,
+                                                   player_model_sample,
+                                                   scorer_forecast,
+                                                   scorer_forecast_backtest,
+                                                   scorer_forecast_text)
     from handball.sim.match_simulator import simulate_ground_truth
 
     app = _app(tmp_path, monkeypatch)
@@ -1710,7 +1715,29 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert c.get("/library/forecast",
                  params={"home": h, "away": "Nincs"}).status_code == 404
 
-    [al] = c.get("/matches/gt7/live-elorejelzes").json()["alerts"]
+    # A várható gólszerzők: a csapat lövő-mintái, az ellenfél kapus-
+    # mintái (player_model_sample, a lemezes tár JSON-körbejárásával).
+    jm = [{side: json.loads(json.dumps(player_model_sample(m, t)))
+           for side, t in (("home", Team.HOME), ("away", Team.AWAY))}
+          for m in meccsek]
+
+    def gsz(idx, side):
+        masik = "away" if side == "home" else "home"
+        return scorer_forecast([jm[i][side]["lovo"] for i in idx],
+                               [jm[i][masik]["kapus"] for i in idx])
+
+    assert j["golszerzok"] == {"home": gsz(range(7), "home"),
+                               "away": gsz(range(7), "away")}
+    assert j["golszerzok"]["home"], "a hazai lövői tanulhatók"
+    assert j["golszerzok_text"]["home"] == scorer_forecast_text(
+        gsz(range(7), "home"))
+    gp = scorer_forecast_backtest([
+        {"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
+         "minta": jm[i]} for i in range(7)])
+    assert j["golszerzo_proba"] == gp
+
+    alerts = c.get("/matches/gt7/live-elorejelzes").json()["alerts"]
+    al = alerts[0]
     f6 = match_forecast(tort(range(6), "home"), tort(range(6), "away"))
     p6 = forecast_backtest(lista(range(6)))
     assert al["forecast"] == f6
@@ -1718,11 +1745,19 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     if p6:
         vart += f" (a próba: {forecast_backtest_text(p6)})"
     assert al["text"] == vart
+    # Utána a két csapat várható gólszerzői (a meccs nélkül).
+    gsorok = [x for x in alerts[1:] if "golszerzok" in x]
+    vart_g = [(side, f"Várható gólszerzők ({nev}): "
+               + scorer_forecast_text(gsz(range(6), side)))
+              for side, nev in (("home", h), ("away", a))
+              if gsz(range(6), side)]
+    assert [(x["team"], x["text"]) for x in gsorok] == vart_g
     assert c.get("/matches/nincs/live-elorejelzes").status_code == 404
 
     mc = c.get("/library/player-model-check").json()
     assert mc["elorejelzes"] == json.loads(json.dumps(proba))
     assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
+    assert mc["golszerzo_proba"] == gp
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

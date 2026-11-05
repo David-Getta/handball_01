@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **Várható gólszerzők: ki dönthet a következő meccsen** (motor +
+  végpontok + meccsterv + élő képernyő + szezon-riport + szezon-képernyő):
+  a lövők várható gólja a következő ellenfél ellen a játékos-modellből —
+  sávonként a lövő meccsenkénti lövései (csak ahol lőtt), a helyzetei
+  értéke, a tanult befejező-szorzója és a szemközti kapus szorzója a
+  sávban: "a 9-es 5,2 gól (főleg távolról: 1,3× befejező, a szemközti
+  kapus ott 1,2× annyi gólt kap, mint az átlag), a 7-es 4,1 gól, a 11-es
+  3,0 gól". És a próbája: a könyvtár időrendjében minden lövő várható
+  gólja csak a korábbi meccsekből, összevetve a meccsen lőtt góljaival,
+  a lövő korábbi gólátlagához ("forma") mérve. Edzőileg: kire figyeljen
+  a védekezés, kire járassuk a labdát — és mennyire lehet a "rá
+  figyeljetek" mondatra építeni. Legalább két meccsen kellett lőnie; a
+  próbához legalább 20 lövő × meccs pár kell. A /library/forecast
+  "golszerzok" mezője (a meccsterv ELŐREJELZÉS kártyáján az övék és a
+  mieink), az élő képernyő meccs eleji "Várható gólszerzők" sorai (a
+  meccs nélkül), a /library/player-model-check "golszerzo_proba" mezője
+  (szezon-képernyő) és a szezon-riport "Gólszerzők" sora a csapat
+  lövőire (play_simulation.scorer_forecast, scorer_forecast_backtest).
+
 - **Meccs-előrejelzés a csapat-modellekből, próbával** (motor + végpontok
   + meccsterv + élő képernyő + szezon-riport + szezon-képernyő): a
   következő meccs várható eredménye a két csapat korábbi meccseiből
