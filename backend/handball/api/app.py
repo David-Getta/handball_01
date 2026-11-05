@@ -8518,7 +8518,8 @@ def create_app():
         eredmény-tárból, hogy a könyvtár-szintű próba második hívása ne
         töltse vissza a hideg meccseket."""
         from ..pipeline.decisions import decision_outcome_sample
-        return _cached_result(m_.meta.match_id, "dontes-minta-v1",
+        # (A név verziója a minta alakjával nő — a v2 helyzetenként is.)
+        return _cached_result(m_.meta.match_id, "dontes-minta-v2",
                               lambda: decision_outcome_sample(m_))
 
     def _jatekos_minta_of(m_, side: str) -> dict:

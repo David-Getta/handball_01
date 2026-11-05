@@ -216,6 +216,14 @@ class _SeasonScreenState extends State<SeasonScreen> {
         const SizedBox(height: AppSpacing.sm),
         Text("Döntések a könyvtárban: ${dOsszes!["verdict"]}.",
             style: AppText.value.copyWith(fontSize: 13)),
+        // Helyzetenként: hol igazolja a pálya a modell legjobb opcióját.
+        for (final h in ((dOsszes["helyzetek"] as List?) ?? const [])
+            .whereType<Map>())
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 2),
+            child: Text("· ${h["verdict"]}",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+          ),
       ],
       for (final t in dontesek)
         Padding(

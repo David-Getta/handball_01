@@ -1460,13 +1460,18 @@ LIVE_SIT_MIN = 6
 DONTES_KIMENET_S = 8.0
 DONTES_PROBA_MIN = 20
 DONTES_PROBA_PP = 5.0
+# Helyzetenként (kilépnek rá / szabad a 6 m-es társ / szabad lőhely) a
+# próba csoportonként ennyi döntéstől szól — kevesebb, mint az egészé,
+# mert a helyzet szűkebb.
+DONTES_PROBA_HELYZET_MIN = 10
 
 
 def decision_outcome_sample(match: Match,
                             config: Optional[TacticsConfig] = None) -> dict:
     """A döntés-modell próbájának NYERS, JSON-barát mintája egy meccsről:
     {"home" / "away": {"jo": [döntés, gól utána], "rossz": [döntés, gól
-    utána]}} — a "jó" döntés a modell szerinti legjobb opció
+    utána], "helyzetek": {helyzet: {"jo": […], "rossz": […]}}}} — a "jó"
+    döntés a modell szerinti legjobb opció
     (situational_decisions, modell nélkül), a "gól utána" a döntő csapat
     gólja a döntés után DONTES_KIMENET_S-en belül."""
     from .event_detection import EventType, detect_shots
@@ -1481,19 +1486,27 @@ def decision_outcome_sample(match: Match,
             golok[e.team.value].append(e.t)
     for v in golok.values():
         v.sort()
-    out = {s: {"jo": [0, 0], "rossz": [0, 0]} for s in ("home", "away")}
+    out = {s: {"jo": [0, 0], "rossz": [0, 0], "helyzetek": {}}
+           for s in ("home", "away")}
     for r in sorted(recs, key=lambda r: (r["t"], r["side"])):
         cs = "jo" if r["good"] else "rossz"
         gol = any(r["t"] <= g <= r["t"] + ablak for g in golok[r["side"]])
         out[r["side"]][cs][0] += 1
         out[r["side"]][cs][1] += int(gol)
+        if r.get("sit"):
+            h = out[r["side"]]["helyzetek"].setdefault(
+                r["sit"], {"jo": [0, 0], "rossz": [0, 0]})
+            h[cs][0] += 1
+            h[cs][1] += int(gol)
     return out
 
 
 def decision_model_check(minta: dict) -> dict | None:
     """A döntés-modell próbája az (összegzett) mintából (`minta` =
-    {"jo": [döntés, gól], "rossz": [döntés, gól]}): {"jo_dontes",
-    "jo_gol_pct", "rossz_dontes", "rossz_gol_pct", "kulonbseg_pp",
+    {"jo": [döntés, gól], "rossz": [döntés, gól], "helyzetek": …}):
+    {"jo_dontes", "jo_gol_pct", "rossz_dontes", "rossz_gol_pct",
+    "kulonbseg_pp", "helyzetek" ([{"sit", …, "verdict"}] — csak ahol
+    mindkét csoportban legalább DONTES_PROBA_HELYZET_MIN döntés van),
     "verdict"} — None, ha bármelyik csoportban kevesebb mint
     DONTES_PROBA_MIN döntés van.
 
@@ -1521,20 +1534,45 @@ def decision_model_check(minta: dict) -> dict | None:
     else:
         verdict = (f"{alap} — nagyjából ugyanannyi: a modell legjobb "
                    "opciója itt nem válik el a többitől")
+    helyzetek = []
+    for sit in SIT_SITUATIONS:
+        h = (minta.get("helyzetek") or {}).get(sit) or {}
+        hjn, hjg = (int(x) for x in (h.get("jo") or [0, 0]))
+        hrn, hrg = (int(x) for x in (h.get("rossz") or [0, 0]))
+        if hjn < DONTES_PROBA_HELYZET_MIN or hrn < DONTES_PROBA_HELYZET_MIN:
+            continue
+        hjp, hrp = 100.0 * hjg / hjn, 100.0 * hrg / hrn
+        hk = round(hjp - hrp, 1)
+        mondat = (f"ha {SIT_PHRASE[sit]}: a legjobb opció után "
+                  f"{hjp:.0f}% ({hjn} döntés), máskor {hrp:.0f}% ({hrn})")
+        mondat += (" — itt igazolja a pálya" if hk >= DONTES_PROBA_PP else
+                   " — itt nem igazolja" if hk <= -DONTES_PROBA_PP else
+                   " — itt nem válik el")
+        helyzetek.append({"sit": sit, "jo_dontes": hjn,
+                          "jo_gol_pct": round(hjp, 1), "rossz_dontes": hrn,
+                          "rossz_gol_pct": round(hrp, 1), "kulonbseg_pp": hk,
+                          "verdict": mondat})
     return {"jo_dontes": jn, "jo_gol_pct": round(jp, 1), "rossz_dontes": rn,
             "rossz_gol_pct": round(rp, 1), "kulonbseg_pp": kul,
-            "verdict": verdict}
+            "helyzetek": helyzetek, "verdict": verdict}
 
 
 def decision_samples_sum(mintak: list) -> dict:
     """Több decision_outcome_sample-oldal ({"jo": [n, g], "rossz": [n, g]})
     összege."""
-    ossz = {"jo": [0, 0], "rossz": [0, 0]}
+    ossz = {"jo": [0, 0], "rossz": [0, 0], "helyzetek": {}}
     for m in mintak:
         for k in ("jo", "rossz"):
             n, g = (m or {}).get(k) or [0, 0]
             ossz[k][0] += int(n)
             ossz[k][1] += int(g)
+        for sit, h in ((m or {}).get("helyzetek") or {}).items():
+            o = ossz["helyzetek"].setdefault(sit, {"jo": [0, 0],
+                                                   "rossz": [0, 0]})
+            for k in ("jo", "rossz"):
+                n, g = h.get(k) or [0, 0]
+                o[k][0] += int(n)
+                o[k][1] += int(g)
     return ossz
 
 

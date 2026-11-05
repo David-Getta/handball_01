@@ -30,6 +30,12 @@ extra hardware and fully on-premise processing.
 - **Explainable AI chain**: every verdict is tied to explicit,
   inspectable thresholds; with insufficient samples the system stays
   silent instead of guessing (AI Act / GDPR-friendly by design).
+- **Self-checking player models**: the learned shooter, goalkeeper and
+  decision models are back-tested on the club's own match library —
+  each match is predicted from the earlier ones and compared with the
+  raw expected-goal value and a team-level baseline — so the product
+  states how far each model can be trusted, and says so when an
+  apparent individual effect is really a team-wide one.
 - 521 analysis layers over a shared tracking data model; outputs
   phrased automatically in coach language.
 

@@ -660,9 +660,12 @@ def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
     assert f"<p><b>Kapus:</b> {k}.</p>" in html
     dv = ("a modell legjobb opcióját választó 40 döntés után 8 mp-en belül "
           "30%-ban jött gól")
-    d_html = season_report_html("Szeged", tr, [], 4,
-                                modell_proba={"dontes_verdict": dv})
+    d_html = season_report_html("Szeged", tr, [], 4, modell_proba={
+        "dontes_verdict": dv, "dontes": {"helyzetek": [
+            {"verdict": "ha szabad a 6 m-es társuk: a legjobb opció után 40% "
+                        "(15 döntés), máskor 10% (20) — itt igazolja a pálya"}]}})
     assert f"<p><b>Döntések:</b> {dv}.</p>" in d_html
+    assert "<li>ha szabad a 6 m-es társuk: a legjobb opció után 40%" in d_html
     csak = season_report_html("Szeged", tr, [], 4,
                               modell_proba={"verdict": None, "kapus_verdict": k})
     assert "<b>Lövők:</b>" not in csak and f"<p><b>Kapus:</b> {k}.</p>" in csak

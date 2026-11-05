@@ -1447,7 +1447,26 @@ def test_a_dontes_modell_probaja_a_mintabol():
     assert decision_model_check({}) is None
     assert decision_samples_sum([{"jo": [3, 1], "rossz": [2, 0]}, {},
                                  {"jo": [1, 1]}]) == {"jo": [4, 2],
-                                                      "rossz": [2, 0]}
+                                                      "rossz": [2, 0],
+                                                      "helyzetek": {}}
+    # Helyzetenként: csak ahol mindkét csoportban elég döntés van.
+    from handball.pipeline.decisions import DONTES_PROBA_HELYZET_MIN
+    assert DONTES_PROBA_HELYZET_MIN == 10
+    h = {"szabad a 6 m-es társ": {"jo": [15, 6], "rossz": [20, 2]},
+         "kilépnek rá": {"jo": [12, 2], "rossz": [25, 3]},
+         "szabad lőhely": {"jo": [5, 2], "rossz": [15, 1]}}
+    ossz = decision_samples_sum([{"jo": [20, 5], "rossz": [30, 3],
+                                  "helyzetek": h},
+                                 {"jo": [20, 7], "rossz": [30, 3],
+                                  "helyzetek": {"kilépnek rá": {
+                                      "jo": [1, 0], "rossz": [0, 0]}}}])
+    assert ossz["helyzetek"]["kilépnek rá"] == {"jo": [13, 2], "rossz": [25, 3]}
+    hr = decision_model_check(ossz)["helyzetek"]
+    assert [x["sit"] for x in hr] == ["kilépnek rá", "szabad a 6 m-es társ"]
+    assert hr[1]["verdict"] == (
+        "ha szabad a 6 m-es társuk: a legjobb opció után 40% (15 döntés), "
+        "máskor 10% (20) — itt igazolja a pálya")
+    assert hr[0]["verdict"].endswith("itt nem válik el")
 
 
 def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
@@ -1464,9 +1483,9 @@ def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
     def _sit(match, config=None, records_out=None, modellek=None):
         hivas["modellek"] = modellek
         records_out.extend([
-            {"t": 10, "side": "home", "good": 1},
-            {"t": 100, "side": "home", "good": 0},
-            {"t": 300, "side": "away", "good": 1}])
+            {"t": 10, "side": "home", "good": 1, "sit": "kilépnek rá"},
+            {"t": 100, "side": "home", "good": 0, "sit": "kilépnek rá"},
+            {"t": 300, "side": "away", "good": 1, "sit": "szabad lőhely"}])
         return {}
 
     class _E:
@@ -1479,8 +1498,10 @@ def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
     m = _sit_match()
     d = decision_outcome_sample(m)
     assert hivas["modellek"] is False
-    assert d == {"home": {"jo": [1, 1], "rossz": [1, 1]},
-                 "away": {"jo": [1, 0], "rossz": [0, 0]}}
+    assert d == {"home": {"jo": [1, 1], "rossz": [1, 1], "helyzetek": {
+                     "kilépnek rá": {"jo": [1, 1], "rossz": [1, 1]}}},
+                 "away": {"jo": [1, 0], "rossz": [0, 0], "helyzetek": {
+                     "szabad lőhely": {"jo": [1, 0], "rossz": [0, 0]}}}}
     monkeypatch.undo()
     valodi = decision_outcome_sample(_sit_match())
     recs: list = []

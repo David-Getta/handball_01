@@ -5189,6 +5189,11 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                if mp.get("kapus_verdict") else "")
             + (f"<p><b>Döntések:</b> {escape(str(mp['dontes_verdict']))}.</p>"
                if mp.get("dontes_verdict") else "")
+            + ("<ul>" + "".join(
+                   f"<li>{escape(str(h_['verdict']))}</li>"
+                   for h_ in ((mp.get("dontes") or {}).get("helyzetek") or []))
+               + "</ul>"
+               if (mp.get("dontes") or {}).get("helyzetek") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "

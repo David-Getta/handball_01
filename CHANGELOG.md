@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **A döntés-próba helyzetenként** (motor + szezon-riport +
+  szezon-képernyő): a döntés-modell próbája helyzetenként is — kilépnek
+  rá, szabad a 6 m-es társ, szabad lőhely: hol igazolja a pálya a modell
+  legjobb opcióját, és hol nem. "Ha szabad a 6 m-es társuk: a legjobb
+  opció után 40% (15 döntés), máskor 10% (20) — itt igazolja a pálya";
+  ahol a két csoport nem válik el, azt is kimondja. Csoportonként
+  legalább 10 döntés kell. Edzőileg: a döntés-edzést oda kell tenni, ahol
+  a modell tanácsa a pályán is gólt hoz. A szezon-riport "Döntések" sora
+  alatt és a szezon-képernyő könyvtár-összesítője alatt.
+
 - **A döntés-modell próbája** (motor + végpont + szezon-riport +
   szezon-képernyő): a "mi lett volna a jobb döntés" mondatoknak akkor van
   súlya, ha a pályán is igaz. A besorolt döntéseket (kilépnek rá, szabad
