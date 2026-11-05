@@ -1578,6 +1578,33 @@ def test_a_varhato_golszerzok_a_lovo_es_a_kapus_mintabol():
     assert scorer_forecast([], kapus) == [] and scorer_forecast_text([]) is None
 
 
+def test_a_kulcsember_gol_erteke_a_csapat_tobbi_lovojehez():
+    """A scorer_forecast "ertek" mezője: a lövő várható gólja mínusz
+    ugyanannyi lövés a csapat TÖBBI lövőjének lövésenkénti várható
+    góljával; egyetlen lövőnél None. key_player_text: a legnagyobb
+    gól-értékű lövő KULCS_MIN_ERTEK-től."""
+    from handball.pipeline.play_simulation import (KULCS_MIN_ERTEK,
+                                                   key_player_text,
+                                                   scorer_forecast)
+
+    # A 7-es helyzetei négyszer annyit érnek lövésenként (0,8 vs 0,2 xG).
+    lovo = [{"7": {"close": [5, 4, 4.0]}, "9": {"far": [10, 2, 2.0]}}] * 2
+    sorok = {r["mez"]: r for r in scorer_forecast(lovo, [])}
+    h, k = sorok[7], sorok[9]
+    assert h["ertek"] == round(
+        h["vart_gol"] - h["vart_loves"] * k["vart_gol"] / k["vart_loves"], 1)
+    assert h["ertek"] > KULCS_MIN_ERTEK > k["ertek"]
+    assert key_player_text(list(sorok.values())) == (
+        "a 7-es: ugyanannyi lövésből " + f"{h['ertek']:.1f}".replace(".", ",")
+        + " góllal többet ér meccsenként, mint a csapat többi lövője")
+    egy = scorer_forecast([{"7": {"close": [5, 4, 4.0]}}] * 2, [])
+    assert egy[0]["ertek"] is None and key_player_text(egy) is None
+    # Egyforma lövők: senki sem kulcsember.
+    egyforma = scorer_forecast([{"7": {"mid": [5, 2, 2.0]},
+                                 "9": {"mid": [5, 2, 2.0]}}] * 2, [])
+    assert key_player_text(egyforma) is None
+
+
 def test_a_varhato_golszerzok_probaja_idorendben():
     """scorer_forecast_backtest: a lövő várható gólja csak a korábbi
     meccsekből, összevetve a meccsen lőtt góljaival (csak aki lőtt); a

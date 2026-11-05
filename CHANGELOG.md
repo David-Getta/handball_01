@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.191 óta)
+
+- **Kulcsember: gól-érték a cserénél** (motor + végpont + meccsterv +
+  nyomtatható meccsterv): a várható gólszerzők mellé, hogy ki ér a
+  legtöbbet — a lövő várható gólja mínusz ugyanannyi lövés a csapat
+  többi lövőjének lövésenkénti várható góljával: "Kulcsemberük — vegyétek
+  ki a játékból: a 9-es: ugyanannyi lövésből 1,4 góllal többet ér
+  meccsenként, mint a csapat többi lövője". A miénknél: "juttassátok
+  lövéshez". Edzőileg: nem az a kulcsember, aki a legtöbbet lő, hanem
+  akinek a lövése a legtöbbet ér a többiekéhez képest. Fél gól alatti
+  különbségnél nincs mondat. A scorer_forecast sorainak "ertek" mezője,
+  a /library/forecast "kulcsember_text" mezője, a meccsterv kártyája és
+  a nyomtatható meccsterv (play_simulation.key_player_text).
+
 ## v0.1.191 — kiadva (2026-11-05)
 
 > Kiadás-jegyzet: AZ ÖNELLENŐRZŐ AI ÉS AZ ELŐREJELZÉS. A lövő-, a kapus-

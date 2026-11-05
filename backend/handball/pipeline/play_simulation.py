@@ -3436,8 +3436,10 @@ def scorer_forecast(lovo_mintak: list, kapus_mintak: list) -> list:
     gól szerint csökkenőben (holtversenyben mezszám): [{"mez",
     "vart_gol", "vart_loves", "meccsek" (ahány meccsen lőtt), "fo_sav"
     (a legtöbb várható gólt adó sáv), "szorzo" (a lövő szorzója ott),
-    "kapus_szorzo" (az ellenfél kapusáé ott)}] — üres, ha senki sem
-    lőtt legalább GOLSZERZO_MIN_MECCS meccsen."""
+    "kapus_szorzo" (az ellenfél kapusáé ott), "ertek" (gól-érték a
+    cserénél: a várható gólja mínusz ugyanannyi lövés a csapat többi
+    lövőjének lövésenkénti várható góljával; None egyetlen lövőnél)}] —
+    üres, ha senki sem lőtt legalább GOLSZERZO_MIN_MECCS meccsen."""
     ossz = _lovo_mintak_osszege(lovo_mintak)
     meccsek: dict = {}
     for m in lovo_mintak:
@@ -3474,8 +3476,38 @@ def scorer_forecast(lovo_mintak: list, kapus_mintak: list) -> list:
                    "fo_sav": fo[1],
                    "szorzo": szorzo.get(mez, {}).get(fo[1], 1.0),
                    "kapus_szorzo": kszorzo.get(fo[1], 1.0)})
+    # Gól-érték a cserénél: a lövő várható gólja mínusz ugyanannyi lövés
+    # a csapat TÖBBI lövőjének átlagos (lövésenkénti várható) befejezésével.
+    for r in ki:
+        tobbi = [o for o in ki if o["mez"] != r["mez"]]
+        tl = sum(o["vart_loves"] for o in tobbi)
+        r["ertek"] = (round(r["vart_gol"] - r["vart_loves"]
+                            * sum(o["vart_gol"] for o in tobbi) / tl, 1)
+                      if tl > 0 else None)
     ki.sort(key=lambda r: (-r["vart_gol"], r["mez"]))
     return ki
+
+
+# A kulcsember-mondat ennyi gól-értéktől (meccsenként, a csapat többi
+# lövőjéhez képest ugyanannyi lövésből) szól.
+KULCS_MIN_ERTEK = 0.5
+
+
+def key_player_text(sorok: list) -> str | None:
+    """A kulcsember egy mondatban: a legnagyobb gól-értékű lövő (a
+    scorer_forecast "ertek" mezője), ha legalább KULCS_MIN_ERTEK — "a
+    9-es: ugyanannyi lövésből 1,4 góllal többet ér meccsenként, mint a
+    csapat többi lövője". Edzőileg: kit kell kivenni a játékból (az
+    övék) / kit kell lövéshez juttatni (a miénk). None, ha nincs ilyen."""
+    jo = [r for r in sorok or [] if r.get("ertek") is not None]
+    if not jo:
+        return None
+    r = min(jo, key=lambda r: (-r["ertek"], r["mez"]))
+    if r["ertek"] < KULCS_MIN_ERTEK:
+        return None
+    return (f"{mezszam_nevelovel(r['mez'])}: ugyanannyi lövésből "
+            + f"{r['ertek']:.1f}".replace(".", ",")
+            + " góllal többet ér meccsenként, mint a csapat többi lövője")
 
 
 def scorer_forecast_text(sorok: list) -> str | None:

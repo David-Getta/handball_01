@@ -542,7 +542,8 @@ def scouting_report_html(rep: ScoutingReport,
     `elorejelzes` (opcionális): a meccsterv mellé a csapat-modell
     várakozása — {"text" (play_simulation.match_forecast_text),
     "proba" (a próba mondata), "ok" / "mi" (a két csapat várható
-    gólszerzői, scorer_forecast_text), "vedekezes" (az ő várható
+    gólszerzői, scorer_forecast_text), "kulcs_ok" / "kulcs_mi" (a két
+    csapat kulcsembere, key_player_text), "vedekezes" (az ő várható
     védekezési rendszerük, defense_system_text), "golszerzo_proba"} —
     "Előrejelzés"
     szakaszként, a meccsterv után; üres mezők kimaradnak.
@@ -552,7 +553,9 @@ def scouting_report_html(rep: ScoutingReport,
     ej = elorejelzes or {}
     ej_sorok = [(c_, ej.get(k_)) for c_, k_ in (
         ("Az ő várható gólszerzőik", "ok"),
+        ("Kulcsemberük — vegyétek ki a játékból", "kulcs_ok"),
         ("A mi várható gólszerzőink", "mi"),
+        ("Kulcsemberünk — juttassátok lövéshez", "kulcs_mi"),
         ("Várható védekezésük", "vedekezes")) if ej.get(k_)]
     elorejelzes_html = ""
     if ej.get("text") or ej_sorok:

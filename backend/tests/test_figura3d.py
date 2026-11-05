@@ -1738,6 +1738,10 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
         {"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
          "minta": jm[i]} for i in range(7)])
     assert j["golszerzo_proba"] == gp
+    from handball.pipeline.play_simulation import key_player_text
+    assert j["kulcsember_text"] == {
+        "home": key_player_text(gsz(range(7), "home")),
+        "away": key_player_text(gsz(range(7), "away"))}
     # A várható védekezési rendszer: a csapat meccseinek "formak" mintái.
     ved = {side: defense_system_forecast([jm[i][side]["formak"]
                                           for i in range(7)])
@@ -1850,6 +1854,13 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
     assert vo is not None
     assert (f"<li>Várható védekezésük: "
             f"{escape(defense_system_text(vo))}.</li>") in r.text
+    from handball.pipeline.play_simulation import key_player_text
+    kmi = key_player_text(mi)
+    if kmi:
+        assert (f"<li>Kulcsemberünk — juttassátok lövéshez: "
+                f"{escape(kmi)}.</li>") in r.text
+    else:
+        assert "Kulcsemberünk" not in r.text
     r2 = c.post("/scouting/export", json={"items": items})
     assert "Előrejelzés (a csapat-modellekből)" not in r2.text
 

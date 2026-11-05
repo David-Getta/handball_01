@@ -8924,8 +8924,9 @@ def create_app():
         "proba_text", "golszerzok": {"home", "away"}, "golszerzok_text":
         {"home", "away"}, "golszerzo_proba", "vedekezes": {"home",
         "away"} (a várható védekezési rendszer, defense_system_forecast),
-        "vedekezes_text", "vedekezes_proba"}. 400: hiányzó csapatnév;
-        404: nincs ilyen csapat a könyvtárban."""
+        "vedekezes_text", "vedekezes_proba", "kulcsember_text": {"home",
+        "away"} (a legnagyobb gól-értékű lövő, key_player_text)}. 400:
+        hiányzó csapatnév; 404: nincs ilyen csapat a könyvtárban."""
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 match_forecast,
                                                 match_forecast_text)
@@ -8938,6 +8939,7 @@ def create_app():
                            _elorejelzes_tortenet(away))
         proba = _elorejelzes_proba()
         from ..pipeline.play_simulation import (defense_system_text,
+                                                key_player_text,
                                                 scorer_forecast_text)
         gsz = {"home": _golszerzok(home, away), "away": _golszerzok(away, home)}
         ved = {"home": _vedekezes_varhato(home), "away": _vedekezes_varhato(away)}
@@ -8951,7 +8953,9 @@ def create_app():
                 "vedekezes": ved,
                 "vedekezes_text": {k: defense_system_text(v)
                                    for k, v in ved.items()},
-                "vedekezes_proba": _vedekezes_proba()}
+                "vedekezes_proba": _vedekezes_proba(),
+                "kulcsember_text": {k: key_player_text(v)
+                                    for k, v in gsz.items()}}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14165,11 +14169,15 @@ def create_app():
         f = match_forecast(_elorejelzes_tortenet(mi), _elorejelzes_tortenet(ok))
         pt = forecast_backtest_text(_elorejelzes_proba())
         gp = _golszerzo_proba()
-        from ..pipeline.play_simulation import defense_system_text
+        from ..pipeline.play_simulation import (defense_system_text,
+                                                key_player_text)
+        g_ok, g_mi = _golszerzok(ok, mi), _golszerzok(mi, ok)
         return {"text": match_forecast_text(mi, ok, f),
                 "proba": f"A próba a könyvtárban: {pt}" if pt and f else None,
-                "ok": scorer_forecast_text(_golszerzok(ok, mi)),
-                "mi": scorer_forecast_text(_golszerzok(mi, ok)),
+                "ok": scorer_forecast_text(g_ok),
+                "mi": scorer_forecast_text(g_mi),
+                "kulcs_ok": key_player_text(g_ok),
+                "kulcs_mi": key_player_text(g_mi),
                 "vedekezes": defense_system_text(_vedekezes_varhato(ok)),
                 "golszerzo_proba": (f"A gólszerző-becslés próbája: "
                                     f"{gp['verdict']}" if gp else None)}

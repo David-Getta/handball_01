@@ -287,6 +287,7 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final gsz = (_forecast?["golszerzok_text"] as Map?) ?? const {};
     final gProba = (_forecast?["golszerzo_proba"] as Map?)?["verdict"];
     final vedOk = ((_forecast?["vedekezes_text"] as Map?) ?? const {})["away"];
+    final kulcs = (_forecast?["kulcsember_text"] as Map?) ?? const {};
     final vedProba = (_forecast?["vedekezes_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
@@ -315,11 +316,27 @@ class _MatchupScreenState extends State<MatchupScreen> {
                       style: AppText.label.copyWith(
                           fontSize: 12.5, color: AppColors.textPrimary)),
                 ],
+                // A kulcsember: a legnagyobb gól-értékű lövő (ugyanannyi
+                // lövésből ennyivel többet ér a csapat többi lövőjénél).
+                if (kulcs["away"] is String) ...[
+                  const SizedBox(height: 4),
+                  Text("Kulcsemberük — vegyétek ki a játékból: "
+                      "${kulcs["away"]}.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.gold)),
+                ],
                 if (gsz["home"] is String) ...[
                   const SizedBox(height: 4),
                   Text("A mi várható gólszerzőink: ${gsz["home"]}.",
                       style: AppText.label.copyWith(
                           fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (kulcs["home"] is String) ...[
+                  const SizedBox(height: 4),
+                  Text("Kulcsemberünk — juttassátok lövéshez: "
+                      "${kulcs["home"]}.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.gold)),
                 ],
                 if (gProba is String) ...[
                   const SizedBox(height: 4),
