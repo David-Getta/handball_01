@@ -54,6 +54,8 @@ class _MatchupScreenState extends State<MatchupScreen> {
   // A meccs-előrejelzés (GET /library/forecast): külön hívás, a hibája
   // nem viszi el a tervet.
   Map<String, dynamic>? _forecast;
+  // Az AI-edzésterv a meccsre (GET /library/next-match-plan).
+  List<Map<String, dynamic>> _plan = const [];
 
   @override
   void initState() {
@@ -114,6 +116,7 @@ class _MatchupScreenState extends State<MatchupScreen> {
       _error = null;
       _result = null;
       _forecast = null;
+      _plan = const [];
     });
     try {
       final r = await _api.fetchMatchup(_itemsOf(own), _itemsOf(opp));
@@ -121,10 +124,15 @@ class _MatchupScreenState extends State<MatchupScreen> {
       try {
         f = await _api.fetchLibraryForecast(own, opp);
       } catch (_) {}
+      List<Map<String, dynamic>> terv = const [];
+      try {
+        terv = await _api.fetchNextMatchPlan(own, opp);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _result = r;
         _forecast = f;
+        _plan = terv;
         _working = false;
       });
     } catch (e) {
@@ -378,6 +386,35 @@ class _MatchupScreenState extends State<MatchupScreen> {
               ]),
         ),
         const SizedBox(height: AppSpacing.lg),
+      ],
+      // EDZÉSTERV A MECCSRE: a modellek meccs előtti képéből egy rövid,
+      // indokolt lista — a hét edzéseinek váza.
+      if (_plan.isNotEmpty) ...[
+        Text("EDZÉSTERV A MECCSRE (AI)", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.sm),
+        for (final (i, t) in _plan.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: AppTheme.card(),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("${i + 1}. ${t["title"] ?? ""}",
+                        style: AppText.value.copyWith(
+                            fontSize: 13, color: AppColors.gold)),
+                    const SizedBox(height: 2),
+                    Text("${t["why"] ?? ""}.",
+                        style: AppText.label.copyWith(
+                            fontSize: 12, color: AppColors.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text("Gyakorlat: ${t["drill"] ?? ""}.",
+                        style: AppText.label.copyWith(fontSize: 11.5)),
+                  ]),
+            ),
+          ),
+        const SizedBox(height: AppSpacing.md),
       ],
       Text("TERV", style: AppText.sectionLabel),
       const SizedBox(height: AppSpacing.sm),

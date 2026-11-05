@@ -1637,11 +1637,20 @@ def test_az_elo_jelzesek_onkalibralasa_a_valodi_lancon(tmp_path,
         [json.loads(json.dumps(player_model_sample(m, Team.HOME)))["lovo"]
          for m in tobbi])
     szint = trust_levels(proba, None, None)["lovo"]
-    vart = calibrate_alerts(live_matchup_alerts(
-        m1, tamadas={"away": AttackModel.learn_many(ok)},
-        savok={"away": lovo_sav_minta_many(ok)},
-        mintak={"away": lovo_minta_many(ok)})["alerts"],
-        {"away": {"lovo": szint}})
+    # A párosításnál ("kit_kinek") a saját (vendég) védő-modellünk próbája
+    # is a többi meccsünkön.
+    from handball.pipeline.play_simulation import defender_model_backtest
+    vszint = trust_levels(None, None, None, defender_model_backtest(
+        [json.loads(json.dumps(player_model_sample(m, Team.AWAY)))["vedok"]
+         for m in tobbi]))["vedo"]
+    vart = []
+    for a_ in live_matchup_alerts(
+            m1, tamadas={"away": AttackModel.learn_many(ok)},
+            savok={"away": lovo_sav_minta_many(ok)},
+            mintak={"away": lovo_minta_many(ok)})["alerts"]:
+        vart += calibrate_alerts([a_], {"away": {
+            "lovo": szint, **({"vedo": vszint}
+                              if a_["fajta"] == "kit_kinek" else {})}})
     assert vart
     assert [(a["text"], a["megbizhatosag"], a["ovatos"])
             for a in j["alerts"]] == [
@@ -1654,8 +1663,8 @@ def test_az_elo_jelzesek_onkalibralasa_a_valodi_lancon(tmp_path,
     j2 = c.get("/matches/gt1/live-kit-kinek").json()
     ok_ = BIZALOM_OVATOS_OKOK[("lovo", "csapat")]
     assert j2["alerts"] and all(
-        a["ovatos"] and a["megbizhatosag"] == {"lovo": "csapat"}
-        and a["text"].endswith(f"(óvatosan: {ok_})") for a in j2["alerts"])
+        a["ovatos"] and a["megbizhatosag"]["lovo"] == "csapat"
+        and ok_ in a["text"] for a in j2["alerts"])
 
 
 def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
@@ -1911,8 +1920,14 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
                 f"{escape(kmi)}.</li>") in r.text
     else:
         assert "Kulcsemberünk" not in r.text
+    # Az AI-edzésterv a meccsre: az első tétel a támadás az ő faluk ellen.
+    from handball.pipeline.play_simulation import _rendszer_nevelovel
+    assert "Edzésterv a meccsre (az AI javaslata)" in r.text
+    assert (f"<li><b>Támadás {escape(_rendszer_nevelovel(vo['fo']))} fal "
+            "ellen</b>") in r.text
     r2 = c.post("/scouting/export", json={"items": items})
     assert "Előrejelzés (a csapat-modellekből)" not in r2.text
+    assert "Edzésterv a meccsre" not in r2.text
     # Az egymás-elleni riport is hozza, a csapatnevekkel címkézve.
     hr = c.get("/head-to-head/report", params={"team_a": h, "team_b": a})
     assert hr.status_code == 200
@@ -2169,6 +2184,60 @@ def test_az_elo_felidei_varakozas_vegpont(tmp_path, monkeypatch):
     assert al["sorok"] == vart["sorok"] and al["t"] == vart["t"]
     assert al["text"] == "Félidő — " + "; ".join(vart["sorok"])
     assert TestClient(app).get("/matches/nincs/live-felido").status_code == 404
+
+
+def test_az_ai_edzesterv_vegpont_a_valodi_lancon(tmp_path, monkeypatch):
+    """GET /library/next-match-plan: a mi csapatunk (itt a vendég, két
+    kapussal) az ellenfél ellen — a valódi láncon a tételek a motor
+    képéből: a támadás az ő várható faluk ellen (ha van), a kapus (ha a
+    választás érdemi); minden tétel cím, terület, indok, gyakorlat; 400
+    hiányzó névre, 404 ismeretlen csapatra."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (_rendszer_nevelovel,
+                                                   defense_system_forecast,
+                                                   keeper_choice_from,
+                                                   player_model_sample,
+                                                   player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        if seed > 1:
+            for f in m.frames:
+                for p in f.players:
+                    if p.team == Team.AWAY and p.role == "kapus":
+                        p.jersey_number = 12
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    jm = [{s_: json.loads(json.dumps(player_model_sample(m, Team(s_))))
+           for s_ in ("home", "away")} for m in meccsek]
+    c = TestClient(app)
+    j = c.get("/library/next-match-plan", params={"home": a, "away": h}).json()
+    assert (j["home"], j["away"]) == (a, h)
+    cimek = [t["title"] for t in j["items"]]
+    assert all(set(t) == {"title", "area", "why", "drill"} for t in j["items"])
+    ved = defense_system_forecast([x["home"]["formak"] for x in jm])
+    if ved:
+        assert cimek[0] == f"Támadás {_rendszer_nevelovel(ved['fo'])} fal ellen"
+    else:
+        assert not any(c_.startswith("Támadás") for c_ in cimek)
+    kv = keeper_choice_from(
+        player_models_from_samples([x["home"] for x in jm])["lovo"],
+        player_models_from_samples([x["away"] for x in jm])["kapusok"])
+    assert any(c_.startswith("Kapus:") for c_ in cimek) == bool(
+        kv and kv["dontes"])
+    assert c.get("/library/next-match-plan",
+                 params={"home": a}).status_code == 400
+    assert c.get("/library/next-match-plan",
+                 params={"home": a, "away": "Nincs"}).status_code == 404
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

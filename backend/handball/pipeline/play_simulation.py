@@ -2968,7 +2968,7 @@ def keeper_model_backtest_summary(sorok: list) -> dict | None:
 
 
 def trust_levels(lovo: dict | None, kapus: dict | None,
-                 dontes: dict | None) -> dict:
+                 dontes: dict | None, vedo: dict | None = None) -> dict:
     """A három próba (shooter_model_backtest, keeper_model_backtest,
     decisions.decision_model_check) szintje modellenként — ezt olvassa az
     élő jelzések önkalibrálása (calibrate_alerts) és a meccs eleji
@@ -2976,10 +2976,14 @@ def trust_levels(lovo: dict | None, kapus: dict | None,
     {"lovo": "megbizhato" | "csapat" (az egyéni szorzó nem jobb a
     csapaténál) | "ovatos" | "semleges" | None, "kapus": "megbizhato" |
     "egeszeben" (a sávok nélküli szorzó jobb) | "ovatos" | "semleges" |
-    None, "dontes": "igazolt" | "ovatos" | "semleges" | None} — None, ahol
-    a próba nem ítélt (kevés korábbi meccs)."""
+    None, "dontes": "igazolt" | "ovatos" | "semleges" | None, "vedo":
+    "egyeni" (a védők egyéni kilépése pontosabban jósol a fal átlagánál) |
+    "kozos" | None} — None, ahol a próba nem ítélt (kevés korábbi meccs)."""
     from .decisions import DONTES_PROBA_PP
-    ki = {"lovo": None, "kapus": None, "dontes": None}
+    ki = {"lovo": None, "kapus": None, "dontes": None, "vedo": None}
+    if vedo:
+        ki["vedo"] = ("egyeni" if float(vedo["javulas_pct"]) >= PROBA_ITELET_PCT
+                      else "kozos")
     if lovo:
         j, e = float(lovo["javulas_pct"]), float(lovo.get("egyeni_pct", 0.0))
         ki["lovo"] = ("megbizhato" if j >= PROBA_ITELET_PCT
@@ -3107,6 +3111,8 @@ BIZALOM_OVATOS_OKOK = {
                           "volt az átlagos kapusnál"),
     ("dontes", "ovatos"): ("a modell legjobb opciója a korábbi meccseken "
                            "nem hozott több gólt"),
+    ("vedo", "kozos"): ("a védőink egyéni kilépése a korábbi meccseken nem "
+                        "tért el a fal átlagától — a párosítás óvatos"),
 }
 
 

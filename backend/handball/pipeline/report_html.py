@@ -557,7 +557,8 @@ def scouting_report_html(rep: ScoutingReport,
                          matchup: list[str] | None = None,
                          figura_ajanlo: dict | None = None,
                          vedekezesi_proba: dict | None = None,
-                         elorejelzes: dict | None = None) -> str:
+                         elorejelzes: dict | None = None,
+                         edzesterv: list | None = None) -> str:
     """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
 
     `playbook_match` (opcionális): a mentett figurákkal való egyezés
@@ -579,11 +580,21 @@ def scouting_report_html(rep: ScoutingReport,
     védekezési rendszerük, defense_system_text), "golszerzo_proba"} —
     "Előrejelzés"
     szakaszként, a meccsterv után; üres mezők kimaradnak.
+    `edzesterv` (opcionális): az AI-edzésterv a meccsre
+    (training.next_match_plan tételei) — "Edzésterv a meccsre" szakasz.
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
     elorejelzes_html = _elorejelzes_blokk(
         elorejelzes, "Előrejelzés (a csapat-modellekből)")
+    edzesterv_html = ""
+    if edzesterv:
+        edzesterv_html = (
+            "<h2>Edzésterv a meccsre (az AI javaslata)</h2><ol>"
+            + "".join(f"<li><b>{escape(str(t_['title']))}</b> — "
+                      f"{escape(str(t_['why']))}. <i>Gyakorlat:</i> "
+                      f"{escape(str(t_['drill']))}.</li>" for t_ in edzesterv)
+            + "</ol>")
 
     # Mennyire hihető a jelentés ALAPANYAGA. A meccsterv az, ami alapján
     # az edző dönt — ha a mögötte lévő feldolgozás gyenge volt, azt a lap
@@ -900,6 +911,8 @@ def scouting_report_html(rep: ScoutingReport,
     if matchup else ""}
 
   {elorejelzes_html}
+
+  {edzesterv_html}
 
   {_breakpoints_block(rep)}
 

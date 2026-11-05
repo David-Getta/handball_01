@@ -1856,6 +1856,21 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// AI-edzésterv a következő meccsre (GET /library/next-match-plan): a
+  /// modellek meccs előtti képéből — [{title, area, why, drill}].
+  Future<List<Map<String, dynamic>>> fetchNextMatchPlan(
+      String home, String away) async {
+    final uri = Uri.parse("$baseUrl/library/next-match-plan").replace(
+        queryParameters: {"home": home, "away": away});
+    final resp = await http.get(uri).timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az edzésterv", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((json["items"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+  }
+
   /// Meccs-előrejelzés a következő meccsre (GET /library/forecast): a két
   /// csapat összes könyvtári meccséből — {home, away, forecast, text,
   /// proba, proba_text}.

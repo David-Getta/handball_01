@@ -8628,7 +8628,7 @@ def create_app():
         _modell_probak eredményéből."""
         from ..pipeline.play_simulation import trust_levels
         return trust_levels(probak.get("lovo"), probak.get("kapus"),
-                            probak.get("dontes"))[modell]
+                            probak.get("dontes"), probak.get("vedo"))[modell]
 
     def _elorejelzes_minta_of(m_) -> dict:
         """EGY meccs előrejelzés-mintája (play_simulation.match_forecast_
@@ -9147,6 +9147,22 @@ def create_app():
                         "home_goals" if k == "home" else "away_goals"))
                     for k in ("home", "away")},
                 "figura_proba": _figura_proba()}
+
+    @app.get("/library/next-match-plan")
+    def get_next_match_plan(home: str = "", away: str = ""):
+        """AI-edzésterv a következő meccsre: a `home` (mi) csapat az
+        `away` (ők) ellen — a modellek meccs előtti képéből egy rövid,
+        indokolt edzés-lista (training.next_match_plan,
+        _kovetkezo_meccs_terv). Válasz: {"home", "away", "items": [{"title",
+        "area", "why", "drill"}]}. 400: hiányzó csapatnév; 404: nincs
+        ilyen csapat a könyvtárban."""
+        if not home or not away:
+            raise HTTPException(status_code=400,
+                                detail="home és away kötelező")
+        for nev in (home, away):
+            _csapat_meccsei(nev)
+        return {"home": home, "away": away,
+                "items": _kovetkezo_meccs_terv(home, away)}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14352,6 +14368,7 @@ def create_app():
         rep = _combined_report(body)
         matchup = None
         elorejelzes = None
+        edzesterv = None
         own_body = body.get("own")
         if own_body:
             try:
@@ -14368,10 +14385,62 @@ def create_app():
                     _items_csapat(body.get("items")))
             except Exception:
                 elorejelzes = None
+            # Az AI-edzésterv a meccsre — hibatűrően.
+            try:
+                mi_, ok_ = (_items_csapat(own_body.get("items")),
+                            _items_csapat(body.get("items")))
+                edzesterv = (_kovetkezo_meccs_terv(mi_, ok_)
+                             if mi_ and ok_ and mi_ != ok_ else None)
+            except Exception:
+                edzesterv = None
         _lib_nevekkel(rep)
         html = scouting_report_html(rep, matchup=matchup,
-                                    elorejelzes=elorejelzes)
+                                    elorejelzes=elorejelzes,
+                                    edzesterv=edzesterv)
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    def _kovetkezo_meccs_terv(mi: str, ok: str) -> list:
+        """AI-edzésterv a következő meccsre (training.next_match_plan): a
+        `mi` csapat a `ok` ellen — a modellek meccs előtti képe a két
+        csapat könyvtári meccseiből (várható fal, kulcsember és hiánya,
+        visszatérő figura a próbával, kapus, a saját AI-tételeink).
+        Minden darab hibatűrő: ami nem számolható, kimarad."""
+        from ..pipeline.decisions import decision_samples_sum
+        from ..pipeline.play_simulation import (key_player_absence,
+                                                match_forecast,
+                                                player_models_from_samples)
+        from ..pipeline.training import (next_match_plan,
+                                         proven_decision_drills,
+                                         season_shot_allocation_drill)
+
+        def biztos(fn):
+            try:
+                return fn()
+            except Exception:
+                return None
+        gsz = biztos(lambda: _golszerzok(ok, mi)) or []
+        f = biztos(lambda: match_forecast(_elorejelzes_tortenet(mi),
+                                          _elorejelzes_tortenet(ok)))
+        par = biztos(lambda: _csapat_meccsei(mi)) or []
+        mintak = biztos(lambda: [_jatekos_minta_of(m_, t_.value)
+                                 for m_, t_ in par]) or []
+        mod = biztos(lambda: player_models_from_samples(mintak)) if mintak \
+            else None
+        return next_match_plan(
+            ok,
+            vedekezes=biztos(lambda: _vedekezes_varhato(ok)),
+            golszerzok=gsz,
+            kulcs_hiany=biztos(lambda: key_player_absence(
+                gsz, (f or {}).get("away_goals"))),
+            figura=biztos(lambda: (_team_figure_library(ok).get("recurring")
+                                   or [None])[0]),
+            figura_proba=biztos(lambda: _figura_proba(csapat=ok)),
+            kapus=biztos(lambda: _kapus_javaslat(mi, ok)),
+            dontes_drills=biztos(lambda: proven_decision_drills(
+                decision_samples_sum([_dontes_minta_of(m_).get(t_.value) or {}
+                                      for m_, t_ in par]))),
+            loves_drill=biztos(lambda: season_shot_allocation_drill(
+                mod["tamadas"], mod["lovo"], len(par))) if mod else None)
 
     def _items_csapat(items) -> str | None:
         """A felderítés `items` listájának csapata ({"match_id", "team"}
@@ -14900,17 +14969,24 @@ def create_app():
                 tamadas[side] = ellen["tamadas"]
                 savok[side] = ellen["sav"]
                 mintak[side] = ellen["lovo"]
-        # Önkalibrálás: az ő lövő-modelljük próbája a többi meccsükön
+        # Önkalibrálás: az ő lövő-modelljük próbája a többi meccsükön, a
+        # párosításnál ("kit_kinek") a saját védő-modellünké is
         # (play_simulation.calibrate_alerts).
-        szintek = {}
+        szintek, par_szintek = {}, {}
         for side in ("home", "away"):
             masik = "away" if side == "home" else "home"
             szintek[side] = {"lovo": _bizalom(_modell_probak(
                 match_id, nevek[masik], ("lovo",)), "lovo")}
+            par_szintek[side] = {**szintek[side], "vedo": _bizalom(
+                _modell_probak(match_id, nevek[side], ("vedo",)), "vedo")}
         r = live_matchup_alerts(match, tamadas=tamadas, savok=savok,
                                 mintak=mintak)
-        return {**r, "alerts": calibrate_alerts(r.get("alerts"), szintek),
-                "szezon_meccsek": db}
+        ki = []
+        for a_ in r.get("alerts") or []:
+            ki += calibrate_alerts(
+                [a_], par_szintek if a_.get("fajta") == "kit_kinek"
+                else szintek)
+        return {**r, "alerts": ki, "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):

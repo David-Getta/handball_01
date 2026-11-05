@@ -1409,15 +1409,21 @@ def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
                                                    trust_levels)
 
     assert trust_levels(None, None, None) == {"lovo": None, "kapus": None,
-                                              "dontes": None}
+                                              "dontes": None, "vedo": None}
+    assert trust_levels(None, None, None, {"javulas_pct": 12.0})["vedo"] == \
+        "egyeni"
+    assert trust_levels(None, None, None, {"javulas_pct": 1.0})["vedo"] == \
+        "kozos"
     assert trust_levels({"javulas_pct": 48.0, "egyeni_pct": 49.0},
                         {"javulas_pct": 64.0, "sav_pct": -47.0},
                         {"kulonbseg_pp": -8.0}) == {
-        "lovo": "megbizhato", "kapus": "egeszeben", "dontes": "ovatos"}
+        "lovo": "megbizhato", "kapus": "egeszeben", "dontes": "ovatos",
+        "vedo": None}
     assert trust_levels({"javulas_pct": 6.0, "egyeni_pct": 0.0},
                         {"javulas_pct": -9.0, "sav_pct": 0.0},
                         {"kulonbseg_pp": 2.0}) == {
-        "lovo": "csapat", "kapus": "ovatos", "dontes": "semleges"}
+        "lovo": "csapat", "kapus": "ovatos", "dontes": "semleges",
+        "vedo": None}
 
     be = [{"team": "home", "text": "A 7-es ellen lépjetek ki."},
           {"team": "away", "text": "A 9-es lőjön többet."},
@@ -1439,6 +1445,12 @@ def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
     assert k["text"] == ("Kapusváltás. (óvatosan: "
                          + BIZALOM_OVATOS_OKOK[("kapus", "egeszeben")] + "; "
                          + BIZALOM_OVATOS_OKOK[("lovo", "ovatos")] + ")")
+    # A védő-modell "közös szokás" szintje a párosítást óvatossá teszi.
+    [pv] = calibrate_alerts([be[0]], {"home": {"vedo": "kozos"}})
+    assert pv["ovatos"] and pv["text"].endswith(
+        "(óvatosan: " + BIZALOM_OVATOS_OKOK[("vedo", "kozos")] + ")")
+    [pe] = calibrate_alerts([be[0]], {"home": {"vedo": "egyeni"}})
+    assert not pe["ovatos"]
     # Ítélet nélkül (kevés korábbi meccs) a jelzés változatlan szöveggel.
     assert calibrate_alerts(be, {}) == [
         {**a, "megbizhatosag": {}, "ovatos": False} for a in be]

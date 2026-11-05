@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **A párosítás önkalibrálása a védő-modellel** (élő kit kinek): a "kit
+  kinek" párosítás ("a 6-os álljon vele szemben") a saját védőink egyéni
+  hajlamán áll — ha a védő-modell próbája szerint a kilépés a fal közös
+  szokása, a párosítás-jelzés óvatos: "(óvatosan: a védőink egyéni
+  kilépése a korábbi meccseken nem tért el a fal átlagától — a párosítás
+  óvatos)", a képernyőn szürkén. Az "engedett lövő" jelzést nem érinti
+  (play_simulation.trust_levels "vedo" szintje).
+
+- **AI-edzésterv a következő meccsre** (motor + végpont + meccsterv +
+  nyomtatható meccsterv): a modellek meccs előtti képéből egy rövid,
+  indokolt edzés-lista a hétre — "1. Támadás az 5-1 fal ellen (Vendég
+  várható védekezése: 5-1, a korábbi védekezésük 70%-a); 2. A
+  kulcsemberük: a 9-es (ugyanannyi lövésből 1,4 góllal többet ér …; ha
+  kiesik, a várható gól 27 helyett 25,6) — szoros őrzés és lövés-elvétel,
+  főleg távolról; 3. A visszatérő figurájuk (ha a figuráik próbája szerint
+  visszatérnek); 4. Kapus: a 12-es kezd; 5. a pálya által igazolt
+  döntés-edzésünk; 6. a szezon lövés-elosztása". Minden tétel mögött a
+  modell indoka és egy gyakorlat. A /library/next-match-plan, a
+  meccsterv-képernyő "EDZÉSTERV A MECCSRE (AI)" kártyái és a nyomtatható
+  meccsterv "Edzésterv a meccsre" szakasza (training.next_match_plan).
+
 - **Lövés-elosztás a szezonból és a szezon kulcsemberei** (edzés-fókusz
   + edzésterv-képernyő + szezon-riport): a 495. szabály egy meccs
   lövés-elosztását nézi — most a szezonét is, ahol a véletlen kisimul:

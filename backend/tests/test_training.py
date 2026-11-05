@@ -1385,3 +1385,49 @@ def test_lovesek_elosztasa_a_szezonbol():
     assert d["drill"].startswith("játékrendszer a 7-es ")
     assert "a 10-es" in d["drill"]
     assert season_shot_allocation_drill(AttackModel(), {}, 3) is None
+
+
+
+def test_ai_edzesterv_a_kovetkezo_meccsre():
+    """training.next_match_plan: a modellek meccs előtti képéből a
+    támadás az ő faluk ellen, a kulcsemberük őrzése (a hiányával), a
+    visszatérő figurájuk (ha a próba nem mond ellent), a kapus (ha érdemi),
+    a saját AI-tételeink — sorrendben, legfeljebb KOV_MECCS_MAX."""
+    from handball.pipeline.training import KOV_MECCS_MAX, next_match_plan
+
+    ved = {"fo": "5-1", "eloszlas": {"5-1": 0.7, "6-0": 0.3}}
+    gsz = [{"mez": 9, "vart_gol": 5.2, "vart_loves": 9.0, "ertek": 1.4,
+            "fo_sav": "far", "szorzo": 1.3, "kapus_szorzo": 1.0},
+           {"mez": 7, "vart_gol": 3.0, "vart_loves": 6.0, "ertek": 0.1,
+            "fo_sav": "close", "szorzo": 1.0, "kapus_szorzo": 1.0}]
+    figura = {"zone": "jobb oldal", "matches": 3, "goals": 5, "name": None}
+    kapus = {"kapus_mez": 12, "dontes": True,
+             "verdict": "a 12-es álljon a kapuban"}
+    dontes = [{"title": "Döntés-edzés: kilépnek rá — a pálya igazolta",
+               "area": "támadás", "why": "w", "drill": "d", "sit": "x"}]
+    loves = {"title": "Lövés-elosztás a szezonból", "area": "támadás",
+             "why": "w2", "drill": "d2"}
+    t = next_match_plan("Vendég", vedekezes=ved, golszerzok=gsz,
+                        kulcs_hiany={"text": "ha a 9-es kiesik, a várható "
+                                             "gól 27 helyett 25,6"},
+                        figura=figura, kapus=kapus, dontes_drills=dontes,
+                        loves_drill=loves)
+    assert [x["title"] for x in t] == [
+        "Támadás az 5-1 fal ellen", "A kulcsemberük: a 9-es",
+        "A visszatérő figurájuk: jobb oldal", "Kapus: a 12-es kezd",
+        "Döntés-edzés: kilépnek rá — a pálya igazolta",
+        "Lövés-elosztás a szezonból"]
+    assert len(t) <= KOV_MECCS_MAX
+    assert t[0]["why"].startswith("Vendég várható védekezése: 5-1")
+    assert t[1]["why"].startswith("kulcsemberük a 9-es: ugyanannyi")
+    assert t[1]["why"].endswith("(ha a 9-es kiesik, a várható gól 27 "
+                                "helyett 25,6)")
+    assert "főleg távolról" in t[1]["drill"]
+    assert set(t[4]) == {"title", "area", "why", "drill"}
+    # A figuráik próbája ellentmond: a figura kimarad; nem érdemi kapus:
+    # a kapus kimarad; kulcsember nélkül (kis gól-érték) nincs őrzés-tétel.
+    u = next_match_plan("Vendég", golszerzok=gsz[1:], figura=figura,
+                        figura_proba={"verdict": "a figuráik meccsről "
+                                      "meccsre cserélődnek"},
+                        kapus={**kapus, "dontes": False})
+    assert u == []

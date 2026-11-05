@@ -243,6 +243,91 @@ def season_shot_allocation_drill(tamadas, minta: dict,
                       "meccsek után újra megnézni")}
 
 
+# Az AI-edzésterv a következő meccsre legfeljebb ennyi tételt ad.
+KOV_MECCS_MAX = 6
+
+
+def next_match_plan(ok: str, *, vedekezes: dict | None = None,
+                    golszerzok: list | None = None,
+                    kulcs_hiany: dict | None = None,
+                    figura: dict | None = None,
+                    figura_proba: dict | None = None,
+                    kapus: dict | None = None,
+                    dontes_drills: list | None = None,
+                    loves_drill: dict | None = None) -> list:
+    """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
+    modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
+    az ő várható faluk ellen (`vedekezes`, play_simulation.
+    defense_system_forecast), a kulcsemberük őrzése (`golszerzok`: az ő
+    várható gólszerzőik, scorer_forecast — a legnagyobb gól-értékű;
+    `kulcs_hiany`: key_player_absence), a visszatérő figurájuk elleni
+    védekezés (`figura`: a figura-könyvtáruk első visszatérő figurája —
+    csak ha a figuráik próbája, `figura_proba`, nem mond ellent), a kapus
+    (`kapus`: keeper_choice_from, ha érdemi a különbség), és a saját
+    AI-tételeink (`dontes_drills`: proven_decision_drills, az első;
+    `loves_drill`: season_shot_allocation_drill). Mit jelent edzőileg:
+    a meccs előtti hét edzéseinek váza, minden tétel mögött a modell
+    indoka. Visszatérés: [{"title", "area", "why", "drill"}] — legfeljebb
+    KOV_MECCS_MAX."""
+    from .play_simulation import (KAPUS_SAV_NEV, KULCS_MIN_ERTEK,
+                                  _rendszer_nevelovel, defense_system_text,
+                                  key_player_text, mezszam_nevelovel)
+    ki: list = []
+    if vedekezes:
+        fo = vedekezes["fo"]
+        ki.append({
+            "title": f"Támadás {_rendszer_nevelovel(fo)} fal ellen",
+            "area": "támadás",
+            "why": f"{ok} várható védekezése: {defense_system_text(vedekezes)}",
+            "drill": (f"6 a 6 elleni játék {_rendszer_nevelovel(fo)} falra: a "
+                      "figurák a fal réseire, a második hullám a "
+                      "visszarendeződés előtt — a meccs előtti utolsó két "
+                      "edzésen")})
+    jo = [r for r in golszerzok or [] if r.get("ertek") is not None
+          and r["ertek"] >= KULCS_MIN_ERTEK]
+    if jo:
+        r = min(jo, key=lambda r: (-r["ertek"], r["mez"]))
+        sav = KAPUS_SAV_NEV.get(r.get("fo_sav"), "")
+        why = f"kulcsemberük {key_player_text(golszerzok)}"
+        if kulcs_hiany:
+            why += f" ({kulcs_hiany['text']})"
+        ki.append({
+            "title": f"A kulcsemberük: {mezszam_nevelovel(r['mez'])}",
+            "area": "védekezés", "why": why,
+            "drill": (f"szoros őrzés és lövés-elvétel "
+                      f"{mezszam_nevelovel(r['mez'])} ellen"
+                      + (f", főleg {sav}" if sav else "")
+                      + ": 1 az 1 elleni védekezés, a második védő a "
+                      "beindulásnál segít, a kilépés a lövőkéz felől")})
+    visszater = (figura_proba is None
+                 or "érdemes készülni" in str(figura_proba.get("verdict")))
+    if figura and visszater:
+        nev = figura.get("name")
+        cimke = f"„{nev}”" if nev else str(figura.get("zone") or "")
+        ki.append({
+            "title": f"A visszatérő figurájuk: {cimke}",
+            "area": "védekezés",
+            "why": (f"{figura.get('matches', 0)} meccsen játszották, "
+                    f"{figura.get('goals', 0)} góllal"
+                    + (f"; {figura_proba['verdict']}" if figura_proba else "")),
+            "drill": ("a figura bejátszása a második csapattal a mi falunk "
+                      "ellen: kettőzés a súlypontnál, kilépés a lövőre, a "
+                      "beálló elzárása — a videóval együtt")})
+    if kapus and kapus.get("dontes"):
+        ki.append({
+            "title": f"Kapus: {mezszam_nevelovel(kapus['kapus_mez'])} kezd",
+            "area": "kapus", "why": kapus["verdict"],
+            "drill": (f"{mezszam_nevelovel(kapus['kapus_mez'])} kapus-edzése "
+                      "az ő lövőik sávjaiból, a lövéseik arányában — a "
+                      "meccs előtti két edzésen ő kapja a több ismétlést")})
+    if dontes_drills:
+        ki.append({k: dontes_drills[0][k]
+                   for k in ("title", "area", "why", "drill")})
+    if loves_drill:
+        ki.append({k: loves_drill[k] for k in ("title", "area", "why", "drill")})
+    return ki[:KOV_MECCS_MAX]
+
+
 def training_focus(match: Match,
                    config: Optional[TacticsConfig] = None) -> dict:
     """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}).
