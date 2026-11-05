@@ -3093,6 +3093,62 @@ def forecast_trust_summary(elore: dict | None = None,
     return "; ".join(reszek) if reszek else None
 
 
+def model_checks_overview(mc: dict) -> dict | None:
+    """Az AI-próbák összképe: a /library/player-model-check válaszából
+    (`mc`) próbánként, hogy ítélt-e, és bizonyított-e — a lövő-szorzók,
+    a kapus-sávok és a döntés-tanácsok a trust_levels szintje szerint
+    ("megbizhato" / "igazolt"), a védő-modell a csapatok többségén, az
+    eredmény-előrejelzés, a gólszerzők és az élő esély a PROBA_ITELET_PCT
+    javulástól, a fal-becslés a liga-viszonyításnál több találattal, a
+    figura-felderítés, ha a visszatérő figurákra érdemes készülni. Mit
+    jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
+    könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
+    "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
+    sem ítélt."""
+    mc = mc or {}
+    sz = trust_levels(mc.get("osszes"), mc.get("kapus_osszes"),
+                      mc.get("dontes_osszes"))
+    sorok: list = []
+
+    def add(nev, ok):
+        sorok.append({"nev": nev, "bizonyitott": bool(ok)})
+
+    if sz["lovo"]:
+        add("lövő-szorzók", sz["lovo"] == "megbizhato")
+    if sz["kapus"]:
+        add("kapus-sávok", sz["kapus"] == "megbizhato")
+    if sz["dontes"]:
+        add("döntés-tanácsok", sz["dontes"] == "igazolt")
+    vedok = mc.get("vedok") or []
+    if vedok:
+        jo = sum(1 for r in vedok if float(r["javulas_pct"]) >= PROBA_ITELET_PCT)
+        add("védő-modell", 2 * jo > len(vedok))
+    for kulcs, nev in (("elorejelzes", "eredmény-előrejelzés"),
+                       ("golszerzo_proba", "gólszerzők"),
+                       ("elo_esely_proba", "élő esély")):
+        p = mc.get(kulcs)
+        if p:
+            add(nev, float(p["javulas_pct"]) >= PROBA_ITELET_PCT)
+    v = mc.get("vedekezes_proba")
+    if v:
+        add("fal-becslés", int(v["talalat"]) > int(v["liga_talalat"]))
+    f = mc.get("figura_proba")
+    if f:
+        add("figura-felderítés", "érdemes készülni" in str(f.get("verdict")))
+    if not sorok:
+        return None
+    k = sum(1 for r in sorok if r["bizonyitott"])
+    igen = [r["nev"] for r in sorok if r["bizonyitott"]]
+    nem = [r["nev"] for r in sorok if not r["bizonyitott"]]
+    verdict = f"{len(sorok)} próbából {k} bizonyított"
+    if igen:
+        verdict += ": " + ", ".join(igen)
+    if nem:
+        verdict += "; még nem: " + ", ".join(nem)
+    return {"itelt": len(sorok), "bizonyitott": k, "sorok": sorok,
+            "verdict": verdict}
+
+
 # ---- Az élő jelzések önkalibrálása ------------------------------------------
 # Egy élő jelzés (kit kinek, lövés-elosztás, kapus-választás, döntés-
 # figyelő) annyit ér, amennyit a mögötte álló modell a csapat KORÁBBI

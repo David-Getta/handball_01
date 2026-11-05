@@ -64,6 +64,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _plays = const [];
   // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
   Map<String, dynamic> _seasonFocus = {};
+  // Az AI-próbák összképe (GET /library/player-model-check "ai_osszkep").
+  Map<String, dynamic>? _aiOsszkep;
 
   // Könyvtár-kereső: csapatnévre / meccs-azonosítóra szűr.
   final TextEditingController _searchCtrl = TextEditingController();
@@ -793,6 +795,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Toplisták külön, nem blokkolóan.
         _api.fetchLibraryLeaders().then((r) {
           if (mounted && r.isNotEmpty) setState(() => _leaders = r);
+        }).catchError((_) {});
+        // Az AI-próbák összképe külön, nem blokkolóan (az első hívás a
+        // könyvtár mintáit számolja — utána a motor gyorsítótárából jön).
+        _api.fetchPlayerModelCheck().then((r) {
+          if (mounted) {
+            setState(() =>
+                _aiOsszkep = (r["ai_osszkep"] as Map?)?.cast<String, dynamic>());
+          }
         }).catchError((_) {});
         // Szezon-fókusz külön, nem blokkolóan (nagy könyvtárnál lassabb).
         _api.fetchLibraryTrainingFocus().then((r) {
@@ -3059,6 +3069,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _statCard("FUTOTT TÁV", "${huNum((s["distance_km"] as num?) ?? 0)} km",
             "${s["sprints"]} sprint összesen",
             icon: Icons.directions_run),
+      // AI-PRÓBÁK: hány modell bizonyított a klub saját könyvtárán.
+      if (_aiOsszkep != null)
+        Tooltip(
+          message: "${_aiOsszkep!["verdict"] ?? ""}. A részletek a "
+              "Szezon képernyő \"A modellek próbája\" szakaszában.",
+          child: _statCard(
+              "AI-PRÓBÁK",
+              "${_aiOsszkep!["bizonyitott"] ?? 0} / ${_aiOsszkep!["itelt"] ?? 0}",
+              "bizonyított a saját meccseken",
+              icon: Icons.auto_awesome),
+        ),
     ];
     // IntrinsicHeight: a kártyasor egy ListView-ban ül (végtelen
     // magasság), ott a stretch-igazítású Row "végtelen magasságra"

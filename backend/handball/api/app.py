@@ -9073,9 +9073,10 @@ def create_app():
         sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
         kapus_sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
         dontes_sorok.sort(key=lambda r: (-r["kulonbseg_pp"], r["team"]))
-        from ..pipeline.play_simulation import forecast_backtest_text
+        from ..pipeline.play_simulation import (forecast_backtest_text,
+                                                model_checks_overview)
         elore = _elorejelzes_proba()
-        return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok),
+        valasz = {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok),
                 "kapusok": kapus_sorok,
                 "kapus_osszes": keeper_model_backtest_summary(kapus_sorok),
                 "dontesek": dontes_sorok,
@@ -9089,6 +9090,9 @@ def create_app():
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
+        # Az AI-próbák összképe (play_simulation.model_checks_overview).
+        valasz["ai_osszkep"] = model_checks_overview(valasz)
+        return valasz
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):

@@ -1398,6 +1398,33 @@ def test_az_elorejelzo_modellek_probai_egy_sorban():
         "figurák: 10 esetből 7 jött újra")
 
 
+def test_az_ai_probak_osszkepe():
+    """model_checks_overview: próbánként, hogy ítélt-e és bizonyított-e —
+    a lövő- és kapus-modell a megbízható szinttől, a döntés az igazolttól,
+    a védő-modell a csapatok többségén, az előrejelzések a javulástól, a
+    fal-becslés a liga felett, a figura-felderítés az "érdemes
+    készülni"-től; ítélet nélkül None."""
+    from handball.pipeline.play_simulation import model_checks_overview
+
+    assert model_checks_overview({}) is None
+    mc = {"osszes": {"javulas_pct": 48.0, "egyeni_pct": 49.0},
+          "kapus_osszes": {"javulas_pct": 20.0, "sav_pct": -3.0},
+          "dontes_osszes": {"kulonbseg_pp": 20.0},
+          "vedok": [{"javulas_pct": 30.0}, {"javulas_pct": 1.0}],
+          "elorejelzes": {"javulas_pct": 22.0},
+          "golszerzo_proba": {"javulas_pct": -4.0},
+          "elo_esely_proba": None,
+          "vedekezes_proba": {"talalat": 10, "liga_talalat": 6},
+          "figura_proba": {"verdict": "… — a visszatérő figuráikra érdemes "
+                                      "készülni"}}
+    o = model_checks_overview(mc)
+    assert (o["itelt"], o["bizonyitott"]) == (8, 5)
+    assert o["verdict"] == (
+        "8 próbából 5 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "eredmény-előrejelzés, fal-becslés, figura-felderítés; még nem: "
+        "kapus-sávok, védő-modell, gólszerzők")
+
+
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
     """trust_levels: a három próba szintje (a lövőnél "csapat", ha csak a
     csapat-szint javít; a kapusnál "egeszeben", ha a sávok nélküli szorzó

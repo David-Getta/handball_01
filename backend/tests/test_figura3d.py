@@ -1800,6 +1800,9 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
     assert mc["golszerzo_proba"] == gp
     assert mc["vedekezes_proba"] == vp
+    from handball.pipeline.play_simulation import model_checks_overview
+    assert mc["ai_osszkep"] == model_checks_overview(
+        {k: v for k, v in mc.items() if k != "ai_osszkep"})
     # A meccs eleji második AI-sor: az előrejelző modellek próbái a csapat
     # többi (hat) meccsén — a motor ugyanazokból a mintákból.
     from handball.pipeline.play_simulation import (forecast_rows_summary,

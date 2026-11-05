@@ -198,6 +198,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
       const SizedBox(height: AppSpacing.lg),
       Text("A MODELLEK PRÓBÁJA", style: AppText.sectionLabel),
       const SizedBox(height: 4),
+      // Az összkép: hány próba ítélt és hány bizonyított.
+      if ((_modelCheck["ai_osszkep"] as Map?)?["verdict"] is String) ...[
+        Text("Összkép: ${(_modelCheck["ai_osszkep"] as Map)["verdict"]}.",
+            style: AppText.value.copyWith(fontSize: 13, color: AppColors.gold)),
+        const SizedBox(height: 4),
+      ],
       Text("A meccsek időrendjében minden modell CSAK a korábbi meccsekből "
           "jósol, és a pálya dönt: a lövő- és a kapus-szorzó a nyers "
           "várható gólhoz, a döntés-tanács a többi döntéshez, az "

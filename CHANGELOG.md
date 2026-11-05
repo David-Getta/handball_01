@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **Az AI-próbák összképe** (motor + végpont + kezdőlap + szezon-képernyő):
+  egy pillantásra, mennyire lehet a klub saját könyvtárán az AI-ra
+  építeni — "9 próbából 6 bizonyított: lövő-szorzók, döntés-tanácsok,
+  eredmény-előrejelzés, fal-becslés, figura-felderítés, …; még nem:
+  kapus-sávok, …". A kezdőlap új "AI-PRÓBÁK 6 / 9" kártyája (a részletek
+  a súgóban és a szezon-képernyőn), a szezon-képernyő próba-szakaszának
+  "Összkép" sora (a /library/player-model-check "ai_osszkep" mezője,
+  play_simulation.model_checks_overview).
+
 - **A párosítás önkalibrálása a védő-modellel** (élő kit kinek): a "kit
   kinek" párosítás ("a 6-os álljon vele szemben") a saját védőink egyéni
   hajlamán áll — ha a védő-modell próbája szerint a kilépés a fal közös

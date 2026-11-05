@@ -35,14 +35,25 @@ extra hardware and fully on-premise processing.
   each match is predicted from the earlier ones and compared with the
   raw expected-goal value and a team-level baseline — so the product
   states how far each model can be trusted, and says so when an
-  apparent individual effect is really a team-wide one.
+  apparent individual effect is really a team-wide one. The defender
+  model and the opponent's recurring set plays are checked the same way.
+- **Forecasts that grade themselves, before, during and after the
+  match**: a pre-match result forecast, expected scorers, the
+  opponent's expected defensive system and a keeper choice, all
+  learned from the club's earlier matches and each back-tested against
+  a naive baseline (team form, league average). Live, the in-play win
+  probability is checked against a score-only baseline, and every live
+  alert carries the trust level of the model behind it. After the
+  match, an expectation-versus-reality review shows where the opponent
+  surprised the staff. Together these feed an AI training plan for the
+  week before the next match.
 - 521 analysis layers over a shared tracking data model; outputs
   phrased automatically in coach language.
 
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 2,933 automated tests,
+- Evidence infrastructure already in place: 2,934 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement
