@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.190 óta)
+## v0.1.191 — kiadva (2026-11-05)
+
+> Kiadás-jegyzet: AZ ÖNELLENŐRZŐ AI ÉS AZ ELŐREJELZÉS. A lövő-, a kapus-
+> és a döntés-modell a klub saját könyvtárán ellenőrzi magát (időrendben,
+> mindig csak a korábbi meccsekből), és megmondja, mennyire lehet rá
+> építeni — a döntés-modell helyzetenként is. Élőben a meccs elején az
+> AI-megbízhatóság sora áll, és maguk a jelzések is önkalibráltak: ahol a
+> modell próbája gyenge, a jelzés óvatos (szürke, az okkal). Új:
+> meccs-előrejelzés a csapat-modellekből (várható eredmény és esélyek, a
+> formához mért próbával), élő esély a 15., 30. és 45. percben (a csak
+> az állásból számolthoz mért próbával), a várható gólszerzők — ki
+> dönthet, kire figyeljen a védekezés —, és a várható védekezési
+> rendszerük, élőben jelezve, ha más fallal jönnek. Mind próbával: a
+> meccsterv-képernyőn és a nyomtatható meccstervben, az élő képernyőn, a
+> szezon-riportban és a szezon-képernyőn.
 
 - **Várható védekezési rendszer és az eltérő fal élőben** (motor +
   végpontok + meccsterv + nyomtatható meccsterv + élő képernyő +
