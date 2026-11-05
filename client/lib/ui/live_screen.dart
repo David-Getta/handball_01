@@ -194,6 +194,26 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Élő lövés-elosztás: a 15., 30., 45. percben az addigi lövések
+    // részesedése a tanult lövők értékéhez mérve — ki lőhetne többet és
+    // ki kevesebbet; a támadó kispadnak szól, csak új párnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveShotAllocation(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő kapus-választás: a 15., 30., 45. percben melyik kapusunk álljon
+    // az ő lövőik ellen, ha most nem ő áll bent — a védő kispadnak szól,
+    // csak új javaslatnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveKeeperChoice(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     try {
       final r = await _api.fetchRules(matchId);
       for (final w in ((r["powerplay"] as List?) ?? const [])

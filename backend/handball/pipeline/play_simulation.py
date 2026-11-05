@@ -123,6 +123,10 @@ LOVO_FELIRAT_MAX = 3
 # Ennél kisebb sáv-szorzó a lövő GYENGE sávja — a játékos-edzésterv
 # befejezés-tétele (a sávhoz legalább LOVO_MIN_LOVES lövés kell).
 LOVO_GYENGE_SZORZO = 0.85
+# Ennél nagyobb sáv-szorzó a kapus GYENGE sávja (az átlagnál ennyiszer
+# több gólt kap onnan) — a játékos-edzésterv kapus-tétele (a sávhoz
+# legalább KAPUS_MIN_LOVES kaputra tartó lövés kell).
+KAPUS_GYENGE_SZORZO = 1.15
 
 
 def kapus_sav(x: float, y: float, goal_x: float) -> str:
@@ -718,12 +722,15 @@ def _lovo_minta(match: Match, attacking_team: Team,
 
 
 def _lovo_mintak_osszege(mintak: list) -> dict:
-    """Több meccs lövő-mintájának összege (mezszám és sáv szerint)."""
+    """Több meccs lövő-mintájának összege (mezszám és sáv szerint) — a
+    mezszám-kulcs egész számra igazítva (a lemezes eredmény-tárból jövő,
+    JSON-körbejárt minta szöveg-kulcsa és az élő minta egész kulcsa egy
+    lövőt jelent)."""
     ossz: dict = {}
     for m in mintak:
         for mez, savok in m.items():
             for sav, (n, gol, xg) in savok.items():
-                r = ossz.setdefault(mez, {}).setdefault(sav, [0, 0, 0.0])
+                r = ossz.setdefault(int(mez), {}).setdefault(sav, [0, 0, 0.0])
                 r[0] += n
                 r[1] += gol
                 r[2] += xg
@@ -2499,6 +2506,248 @@ def shot_allocation(match: Match, config: TacticsConfig | None = None) -> dict:
     return out
 
 
+def shooter_bands_from(minta: dict) -> list:
+    """Egy lövő sávonkénti képe a nyers mintájából (`minta` = {sáv:
+    [lövés, gól, xG]} — egy meccs vagy több meccs összege): [{"sav",
+    "sav_nev", "lovesek", "gol", "xg", "szorzo"}, …] közelről, közepes,
+    távolról sorrendben, csak a lövéses sávok; a szorzó a tanult
+    (_lovo_szorzo: LOVO_MIN_LOVES lövéstől), kevesebbnél None."""
+    szorzo = (_lovo_szorzo({0: minta}).get(0)) or {}
+    out = []
+    for sav in ("close", "mid", "far"):
+        if sav not in minta:
+            continue
+        n, gol, xg = minta[sav]
+        out.append({"sav": sav, "sav_nev": KAPUS_SAV_NEV[sav],
+                    "lovesek": int(n), "gol": int(gol),
+                    "xg": round(float(xg), 2), "szorzo": szorzo.get(sav)})
+    return out
+
+
+def keeper_bands_from(minta: dict) -> list:
+    """Egy kapus sávonkénti képe a nyers mintájából (`minta` = {sáv:
+    [kaputra érkezett, védett]}): [{"sav", "sav_nev", "kaputra", "vedes",
+    "szorzo"}, …] közelről, közepes, távolról sorrendben; a szorzó a
+    tanult (_kapus_szorzo: KAPUS_MIN_LOVES lövéstől — 1 felett az
+    átlagnál több gólt kap onnan), kevesebbnél None."""
+    szorzo = _kapus_szorzo(minta)
+    out = []
+    for sav in ("close", "mid", "far"):
+        if sav not in minta:
+            continue
+        faced, saves = minta[sav]
+        out.append({"sav": sav, "sav_nev": KAPUS_SAV_NEV[sav],
+                    "kaputra": int(faced), "vedes": int(saves),
+                    "szorzo": szorzo.get(sav)})
+    return out
+
+# ---- Egy játékos lövő-modellje ----------------------------------------------
+
+def player_shooter_profile(match: Match, player_id: int,
+                           config: TacticsConfig | None = None) -> dict | None:
+    """Egy játékos tanult lövő-modellje egy meccsről (a Döntések panel
+    játékos-lapjához): a mezszáma és a csapata a kockákból; sávonként a
+    nyers minta (lövés, gól, xG — _lovo_minta) és a tanult szorzó
+    (_lovo_szorzo: LOVO_MIN_LOVES lövéstől; kevesebbnél None — a modell
+    nem találgat); a lövés-elosztásban (shot_allocation) a tanult
+    sávjainak részesedése és értéke, és hogy ő-e a "többet lőhetne" /
+    "kevesebbet" szereplője.
+
+    Edzőileg: a játékos saját képe — honnan lő be többet a helyzeteinél,
+    honnan kevesebbet, és a csapat lövéseiből mennyit vállal.
+
+    Visszaad: {"jersey", "team", "savok": [{"sav", "sav_nev", "lovesek",
+    "gol", "xg", "szorzo"}, …] (közelről, közepes, távolról sorrendben,
+    csak a lövéses sávok), "felirat", "elosztas": {"szerep" ("tobbet" /
+    "kevesebbet" / None), "parosok": [{"sav", "sav_nev", "ertek",
+    "arany_pct"}], "verdict"} vagy None} — None, ha a játékosnak nincs
+    mezszáma vagy mezszámos lövése."""
+    config = config or TacticsConfig()
+    jersey = team = None
+    for f in match.frames:
+        for p in f.players:
+            if p.track_id == player_id and p.jersey_number is not None:
+                jersey, team = int(p.jersey_number), p.team
+                break
+        if jersey is not None:
+            break
+    if jersey is None or team not in (Team.HOME, Team.AWAY):
+        return None
+    minta = (_lovo_minta(match, team, config).get(jersey)) or {}
+    if not minta:
+        return None
+    savok = shooter_bands_from(minta)
+
+    def sz(v, d=1):
+        return f"{v:.{d}f}".replace(".", ",")
+
+    reszek = []
+    for s in savok:
+        r = (f"{s['sav_nev']} {s['lovesek']} lövés, {s['gol']} gól "
+             f"({sz(s['xg'])} várható)")
+        r += (f" — {sz(s['szorzo'])}× annyit lő be, mint amennyit a "
+              "helyzetei érnek" if s["szorzo"] is not None
+              else " — kevés minta")
+        reszek.append(r)
+    elosztas = None
+    try:
+        le = shot_allocation(match, config).get(team.value)
+    except Exception:
+        le = None
+    if le:
+        szerep = ("tobbet" if (le.get("tobbet") or {}).get("mez") == jersey
+                  else "kevesebbet"
+                  if (le.get("kevesebbet") or {}).get("mez") == jersey
+                  else None)
+        elosztas = {"szerep": szerep,
+                    "parosok": [{k: r[k] for k in ("sav", "sav_nev", "ertek",
+                                                   "arany_pct")}
+                                for r in le["parosok"] if r["mez"] == jersey],
+                    "verdict": le["verdict"]}
+    return {"jersey": jersey, "team": team.value, "savok": savok,
+            "felirat": "; ".join(reszek), "elosztas": elosztas}
+
+
+# ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
+# Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
+# összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a
+# küszöbök — LOVO_MIN_LOVES, KAPUS_MIN_LOVES — mindkettőben
+# teljesülnek), és a szorzó legalább FEJLODES_ELTERES-sel változott.
+# Legfeljebb FEJLODES_MAX sor, a változás nagysága szerint.
+FEJLODES_ELTERES = 0.1
+FEJLODES_MAX = 5
+
+
+def player_model_development(regi_tamadas, uj_tamadas,
+                             regi_kapus: dict | None = None,
+                             uj_kapus: dict | None = None) -> dict:
+    """A játékos-modell fejlődése két időszak között: `regi_tamadas` /
+    `uj_tamadas` (AttackModel — a két időszak tanult lövői), `regi_kapus`
+    / `uj_kapus` (a csapat kapusának sávonkénti szorzója a két
+    időszakban). A lövőnél a nagyobb szorzó a jobb (többet lő be a
+    helyzeteinél), a kapusnál a kisebb (kevesebb gólt kap az átlagnál).
+
+    Edzőileg: a szezon-riport kérdése — melyik lövőnk javult melyik
+    távolságból, és a kapus melyik sávja romlott; a heti munka iránya.
+
+    Visszaad: {"lovok": [{"mez", "sav", "sav_nev", "regi", "uj",
+    "valtozas", "irany" ("javul" / "romlik")}, …], "kapus": [{"sav",
+    "sav_nev", "regi", "uj", "valtozas", "irany"}, …], "lovo_sorok",
+    "kapus_sorok" (mondatok)} — a változás nagysága szerint csökkenőben
+    (holtversenyben mezszám, sáv), legfeljebb FEJLODES_MAX soronként;
+    üres listák, ha nincs érdemi változás."""
+    regi = regi_tamadas.lovok if regi_tamadas is not None else {}
+    uj = uj_tamadas.lovok if uj_tamadas is not None else {}
+    lovok = []
+    for mez in sorted(set(regi) & set(uj)):
+        for sav in ("close", "mid", "far"):
+            if sav not in regi[mez] or sav not in uj[mez]:
+                continue
+            a, b = float(regi[mez][sav]), float(uj[mez][sav])
+            if abs(b - a) < FEJLODES_ELTERES:
+                continue
+            lovok.append({"mez": int(mez), "sav": sav,
+                          "sav_nev": KAPUS_SAV_NEV[sav], "regi": a, "uj": b,
+                          "valtozas": round(b - a, 3),
+                          "irany": "javul" if b > a else "romlik"})
+    lovok.sort(key=lambda r: (-abs(r["valtozas"]), r["mez"], r["sav"]))
+    lovok = lovok[:FEJLODES_MAX]
+    kapus = []
+    rk, uk = regi_kapus or {}, uj_kapus or {}
+    for sav in ("close", "mid", "far"):
+        if sav not in rk or sav not in uk:
+            continue
+        a, b = float(rk[sav]), float(uk[sav])
+        if abs(b - a) < FEJLODES_ELTERES:
+            continue
+        kapus.append({"sav": sav, "sav_nev": KAPUS_SAV_NEV[sav], "regi": a,
+                      "uj": b, "valtozas": round(b - a, 3),
+                      "irany": "javul" if b < a else "romlik"})
+    kapus.sort(key=lambda r: (-abs(r["valtozas"]), r["sav"]))
+
+    def sz(v):
+        return f"{v:.1f}".replace(".", ",")
+
+    lovo_sorok = [f"{mezszam_nevelovel(r['mez'])} {r['sav_nev']} "
+                  f"{sz(r['regi'])}× → {sz(r['uj'])}× ({r['irany']})"
+                  for r in lovok]
+    kapus_sorok = [f"a kapus {r['sav_nev']} {sz(r['regi'])}× → "
+                   f"{sz(r['uj'])}× annyi gólt kap, mint az átlag "
+                   f"({r['irany']})" for r in kapus]
+    return {"lovok": lovok, "kapus": kapus, "lovo_sorok": lovo_sorok,
+            "kapus_sorok": kapus_sorok}
+
+
+# ---- Élő lövés-elosztás: az eddigi lövések × a tanult lövők ----------------
+# A LIVE_AJANLO_PERCEK perceiben a TÁMADÓ kispadnak: az ADDIG leadott
+# mezszámos lövések részesedése × a csapat tanult lövőinek értéke az
+# ellenfél kapusa ellen (a szezon korábbi meccseiből; ahol nincs, az addig
+# látott kockákból) — shot_allocation_from. Csak döntésnél szól, és egy
+# oldal ugyanazzal a párral (többet / kevesebbet) nem ismétlődik.
+
+
+def live_shot_allocation_alerts(match: Match,
+                                config: TacticsConfig | None = None, *,
+                                tamadas: dict | None = None,
+                                kapus: dict | None = None) -> dict:
+    """Élő lövés-elosztás: a LIVE_AJANLO_PERCEK perceiben csapatonként (a
+    TÁMADÓ oldal) az addig leadott lövések részesedése a tanult lövők
+    értékéhez mérve — ki lőhetne többet és ki kevesebbet
+    (shot_allocation_from). `tamadas` ({"home" / "away": AttackModel — a
+    csapat lövői}) és `kapus` ({…: a SZEMKÖZTI kapus sávjai}) a szezon
+    KORÁBBI meccseiből; ahol nincs, az addig látott kockákból tanul
+    (okszerű). A részesedés mindig az addigi kockákból.
+
+    Edzőileg: az időkérésen — "eddig a 10-es lőtt háromnegyedet, pedig a
+    7-es közelről többet ér ellenük": a játékrendszer a ritkán lövő
+    értékes lövőt hozza helyzetbe.
+
+    Visszaad: {"alerts": [{"t" (kocka), "t_s", "perc", "team",
+    "team_name", "tobbet_mez", "tobbet_sav", "kevesebbet_mez",
+    "kevesebbet_sav", "lovesek", "verdict", "text"}, …]} t és csapat
+    szerint; üres, ha nincs döntés (kevés lövés, nincs tanult lövő, vagy
+    kiegyensúlyozott)."""
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    t0 = match.frames[0].t
+    utolso: dict = {}
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [f for f in match.frames if f.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                                  ("away", Team.AWAY, Team.HOME)):
+            tam = (tamadas or {}).get(side)
+            if tam is None:
+                tam = AttackModel.learn(resz, team, config)
+            kap = (kapus or {}).get(side)
+            if kap is None:
+                kap = _kapus_tanul(resz, masik, config)
+            p = shot_allocation_from(tam, kap, _lovo_minta(resz, team, config))
+            if not p or not p.get("dontes"):
+                continue
+            t_, k_ = p["tobbet"], p["kevesebbet"]
+            par = (t_["mez"], t_["sav"], k_["mez"], k_["sav"])
+            if utolso.get(side) == par:
+                continue
+            utolso[side] = par
+            alerts.append({
+                "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc,
+                "team": side, "team_name": nevek[side],
+                "tobbet_mez": t_["mez"], "tobbet_sav": t_["sav"],
+                "kevesebbet_mez": k_["mez"], "kevesebbet_sav": k_["sav"],
+                "lovesek": p["lovesek"], "verdict": p["verdict"],
+                "text": (f"Lövés-elosztás ({perc}. perc): {nevek[side]} — "
+                         f"{p['verdict']}")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}
+
 # ---- Élő kit kinek: a lövőik × az addig látott falunk ----------------------
 # A LIVE_AJANLO_PERCEK perceiben (mint a figura-ajánló), ha az addig
 # látott kockákból a falunk már tanulható (LIVE_AJANLO_MIN_KOCKA): az
@@ -2767,6 +3016,117 @@ def keeper_choice(match: Match, config: TacticsConfig | None = None) -> dict:
     return out
 
 
+# ---- Élő kapus-választás ----------------------------------------------------
+# A LIVE_AJANLO_PERCEK perceiben a VÉDŐ kispadnak: az ő lövőik nyers
+# mintája (a szezon korábbi meccseiből + az ADDIG látottak) × a kapusaink
+# kapusonkénti sáv-mérlege (a szezon korábbi meccseiből + az addig
+# látottak) — keeper_choice_from. Csak akkor szól, ha a döntés érdemi
+# (KAPUS_VALASZTAS_ELTERES) ÉS a kapuban most nem a javasolt kapus áll;
+# egy oldal ugyanazzal a javaslattal nem ismétlődik. Okszerű: a meccsből
+# csak a percig látott kockák számítanak.
+
+
+def _kapus_mintak_osszege(mintak: list) -> dict:
+    """Több kapusonkénti sáv-minta összege ({kapus mez: {sáv: [kaputra
+    érkezett, védett]}} — _kapus_minta_kapusonkent alakban)."""
+    ossz: dict = {}
+    for m in mintak:
+        for kmez, savok in (m or {}).items():
+            for sav, (faced, saves) in savok.items():
+                r = ossz.setdefault(int(kmez), {}).setdefault(sav, [0, 0])
+                r[0] += int(faced)
+                r[1] += int(saves)
+    return ossz
+
+
+def kapus_mintak_many(meccsek: list,
+                      config: TacticsConfig | None = None) -> dict:
+    """A csapat kapusonkénti sáv-mintája TÖBB meccsből (`meccsek` =
+    [(match, a csapat oldala), …]) — a keeper_choice_from `kapusok`
+    bemenete a szezonból. Üres listára üres."""
+    config = config or TacticsConfig()
+    return _kapus_mintak_osszege([_kapus_minta_kapusonkent(m, t, config)
+                                  for m, t in meccsek])
+
+
+def _kapus_most(match: Match, team: Team,
+                config: TacticsConfig) -> int | None:
+    """A kapuban a meccs (eddigi) végén álló kapus mezszáma — a
+    goalkeeper_timeline utolsó szolgálat-szakasza szerint; None, ha nem
+    ismert."""
+    from .goalkeeper import goalkeeper_timeline
+    stints = (goalkeeper_timeline(match, config).get(team.value) or {}
+              ).get("stints") or []
+    if not stints:
+        return None
+    tid = max(stints, key=lambda st: (st["to_s"], st["from_s"]))["track_id"]
+    for f in reversed(match.frames):
+        for p in f.players:
+            if p.track_id == tid and p.jersey_number is not None:
+                return int(p.jersey_number)
+    return None
+
+
+def live_keeper_alerts(match: Match, config: TacticsConfig | None = None, *,
+                       lovo_mintak: dict | None = None,
+                       kapus_mintak: dict | None = None) -> dict:
+    """Élő kapus-választás: a LIVE_AJANLO_PERCEK perceiben csapatonként (a
+    VÉDŐ oldal) melyik kapusunk álljon az ő lövőik ellen, ha most nem ő
+    áll bent (keeper_choice_from). `lovo_mintak` ({"home" / "away": az
+    adott kapu ELLEN támadó csapat nyers lövő-mintája}) és `kapus_mintak`
+    ({…: a kapu csapatának kapusonkénti sáv-mintája}) a szezon KORÁBBI
+    meccseiből — mindkettőhöz hozzáadódik az addig látott; nélkülük csak
+    az addigiakból.
+
+    Edzőileg: a kapus-csere időzítése — nem a "rossz napja van" érzésből,
+    hanem az ő lövőik és a két kapus sávjai szerint.
+
+    Visszaad: {"alerts": [{"t" (kocka), "t_s", "perc", "team",
+    "team_name", "most_mez", "javasolt_mez", "elteres", "verdict",
+    "text"}, …]} t és csapat szerint; üres, ha nincs érdemi különbség,
+    vagy a javasolt kapus áll bent."""
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    t0 = match.frames[0].t
+    utolso: dict = {}
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [f for f in match.frames if f.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                                  ("away", Team.AWAY, Team.HOME)):
+            lm = _lovo_mintak_osszege([(lovo_mintak or {}).get(side) or {},
+                                       _lovo_minta(resz, masik, config)])
+            km = _kapus_mintak_osszege([
+                (kapus_mintak or {}).get(side) or {},
+                _kapus_minta_kapusonkent(resz, team, config)])
+            p = keeper_choice_from(lm, km)
+            if not p or not p.get("dontes"):
+                continue
+            most = _kapus_most(resz, team, config)
+            if most is None or most == p["kapus_mez"]:
+                continue
+            if utolso.get(side) == p["kapus_mez"]:
+                continue
+            utolso[side] = p["kapus_mez"]
+            alerts.append({
+                "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc,
+                "team": side, "team_name": nevek[side], "most_mez": most,
+                "javasolt_mez": p["kapus_mez"], "elteres": p["elteres"],
+                "verdict": p["verdict"],
+                "text": (f"Kapus-választás ({perc}. perc): {nevek[side]} "
+                         f"kapujában most {mezszam_nevelovel(most)} áll — "
+                         f"{p['verdict']}")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}
+
+
 # ---- Élő utolsó labda -------------------------------------------------------
 # A hajrá: a felvétel vége előtt ennyi mp-cel szól (az utolsó támadások
 # még elrendezhetők), ha az állás ekkor legfeljebb LIVE_UTOLSO_KULONBSEG
@@ -2801,7 +3161,8 @@ def player_model_sample(match: Match, team: Team,
     összeadható (player_models_from_samples). {"lovo": {mez (str): {sáv:
     [lövés, gól, xG]}}, "sav": {mez (str): [lövés sávonként]}, "kapus":
     {sáv: [kaputra érkezett, védett]}, "vedok": {mez (str): {"n",
-    "y_osszeg", "kozel", "ralepett", "masodik", "kettozott"}}, "kockak"}
+    "y_osszeg", "kozel", "ralepett", "masodik", "kettozott"}}, "kockak",
+    "kapusok": {kapus mez (str): {sáv: [kaputra érkezett, védett]}}}
     — a lövők a `team` lövései, a kapus és a fal a `team` védekezéséé."""
     config = config or TacticsConfig()
     tm = _tanulas_minta(match, team, config)
@@ -2816,15 +3177,19 @@ def player_model_sample(match: Match, team: Team,
         "vedok": {str(m): {k: (float(x) if k == "y_osszeg" else int(x))
                            for k, x in v.items()}
                   for m, v in (tm.get("vedok") or {}).items()},
-        "kockak": int(tm.get("kockak", 0))}
+        "kockak": int(tm.get("kockak", 0)),
+        "kapusok": {str(k): {s: [int(v[0]), int(v[1])] for s, v in sv.items()}
+                    for k, sv in _kapus_minta_kapusonkent(match, team,
+                                                          config).items()}}
 
 
 def player_models_from_samples(mintak: list) -> dict:
     """Több meccs player_model_sample-jéből a kész modellek: {"tamadas"
     (AttackModel), "kapus" ({sáv: szorzó}), "vedok" (DefenseModel.vedok
     alakban), "sav" ({mez (str): [lövés sávonként]}), "lovo" (az
-    összegzett nyers lövő-minta)} — a minták összeadva, a küszöbök az
-    összegre (mint a learn_many / kapus_many)."""
+    összegzett nyers lövő-minta), "kapusok" (kapusonkénti sáv-minta, a
+    keeper_choice_from bemenete)} — a minták összeadva, a küszöbök az
+    összegre (mint a learn_many / kapus_many / kapus_mintak_many)."""
     lovo = _lovo_mintak_osszege([m.get("lovo") or {} for m in mintak])
     sav: dict = {}
     kap: dict = {}
@@ -2847,7 +3212,9 @@ def player_models_from_samples(mintak: list) -> dict:
     return {"tamadas": AttackModel._modell_mintabol(lovo),
             "kapus": _kapus_szorzo(kap),
             "vedok": _vedok_mintabol(vedok, kockak) if vedok else [],
-            "sav": sav, "lovo": lovo}
+            "sav": sav, "lovo": lovo,
+            "kapusok": _kapus_mintak_osszege([m.get("kapusok") or {}
+                                              for m in mintak])}
 
 
 def live_last_shot_alerts(match: Match, config: TacticsConfig | None = None,

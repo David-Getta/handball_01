@@ -5,6 +5,74 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **Szezon játékos-lap: honnan lősz be, hol kapsz gólt** (nyomtatható
+  játékos-lap): a játékos szezonból tanult sáv-képe két táblában — a
+  lövőnek sávonként (közelről / közepes távolságból / távolról) a
+  lövései, a góljai, a várható gólja és a tanult szorzója; a kapusnak a
+  kapura tartó lövések, a védések és a szorzó (1 felett onnan több gólt
+  kap az átlagnál). A csapat összes elemzett meccsének mintájából, a
+  mezszámára összeadva; három lövés alatt a sáv "kevés minta". A lapot a
+  játékos teszi el: nem az, hogy "jól lősz", hanem hogy honnan
+  (play_simulation.shooter_bands_from, keeper_bands_from).
+
+- **Élő jelzések: a szezon-modell a mintatárból** (végpontok): az élő
+  utolsó labda, kit kinek, lövés-elosztás, kapus-választás és a
+  döntés-figyelő a csapatok KORÁBBI meccseinek modelljét eddig minden
+  hívásnál a teljes meccsekből tanulta újra (a hideg meccseket
+  visszatöltve). Most a meccsenkénti nyers játékos-mintából (lövők,
+  sávok, kapus, kapusonként, fal) épül, amely a lemezes eredmény-tárban
+  él — a második hívás nem tölt vissza egyetlen meccset sem. A minta
+  mezszám-kulcsa egységes (a tárból jövő szöveg- és az élő egész-kulcs
+  ugyanazt a lövőt jelenti).
+
+- **Döntések panel: a játékos lövő-modellje** (motor + végpont +
+  kliens): a meccs Döntések lapján a kiválasztott játékos alatt új
+  "LÖVŐ-MODELL" szakasz — sávonként (közelről / közepes távolságból /
+  távolról) a lövései, a góljai, a várható gólja és a tanult szorzó
+  ("Közelről · 5 lövés · 3 gól · 2,1 várható · 1,3×"; három lövés alatt
+  "kevés minta"), és ha a lövés-elosztásban ő a "többet lőhetne" vagy a
+  "kevesebbet" szereplője, a modell mondata. A játékos-végpont "lovo"
+  mezője (play_simulation.player_shooter_profile).
+
+- **Élő kapus-választás** (motor + végpont + élő képernyő): az élő
+  képernyő a 15., 30. és 45. percben a VÉDŐ kispadnak megmondja, ha a
+  másik kapusa érdemben kevesebbet kapna az ő lövőik ellen, mint aki most
+  bent áll — "Kapus-választás (30. perc): Szeged kapujában most az 1-es
+  áll — a 16-os álljon a kapuban az ő lövőik ellen: 0,27 várható gól
+  lövésenként (az 1-es: 0,34) — távolról 0,8× annyit kap, mint az
+  átlag". Az ő lövőik az ellenfél, a kapusaink a csapat KORÁBBI
+  meccseiből, mindkettőhöz hozzáadva az addig látottak (okszerű); csak
+  érdemi különbségnél (0,02 várható gól lövésenként) szól, és ha a
+  javasolt kapus áll bent, hallgat. Új végpont:
+  /matches/{id}/live-kapus-valasztas.
+
+- **Szezon-riport: a játékos-modell fejlődése** (motor + nyomtatható
+  szezon-riport): a lövők és a kapus sávonkénti szorzója a szezon két
+  felében külön tanulva (ugyanaz a vágás, mint a fejlődés-tábláé) és
+  összevetve — "a 7-es távolról 0,9× → 1,2× (javul)", "a kapus távolról
+  1,2× → 0,9× annyi gólt kap, mint az átlag (javul)". Csak az a sáv hír,
+  amelyik mindkét félben tanulható volt, és legalább 0,1-del változott;
+  legfeljebb öt lövő-sor, a változás nagysága szerint. Edzőileg: a heti
+  munka iránya — melyik lövőnk javult melyik távolságból, és a kapus
+  melyik sávja romlott (play_simulation.player_model_development).
+
+- **A lövés-elosztás élőben és a játékos lapján; a kapus gyenge sávja**
+  (motor + végpont + élő képernyő + egyéni edzés-fókusz): az élő képernyő
+  a 15., 30. és 45. percben a TÁMADÓ kispadnak megmondja, kinek kellene
+  többet lőnie — az addig leadott lövések részesedése a tanult lövők
+  értékéhez mérve az ellenfél kapusa ellen: "Lövés-elosztás (30. perc):
+  Szeged — többet lőhetne a 7-es közelről (0,61 várható gól lövésenként,
+  eddig 3 lövés — 25%), kevesebbet a 10-es közelről (0,44; 9 lövés —
+  75%)". A lövők a csapat, a kapus az ellenfél KORÁBBI meccseiből
+  (okszerű), ahol nincs, az addig látott kockákból; ugyanaz a pár nem
+  ismétlődik. Új végpont: /matches/{id}/live-loves-elosztas. A játékos
+  lapján: a ritkán lövő értékes lövő "Vállalj több lövést", a sokat lövő
+  "Lövés-választás" tételt kap; a kapus "Védés a gyenge sávban" tételt,
+  ha egy sávból az átlagnál érdemben több gólt kap (a sáv szorzója
+  legalább 1,15, legalább három kapura tartó lövésből) — "távolról 9
+  kapura tartó lövésből 2 védés — 1,3× annyi gólt kapsz onnan, mint az
+  átlag", a gyakorlat a sávhoz igazítva.
+
 - **Lövés-elosztás: ki lő túl sokat és ki túl keveset** (`shot_allocation`
   — motor + API + összefoglaló + felderítés + meccsterv + edzésterv +
   kliens-csempe): az utolsó lövés párja a teljes meccsre. A csapat tanult

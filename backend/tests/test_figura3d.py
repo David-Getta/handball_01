@@ -1425,6 +1425,78 @@ def test_az_elo_utolso_labda_vegpont_a_szezon_modelljeivel(tmp_path,
     assert c.get("/matches/nincs/live-utolso-labda").status_code == 404
 
 
+def test_az_elo_kapus_valasztas_vegpont_a_szezon_mintaival(tmp_path,
+                                                           monkeypatch):
+    """GET /matches/{id}/live-kapus-valasztas: az ő lövőik az ellenfél, a
+    kapusaink a csapat könyvtári KORÁBBI meccseiből (ez a meccs nélkül —
+    szezon_meccsek), a riasztás ugyanaz, mint a motor a kész mintákkal;
+    404 ismeretlen meccsre."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (kapus_mintak_many,
+                                                   live_keeper_alerts,
+                                                   lovo_minta_many)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    app = _app(tmp_path, monkeypatch)
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    m1.meta.match_id, m2.meta.match_id = "gt1", "gt2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/gt1/live-kapus-valasztas")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["szezon_meccsek"] == {"home": 1, "away": 1}
+    vart = live_keeper_alerts(
+        m1, lovo_mintak={"home": lovo_minta_many([(m2, Team.AWAY)]),
+                         "away": lovo_minta_many([(m2, Team.HOME)])},
+        kapus_mintak={"home": kapus_mintak_many([(m2, Team.HOME)]),
+                      "away": kapus_mintak_many([(m2, Team.AWAY)])})["alerts"]
+    assert [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert kapus_mintak_many([]) == {}
+    assert c.get("/matches/nincs/live-kapus-valasztas").status_code == 404
+
+
+def test_az_elo_loves_elosztas_vegpont_a_szezon_modelljeivel(tmp_path,
+                                                             monkeypatch):
+    """GET /matches/{id}/live-loves-elosztas: a lövő-modell a csapat, a
+    kapus-modell az ellenfél könyvtári KORÁBBI meccseiből (ez a meccs
+    nélkül — szezon_meccsek), a riasztás ugyanaz, mint a motor a kész
+    modellekkel; 404 ismeretlen meccsre."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (AttackModel, kapus_many,
+                                                   live_shot_allocation_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    app = _app(tmp_path, monkeypatch)
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    m1.meta.match_id, m2.meta.match_id = "gt1", "gt2"
+    app.state.put_match(m1)
+    app.state.put_match(m2)
+    c = TestClient(app)
+    r = c.get("/matches/gt1/live-loves-elosztas")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["szezon_meccsek"] == {"home": 1, "away": 1}
+    vart = live_shot_allocation_alerts(
+        m1, tamadas={"home": AttackModel.learn_many([(m2, Team.HOME)]),
+                     "away": AttackModel.learn_many([(m2, Team.AWAY)])},
+        kapus={"home": kapus_many([(m2, Team.AWAY)]),
+               "away": kapus_many([(m2, Team.HOME)])})["alerts"]
+    assert [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert c.get("/matches/nincs/live-loves-elosztas").status_code == 404
+
+
 def test_az_elo_kit_kinek_vegpont_a_szezon_lovoivel(tmp_path, monkeypatch):
     """GET /matches/{id}/live-kit-kinek: a lövő-modell, a sáv- és a nyers
     minta az ELLENFÉL könyvtári KORÁBBI meccseiből (ez a meccs nélkül —

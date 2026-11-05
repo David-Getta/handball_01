@@ -1811,6 +1811,40 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő kapus-választás (GET /matches/{id}/live-kapus-valasztas): a 15.,
+  /// 30. és 45. percben melyik kapusunk álljon az ő lövőik ellen, ha most
+  /// nem ő áll bent (a szezon korábbi meccseiből és az addig látottakból)
+  /// — [{t, t_s, perc, team, team_name, most_mez, javasolt_mez, elteres,
+  /// verdict, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveKeeperChoice(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-kapus-valasztas"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az élő kapus-választás", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Élő lövés-elosztás (GET /matches/{id}/live-loves-elosztas): a 15.,
+  /// 30. és 45. percben az addigi lövések részesedése a tanult lövők
+  /// értékéhez mérve (a szezon korábbi meccseiből) — ki lőhetne többet
+  /// és ki kevesebbet — [{t, t_s, perc, team, team_name, tobbet_mez,
+  /// tobbet_sav, kevesebbet_mez, kevesebbet_sav, lovesek, verdict, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveShotAllocation(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-loves-elosztas"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az élő lövés-elosztás", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő kit kinek (GET /matches/{id}/live-kit-kinek): a 15., 30. és 45.
   /// percben az addig látott falunk védői × az ellenfél tanult lövői (a
   /// szezon korábbi meccseiből) — ki álljon a veszélyes távoli lövővel

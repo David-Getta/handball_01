@@ -92,6 +92,21 @@ def test_a_dontes_vegpont_helyzetenkent_es_szoritva_is_valaszol():
     assert kilep["match"] == 0, d
     assert d["pressure"] == {"press": 10, "press_best": 0,
                              "team_free_pct": None}, d
+    # Mezszám és lövés nélkül nincs lövő-modell — a kulcs ott van, None.
+    assert "lovo" in d and d["lovo"] is None, d
+
+
+def test_a_dontes_vegpont_a_jatekos_lovo_modelljet_is_hozza(monkeypatch):
+    """A "lovo" kulcs a motor player_shooter_profile képe (a panel
+    LÖVŐ-MODELL szakasza ebből rajzol)."""
+    client, mid = _client()
+    kep = {"jersey": 7, "team": "home", "savok": [], "felirat": "x",
+           "elosztas": None}
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_shooter_profile",
+        lambda m, pid, c=None: kep if pid == 1 else None)
+    assert client.get(f"/matches/{mid}/players/1/decisions").json()["lovo"] == kep
+    assert client.get(f"/matches/{mid}/players/2/decisions").json()["lovo"] is None
 
 
 def test_dontes_nelkuli_jatekos_ures_profilt_kap():
@@ -164,10 +179,10 @@ def test_az_elo_dontes_figyelo_vegpontja():
 
 def test_az_elo_dontes_figyelo_vegpontja_a_szezon_modelljevel(monkeypatch):
     """Ha a könyvtárban van a csapatnak KORÁBBI meccse, a figyelő a belőle
-    tanult lövőkkel (AttackModel.learn_many a csapat meccseiből) és a
-    szemközti kapus sávjaival (kapus_many az ellenfél meccseiből) számol
-    — a jelzés megnevezi; a szezon_meccsek oldalanként a korábbi meccsek
-    száma; ez a meccs nem számít bele (okszerű)."""
+    tanult lövőkkel (a csapat meccseinek mintáiból) és a szemközti kapus
+    sávjaival (az ellenfél meccseinek mintáiból) számol — a jelzés
+    megnevezi; a szezon_meccsek oldalanként a korábbi meccsek száma; ez a
+    meccs nem számít bele (okszerű): minden minta a pdapi2 meccsé."""
     from handball.pipeline.play_simulation import AttackModel
 
     client, mid = _client()
@@ -176,20 +191,22 @@ def test_az_elo_dontes_figyelo_vegpontja_a_szezon_modelljevel(monkeypatch):
         json.dumps(m2.to_dict()), encoding="utf-8")
     latott = []
 
-    def _learn_many(cls, meccsek, config=None):
-        latott.append(("lovok", [(m.meta.match_id, t) for m, t in meccsek]))
-        return (AttackModel(lovok={2: {"close": 1.3}})
-                if meccsek[0][1] == Team.HOME else AttackModel())
+    def _minta(match, team, config=None):
+        return {"_id": match.meta.match_id, "_team": team.value}
 
-    def _kapus_many(meccsek, config=None):
-        latott.append(("kapus", [(m.meta.match_id, t) for m, t in meccsek]))
-        return {"far": 1.2} if meccsek[0][1] == Team.AWAY else {}
+    def _modellek(mintak):
+        latott.append([(m["_id"], m["_team"]) for m in mintak])
+        ures = {"tamadas": AttackModel(), "kapus": {}, "vedok": [],
+                "sav": {}, "lovo": {}, "kapusok": {}}
+        if mintak and mintak[0]["_team"] == "home":
+            return {**ures, "tamadas": AttackModel(lovok={2: {"close": 1.3}})}
+        return {**ures, "kapus": {"far": 1.2}}
 
+    monkeypatch.setattr("handball.pipeline.play_simulation.player_model_sample",
+                        _minta)
     monkeypatch.setattr(
-        "handball.pipeline.play_simulation.AttackModel.learn_many",
-        classmethod(_learn_many))
-    monkeypatch.setattr("handball.pipeline.play_simulation.kapus_many",
-                        _kapus_many)
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
     from handball.api.app import create_app
     client2 = TestClient(create_app())
     r = client2.get(f"/matches/{mid}/decision-alerts").json()
@@ -200,10 +217,11 @@ def test_az_elo_dontes_figyelo_vegpontja_a_szezon_modelljevel(monkeypatch):
     [a] = r["alerts"]
     assert a["team"] == "home" and a["modell"] == felirat
     assert a["text"].endswith(f"(a szezon korábbi meccseiből: {felirat})")
-    # Minden modell csak a KORÁBBI (pdapi2) meccsből tanult.
-    assert latott and all(ids == [("pdapi2", t)] for _, ids in latott
-                          for t in [ids[0][1]])
-    assert {m for _, ids in latott for m, _t in ids} == {"pdapi2"}
+    # Minden modell csak a KORÁBBI (pdapi2) meccsből tanult, a csapat
+    # oldalával.
+    assert sorted(map(tuple, latott)) == sorted([
+        (("pdapi2", "home"),), (("pdapi2", "away"),),
+        (("pdapi2", "away"),), (("pdapi2", "home"),)])
 
 
 def test_a_jatekos_lap_viszi_a_donteseit():
@@ -222,3 +240,54 @@ def test_a_jatekos_lap_viszi_a_donteseit():
     assert "Ha kilépnek rád rendre a visszajátszás a választásod, pedig " \
         "a passz a 6 m-re érne többet" in html
     assert "Döntéseid" not in player_report_html(m, 3)
+
+
+def test_a_szezon_jatekos_lap_vegpont_a_szezon_lovo_modelljevel():
+    """GET /players/season-report: a lövő-modell táblája a csapat összes
+    könyvtári meccsének mintájából, a játékos mezszámára összeadva — a
+    valódi láncon (két szimulált meccs) a lövésszám sávonként a
+    player_model_sample-ök összege; a második hívás nem tölt vissza
+    meccset (a minta a lemezes eredmény-tárban)."""
+    import shutil
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import player_model_sample
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    tmp2 = tempfile.mkdtemp(prefix="handball_pseason_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    try:
+        d = Path(tmp2) / "data" / "matches"
+        d.mkdir(parents=True, exist_ok=True)
+        meccsek = []
+        for seed in (1, 2):
+            m = simulate_ground_truth(duration_s=600, fps=25.0, seed=seed,
+                                      shots_per_min=8, halftime_break_s=30)
+            m.meta.match_id = f"ps{seed}"
+            m.meta.date = f"2026-10-0{seed}"
+            meccsek.append(m)
+            (d / f"ps{seed}.json").write_text(json.dumps(m.to_dict()),
+                                              encoding="utf-8")
+        mintak = [player_model_sample(m, Team.HOME) for m in meccsek]
+        ossz: dict = {}
+        for s_ in mintak:
+            for mez, savok in s_["lovo"].items():
+                for sav, v in savok.items():
+                    ossz.setdefault(mez, {}).setdefault(sav, 0)
+                    ossz[mez][sav] += v[0]
+        mez = max(ossz, key=lambda k: (sum(ossz[k].values()), k))
+        from handball.api.app import create_app
+        client = TestClient(create_app())
+        r = client.get("/players/season-report",
+                       params={"team": meccsek[0].meta.home_team,
+                               "jersey": int(mez)})
+        assert r.status_code == 200, r.text
+        assert "Honnan lősz be — a szezon lövő-modellje" in r.text
+        nevek = {"close": "közelről", "mid": "közepes távolságból",
+                 "far": "távolról"}
+        for sav, n in ossz[mez].items():
+            assert f'<tr><td>{nevek[sav]}</td><td class="num">{n}</td>' in r.text
+        assert "A szezon 2 meccséből" in r.text
+    finally:
+        os.environ["HANDBALL_DATA_DIR"] = _tmp
+        shutil.rmtree(tmp2, ignore_errors=True)

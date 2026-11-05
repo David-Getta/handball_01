@@ -421,6 +421,95 @@ def test_kilepes_a_savod_lovojere_a_sajat_oldal_trackjen(monkeypatch):
     assert "és a kilépésedet nem ismerjük — a modell a 6-ost" in t2["why"]
 
 
+def test_loves_elosztas_emberre_a_sajat_oldal_trackjen(monkeypatch):
+    """(c7) Patchelt lövés-elosztás a vendég oldalon: a többet érő, de
+    keveset lövő 6-os a "Vállalj több lövést", a sokat lövő 4-es a
+    "Lövés-választás" tételt kapja — a VENDÉG track-jein (a 4-es a 2-es
+    track, nem a hazai 1-es); döntés nélkül senki."""
+    _csend(monkeypatch)
+    t_ = {"mez": 6, "sav": "close", "sav_nev": "közelről", "ertek": 0.61,
+          "lovesek": 3, "arany_pct": 25.0}
+    k_ = {"mez": 4, "sav": "far", "sav_nev": "távolról", "ertek": 0.33,
+          "lovesek": 9, "arany_pct": 75.0}
+    dontes = {"dontes": True, "tobbet": t_, "kevesebbet": k_, "verdict": "x"}
+    monkeypatch.setattr("handball.pipeline.play_simulation.shot_allocation",
+                        lambda m, c=None: {"home": None, "away": dontes})
+    rec = player_training_focus(_ketoldali_match())
+    tetel = {(p["player_id"], p["jersey"], i["title"]): i
+             for p in rec["away"]["players"] for i in p["items"]
+             if i["title"] in ("Vállalj több lövést", "Lövés-választás")}
+    assert set(tetel) == {(3, 6, "Vállalj több lövést"),
+                          (2, 4, "Lövés-választás")}
+    assert tetel[(3, 6, "Vállalj több lövést")]["why"] == (
+        "közelről lövésenként 0,61 várható gólt érsz ellenük, mégis a "
+        "csapat lövéseinek csak 25%-át adod le (3 lövés)")
+    assert tetel[(2, 4, "Lövés-választás")]["why"] == (
+        "a csapat lövéseinek 75%-át adod le távolról (9 lövés), pedig "
+        "onnan lövésenként 0,33 várható gólt érsz — a 6-os közelről 0,61-et")
+    assert all(i["area"] == "befejezés" and i["clips"] == ["shot"]
+               for i in tetel.values())
+    assert not [i for p in rec["home"]["players"] for i in p["items"]
+                if i["title"] in ("Vállalj több lövést", "Lövés-választás")]
+    monkeypatch.setattr("handball.pipeline.play_simulation.shot_allocation",
+                        lambda m, c=None: {"home": None,
+                                           "away": {**dontes, "dontes": False}})
+    rec2 = player_training_focus(_ketoldali_match())
+    assert not [i for p in rec2["away"]["players"] for i in p["items"]
+                if i["title"] in ("Vállalj több lövést", "Lövés-választás")]
+
+
+def test_kapus_a_gyenge_savban_a_sajat_oldal_trackjen(monkeypatch):
+    """(e2) Patchelt kapusonkénti minta: a vendég 4-es kapusa távolról 9
+    kapura tartó lövésből 2-t véd → a szorzó a felső korlát (1,3×), ez a
+    gyenge sáv (KAPUS_GYENGE_SZORZO felett) — a tétel a vendég 4-es
+    track-jére kerül, a sávhoz igazított gyakorlattal; a jó sáv (közelről
+    a várt arány) nem kap tételt."""
+    from handball.pipeline.play_simulation import KAPUS_GYENGE_SZORZO
+
+    _csend(monkeypatch)
+    assert KAPUS_GYENGE_SZORZO == 1.15
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation._kapus_minta_kapusonkent",
+        lambda m, team, c: ({4: {"far": [9, 2], "close": [10, 3]}}
+                            if team == Team.AWAY else {}))
+    rec = player_training_focus(_ketoldali_match())
+    cim = "Védés a gyenge sávban"
+    tetel = [(p["player_id"], p["jersey"], i) for p in rec["away"]["players"]
+             for i in p["items"] if i["title"] == cim]
+    assert [(pid, j) for pid, j, _ in tetel] == [(2, 4)]
+    i = tetel[0][2]
+    assert i["area"] == "kapus"
+    assert i["why"] == ("távolról 9 kapura tartó lövésből 2 védés — 1,3× "
+                        "annyi gólt kapsz onnan, mint az átlag")
+    assert i["drill"].startswith("átlövés-sor 9–11 m-ről")
+    assert not [x for p in rec["home"]["players"] for x in p["items"]
+                if x["title"] == cim]
+
+
+def test_kapus_a_gyenge_savban_a_valodi_lancon():
+    """(e2) A valódi láncon (szimulált meccs): a tételt pontosan azok a
+    kapusok kapják, akiknek a kapusonkénti mintájából tanult sáv-szorzója
+    legalább KAPUS_GYENGE_SZORZO."""
+    from handball.pipeline.play_simulation import (KAPUS_GYENGE_SZORZO,
+                                                   _kapus_minta_kapusonkent,
+                                                   _kapus_szorzo)
+    from handball.pipeline.tactics import TacticsConfig
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    rec = player_training_focus(m)
+    cim = "Védés a gyenge sávban"
+    for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+        vart = {int(k) for k, minta in _kapus_minta_kapusonkent(
+                    m, team, TacticsConfig()).items()
+                if any(v >= KAPUS_GYENGE_SZORZO
+                       for v in _kapus_szorzo(minta).values())}
+        kaptak = {p["jersey"] for p in rec[side]["players"]
+                  for i in p["items"] if i["title"] == cim}
+        assert kaptak == vart, (side, kaptak, vart)
+
+
 def test_befejezes_a_gyenge_savbol_a_savhoz_igazitott_gyakorlattal(
         monkeypatch):
     """(c3) A gyenge sáv tétele: a sáv neve, a lövésszám, a gól, az xG és

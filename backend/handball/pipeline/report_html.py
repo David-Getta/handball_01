@@ -4777,7 +4777,8 @@ def player_season_html(team: str, jersey: int, points: list[dict],
                        name: str | None = None,
                        focus: list[dict] | None = None,
                        trend: dict | None = None,
-                       trend_window: int = 3) -> str:
+                       trend_window: int = 3,
+                       lovo_modell: dict | None = None) -> str:
     """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
     HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
 
@@ -4790,6 +4791,11 @@ def player_season_html(team: str, jersey: int, points: list[dict],
     a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
     nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,
     és pont az marad ki, amiért elteszi.
+
+    A `lovo_modell` (opcionális) a szezonból tanult sáv-kép: {"lovo":
+    play_simulation.shooter_bands_from, "kapus": keeper_bands_from,
+    "meccsek"} — "Honnan lősz be" / "Hol kapsz gólt" táblaként; üres
+    sorokkal a szakasz elmarad.
     """
     # A címben a szám ELŐL marad (a mezszám az azonosító, a név a
     # kényelem): "#7 Kovács" — így a névtelen és a nevesített lap
@@ -4798,6 +4804,45 @@ def player_season_html(team: str, jersey: int, points: list[dict],
     # Egyéni edzés-fókusz a SZEZONBÓL: ami több meccsen visszatért, az
     # nem napi forma, hanem fejlesztendő terület. Ez az a rész, amiért
     # a játékos elteszi a lapot.
+    modell_html = ""
+    lm = lovo_modell or {}
+    if lm.get("lovo") or lm.get("kapus"):
+        def _sz(v):
+            return (f"{v:.1f}".replace(".", ",") + "×") if v is not None \
+                else "kevés minta"
+        reszek = []
+        if lm.get("lovo"):
+            sorok = "".join(
+                f"<tr><td>{escape(str(s_['sav_nev']))}</td>"
+                f'<td class="num">{int(s_["lovesek"])}</td>'
+                f'<td class="num">{int(s_["gol"])}</td>'
+                f'<td class="num">{float(s_["xg"]):.1f}</td>'
+                f'<td class="num">{_sz(s_.get("szorzo"))}</td></tr>'
+                for s_ in lm["lovo"])
+            reszek.append(
+                "<h2>Honnan lősz be — a szezon lövő-modellje</h2>"
+                "<table><tr><th>Sáv</th><th class=\"num\">Lövés</th>"
+                "<th class=\"num\">Gól</th><th class=\"num\">Várható</th>"
+                "<th class=\"num\">Szorzó</th></tr>" + sorok + "</table>")
+        if lm.get("kapus"):
+            sorok = "".join(
+                f"<tr><td>{escape(str(s_['sav_nev']))}</td>"
+                f'<td class="num">{int(s_["kaputra"])}</td>'
+                f'<td class="num">{int(s_["vedes"])}</td>'
+                f'<td class="num">{_sz(s_.get("szorzo"))}</td></tr>'
+                for s_ in lm["kapus"])
+            reszek.append(
+                "<h2>Hol kapsz gólt — a szezon kapus-modellje</h2>"
+                "<table><tr><th>Sáv</th><th class=\"num\">Kapura</th>"
+                "<th class=\"num\">Védés</th><th class=\"num\">Szorzó</th>"
+                "</tr>" + sorok + "</table>")
+        modell_html = ("".join(reszek)
+                       + '<p class="note">A szezon '
+                       f"{int(lm.get('meccsek') or 0)} meccséből, sávonként "
+                       "összeadva. A lövő szorzója 1 felett: onnan többet "
+                       "lősz be, mint amennyit a helyzeteid érnek; a kapusé "
+                       "1 felett: onnan több gólt kapsz az átlagnál. Három "
+                       "lövés alatt a sáv még nem tanulható.</p>")
     focus_html = ""
     if focus:
         lis = "".join(
@@ -4998,6 +5043,7 @@ def player_season_html(team: str, jersey: int, points: list[dict],
 <h2>Szezon-összesítő</h2>
 <div class="metrics">{"".join(totals)}</div>
 {trend_html}
+{modell_html}
 {focus_html}
 <h2>Meccsről meccsre</h2>
 {table}
@@ -5107,7 +5153,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        opponents: list[dict] | None = None,
                        figure_library: dict | None = None,
                        repertoire: dict | None = None,
-                       jatekos_modell: dict | None = None) -> str:
+                       jatekos_modell: dict | None = None,
+                       fejlodes: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
 
@@ -5121,8 +5168,22 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     {"lovok": a lövők sora (play_simulation.lovo_felirat), "kapus": a
     kapus sora (kapus_felirat), "meccsek": hány meccsből}; a szakasz
     csak akkor jelenik meg, ha legalább egyik sor nem üres.
+    `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
+    között (play_simulation.player_model_development) — a "lovo_sorok" és
+    "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
     """
     table = _trend_metrics_table(tr)
+    fejl_html = ""
+    fj = fejlodes or {}
+    fj_sorok = list(fj.get("lovo_sorok") or []) + list(fj.get("kapus_sorok") or [])
+    if fj_sorok:
+        fejl_html = (
+            "<h2>A játékos-modell fejlődése (első fél → második fél)</h2>"
+            "<ul>" + "".join(f"<li>{escape(str(s_))}</li>" for s_ in fj_sorok)
+            + "</ul>"
+            '<p class="note">A lövők és a kapus sávonkénti szorzója a szezon '
+            "két felében külön tanulva — csak az a sáv, amelyik mindkét "
+            "félben tanulható volt, és legalább 0,1-del változott.</p>")
     modell_html = ""
     jm = jatekos_modell or {}
     if jm.get("lovok") or jm.get("kapus"):
@@ -5291,6 +5352,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {opponents_html}
 {leaders_html}
 {modell_html}
+{fejl_html}
 {figures_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}

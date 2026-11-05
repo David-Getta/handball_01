@@ -240,8 +240,45 @@ def test_season_report_jatekos_modell_szakasz(monkeypatch):
     assert "a szezon 2 meccséből" in r.text
     [mintak] = latott[:1]
     assert len(mintak) == 2
-    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak"}
+    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak", "kapusok"}
                for m in mintak)
+
+
+def test_season_report_jatekos_modell_fejlodes(monkeypatch):
+    """A szezon-riport a két fél (a fejlődés-tábla vágása) külön tanult
+    lövőit és kapusát veti össze: a régebbi fél egy meccsének mintájából
+    0,9×, az újabbéból 1,2× → "javul" sor; a két fél modellje a fél
+    meccseinek nyers mintáiból épül (player_models_from_samples — az
+    egész szezon után előbb a régebbi, aztán az újabb fél, egy-egy
+    mintából)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=2)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    hivasok = []
+
+    def _modellek(mintak):
+        hivasok.append(len(mintak))
+        ures = {"tamadas": AttackModel(), "kapus": {}, "vedok": [],
+                "sav": {}, "lovo": {}}
+        if len(mintak) != 1:
+            return ures
+        egyes = sum(1 for n in hivasok if n == 1)
+        return {**ures, "tamadas": AttackModel(
+            lovok={7: {"far": 0.9 if egyes == 1 else 1.2}})}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report", params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    assert hivasok[-3:] == [2, 1, 1]
+    assert "A játékos-modell fejlődése (első fél → második fél)" in r.text
+    assert "<li>a 7-es távolról 0,9× → 1,2× (javul)</li>" in r.text
 
 
 def test_season_report_venue_split():

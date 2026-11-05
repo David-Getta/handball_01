@@ -341,6 +341,25 @@ def test_player_season_html_goalkeeper_columns():
     assert "Védés összesen" not in html2 and "GSAx" not in html2
 
 
+def test_a_szezon_riport_a_jatekos_modell_fejlodeset_is_hozza():
+    """A szezon-riport fejlődés-szakasza a lövő- és a kapus-sorokkal;
+    üres sorokkal (vagy nélküle) elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    fj = {"lovo_sorok": ["a 7-es távolról 0,9× → 1,2× (javul)"],
+          "kapus_sorok": ["a kapus távolról 1,2× → 0,9× annyi gólt kap, "
+                          "mint az átlag (javul)"]}
+    html = season_report_html("Szeged", tr, [], 4, fejlodes=fj)
+    assert "A játékos-modell fejlődése (első fél → második fél)" in html
+    assert "<li>a 7-es távolról 0,9× → 1,2× (javul)</li>" in html
+    assert "<li>a kapus távolról 1,2× → 0,9× annyi gólt kap" in html
+    for ures in (None, {}, {"lovo_sorok": [], "kapus_sorok": []}):
+        assert "A játékos-modell fejlődése" not in season_report_html(
+            "Szeged", tr, [], 4, fejlodes=ures)
+
+
 def test_h2h_report_html_jatekos_modell_szakasz():
     """Az egymás-elleni riport játékos-modell szakasza: csapatonként csak
     a nem üres sorok (lövőik, kapusuk, utolsó labdájuk ellenük, kit
@@ -568,3 +587,56 @@ def test_a_nyomtathato_jelentes_viszi_a_vedekezes_feltoreset():
     html = scouting_report_html(rep2)
     assert "Hol törhető fel a védekezésük" in html
     assert "<b>Hol:</b> 9 m-en" in html and "Mivel:" in html and "Miért:" in html
+
+
+def test_a_szezon_jatekos_lap_a_lovo_es_a_kapus_modellt_is_hozza():
+    """A szezon játékos-lap "Honnan lősz be" és "Hol kapsz gólt"
+    táblái a szezon sávonkénti mintájából: a lövés, a gól, a várható és a
+    szorzó (kevés mintánál "kevés minta"); modell nélkül a szakasz
+    elmarad."""
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": "m1", "goals": 3, "shots": 8}]
+    lm = {"lovo": [{"sav": "close", "sav_nev": "közelről", "lovesek": 5,
+                    "gol": 4, "xg": 2.6, "szorzo": 1.2},
+                   {"sav": "far", "sav_nev": "távolról", "lovesek": 2,
+                    "gol": 0, "xg": 0.5, "szorzo": None}],
+          "kapus": [{"sav": "far", "sav_nev": "távolról", "kaputra": 9,
+                     "vedes": 2, "szorzo": 1.3}],
+          "meccsek": 4}
+    html = player_season_html("A", 7, pontok, lovo_modell=lm)
+    assert "Honnan lősz be — a szezon lövő-modellje" in html
+    assert ('<tr><td>közelről</td><td class="num">5</td><td class="num">4</td>'
+            '<td class="num">2.6</td><td class="num">1,2×</td></tr>') in html
+    assert '<td class="num">kevés minta</td>' in html
+    assert "Hol kapsz gólt — a szezon kapus-modellje" in html
+    assert ('<tr><td>távolról</td><td class="num">9</td><td class="num">2</td>'
+            '<td class="num">1,3×</td></tr>') in html
+    assert "A szezon 4 meccséből" in html
+    for ures in (None, {}, {"lovo": [], "kapus": [], "meccsek": 2}):
+        assert "a szezon lövő-modellje" not in player_season_html(
+            "A", 7, pontok, lovo_modell=ures)
+
+
+def test_a_sav_kep_a_nyers_mintabol():
+    """A sávonkénti kép a nyers mintából: a lövőnél a tanult szorzó
+    LOVO_MIN_LOVES lövéstől, a kapusnál KAPUS_MIN_LOVES lövéstől (ugyanaz,
+    mint a modell); sorrend: közelről, közepes, távolról."""
+    from handball.pipeline.play_simulation import (_kapus_szorzo,
+                                                   _lovo_szorzo,
+                                                   keeper_bands_from,
+                                                   shooter_bands_from)
+
+    lm = {"far": [2, 0, 0.6], "close": [3, 3, 1.5]}
+    assert shooter_bands_from(lm) == [
+        {"sav": "close", "sav_nev": "közelről", "lovesek": 3, "gol": 3,
+         "xg": 1.5, "szorzo": _lovo_szorzo({7: lm})[7]["close"]},
+        {"sav": "far", "sav_nev": "távolról", "lovesek": 2, "gol": 0,
+         "xg": 0.6, "szorzo": None}]
+    km = {"far": [9, 2], "mid": [2, 1]}
+    assert keeper_bands_from(km) == [
+        {"sav": "mid", "sav_nev": "közepes távolságból", "kaputra": 2,
+         "vedes": 1, "szorzo": None},
+        {"sav": "far", "sav_nev": "távolról", "kaputra": 9, "vedes": 2,
+         "szorzo": _kapus_szorzo(km)["far"]}]
+    assert shooter_bands_from({}) == [] and keeper_bands_from({}) == []

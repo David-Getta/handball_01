@@ -1189,37 +1189,80 @@ def test_az_engedett_lovo_a_meccsbol_a_felderitesben_es_az_edzestervben(
     assert f"falának engedett lövője: {sor['verdict']}." in szoveg
 
 
-def test_a_jatekos_modell_nyers_mintaja_a_learn_many_parja():
-    """A meccsenkénti nyers, JSON-barát játékos-modell minta
-    (player_model_sample) összegéből (player_models_from_samples)
-    ugyanazok a modellek épülnek, mint a learn_many / kapus_many /
-    DefenseModel.learn_many útján — JSON-körbejárás után is (a lemezes
-    eredmény-tár így tárolja)."""
-    import json as _json
-
-    from handball.pipeline.play_simulation import (
-        AttackModel, _lovo_sav_minta, kapus_many, player_model_sample,
-        player_models_from_samples)
+def test_egy_jatekos_lovo_modellje_es_a_helye_az_elosztasban(monkeypatch):
+    """A Döntések panel lövő-modellje: a játékos mezszáma és csapata a
+    kockákból; sávonként a nyers minta és a tanult szorzó (LOVO_MIN_LOVES
+    alatt None — "kevés minta"); a lövés-elosztásban a tanult sávjainak
+    részesedése, és hogy ő a "többet lőhetne"; mezszám vagy lövés nélkül
+    None; a valódi láncon a minta egyezik a _lovo_minta sorával."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (_lovo_minta,
+                                                   player_shooter_profile)
     from handball.sim.match_simulator import simulate_ground_truth
 
-    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
-                               shots_per_min=8, halftime_break_s=30)
-    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
-                               shots_per_min=8, halftime_break_s=30)
-    cfg = TacticsConfig()
-    for team in (Team.HOME, Team.AWAY):
-        par = [(m1, team), (m2, team)]
-        mintak = [_json.loads(_json.dumps(player_model_sample(m, t)))
-                  for m, t in par]
-        mod = player_models_from_samples(mintak)
-        assert mod["tamadas"].lovok == AttackModel.learn_many(par).lovok
-        assert mod["kapus"] == kapus_many(par)
-        assert mod["vedok"] == DefenseModel.learn_many(par).vedok
-        egy = player_models_from_samples(mintak[:1])
-        assert egy["tamadas"].lovok == AttackModel.learn(m1, team).lovok
-        assert egy["sav"] == {str(k): v for k, v in
-                              _lovo_sav_minta(m1, team, cfg).items()}
-    assert player_models_from_samples([])["vedok"] == []
+    monkeypatch.setattr(ps, "_lovo_minta", lambda match, team, config: (
+        {1: {"close": [3, 3, 1.5], "far": [2, 0, 0.6]},
+         10: {"close": [9, 3, 4.5]}} if team == Team.HOME else {}))
+    m = _proba_match()
+    p = player_shooter_profile(m, 1)
+    assert (p["jersey"], p["team"]) == (1, "home")
+    assert [(s["sav"], s["lovesek"], s["gol"], s["xg"], s["szorzo"])
+            for s in p["savok"]] == [("close", 3, 3, 1.5, 1.3),
+                                     ("far", 2, 0, 0.6, None)]
+    assert p["felirat"] == (
+        "közelről 3 lövés, 3 gól (1,5 várható) — 1,3× annyit lő be, mint "
+        "amennyit a helyzetei érnek; távolról 2 lövés, 0 gól (0,6 várható) "
+        "— kevés minta")
+    el = p["elosztas"]
+    assert el["szerep"] == "tobbet"
+    assert [(r["sav"], r["arany_pct"]) for r in el["parosok"]] == [
+        ("close", 21.4)]
+    assert el["verdict"].startswith("többet lőhetne az 1-es közelről")
+    assert player_shooter_profile(m, 2) is None          # nincs lövése
+    assert player_shooter_profile(m, 999) is None        # nincs ilyen
+    monkeypatch.undo()
+    valodi = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                                   shots_per_min=8, halftime_break_s=30)
+    minta = _lovo_minta(valodi, Team.HOME, TacticsConfig())
+    mez = next(iter(sorted(minta)))
+    pid = next(pl.track_id for f in valodi.frames for pl in f.players
+               if pl.team == Team.HOME and pl.jersey_number == mez)
+    vp = player_shooter_profile(valodi, pid)
+    assert vp["jersey"] == mez
+    assert {s["sav"]: s["lovesek"] for s in vp["savok"]} == {
+        s: v[0] for s, v in minta[mez].items()}
+
+
+def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():
+    """A két időszak tanult szorzói: csak a mindkét időszakban tanult sáv
+    és csak FEJLODES_ELTERES feletti változás hír; a lövőnél a nagyobb,
+    a kapusnál a kisebb szorzó a javulás; a változás nagysága szerint
+    rendezve, legfeljebb FEJLODES_MAX lövő-sor; a mondatok."""
+    from handball.pipeline.play_simulation import (FEJLODES_ELTERES,
+                                                   FEJLODES_MAX, AttackModel,
+                                                   player_model_development)
+
+    assert (FEJLODES_ELTERES, FEJLODES_MAX) == (0.1, 5)
+    regi = AttackModel(lovok={7: {"far": 0.9, "close": 1.0},
+                              9: {"mid": 1.25}, 10: {"far": 1.1}})
+    uj = AttackModel(lovok={7: {"far": 1.2, "close": 1.05},
+                            9: {"mid": 1.0}, 11: {"far": 1.3}})
+    r = player_model_development(regi, uj, {"far": 1.2, "close": 1.0},
+                                 {"far": 0.9, "close": 1.05, "mid": 0.8})
+    assert [(x["mez"], x["sav"], x["irany"]) for x in r["lovok"]] == [
+        (7, "far", "javul"), (9, "mid", "romlik")]
+    assert r["lovo_sorok"] == ["a 7-es távolról 0,9× → 1,2× (javul)",
+                               "a 9-es közepes távolságból 1,2× → 1,0× (romlik)"]
+    assert [(x["sav"], x["irany"]) for x in r["kapus"]] == [("far", "javul")]
+    assert r["kapus_sorok"] == ["a kapus távolról 1,2× → 0,9× annyi gólt "
+                                "kap, mint az átlag (javul)"]
+    sok_regi = AttackModel(lovok={m: {"far": 0.8} for m in range(1, 9)})
+    sok_uj = AttackModel(lovok={m: {"far": 0.8 + 0.05 * m} for m in range(1, 9)})
+    sok = player_model_development(sok_regi, sok_uj)
+    assert [x["mez"] for x in sok["lovok"]] == [8, 7, 6, 5, 4]
+    ures = player_model_development(None, None)
+    assert ures == {"lovok": [], "kapus": [], "lovo_sorok": [],
+                    "kapus_sorok": []}
 
 
 def test_a_loves_elosztas_a_kesz_modellbol():
@@ -1331,6 +1374,39 @@ def test_a_loves_elosztas_a_meccsbol_a_felderitesben_es_az_edzestervben(
     assert not [i for i in training_focus(m)["away"] if i["title"] == cim]
     szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
     assert f"lövés-elosztása a modell szerint: {p['verdict']}." in szoveg
+
+
+def test_a_jatekos_modell_nyers_mintaja_a_learn_many_parja():
+    """A meccsenkénti nyers, JSON-barát játékos-modell minta
+    (player_model_sample) összegéből (player_models_from_samples)
+    ugyanazok a modellek épülnek, mint a learn_many / kapus_many /
+    DefenseModel.learn_many útján — JSON-körbejárás után is (a lemezes
+    eredmény-tár így tárolja)."""
+    import json as _json
+
+    from handball.pipeline.play_simulation import (
+        AttackModel, _lovo_sav_minta, kapus_many, player_model_sample,
+        player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    cfg = TacticsConfig()
+    for team in (Team.HOME, Team.AWAY):
+        par = [(m1, team), (m2, team)]
+        mintak = [_json.loads(_json.dumps(player_model_sample(m, t)))
+                  for m, t in par]
+        mod = player_models_from_samples(mintak)
+        assert mod["tamadas"].lovok == AttackModel.learn_many(par).lovok
+        assert mod["kapus"] == kapus_many(par)
+        assert mod["vedok"] == DefenseModel.learn_many(par).vedok
+        egy = player_models_from_samples(mintak[:1])
+        assert egy["tamadas"].lovok == AttackModel.learn(m1, team).lovok
+        assert egy["sav"] == {str(k): v for k, v in
+                              _lovo_sav_minta(m1, team, cfg).items()}
+    assert player_models_from_samples([])["vedok"] == []
 
 
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
@@ -1717,6 +1793,94 @@ def test_az_elo_kit_kinek_az_addig_latott_falbol(monkeypatch):
     assert live_matchup_alerts(eddig, **be)["alerts"] == r
     assert live_matchup_alerts(Match(m.meta, m.frames[:1000]), **be)["alerts"] == []
     assert live_matchup_alerts(_proba_match(ismetles=40))["alerts"] == []
+
+
+def test_az_elo_loves_elosztas_az_addigi_lovesekbol(monkeypatch):
+    """Az 1. és 2. percben (küszöb átállítva) a hazai addigi lövései (a
+    patchelt nyers minta — a részesedés MINDIG az addigi kockákból) × a
+    megadott (szezon-) lövő-modell: döntésnél a motor mondata a támadó
+    oldalnak; ugyanaz a pár a 2. percben nem ismétlődik, más pár igen;
+    modell nélkül az addigi kockákból tanul; a vendégnek nincs lövése →
+    semmi; a minta csak a percig tartó kockákat kapja (okszerű)."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   live_shot_allocation_alerts,
+                                                   shot_allocation_from)
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (1, 2))
+    latott = []
+    minta = {7: {"close": [3, 3, 1.5]}, 10: {"close": [9, 3, 4.5]}}
+
+    def _minta(match, team, config):
+        latott.append(match.frames[-1].t)
+        return minta if team == Team.HOME else {}
+
+    monkeypatch.setattr(ps, "_lovo_minta", _minta)
+    m = _proba_match(ismetles=40)          # 160 mp — eléri a 2. percet
+    r = live_shot_allocation_alerts(m)["alerts"]
+    assert [(a["perc"], a["team"]) for a in r] == [(1, "home")]
+    a = r[0]
+    vart = shot_allocation_from(AttackModel(lovok={7: {"close": 1.3},
+                                                   10: {"close": 0.8}}),
+                                {}, minta)
+    assert (a["tobbet_mez"], a["tobbet_sav"], a["kevesebbet_mez"],
+            a["kevesebbet_sav"], a["lovesek"]) == (7, "close", 10, "close", 12)
+    assert a["verdict"] == vart["verdict"]
+    assert a["text"] == f"Lövés-elosztás (1. perc): Ők — {vart['verdict']}"
+    hatar1 = m.frames[0].t + 60 * 25
+    assert a["t"] == hatar1 and a["t_s"] == hatar1 / 25
+    assert max(latott) <= m.frames[0].t + 120 * 25
+    # A szezon-modell szerint a 10-es a jobb: más pár, a 2. percben is.
+    tam = {"home": AttackModel(lovok={7: {"close": 0.8}, 10: {"close": 1.3},
+                                      11: {"close": 1.0}})}
+    monkeypatch.setattr(ps, "_lovo_minta", lambda match, team, config: (
+        {7: {"close": [9, 3, 4.5]}, 10: {"close": [2, 1, 1.0]},
+         11: {"close": [1, 0, 0.5]}} if team == Team.HOME else {}))
+    r2 = live_shot_allocation_alerts(m, tamadas=tam)["alerts"]
+    assert [(x["perc"], x["tobbet_mez"], x["kevesebbet_mez"]) for x in r2] == [
+        (1, 10, 7)]
+    assert live_shot_allocation_alerts(_proba_match(ismetles=5))["alerts"] == []
+
+def test_az_elo_kapus_valasztas_a_szezon_es_az_addigiak_mintajabol(
+        monkeypatch):
+    """A valódi láncon (szimulált meccs: a hazai sokat lő távolról, a
+    vendég kapuját az 1-es védi): a 3. percben (küszöb átállítva) a
+    vendég 1-es kapusa addig távolról alig véd; a szezon-mintában a 16-os
+    távolról jól véd → a modell a 16-ost javasolja, és mivel most az 1-es
+    áll bent, szól — a motor mondatával; a 6. percben ugyanazt nem
+    ismétli; a hazai oldalon (nincs második kapus) semmi; szezon-minta
+    nélkül (egy kapus) semmi; ha a javasolt áll bent, semmi."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import (_kapus_minta_kapusonkent,
+                                                   _kapus_mintak_osszege,
+                                                   _kapus_most, _lovo_minta,
+                                                   keeper_choice_from,
+                                                   live_keeper_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    cfg = TacticsConfig()
+    szezon = {"away": {16: {"far": [30, 22], "close": [10, 4]}}}
+    r = live_keeper_alerts(m, kapus_mintak=szezon)["alerts"]
+    assert [(a["perc"], a["team"], a["most_mez"], a["javasolt_mez"])
+            for a in r] == [(3, "away", 1, 16)]
+    hatar = m.frames[0].t + 3 * 60 * 25
+    eddig = Match(m.meta, [f for f in m.frames if f.t <= hatar])
+    assert _kapus_most(eddig, Team.AWAY, cfg) == 1
+    vart = keeper_choice_from(
+        _lovo_minta(eddig, Team.HOME, cfg),
+        _kapus_mintak_osszege([szezon["away"],
+                               _kapus_minta_kapusonkent(eddig, Team.AWAY, cfg)]))
+    a = r[0]
+    assert a["verdict"] == vart["verdict"] and a["elteres"] == vart["elteres"]
+    assert a["text"] == (f"Kapus-választás (3. perc): {m.meta.away_team} "
+                         f"kapujában most az 1-es áll — {vart['verdict']}")
+    assert live_keeper_alerts(m)["alerts"] == []
+    # Ha a szezonból a 16-os rosszabb, az 1-es marad (ő áll bent) → semmi.
+    rossz = {"away": {16: {"far": [30, 2], "close": [10, 0]}}}
+    assert live_keeper_alerts(m, kapus_mintak=rossz)["alerts"] == []
 
 
 def test_az_elo_utolso_labda_okszeru_es_az_allast_nezi(monkeypatch):

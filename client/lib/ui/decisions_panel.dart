@@ -214,6 +214,73 @@ class _DecisionsPanelState extends State<DecisionsPanel> {
             "érő opció (a fogott fogadó és a szorított lövő kevesebbet ér). "
             "$_sitMin döntés alatt ez még nem szokás, csak egy-egy eset.",
             style: AppText.label.copyWith(fontSize: 11)),
+        if (d["lovo"] is Map) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text("LÖVŐ-MODELL", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          _shooterProfile((d["lovo"] as Map).cast<String, dynamic>()),
+        ],
+      ],
+    );
+  }
+
+  /// Nagy kezdőbetű a sáv-névhez ("közelről" → "Közelről").
+  static String _nagyKezdo(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  /// A játékos tanult lövő-modellje sávonként (a motor
+  /// play_simulation.player_shooter_profile képe: lövés, gól, várható gól
+  /// és a szorzó — a szorzó a motor küszöbétől, kevesebbnél "kevés
+  /// minta"), és a helye a csapat lövés-elosztásában.
+  Widget _shooterProfile(Map<String, dynamic> p) {
+    String sz(num v, [int d = 1]) =>
+        v.toStringAsFixed(d).replaceAll(".", ",");
+    final savok = ((p["savok"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+    final el = (p["elosztas"] as Map?)?.cast<String, dynamic>();
+    final szerep = el?["szerep"];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (i, s) in savok.indexed)
+          FadeSlideIn(
+            index: i,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  Text(_nagyKezdo("${s["sav_nev"] ?? ""}"),
+                      style: AppText.label
+                          .copyWith(color: AppColors.textPrimary)),
+                  Text(
+                      "${s["lovesek"]} lövés · ${s["gol"]} gól · "
+                      "${sz((s["xg"] as num?) ?? 0)} várható"
+                      "${s["szorzo"] is num ? " · ${sz(s["szorzo"] as num)}×" : " · kevés minta"}",
+                      style: AppText.value),
+                ],
+              ),
+            ),
+          ),
+        if (szerep == "tobbet" || szerep == "kevesebbet") ...[
+          const SizedBox(height: 6),
+          Text(
+              szerep == "tobbet"
+                  ? "A modell szerint többet lőhetne: ${el?["verdict"] ?? ""}."
+                  : "A modell szerint kevesebbet kellene lőnie: "
+                      "${el?["verdict"] ?? ""}.",
+              style: AppText.label.copyWith(color: AppColors.textPrimary)),
+        ],
+        const SizedBox(height: 6),
+        Text(
+            "A szorzó: 1 felett a helyzeteinél (várható gól) többet lő be "
+            "abból a sávból, 1 alatt kevesebbet — sávonként legalább három "
+            "lövéstől tanul a modell.",
+            style: AppText.label.copyWith(fontSize: 11)),
       ],
     );
   }

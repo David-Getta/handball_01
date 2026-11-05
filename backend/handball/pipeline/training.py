@@ -12759,7 +12759,7 @@ def _player_training_focus_cached(match: Match,
     except Exception:
         pass
 
-    # (c3) Befejezés SÁVONKÉNT — a tanult lövő-modell (AttackModel): a
+    # (c5) Befejezés SÁVONKÉNT — a tanult lövő-modell (AttackModel): a
     #    játékos melyik távolságból lő be a helyzeteinél kevesebbet. A (c)
     #    azt mondja, hogy elmarad; ez azt, hogy HONNAN — és a gyakorlat
     #    a sávhoz igazodik.
@@ -12797,7 +12797,7 @@ def _player_training_focus_cached(match: Match,
     except Exception:
         pass
 
-    # (c4) Kilépés a sávod lövőjére — a kit kinek (shooter_defender_pairs):
+    # (c6) Kilépés a sávod lövőjére — a kit kinek (shooter_defender_pairs):
     #    az ellenfél veszélyes távoli lövőjének sávjában a MI védőnk áll,
     #    aki ritkán lép ki (a modell cserét javasol a kilépőre) — a védő
     #    egyéni tétele a kilépés időzítése; a kilépő, akit elé javasol,
@@ -12829,6 +12829,51 @@ def _player_training_focus_cached(match: Match,
                     "lépj ki a labda átvételekor, ne a lendületnél; 10 "
                     "ismétlés, aztán 6 a 6-ban jelzésre a sávod lövőjére",
                     clips=["free_shot", "shot"])
+    except Exception:
+        pass
+
+    # (c7) Lövés-elosztás emberre — a shot_allocation (a tanult lövők × a
+    #    szemközti kapus): aki lövésenként a legtöbbet ér, de az átlagnál
+    #    kevesebbet lő, a "Vállalj több lövést" tételt kapja; aki az
+    #    átlagnál többet lő, pedig kevesebbet ér, a "Lövés-választás"
+    #    tételt. A csapat-szabály (495) a rendszert mondja, ez az embert.
+    try:
+        from .play_simulation import mezszam_nevelovel, shot_allocation
+
+        def _sz(v):
+            return f"{v:.2f}".replace(".", ",")
+
+        le = shot_allocation(match, config)
+        for side in ("home", "away"):
+            p = le.get(side)
+            if not p or not p.get("dontes"):
+                continue
+            pid_of = _pid_of(side)
+            t_, k_ = p["tobbet"], p["kevesebbet"]
+            if t_["mez"] in pid_of:
+                add(side, pid_of[t_["mez"]], t_["mez"], "befejezés",
+                    "Vállalj több lövést",
+                    f"{t_['sav_nev']} lövésenként {_sz(t_['ertek'])} várható "
+                    "gólt érsz ellenük, mégis a csapat lövéseinek csak "
+                    f"{t_['arany_pct']:.0f}%-át adod le ({t_['lovesek']} "
+                    "lövés)",
+                    "lövés-vállalás jelzésre: 6 a 6-ban az első szabad "
+                    "pillanat a te lövésed — passz helyett lövés, 15 "
+                    "ismétlés a sávodból, a kapus mozdulása után helyezve",
+                    clips=["shot"])
+            if k_["mez"] in pid_of:
+                add(side, pid_of[k_["mez"]], k_["mez"], "befejezés",
+                    "Lövés-választás",
+                    f"a csapat lövéseinek {k_['arany_pct']:.0f}%-át adod le "
+                    f"{k_['sav_nev']} ({k_['lovesek']} lövés), pedig onnan "
+                    f"lövésenként {_sz(k_['ertek'])} várható gólt érsz — "
+                    f"{mezszam_nevelovel(t_['mez'])} {t_['sav_nev']} "
+                    f"{_sz(t_['ertek'])}-et",
+                    "lövés-választás: 6 a 6-ban kétlépéses döntés — ha a "
+                    "társ jobb helyzetben van, passz; 10 ismétlés a lövés "
+                    "helyett kiadott labdára, aztán a saját lövés csak a "
+                    "legjobb sávodból",
+                    clips=["shot"])
     except Exception:
         pass
 
@@ -12947,6 +12992,45 @@ def _player_training_focus_cached(match: Match,
                     # szerint nem szűrhető rá; a jelenet-ajánlás itt
                     # üres, nem hazudunk "nézd meg" gombot.
                     clips=[])
+    except Exception:
+        pass
+
+    # (e2) Kapus SÁVONKÉNT — a tanult kapus-sávok kapusonként
+    #    (_kapus_minta_kapusonkent: ki védett a lövés pillanatában): a sáv,
+    #    ahonnan az átlagnál érdemben több gólt kap (a szorzó legalább
+    #    KAPUS_GYENGE_SZORZO). Az (e) azt mondja, hogy elmarad; ez azt,
+    #    hogy HONNAN — a gyakorlat a sávhoz igazodik.
+    try:
+        from .play_simulation import (KAPUS_GYENGE_SZORZO, KAPUS_SAV_NEV,
+                                      _kapus_minta_kapusonkent,
+                                      _kapus_szorzo)
+        kgyak = {"close": ("reakció-sor közelről (6 m, beálló és szélső "
+                           "szögből): kimozdulás a lövő elé, a láb zárja "
+                           "az alsó sarkokat, 20 lövés váltott oldalra"),
+                 "mid": ("8–9 m-es lövések elzárás mögül: a blokk melletti "
+                         "sáv a kapusé — helyezkedés a blokk mögé, 15 "
+                         "lövés a takarásból"),
+                 "far": ("átlövés-sor 9–11 m-ről: alap-pozíció a lövő "
+                         "karjához, a felső sarkok zárása, késleltetett "
+                         "vetődés — 20 lövés két oldalról")}
+        for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+            pid_of = _pid_of(side)
+            for kmez, minta in sorted(
+                    _kapus_minta_kapusonkent(match, team, config).items()):
+                szorzok = _kapus_szorzo(minta)
+                gyenge = [(v, s) for s, v in szorzok.items()
+                          if v >= KAPUS_GYENGE_SZORZO]
+                if not gyenge or int(kmez) not in pid_of:
+                    continue
+                v, s = max(gyenge)
+                faced, saves = minta[s]
+                add(side, pid_of[int(kmez)], int(kmez), "kapus",
+                    "Védés a gyenge sávban",
+                    f"{KAPUS_SAV_NEV[s]} {faced} kapura tartó lövésből "
+                    f"{saves} védés — "
+                    + f"{v:.1f}".replace(".", ",")
+                    + "× annyi gólt kapsz onnan, mint az átlag",
+                    kgyak[s], clips=[])
     except Exception:
         pass
 

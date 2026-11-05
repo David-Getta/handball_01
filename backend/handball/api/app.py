@@ -8016,12 +8016,34 @@ def create_app():
                                   "meccsek": len(mintak)}
         except Exception:
             jatekos_modell = None
+        # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
+        # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
+        fejlodes = None
+        try:
+            from ..pipeline.play_simulation import (
+                player_model_development, player_models_from_samples)
+            kilincs = {m_.meta.match_id: m_ for m_ in _season_matches()}
+            regi_ids = {it["match_id"] for it in older_items}
+            uj_ids = {it["match_id"] for it in newer_items}
+            regi_s = [_jatekos_minta_of(kilincs[mid_], side_)
+                      for _d, mid_, side_ in entries
+                      if mid_ in regi_ids and mid_ in kilincs]
+            uj_s = [_jatekos_minta_of(kilincs[mid_], side_)
+                    for _d, mid_, side_ in entries
+                    if mid_ in uj_ids and mid_ in kilincs]
+            if regi_s and uj_s:
+                r_ = player_models_from_samples(regi_s)
+                u_ = player_models_from_samples(uj_s)
+                fejlodes = player_model_development(
+                    r_["tamadas"], u_["tamadas"], r_["kapus"], u_["kapus"])
+        except Exception:
+            fejlodes = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
             venue=venue, leaders=leaders, opponents=opponents,
             figure_library=figure_library, repertoire=repertoire,
-            jatekos_modell=jatekos_modell))
+            jatekos_modell=jatekos_modell, fejlodes=fejlodes))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
@@ -8033,6 +8055,35 @@ def create_app():
         if not data["points"]:
             raise HTTPException(status_code=404,
                                 detail="no data for player")
+        # A szezon lövő- és kapus-modellje a játékosra: a csapat összes
+        # könyvtári meccsének nyers mintája (a lemezes eredmény-tárból),
+        # a mezszámára összeadva — hibatűrően.
+        lovo_modell = None
+        try:
+            from ..pipeline.play_simulation import (keeper_bands_from,
+                                                    shooter_bands_from)
+            par = _csapat_meccsei(team)
+            mintak = [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]
+            lm: dict = {}
+            km: dict = {}
+            for s_ in mintak:
+                for sav, v in ((s_.get("lovo") or {}).get(str(jersey))
+                               or {}).items():
+                    r_ = lm.setdefault(sav, [0, 0, 0.0])
+                    r_[0] += int(v[0])
+                    r_[1] += int(v[1])
+                    r_[2] += float(v[2])
+                for sav, v in ((s_.get("kapusok") or {}).get(str(jersey))
+                               or {}).items():
+                    r_ = km.setdefault(sav, [0, 0])
+                    r_[0] += int(v[0])
+                    r_[1] += int(v[1])
+            if lm or km:
+                lovo_modell = {"lovo": shooter_bands_from(lm),
+                               "kapus": keeper_bands_from(km),
+                               "meccsek": len(mintak)}
+        except Exception:
+            lovo_modell = None
         from ..pipeline.report_html import player_season_html
         return HTMLResponse(content=player_season_html(
             team, jersey, data["points"], data.get("name"),
@@ -8041,7 +8092,8 @@ def create_app():
             # javul, a nyomtatvány pedig nem, a papír kevesebbet ér,
             # mint a program.
             trend=data.get("trend"),
-            trend_window=data.get("trend_window", TREND_WINDOW)))
+            trend_window=data.get("trend_window", TREND_WINDOW),
+            lovo_modell=lovo_modell))
 
     # Egyéni edzés-fókusz gyorsítótár (match_id → (kulcs, eredmény)).
     # A szezon-szintű összegzés MINDEN meccsre lefuttatja a réteget, és
@@ -8421,6 +8473,23 @@ def create_app():
     _TALLY_CATS = ("goals", "assists", "blocks", "steals", "saves",
                    "matches")
 
+    def _korabbi_modellek(match_id: str, nev: str):
+        """A `nev` csapat könyvtári KORÁBBI meccseiből (a `match_id` meccs
+        nélkül — az élő jelzések okszerűek) a kész játékos-modellek
+        (play_simulation.player_models_from_samples a meccsenkénti, a
+        lemezes eredmény-tárból vett nyers mintákból: "tamadas", "kapus",
+        "vedok", "sav", "lovo", "kapusok") és a meccsek száma. A második
+        hívás nem tölti vissza a hideg meccseket."""
+        from ..pipeline.play_simulation import player_models_from_samples
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != match_id]
+        except HTTPException:
+            par = []
+        return (player_models_from_samples(
+                    [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]),
+                len(par))
+
     def _jatekos_minta_of(m_, side: str) -> dict:
         """EGY meccs nyers játékos-modell mintája az adott oldalra
         (play_simulation.player_model_sample: lövők, sávok, kapus, fal) —
@@ -8428,7 +8497,9 @@ def create_app():
         hívása ne töltse vissza a hideg meccseket; JSON-barát, meccsek
         közt összeadható (player_models_from_samples)."""
         from ..pipeline.play_simulation import player_model_sample
-        return _cached_result(m_.meta.match_id, f"jatekos-minta-{side}",
+        # (A név verziója a minta ALAKJÁVAL nő — a v2 a kapusonkénti
+        # mintát is hozza; a régi alakú tárolt minta így nem tér vissza.)
+        return _cached_result(m_.meta.match_id, f"jatekos-minta-v2-{side}",
                               lambda: player_model_sample(m_, Team(side)))
 
     def _player_tally_of(m) -> dict:
@@ -13879,31 +13950,87 @@ def create_app():
         "t_s", "perc", "team", "team_name", "allas", "kulonbseg", "mez",
         "sav", "ertek", "text"}], "szezon_meccsek": {"home", "away"}}.
         404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import (kapus_many,
-                                                live_last_shot_alerts)
+        from ..pipeline.play_simulation import live_last_shot_alerts
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
 
-        def korabbi(nev: str) -> list:
-            try:
-                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
-                        if m_.meta.match_id != match_id]
-            except HTTPException:
-                return []
+        tamadas, kapus, db = {}, {}, {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            sajat, n_s = _korabbi_modellek(match_id, nevek[side])
+            ellen, n_e = _korabbi_modellek(match_id, nevek[masik])
+            db[side] = n_s
+            if n_s:
+                tamadas[side] = sajat["tamadas"]
+            if n_e:
+                kapus[side] = ellen["kapus"]
+        return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
+                "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/live-kapus-valasztas")
+    def get_live_keeper_choice(match_id: str):
+        """ÉLŐ kapus-választás: a 15., 30. és 45. percben melyik kapusunk
+        álljon az ő lövőik ellen, ha most nem ő áll bent (play_simulation.
+        live_keeper_alerts). Az ő lövőik nyers mintája az ellenfél, a
+        kapusaink kapusonkénti mintája a csapat könyvtári KORÁBBI
+        meccseiből (ez a meccs nélkül), mindkettőhöz hozzáadva az addig
+        látottak (okszerű). Válasz: {"alerts": [{"t", "t_s", "perc",
+        "team" (a VÉDŐ oldal), "team_name", "most_mez", "javasolt_mez",
+        "elteres", "verdict", "text"}], "szezon_meccsek": {"home",
+        "away"}} — a szám a csapat korábbi meccsei. 404: nincs ilyen
+        meccs."""
+        from ..pipeline.play_simulation import live_keeper_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        lovo, kapus, db = {}, {}, {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            sajat, n_s = _korabbi_modellek(match_id, nevek[side])
+            ellen, n_e = _korabbi_modellek(match_id, nevek[masik])
+            db[side] = n_s
+            if n_s:
+                kapus[side] = sajat["kapusok"]
+            if n_e:
+                lovo[side] = ellen["lovo"]
+        return {**live_keeper_alerts(match, lovo_mintak=lovo,
+                                     kapus_mintak=kapus),
+                "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/live-loves-elosztas")
+    def get_live_shot_allocation(match_id: str):
+        """ÉLŐ lövés-elosztás: a 15., 30. és 45. percben az addig leadott
+        lövések részesedése a tanult lövők értékéhez mérve — ki lőhetne
+        többet és ki kevesebbet (play_simulation.live_shot_allocation_
+        alerts). A lövők a csapat, a kapus az ellenfél könyvtári KORÁBBI
+        meccseiből (ez a meccs nélkül — okszerű); ahol nincs, az addig
+        látott kockákból. Válasz: {"alerts": [{"t", "t_s", "perc", "team"
+        (a TÁMADÓ oldal), "team_name", "tobbet_mez", "tobbet_sav",
+        "kevesebbet_mez", "kevesebbet_sav", "lovesek", "verdict",
+        "text"}], "szezon_meccsek": {"home", "away"}} — a szám a csapat
+        korábbi meccsei. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import live_shot_allocation_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
 
         tamadas, kapus, db = {}, {}, {}
         for side in ("home", "away"):
             masik = "away" if side == "home" else "home"
-            sajat = korabbi(nevek[side])
-            ellen = korabbi(nevek[masik])
-            db[side] = len(sajat)
-            if sajat:
-                tamadas[side] = AttackModel.learn_many(sajat)
-            if ellen:
-                kapus[side] = kapus_many(ellen)
-        return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
+            sajat, n_s = _korabbi_modellek(match_id, nevek[side])
+            ellen, n_e = _korabbi_modellek(match_id, nevek[masik])
+            db[side] = n_s
+            if n_s:
+                tamadas[side] = sajat["tamadas"]
+            if n_e:
+                kapus[side] = ellen["kapus"]
+        return {**live_shot_allocation_alerts(match, tamadas=tamadas,
+                                              kapus=kapus),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/live-kit-kinek")
@@ -13918,30 +14045,21 @@ def create_app():
         "vedo_mez", "javasolt_mez", "verdict", "text"}], "szezon_meccsek":
         {"home", "away"}} — a szám oldalanként az ELLENFÉL korábbi
         meccsei. 404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import (live_matchup_alerts,
-                                                lovo_minta_many,
-                                                lovo_sav_minta_many)
+        from ..pipeline.play_simulation import live_matchup_alerts
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
 
-        def korabbi(nev: str) -> list:
-            try:
-                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
-                        if m_.meta.match_id != match_id]
-            except HTTPException:
-                return []
-
         tamadas, savok, mintak, db = {}, {}, {}, {}
         for side in ("home", "away"):
             masik = "away" if side == "home" else "home"
-            ellen = korabbi(nevek[masik])
-            db[side] = len(ellen)
-            if ellen:
-                tamadas[side] = AttackModel.learn_many(ellen)
-                savok[side] = lovo_sav_minta_many(ellen)
-                mintak[side] = lovo_minta_many(ellen)
+            ellen, n_e = _korabbi_modellek(match_id, nevek[masik])
+            db[side] = n_e
+            if n_e:
+                tamadas[side] = ellen["tamadas"]
+                savok[side] = ellen["sav"]
+                mintak[side] = ellen["lovo"]
         return {**live_matchup_alerts(match, tamadas=tamadas, savok=savok,
                                       mintak=mintak),
                 "szezon_meccsek": db}
@@ -14026,26 +14144,18 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         from ..pipeline.decisions import (decision_models_from,
                                           live_decision_alerts)
-        from ..pipeline.play_simulation import kapus_many
         nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
-
-        def korabbi(nev: str) -> list:
-            try:
-                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
-                        if m_.meta.match_id != match_id]
-            except HTTPException:
-                return []
 
         tamadas, kapus, db = {}, {}, {}
         for side in ("home", "away"):
             masik = "away" if side == "home" else "home"
-            sajat = korabbi(nevek[side])
-            ellen = korabbi(nevek[masik])
-            db[side] = len(sajat)
-            if sajat:
-                tamadas[side] = AttackModel.learn_many(sajat)
-            if ellen:
-                kapus[side] = kapus_many(ellen)
+            sajat, n_s = _korabbi_modellek(match_id, nevek[side])
+            ellen, n_e = _korabbi_modellek(match_id, nevek[masik])
+            db[side] = n_s
+            if n_s:
+                tamadas[side] = sajat["tamadas"]
+            if n_e:
+                kapus[side] = ellen["kapus"]
         if not tamadas and not kapus:
             return {**_cached_result(match_id, "decision-alerts",
                                      lambda: live_decision_alerts(match)),
@@ -14107,6 +14217,15 @@ def create_app():
                     break
         except Exception:
             pass
+        # A játékos tanult lövő-modellje (sávonként a minta és a szorzó, a
+        # lövés-elosztásban a helye) — play_simulation.player_shooter_
+        # profile; None, ha nincs mezszámos lövése.
+        out["lovo"] = None
+        try:
+            from ..pipeline.play_simulation import player_shooter_profile
+            out["lovo"] = player_shooter_profile(match, player_id)
+        except Exception:
+            out["lovo"] = None
         return out
 
     @app.post("/matches/{match_id}/simulate-setplay")
