@@ -21,6 +21,8 @@ Tiszta adatfeldolgozás (videó nélkül tesztelhető). Több meccs egyesíthet�
 
 from __future__ import annotations
 
+import re
+
 import math
 from dataclasses import dataclass, field, asdict
 from typing import Optional
@@ -25118,6 +25120,91 @@ def scouting_caveat(rep: ScoutingReport) -> Optional[str]:
             "beleszámítanak az összegzésbe — a lenti megállapításokat "
             "ennek tudatában olvasd.")
 
+
+
+# ---- A felderítés próbája --------------------------------------------------
+# A felderítő jelentés edzői kulcsai (erősség, gyengeség, "hogyan játssz
+# ellenük") a KORÁBBI meccsekből — visszaköszönnek-e a következő meccsen?
+# A próba a könyvtár időrendjében minden csapatra és meccsre: a csapat
+# legalább SC_MIN_KORABBI korábbi meccsének egyesített jelentéséből a
+# kulcsok, és közülük hány jelenik meg a meccs saját jelentésében. A
+# viszonyítás a liga általános kulcsai (a többi csapat korábbi meccseinek
+# egyesített jelentése) — a felderítés akkor ér valamit, ha az ő
+# szokásaik SC_ITELET_PP százalékponttal stabilabbak az általánosnál.
+SC_PROBA_MIN = 5
+SC_MIN_KORABBI = 2
+SC_ITELET_PP = 10.0
+
+
+def _kulcs_alak(kulcs: str) -> str:
+    """Egy edzői kulcs számok nélküli alakja (a "Gyors indítás (14%)" és a
+    "Gyors indítás (19%)" ugyanaz a kulcs)."""
+    return re.sub(r"\d+(?:[.,]\d+)?", "#", str(kulcs))
+
+
+def coach_key_set(rep: ScoutingReport) -> set:
+    """A jelentés edzői kulcsai (erősségek, gyengeségek, kulcsok együtt)
+    számok nélküli alakban — a felderítés próbájának összevetési
+    egysége."""
+    return {_kulcs_alak(k) for lista in _coach_keys(rep) for k in lista}
+
+
+def scouting_backtest(meccsek: list, csapat: Optional[str] = None) -> Optional[dict]:
+    """A felderítés próbája: `meccsek` = [{"match_id", "home", "away",
+    "reports": {"home": ScoutingReport, "away": ScoutingReport}}]
+    időrendben. Minden csapatra és meccsre: a KORÁBBI (legalább
+    SC_MIN_KORABBI) meccsei egyesített jelentésének kulcsai közül hány
+    köszön vissza a meccs saját jelentésében — a liga általános kulcsaihoz
+    (a többi csapat korábbi meccsei) mérve. A `csapat` megadásával csak
+    az ő felderítése. Mit jelent edzőileg: a felderítő jelentésre akkor
+    lehet meccstervet építeni, ha az ellenfél szokásai meccsről meccsre
+    megmaradnak — ha a kulcsai nem stabilabbak az általánosnál, a friss
+    meccsek és a közös minták számítanak. Visszatérés: {"meccsek",
+    "talalat_pct", "liga_pct", "kulonbseg_pp", "sorok", "itelet"
+    ("atviheto" / "nem"), "verdict"} — None, ha SC_PROBA_MIN-nél kevesebb
+    a mérhető meccs."""
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            sajat = [x["reports"][s] for x in meccsek[:i]
+                     for s in ("home", "away") if x.get(s) == nev]
+            liga = [x["reports"][s] for x in meccsek[:i]
+                    for s in ("home", "away") if x.get(s) != nev]
+            if len(sajat) < SC_MIN_KORABBI or not liga:
+                continue
+            pred = coach_key_set(combine_reports(sajat))
+            ligak = coach_key_set(combine_reports(liga))
+            if not pred or not ligak:
+                continue
+            act = coach_key_set(m["reports"][side])
+            sorok.append({"match_id": m.get("match_id"), "team": nev,
+                          "kulcsok": len(pred), "talalt": len(pred & act),
+                          "liga_kulcsok": len(ligak),
+                          "liga_talalt": len(ligak & act),
+                          "talalat_pct": round(100.0 * len(pred & act) / len(pred), 1),
+                          "liga_pct": round(100.0 * len(ligak & act) / len(ligak), 1)})
+    n = len(sorok)
+    if n < SC_PROBA_MIN:
+        return None
+    atlag = sum(r["talalat_pct"] for r in sorok) / n
+    liga_atlag = sum(r["liga_pct"] for r in sorok) / n
+    d = atlag - liga_atlag
+    atviheto = d >= SC_ITELET_PP
+    return {"meccsek": n, "talalat_pct": round(atlag, 1),
+            "liga_pct": round(liga_atlag, 1), "kulonbseg_pp": round(d, 1),
+            "sorok": sorok, "itelet": "atviheto" if atviheto else "nem",
+            "verdict": (f"a felderítés kulcsai {n} meccsen átlag {atlag:.0f}%-ban "
+                        f"visszaköszöntek a következő meccsen (a liga általános "
+                        f"kulcsai: {liga_atlag:.0f}%) — "
+                        + ("a felderítésre lehet építeni: a szokásaik meccsről "
+                           "meccsre megmaradnak" if atviheto else
+                           "a felderítés kulcsai nem stabilabbak a liga "
+                           "általános kulcsainál: a meccstervet a friss "
+                           "meccsekre és a közös mintákra súlyozd"))}
 
 def report_to_dict(rep: ScoutingReport) -> dict:
     """A jelentés JSON-barát szótárrá alakítása (az API-hoz) — a szöveges

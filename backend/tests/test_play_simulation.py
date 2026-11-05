@@ -1417,17 +1417,20 @@ def test_az_ai_probak_osszkepe():
           "vedekezes_proba": {"talalat": 10, "liga_talalat": 6},
           "kapus_valasztas_proba": {"itelet": "igazolt"},
           "figura_proba": {"verdict": "… — a visszatérő figuráikra érdemes "
-                                      "készülni"}}
+                                      "készülni"},
+          "felderites_proba": {"itelet": "atviheto"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (9, 6)
+    assert (o["itelt"], o["bizonyitott"]) == (10, 7)
     assert o["verdict"] == (
-        "9 próbából 6 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "10 próbából 7 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
-        "figura-felderítés; még nem: kapus-sávok, védő-modell, gólszerzők")
-    # A kapus-választás csak az "igazolt" ítélettel bizonyított.
+        "figura-felderítés, felderítés; még nem: kapus-sávok, védő-modell, "
+        "gólszerzők")
+    # A kapus-választás csak az "igazolt", a felderítés csak az
+    # "atviheto" ítélettel bizonyított.
     o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
-        "itelet": "egyenlo"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (9, 5)
+        "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (10, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():

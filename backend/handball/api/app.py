@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # A felderítésük próbája — hibatűrően.
+        try:
+            fd_ = _felderites_proba(csapat=team)
+            if fd_:
+                modell_proba = {**(modell_proba or {}), "felderites": fd_,
+                                "felderites_verdict": fd_["verdict"]}
+        except Exception:
+            pass
         # A kapus-választásuk próbája — hibatűrően.
         try:
             kv_ = _kapus_valasztas_proba(csapat=team)
@@ -8818,6 +8826,21 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _felderites_proba(csapat: str | None = None,
+                          kiveve: str | None = None):
+        """A felderítés próbája a könyvtár időrendjében (scouting.
+        scouting_backtest — a meccsenkénti felderítő jelentések a
+        tárból; a `kiveve` meccs nélkül, a `csapat` megadásával csak az ő
+        felderítése)."""
+        from ..pipeline.scouting import scouting_backtest
+        return scouting_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "reports": {"home": _scout_cached(m_, Team.HOME),
+                         "away": _scout_cached(m_, Team.AWAY)}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _kapusforma_minta_of(m_, side: str) -> dict:
         """EGY meccs kapus-forma mintája az adott oldalra (play_simulation.
         keeper_form_sample) — a lemezes eredmény-tárból."""
@@ -9118,6 +9141,8 @@ def create_app():
         None, "idokeres_proba": az időkérés próbája a sorozat ellen
         (timeout_run_backtest) vagy None, "kapus_valasztas_proba": a
         kapus-választás próbája (keeper_choice_backtest) vagy None,
+        "felderites_proba": a felderítés próbája (scouting_backtest) vagy
+        None,
         "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
@@ -9177,6 +9202,7 @@ def create_app():
                 "kapus_forma_proba": _kapusforma_proba(),
                 "idokeres_proba": _idokeres_proba(),
                 "kapus_valasztas_proba": _kapus_valasztas_proba(),
+                "felderites_proba": _felderites_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -9202,6 +9228,8 @@ def create_app():
         lövői ellen, keeper_choice_from — None: nincs két tanult kapus),
         "kapus_valasztas_proba" (a kapus-választás könyvtári próbája,
         keeper_choice_backtest — None: kevés mérhető választás),
+        "felderites_proba" (a felderítés próbája, scouting.
+        scouting_backtest — None: kevés mérhető meccs),
         "kulcs_hiany": {"home", "away"} (mi lenne a kulcsember nélkül:
         key_player_absence — None, ha nincs kulcsember vagy
         előrejelzés)}. 400:
@@ -9239,6 +9267,7 @@ def create_app():
                 "kapus_javaslat": {"home": _kapus_javaslat(home, away),
                                    "away": _kapus_javaslat(away, home)},
                 "kapus_valasztas_proba": _kapus_valasztas_proba(),
+                "felderites_proba": _felderites_proba(),
                 "kulcs_hiany": {
                     k: key_player_absence(gsz[k], (f or {}).get(
                         "home_goals" if k == "home" else "away_goals"))

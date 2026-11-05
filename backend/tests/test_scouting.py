@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 import sys
+
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from handball.models.tracking import (
@@ -2664,3 +2666,69 @@ def test_a_hajra_retegek_meccsterv_szabalyai_tenyleg_megszolalnak():
     own.defense_main = "3-2-1"
     plan2 = matchup_plan(own, opp) or []
     assert any("beállójuk a 2. félidőre elfogy" in p for p in plan2)
+
+
+def test_a_felderites_probaja():
+    """scouting_backtest: a csapat korábbi meccseinek egyesített kulcsai
+    visszaköszönnek-e a meccs saját jelentésében — a liga általános
+    kulcsaihoz mérve; a kulcsok számok nélkül egyeznek; kevés meccsnél
+    None; a csapat-szűrő."""
+    from handball.pipeline.scouting import (SC_ITELET_PP, SC_MIN_KORABBI,
+                                            SC_PROBA_MIN, ScoutingReport,
+                                            _kulcs_alak, coach_key_set,
+                                            combine_reports,
+                                            scouting_backtest)
+
+    assert _kulcs_alak("Gyors indítás (14%) — 2,5 s") == \
+        "Gyors indítás (#%) — # s"
+    # "A": mély 6-0, gyors indítás, erős befejezés; "B": 5-1, lassú, gyenge
+    # befejezés, sok eladott labda — a két profil kulcsai nem fedik egymást.
+    a = ScoutingReport(team="home", team_name="A", defense_main="6-0",
+                       defense_distribution={"6-0": 80.0, "5-1": 20.0},
+                       fast_break_pct=20.0, shots=10, goals=6, xg=4.0,
+                       xg_diff=2.0, turnovers=2)
+    b = ScoutingReport(team="away", team_name="B", defense_main="5-1",
+                       defense_distribution={"5-1": 90.0, "6-0": 10.0},
+                       fast_break_pct=2.0, shots=10, goals=2, xg=4.0,
+                       xg_diff=-2.0, turnovers=12)
+    ka, kb = coach_key_set(a), coach_key_set(b)
+    assert "Mély #-# faluk ellen: # m-es lövés és beúszó, csald ki a védőt." \
+        in ka and "#-#-ük ellen: az előretolt védő kicselezése, gyors " \
+        "lefordulás." in kb
+    kozos = len(ka & kb)        # a két profil közös kulcsai (kevés)
+    assert kozos < min(len(ka), len(kb)) / 2
+    ms = [{"match_id": f"m{i}", "home": "A", "away": "B",
+           "reports": {"home": a, "away": b}} for i in range(8)]
+    p = scouting_backtest(ms)
+    # Az első SC_MIN_KORABBI meccs a tanuláshoz: 6 meccs × 2 csapat; a
+    # stabil profil kulcsai mind visszaköszönnek, a "ligáé" (a másik
+    # csapat) csak a közös kulcsokban.
+    assert (p["meccsek"], p["itelet"]) == (12, "atviheto")
+    # Az egyesített jelentés kulcsai nem pont az egy meccsé (az összegzett
+    # számok más küszöböket érnek el) — a többségük így is visszaköszön,
+    # a ligáé csak a közös kulcsokban.
+    assert 80.0 <= p["talalat_pct"] <= 100.0
+    assert p["talalat_pct"] - p["liga_pct"] >= p["kulonbseg_pp"] - 0.1 >= \
+        SC_ITELET_PP
+    e0 = p["sorok"][0]
+    assert e0["match_id"] == f"m{SC_MIN_KORABBI}" and e0["team"] == "A"
+    ketto = coach_key_set(combine_reports([a, a]))
+    assert (e0["kulcsok"], e0["talalt"]) == (len(ketto), len(ketto & ka))
+    assert e0["liga_talalt"] == len(coach_key_set(combine_reports([b, b])) & ka)
+    assert p["verdict"].startswith(
+        f"a felderítés kulcsai 12 meccsen átlag {p['talalat_pct']:.0f}%-ban "
+        "visszaköszöntek a következő meccsen (a liga általános kulcsai: ")
+    assert p["verdict"].endswith("a felderítésre lehet építeni: a szokásaik "
+                                 "meccsről meccsre megmaradnak")
+    assert scouting_backtest(ms, "B")["meccsek"] == 6
+    assert scouting_backtest(ms[:SC_MIN_KORABBI + SC_PROBA_MIN // 2]) is None
+    # Ha a csapat meccsről meccsre más profilt mutat (az "A" felváltva a
+    # két profil), a kulcsai nem stabilabbak a ligánál: "nem".
+    v = [{"match_id": f"v{i}", "home": "A", "away": "B",
+          "reports": {"home": a if i % 2 else ScoutingReport(
+              **{**b.__dict__, "team": "home", "team_name": "A"}),
+                      "away": b}} for i in range(8)]
+    q = scouting_backtest(v, "A")
+    assert q is not None and q["itelet"] == "nem"
+    assert q["verdict"].endswith(
+        "a meccstervet a friss meccsekre és a közös mintákra súlyozd")

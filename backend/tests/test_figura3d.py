@@ -2147,6 +2147,26 @@ def test_a_meccs_elotti_kapus_valasztas_a_konyvtarbol(tmp_path, monkeypatch):
     assert j["kapus_valasztas_proba"] == kvp
     assert TestClient(app).get("/library/player-model-check").json()[
         "kapus_valasztas_proba"] == kvp
+    # A felderítés próbája a valódi láncon: a meccsenkénti felderítő
+    # jelentésekből (scout_team) ugyanaz, mint a motor — a küszöbök a
+    # három meccshez igazítva (mindkét modulban ugyanaz a név).
+    import handball.pipeline.scouting as sc
+    from handball.pipeline.scouting import scouting_backtest, scout_team
+    monkeypatch.setattr(sc, "SC_PROBA_MIN", 1)
+    monkeypatch.setattr(sc, "SC_MIN_KORABBI", 1)
+    # A könyvtár MINDEN meccse időrendben — az _app segéd "fm" meccse (A–B)
+    # is: a liga általános kulcsaiba az ő jelentései is beleszámítanak.
+    tar = app.state.store
+    fdp = scouting_backtest(
+        [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+          "away": m.meta.away_team,
+          "reports": {s_: scout_team(m, Team(s_)) for s_ in ("home", "away")}}
+         for m in (tar.get(i) for i in ("fm", "gt1", "gt2", "gt3"))])
+    assert fdp is not None and fdp["meccsek"] == 4
+    assert TestClient(app).get("/library/player-model-check").json()[
+        "felderites_proba"] == fdp
+    assert TestClient(app).get("/library/forecast", params={
+        "home": h, "away": a}).json()["felderites_proba"] == fdp
 
 
 def test_az_elo_felidei_varakozas_vegpont(tmp_path, monkeypatch):

@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **A felderítés próbája** (motor + végpontok + meccsterv + szezon-riport
+  + szezon-képernyő + összkép): a felderítő jelentésre lehet-e
+  meccstervet építeni — visszaköszönnek-e az edzői kulcsai a következő
+  meccsen? A próba a könyvtár időrendjében minden csapatra és meccsre a
+  KORÁBBI (legalább két) meccs egyesített jelentésének kulcsait (erősség,
+  gyengeség, "hogyan játssz ellenük", számok nélkül) veti össze a meccs
+  saját jelentésével, a liga általános kulcsaihoz (a többi csapat korábbi
+  meccsei) mérve: "a felderítés kulcsai 9 meccsen átlag 71%-ban
+  visszaköszöntek a következő meccsen (a liga általános kulcsai: 44%) — a
+  felderítésre lehet építeni: a szokásaik meccsről meccsre megmaradnak";
+  ha nem stabilabbak: "a meccstervet a friss meccsekre és a közös
+  mintákra súlyozd". A /library/player-model-check és a /library/forecast
+  "felderites_proba" mezője, a meccsterv ELŐREJELZÉS kártyájának sora, a
+  szezon-képernyő és a szezon-riport "Felderítés" sora (a csapat saját
+  felderítése), az AI-próbák összképének új sora
+  (scouting.scouting_backtest, coach_key_set).
+
 - **A kapus-választás próbája** (motor + végpontok + meccsterv +
   szezon-riport + szezon-képernyő + összkép): a meccs előtti "ki álljon
   a kapuban az ő lövőik ellen" tanács igazolódik-e a klub saját meccsein?

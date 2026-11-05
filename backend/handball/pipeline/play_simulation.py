@@ -3102,7 +3102,8 @@ def model_checks_overview(mc: dict) -> dict | None:
     javulástól, a fal-becslés a liga-viszonyításnál több találattal, a
     kapus-választás, ha a lövők szerinti választás a sima mérlegnél
     többet tud (keeper_choice_backtest), a figura-felderítés, ha a
-    visszatérő figurákra érdemes készülni. Mit
+    visszatérő figurákra érdemes készülni, a felderítés, ha a kulcsai
+    átvihetők a következő meccsre (scouting_backtest). Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3140,6 +3141,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     f = mc.get("figura_proba")
     if f:
         add("figura-felderítés", "érdemes készülni" in str(f.get("verdict")))
+    fd = mc.get("felderites_proba")
+    if fd:
+        add("felderítés", fd.get("itelet") == "atviheto")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])

@@ -306,6 +306,7 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final vedProba = (_forecast?["vedekezes_proba"] as Map?)?["verdict"];
     final kvProba =
         (_forecast?["kapus_valasztas_proba"] as Map?)?["verdict"];
+    final fdProba = (_forecast?["felderites_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
       // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
@@ -389,6 +390,12 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (figProba is String) ...[
                   const SizedBox(height: 4),
                   Text("A figura-felderítés próbája: $figProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                // A felderítés súlya: visszaköszönnek-e a kulcsai.
+                if (fdProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A felderítés próbája: $fdProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
               ]),
