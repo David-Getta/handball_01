@@ -1425,6 +1425,62 @@ def test_az_elo_utolso_labda_vegpont_a_szezon_modelljeivel(tmp_path,
     assert c.get("/matches/nincs/live-utolso-labda").status_code == 404
 
 
+def test_az_elo_ai_megbizhatosag_vegpont_a_korabbi_meccsekbol(tmp_path,
+                                                             monkeypatch):
+    """GET /matches/{id}/live-modell-proba: csapatonként a KORÁBBI
+    meccsek (ez a meccs nélkül) mintáiból a három próba és az egy soros
+    összegzés — a valódi láncon (három szimulált meccs, a harmadikra
+    kérve) ugyanaz, mint a motor a másik két meccsből; egyetlen másik
+    meccsnél nincs sor; 404 ismeretlen meccsre."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.decisions import (decision_model_check,
+                                             decision_outcome_sample,
+                                             decision_samples_sum)
+    from handball.pipeline.play_simulation import (keeper_model_backtest,
+                                                   model_trust_summary,
+                                                   player_model_sample,
+                                                   shooter_model_backtest)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=600, fps=25.0, seed=seed,
+                                  shots_per_min=8, halftime_break_s=30)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+        if seed == 2:
+            # Egyetlen MÁSIK meccs a könyvtárban: a próbához kevés.
+            c = TestClient(app)
+            assert c.get("/matches/gt2/live-modell-proba").json()[
+                "alerts"] == []
+    j = c.get("/matches/gt3/live-modell-proba").json()
+    korabbi = meccsek[:2]
+    for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+        mintak = [json.loads(json.dumps(player_model_sample(m, team)))
+                  for m in korabbi]
+        lp = shooter_model_backtest([x["lovo"] for x in mintak])
+        kp = keeper_model_backtest([x["kapus"] for x in mintak])
+        dp = decision_model_check(decision_samples_sum(
+            [decision_outcome_sample(m)[side] for m in korabbi]))
+        sor = model_trust_summary(lp, kp, dp)
+        talalt = [a for a in j["alerts"] if a["team"] == side]
+        if sor is None:
+            assert talalt == []
+        else:
+            [a] = talalt
+            assert a["meccsek"] == 2
+            assert a["text"].endswith(f"(2 korábbi meccs): {sor}") or \
+                a["text"] == (f"AI-megbízhatóság ({a['team_name']}, 2 korábbi "
+                              f"meccs): {sor}")
+    assert j["alerts"], "a valódi láncon legalább egy próba ítél"
+    assert c.get("/matches/nincs/live-modell-proba").status_code == 404
+
+
 def test_az_elo_kapus_valasztas_vegpont_a_szezon_mintaival(tmp_path,
                                                            monkeypatch):
     """GET /matches/{id}/live-kapus-valasztas: az ő lövőik az ellenfél, a
@@ -1535,6 +1591,68 @@ def test_az_elo_kit_kinek_vegpont_a_szezon_lovoivel(tmp_path, monkeypatch):
     assert [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
     assert lovo_minta_many([]) == {} and lovo_sav_minta_many([]) == {}
     assert c.get("/matches/nincs/live-kit-kinek").status_code == 404
+
+
+def test_az_elo_jelzesek_onkalibralasa_a_valodi_lancon(tmp_path,
+                                                       monkeypatch):
+    """Az élő kit-kinek jelzés a mögötte álló modell próbájával: az ő
+    lövő-modelljük próbája a többi meccsükön (ez a meccs nélkül) — a
+    valódi láncon (három szimulált meccs, az elsőre kérve) a
+    "megbizhatosag" és a szöveg ugyanaz, mint a motor a másik két meccs
+    mintáiból; ha a próba szerint az egyéni lövő-szorzó csak csapat-
+    szinten igaz, a jelzés óvatos, és a szöveg végén az ok."""
+    import json
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   BIZALOM_OVATOS_OKOK,
+                                                   calibrate_alerts,
+                                                   live_matchup_alerts,
+                                                   lovo_minta_many,
+                                                   lovo_sav_minta_many,
+                                                   player_model_sample,
+                                                   shooter_model_backtest,
+                                                   trust_levels)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (3, 6))
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=600, fps=25.0, seed=seed,
+                                  shots_per_min=8, halftime_break_s=30)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    m1, tobbi = meccsek[0], meccsek[1:]
+    c = TestClient(app)
+    j = c.get("/matches/gt1/live-kit-kinek").json()
+    ok = [(m, Team.HOME) for m in tobbi]
+    proba = shooter_model_backtest(
+        [json.loads(json.dumps(player_model_sample(m, Team.HOME)))["lovo"]
+         for m in tobbi])
+    szint = trust_levels(proba, None, None)["lovo"]
+    vart = calibrate_alerts(live_matchup_alerts(
+        m1, tamadas={"away": AttackModel.learn_many(ok)},
+        savok={"away": lovo_sav_minta_many(ok)},
+        mintak={"away": lovo_minta_many(ok)})["alerts"],
+        {"away": {"lovo": szint}})
+    assert vart
+    assert [(a["text"], a["megbizhatosag"], a["ovatos"])
+            for a in j["alerts"]] == [
+        (a["text"], a["megbizhatosag"], a["ovatos"]) for a in vart]
+
+    # A próba szerint az egyéni szorzó nem jobb a csapaténál → óvatos.
+    monkeypatch.setattr(ps, "shooter_model_backtest",
+                        lambda mintak: {"javulas_pct": 12.0,
+                                        "egyeni_pct": -1.0})
+    j2 = c.get("/matches/gt1/live-kit-kinek").json()
+    ok_ = BIZALOM_OVATOS_OKOK[("lovo", "csapat")]
+    assert j2["alerts"] and all(
+        a["ovatos"] and a["megbizhatosag"] == {"lovo": "csapat"}
+        and a["text"].endswith(f"(óvatosan: {ok_})") for a in j2["alerts"])
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

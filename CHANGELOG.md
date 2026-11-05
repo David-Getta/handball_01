@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **Élő AI-megbízhatóság és önkalibráló élő jelzések** (motor + élő
+  végpontok + élő képernyő): a meccs elején csapatonként egy sor arról,
+  mennyire bizonyult megbízhatónak a csapat többi könyvtári meccsén a
+  lövő-, a kapus- és a döntés-modell — "AI-megbízhatóság (Hazai, 6
+  korábbi meccs): lövő-szorzók: megbízhatók (+48%); kapus-sávok: csak
+  egészében (a sávok nélküli szorzó jobb); döntés-tanácsok: igazoltak
+  (+20 százalékpont)". És maguk az élő jelzések (kit kinek,
+  lövés-elosztás, kapus-választás, döntés-figyelő) is a mögöttük álló
+  modell próbájával jönnek: ahol a próba részleges vagy negatív, a
+  jelzés "óvatos" — a szöveg végén az ok ("óvatosan: az egyéni
+  lövő-szorzó a korábbi meccseken nem volt jobb a csapaténál"), és a
+  képernyőn szürkén, alacsonyabb súllyal. Edzőileg: a padon tudni kell,
+  melyik mondatra lehet építeni. Legalább két másik meccs kell; a
+  "semleges" próba nem óvatos. A /matches/{id}/live-modell-proba
+  végpont, a négy élő végpont "megbizhatosag" és "ovatos" mezője
+  (play_simulation.trust_levels, model_trust_summary, calibrate_alerts).
+
 - **A döntés-próba helyzetenként** (motor + szezon-riport +
   szezon-képernyő): a döntés-modell próbája helyzetenként is — kilépnek
   rá, szabad a 6 m-es társ, szabad lőhely: hol igazolja a pálya a modell

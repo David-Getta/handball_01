@@ -2892,6 +2892,118 @@ def keeper_model_backtest_summary(sorok: list) -> dict | None:
                         f"kapus{sav} ({cs} meccs × sáv, {lv} kapura tartó "
                         "lövés)")}
 
+
+def trust_levels(lovo: dict | None, kapus: dict | None,
+                 dontes: dict | None) -> dict:
+    """A három próba (shooter_model_backtest, keeper_model_backtest,
+    decisions.decision_model_check) szintje modellenként — ezt olvassa az
+    élő jelzések önkalibrálása (calibrate_alerts) és a meccs eleji
+    "AI-megbízhatóság" sor (model_trust_summary). Visszatérés:
+    {"lovo": "megbizhato" | "csapat" (az egyéni szorzó nem jobb a
+    csapaténál) | "ovatos" | "semleges" | None, "kapus": "megbizhato" |
+    "egeszeben" (a sávok nélküli szorzó jobb) | "ovatos" | "semleges" |
+    None, "dontes": "igazolt" | "ovatos" | "semleges" | None} — None, ahol
+    a próba nem ítélt (kevés korábbi meccs)."""
+    from .decisions import DONTES_PROBA_PP
+    ki = {"lovo": None, "kapus": None, "dontes": None}
+    if lovo:
+        j, e = float(lovo["javulas_pct"]), float(lovo.get("egyeni_pct", 0.0))
+        ki["lovo"] = ("megbizhato" if j >= PROBA_ITELET_PCT
+                      and e >= PROBA_ITELET_PCT else
+                      "csapat" if j >= PROBA_ITELET_PCT else
+                      "ovatos" if j <= -PROBA_ITELET_PCT else "semleges")
+    if kapus:
+        j, sp = float(kapus["javulas_pct"]), float(kapus.get("sav_pct", 0.0))
+        ki["kapus"] = ("megbizhato" if j >= PROBA_ITELET_PCT
+                       and sp >= PROBA_ITELET_PCT else
+                       "egeszeben" if j >= PROBA_ITELET_PCT else
+                       "ovatos" if j <= -PROBA_ITELET_PCT else "semleges")
+    if dontes:
+        k = float(dontes["kulonbseg_pp"])
+        ki["dontes"] = ("igazolt" if k >= DONTES_PROBA_PP else
+                        "ovatos" if k <= -DONTES_PROBA_PP else "semleges")
+    return ki
+
+
+def model_trust_summary(lovo: dict | None, kapus: dict | None,
+                        dontes: dict | None) -> str | None:
+    """A három próba (shooter_model_backtest, keeper_model_backtest,
+    decisions.decision_model_check) egy sorban — az élő képernyő meccs
+    eleji "AI-megbízhatóság" sorához: "lövő-szorzók: megbízhatók (+48%);
+    kapus-sávok: csak egészében (a sávok nélküli szorzó jobb); döntés-
+    tanácsok: igazoltak (+20 százalékpont)". None, ha egyik próba sem
+    ítélt (kevés korábbi meccs)."""
+    sz = trust_levels(lovo, kapus, dontes)
+    reszek = []
+    if sz["lovo"]:
+        j = float(lovo["javulas_pct"])
+        reszek.append({
+            "megbizhato": f"lövő-szorzók: megbízhatók (+{j:.0f}%)",
+            "csapat": ("lövő-szorzók: csak csapat-szinten (az egyéni "
+                       "szorzó nem jobb a csapaténál)"),
+            "ovatos": f"lövő-szorzók: óvatosan ({j:.0f}%)",
+            "semleges": "lövő-szorzók: semlegesek"}[sz["lovo"]])
+    if sz["kapus"]:
+        j = float(kapus["javulas_pct"])
+        reszek.append({
+            "megbizhato": f"kapus-sávok: megbízhatók (+{j:.0f}%)",
+            "egeszeben": ("kapus-sávok: csak egészében (a sávok nélküli "
+                          "szorzó jobb)"),
+            "ovatos": f"kapus-sávok: óvatosan ({j:.0f}%)",
+            "semleges": "kapus-sávok: semlegesek"}[sz["kapus"]])
+    if sz["dontes"]:
+        k = float(dontes["kulonbseg_pp"])
+        reszek.append({
+            "igazolt": f"döntés-tanácsok: igazoltak (+{k:.0f} százalékpont)",
+            "ovatos": f"döntés-tanácsok: óvatosan ({k:.0f} százalékpont)",
+            "semleges": "döntés-tanácsok: semlegesek"}[sz["dontes"]])
+    return "; ".join(reszek) if reszek else None
+
+
+# ---- Az élő jelzések önkalibrálása ------------------------------------------
+# Egy élő jelzés (kit kinek, lövés-elosztás, kapus-választás, döntés-
+# figyelő) annyit ér, amennyit a mögötte álló modell a csapat KORÁBBI
+# meccsein a próbán mutatott. Ahol a próba részleges vagy negatív
+# (az alábbi szintek), a jelzés "óvatos": a szöveg végére kerül az ok,
+# és a kliens alacsonyabb súllyal (szürkén) mutatja. A "semleges" szint
+# nem óvatos: a modell nem rosszabb a viszonyításnál.
+BIZALOM_OVATOS_OKOK = {
+    ("lovo", "csapat"): ("az egyéni lövő-szorzó a korábbi meccseken nem "
+                         "volt jobb a csapaténál"),
+    ("lovo", "ovatos"): ("a lövő-modell a korábbi meccseken pontatlanabb "
+                         "volt az xG-nél"),
+    ("kapus", "egeszeben"): ("a kapus-sávok a korábbi meccseken csak "
+                             "egészében igazolódtak"),
+    ("kapus", "ovatos"): ("a kapus-modell a korábbi meccseken pontatlanabb "
+                          "volt az átlagos kapusnál"),
+    ("dontes", "ovatos"): ("a modell legjobb opciója a korábbi meccseken "
+                           "nem hozott több gólt"),
+}
+
+
+def calibrate_alerts(alerts: list, szintek: dict) -> list:
+    """Az élő jelzések önkalibrálása: `szintek` oldalanként (a jelzés
+    "team" mezője szerint) a jelzés mögötti modellek próba-szintje
+    ({"home": {"lovo": "csapat", "kapus": "megbizhato"}, ...} — a
+    trust_levels értékei; None a nem ítélt modell). Minden jelzés új
+    másolata "megbizhatosag" mezőt kap (a nem-None szintek) és "ovatos"
+    jelzőt; óvatos szintnél a szöveg végére "(óvatosan: …)" az okkal
+    (BIZALOM_OVATOS_OKOK). A bemenet nem változik."""
+    ki = []
+    for a in alerts or []:
+        sz = {k: v for k, v in sorted(
+            (szintek.get(a.get("team")) or {}).items()) if v}
+        okok = [BIZALOM_OVATOS_OKOK[(k, v)] for k, v in sz.items()
+                if (k, v) in BIZALOM_OVATOS_OKOK]
+        b = dict(a)
+        b["megbizhatosag"] = sz
+        b["ovatos"] = bool(okok)
+        if okok and b.get("text"):
+            b["text"] = f"{b['text']} (óvatosan: {'; '.join(okok)})"
+        ki.append(b)
+    return ki
+
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a

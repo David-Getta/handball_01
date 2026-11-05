@@ -1318,6 +1318,78 @@ def test_a_kapus_modell_probaja_a_kovetkezo_meccsen():
     assert keeper_model_backtest_summary([]) is None
 
 
+def test_az_ai_megbizhatosag_egy_sorban():
+    """A három próba egy sorban: a lövő-szorzó megbízható / csak csapat-
+    szinten / óvatosan / semleges; a kapus-sávok ugyanígy (a sávok nélküli
+    szorzóhoz mérve); a döntés-tanácsok a százalékpont-különbség szerint;
+    ítélet nélkül None."""
+    from handball.pipeline.play_simulation import model_trust_summary
+
+    assert model_trust_summary(None, None, None) is None
+    sor = model_trust_summary(
+        {"javulas_pct": 48.0, "egyeni_pct": 49.0},
+        {"javulas_pct": 64.0, "sav_pct": -47.0},
+        {"kulonbseg_pp": 20.0})
+    assert sor == ("lövő-szorzók: megbízhatók (+48%); kapus-sávok: csak "
+                   "egészében (a sávok nélküli szorzó jobb); döntés-tanácsok: "
+                   "igazoltak (+20 százalékpont)")
+    assert model_trust_summary({"javulas_pct": 5.1, "egyeni_pct": 0.0},
+                               None, None) == (
+        "lövő-szorzók: csak csapat-szinten (az egyéni szorzó nem jobb a "
+        "csapaténál)")
+    assert model_trust_summary({"javulas_pct": -17.0, "egyeni_pct": -3.0},
+                               {"javulas_pct": 2.0, "sav_pct": 1.0},
+                               {"kulonbseg_pp": -8.0}) == (
+        "lövő-szorzók: óvatosan (-17%); kapus-sávok: semlegesek; "
+        "döntés-tanácsok: óvatosan (-8 százalékpont)")
+
+
+def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
+    """trust_levels: a három próba szintje (a lövőnél "csapat", ha csak a
+    csapat-szint javít; a kapusnál "egeszeben", ha a sávok nélküli szorzó
+    jobb). calibrate_alerts: a jelzés a "team" oldal szintjeit kapja; a
+    részleges / negatív szint "óvatos" (a szöveg végén az ok), a
+    "semleges" és a "megbizhato" nem; a bemenet nem változik."""
+    from handball.pipeline.play_simulation import (BIZALOM_OVATOS_OKOK,
+                                                   calibrate_alerts,
+                                                   trust_levels)
+
+    assert trust_levels(None, None, None) == {"lovo": None, "kapus": None,
+                                              "dontes": None}
+    assert trust_levels({"javulas_pct": 48.0, "egyeni_pct": 49.0},
+                        {"javulas_pct": 64.0, "sav_pct": -47.0},
+                        {"kulonbseg_pp": -8.0}) == {
+        "lovo": "megbizhato", "kapus": "egeszeben", "dontes": "ovatos"}
+    assert trust_levels({"javulas_pct": 6.0, "egyeni_pct": 0.0},
+                        {"javulas_pct": -9.0, "sav_pct": 0.0},
+                        {"kulonbseg_pp": 2.0}) == {
+        "lovo": "csapat", "kapus": "ovatos", "dontes": "semleges"}
+
+    be = [{"team": "home", "text": "A 7-es ellen lépjetek ki."},
+          {"team": "away", "text": "A 9-es lőjön többet."},
+          {"team": "home", "text": "Kapusváltás."}]
+    ki = calibrate_alerts(be, {
+        "home": {"lovo": "csapat", "kapus": "megbizhato"},
+        "away": {"lovo": "semleges", "kapus": None}})
+    assert be[0]["text"] == "A 7-es ellen lépjetek ki."
+    assert ki[0]["ovatos"] is True
+    assert ki[0]["megbizhatosag"] == {"kapus": "megbizhato",
+                                      "lovo": "csapat"}
+    assert ki[0]["text"] == ("A 7-es ellen lépjetek ki. (óvatosan: "
+                             + BIZALOM_OVATOS_OKOK[("lovo", "csapat")] + ")")
+    assert ki[1] == {**be[1], "megbizhatosag": {"lovo": "semleges"},
+                     "ovatos": False}
+    # Több óvatos ok egy jelzésen: mind a végére, "; "-vel.
+    [k] = calibrate_alerts([be[2]], {"home": {"lovo": "ovatos",
+                                              "kapus": "egeszeben"}})
+    assert k["text"] == ("Kapusváltás. (óvatosan: "
+                         + BIZALOM_OVATOS_OKOK[("kapus", "egeszeben")] + "; "
+                         + BIZALOM_OVATOS_OKOK[("lovo", "ovatos")] + ")")
+    # Ítélet nélkül (kevés korábbi meccs) a jelzés változatlan szöveggel.
+    assert calibrate_alerts(be, {}) == [
+        {**a, "megbizhatosag": {}, "ovatos": False} for a in be]
+
+
 def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():
     """A két időszak tanult szorzói: csak a mindkét időszakban tanult sáv
     és csak FEJLODES_ELTERES feletti változás hír; a lövőnél a nagyobb,

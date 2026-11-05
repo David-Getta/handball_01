@@ -8512,6 +8512,47 @@ def create_app():
                     [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]),
                 len(par))
 
+    def _modell_probak(match_id: str, nev: str,
+                       kell=("lovo", "kapus", "dontes")) -> dict:
+        """A `nev` csapat könyvtári többi meccsén (a `match_id` meccs
+        nélkül) a modell-próbák: {"lovo" (shooter_model_backtest), "kapus"
+        (keeper_model_backtest), "dontes" (decisions.decision_model_check),
+        "meccsek"} — csak a `kell` próbái, és csak legalább két másik
+        meccsnél (különben mind None). A meccsenkénti minták a lemezes
+        eredmény-tárból: a második hívás nem tölt vissza hideg meccset."""
+        from ..pipeline.decisions import (decision_model_check,
+                                          decision_samples_sum)
+        from ..pipeline.play_simulation import (keeper_model_backtest,
+                                                shooter_model_backtest)
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != match_id]
+        except HTTPException:
+            par = []
+        ki = {"lovo": None, "kapus": None, "dontes": None,
+              "meccsek": len(par)}
+        if len(par) < 2:
+            return ki
+        if "lovo" in kell or "kapus" in kell:
+            mintak = [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]
+            if "lovo" in kell:
+                ki["lovo"] = shooter_model_backtest(
+                    [m.get("lovo") or {} for m in mintak])
+            if "kapus" in kell:
+                ki["kapus"] = keeper_model_backtest(
+                    [m.get("kapus") or {} for m in mintak])
+        if "dontes" in kell:
+            ki["dontes"] = decision_model_check(decision_samples_sum(
+                [_dontes_minta_of(m_).get(t_.value) or {} for m_, t_ in par]))
+        return ki
+
+    def _bizalom(probak: dict, modell: str):
+        """Egy modell próba-szintje (play_simulation.trust_levels) a
+        _modell_probak eredményéből."""
+        from ..pipeline.play_simulation import trust_levels
+        return trust_levels(probak.get("lovo"), probak.get("kapus"),
+                            probak.get("dontes"))[modell]
+
     def _dontes_minta_of(m_) -> dict:
         """EGY meccs döntés-próba mintája (decisions.decision_outcome_sample:
         oldalanként a jó / többi döntés és utánuk a gól) — a lemezes
@@ -14053,6 +14094,40 @@ def create_app():
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
 
+    @app.get("/matches/{match_id}/live-modell-proba")
+    def get_live_model_trust(match_id: str):
+        """ÉLŐ AI-megbízhatóság: a meccs elején csapatonként egy sor arról,
+        mennyire bizonyult megbízhatónak a csapat KORÁBBI meccsein a
+        lövő-, a kapus- és a döntés-modell (shooter_model_backtest,
+        keeper_model_backtest, decisions.decision_model_check — a
+        lemezes mintatárból, ez a meccs nélkül). Az élő jelzések súlyát
+        mondja meg: melyik mondatra lehet építeni. Válasz: {"alerts":
+        [{"t", "t_s", "team", "team_name", "meccsek", "lovo", "kapus",
+        "dontes", "text"}]} — csak ahol legalább egy próba ítélt. 404:
+        nincs ilyen meccs."""
+        from ..pipeline.play_simulation import model_trust_summary
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+        t0 = match.frames[0].t if match.frames else 0
+        alerts = []
+        for side in ("home", "away"):
+            nev = match.meta.home_team if side == "home" else match.meta.away_team
+            pr = _modell_probak(match_id, nev)
+            lp, kp, dp, n = (pr["lovo"], pr["kapus"], pr["dontes"],
+                             pr["meccsek"])
+            sor = model_trust_summary(lp, kp, dp)
+            if not sor:
+                continue
+            alerts.append({
+                "t": t0, "t_s": round(t0 / fps, 1), "team": side,
+                "team_name": nev, "meccsek": n, "lovo": lp,
+                "kapus": kp, "dontes": dp,
+                "text": (f"AI-megbízhatóság ({nev}, {n} korábbi "
+                         f"meccs): {sor}")})
+        return {"alerts": alerts}
+
     @app.get("/matches/{match_id}/live-kapus-valasztas")
     def get_live_keeper_choice(match_id: str):
         """ÉLŐ kapus-választás: a 15., 30. és 45. percben melyik kapusunk
@@ -14065,7 +14140,8 @@ def create_app():
         "elteres", "verdict", "text"}], "szezon_meccsek": {"home",
         "away"}} — a szám a csapat korábbi meccsei. 404: nincs ilyen
         meccs."""
-        from ..pipeline.play_simulation import live_keeper_alerts
+        from ..pipeline.play_simulation import (calibrate_alerts,
+                                                live_keeper_alerts)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -14081,8 +14157,18 @@ def create_app():
                 kapus[side] = sajat["kapusok"]
             if n_e:
                 lovo[side] = ellen["lovo"]
-        return {**live_keeper_alerts(match, lovo_mintak=lovo,
-                                     kapus_mintak=kapus),
+        # Önkalibrálás: a saját kapus-modell és az ő lövő-modelljük
+        # próbája a többi meccsen (play_simulation.calibrate_alerts).
+        szintek = {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            szintek[side] = {
+                "kapus": _bizalom(_modell_probak(
+                    match_id, nevek[side], ("kapus",)), "kapus"),
+                "lovo": _bizalom(_modell_probak(
+                    match_id, nevek[masik], ("lovo",)), "lovo")}
+        r = live_keeper_alerts(match, lovo_mintak=lovo, kapus_mintak=kapus)
+        return {**r, "alerts": calibrate_alerts(r.get("alerts"), szintek),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/live-loves-elosztas")
@@ -14097,7 +14183,8 @@ def create_app():
         "kevesebbet_mez", "kevesebbet_sav", "lovesek", "verdict",
         "text"}], "szezon_meccsek": {"home", "away"}} — a szám a csapat
         korábbi meccsei. 404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import live_shot_allocation_alerts
+        from ..pipeline.play_simulation import (calibrate_alerts,
+                                                live_shot_allocation_alerts)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -14113,8 +14200,18 @@ def create_app():
                 tamadas[side] = sajat["tamadas"]
             if n_e:
                 kapus[side] = ellen["kapus"]
-        return {**live_shot_allocation_alerts(match, tamadas=tamadas,
-                                              kapus=kapus),
+        # Önkalibrálás: a saját lövő-modell és az ő kapus-modelljük
+        # próbája a többi meccsen (play_simulation.calibrate_alerts).
+        szintek = {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            szintek[side] = {
+                "lovo": _bizalom(_modell_probak(
+                    match_id, nevek[side], ("lovo",)), "lovo"),
+                "kapus": _bizalom(_modell_probak(
+                    match_id, nevek[masik], ("kapus",)), "kapus")}
+        r = live_shot_allocation_alerts(match, tamadas=tamadas, kapus=kapus)
+        return {**r, "alerts": calibrate_alerts(r.get("alerts"), szintek),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/live-kit-kinek")
@@ -14129,7 +14226,8 @@ def create_app():
         "vedo_mez", "javasolt_mez", "verdict", "text"}], "szezon_meccsek":
         {"home", "away"}} — a szám oldalanként az ELLENFÉL korábbi
         meccsei. 404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import live_matchup_alerts
+        from ..pipeline.play_simulation import (calibrate_alerts,
+                                                live_matchup_alerts)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -14144,8 +14242,16 @@ def create_app():
                 tamadas[side] = ellen["tamadas"]
                 savok[side] = ellen["sav"]
                 mintak[side] = ellen["lovo"]
-        return {**live_matchup_alerts(match, tamadas=tamadas, savok=savok,
-                                      mintak=mintak),
+        # Önkalibrálás: az ő lövő-modelljük próbája a többi meccsükön
+        # (play_simulation.calibrate_alerts).
+        szintek = {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            szintek[side] = {"lovo": _bizalom(_modell_probak(
+                match_id, nevek[masik], ("lovo",)), "lovo")}
+        r = live_matchup_alerts(match, tamadas=tamadas, savok=savok,
+                                mintak=mintak)
+        return {**r, "alerts": calibrate_alerts(r.get("alerts"), szintek),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/setplays")
@@ -14228,6 +14334,7 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         from ..pipeline.decisions import (decision_models_from,
                                           live_decision_alerts)
+        from ..pipeline.play_simulation import calibrate_alerts
         nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
 
         tamadas, kapus, db = {}, {}, {}
@@ -14244,8 +14351,14 @@ def create_app():
             return {**_cached_result(match_id, "decision-alerts",
                                      lambda: live_decision_alerts(match)),
                     "szezon_meccsek": db}
-        return {**live_decision_alerts(
-                    match, modellek=decision_models_from(tamadas, kapus)),
+        # Önkalibrálás: a csapat döntés-próbája a többi meccsén
+        # (play_simulation.calibrate_alerts).
+        szintek = {side: {"dontes": _bizalom(_modell_probak(
+            match_id, nevek[side], ("dontes",)), "dontes")}
+            for side in ("home", "away")}
+        r = live_decision_alerts(
+            match, modellek=decision_models_from(tamadas, kapus))
+        return {**r, "alerts": calibrate_alerts(r.get("alerts"), szintek),
                 "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/players/{player_id}/decisions")

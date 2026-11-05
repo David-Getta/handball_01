@@ -150,7 +150,8 @@ class _LiveScreenState extends State<LiveScreen> {
       for (final a in await _api.fetchDecisionAlerts(matchId)) {
         out.add(_FeedEntry(
             (a["t"] as num?)?.toInt() ?? 0,
-            Suggestion(4, "dontes", "Döntés-figyelő — ${a["text"] ?? ""}")));
+            Suggestion(_sulya(a, 4), "dontes",
+                "Döntés-figyelő — ${a["text"] ?? ""}")));
       }
     } catch (_) {}
     // Ismert figura: a csapat meccsről meccsre visszatérő figurája
@@ -191,7 +192,7 @@ class _LiveScreenState extends State<LiveScreen> {
       for (final a in await _api.fetchLiveMatchup(matchId)) {
         out.add(_FeedEntry(
             (a["t"] as num?)?.toInt() ?? 0,
-            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     // Élő lövés-elosztás: a 15., 30., 45. percben az addigi lövések
@@ -201,7 +202,17 @@ class _LiveScreenState extends State<LiveScreen> {
       for (final a in await _api.fetchLiveShotAllocation(matchId)) {
         out.add(_FeedEntry(
             (a["t"] as num?)?.toInt() ?? 0,
-            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // AI-megbízhatóság: a meccs elején csapatonként, mennyire bizonyult
+    // megbízhatónak a lövő-, a kapus- és a döntés-modell a korábbi
+    // meccseken — az élő jelzések súlya.
+    try {
+      for (final a in await _api.fetchLiveModelTrust(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(3, "ai", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     // Élő kapus-választás: a 15., 30., 45. percben melyik kapusunk álljon
@@ -211,7 +222,7 @@ class _LiveScreenState extends State<LiveScreen> {
       for (final a in await _api.fetchLiveKeeperChoice(matchId)) {
         out.add(_FeedEntry(
             (a["t"] as num?)?.toInt() ?? 0,
-            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     try {
@@ -948,6 +959,12 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   /// A prioritás színe: 5 → arany (sürgős kiemelés), 4 → teal, ≤3 → halvány.
+  /// Az önkalibrált élő jelzés súlya: ha a mögötte álló modell a
+  /// korábbi meccseken a próbán részlegesen vagy rosszul teljesített
+  /// (a backend "ovatos" jelzője — play_simulation.calibrate_alerts),
+  /// a jelzés szürke (3), különben az alap-súlyán marad.
+  static int _sulya(Map a, int alap) => a["ovatos"] == true ? 3 : alap;
+
   Color _prioColor(int priority) {
     if (priority >= 5) return AppColors.gold;
     if (priority == 4) return AppColors.accent;

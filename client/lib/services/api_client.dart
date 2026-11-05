@@ -1811,6 +1811,22 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő AI-megbízhatóság (GET /matches/{id}/live-modell-proba): a meccs
+  /// elején csapatonként egy sor arról, mennyire bizonyult megbízhatónak
+  /// a lövő-, a kapus- és a döntés-modell a csapat korábbi meccsein —
+  /// [{t, t_s, team, team_name, meccsek, lovo, kapus, dontes, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveModelTrust(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-modell-proba"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az AI-megbízhatóság", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő kapus-választás (GET /matches/{id}/live-kapus-valasztas): a 15.,
   /// 30. és 45. percben melyik kapusunk álljon az ő lövőik ellen, ha most
   /// nem ő áll bent (a szezon korábbi meccseiből és az addig látottakból)
