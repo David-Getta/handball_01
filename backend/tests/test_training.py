@@ -1361,3 +1361,27 @@ def test_ai_dontes_edzes_ahol_a_palya_igazolta():
         "kilépnek rá": {"jo": [12, 1], "rossz": [30, 9]}}}
     assert proven_decision_drills(nem) == []
     assert proven_decision_drills({}) == []
+
+
+
+def test_lovesek_elosztasa_a_szezonbol():
+    """training.season_shot_allocation_drill: a szezon tanult lövői és
+    összegzett lövései szerint ki lőhetne többet (az értékes, ritkán
+    lövő) és ki kevesebbet — a play_simulation.shot_allocation_from
+    ítéletével és a 495. szabály gyakorlatával; érdemi hiba nélkül None."""
+    from handball.pipeline.play_simulation import (AttackModel,
+                                                   shot_allocation_from)
+    from handball.pipeline.training import season_shot_allocation_drill
+
+    tam = AttackModel(lovok={7: {"close": 1.3}, 10: {"far": 0.8}})
+    minta = {7: {"close": [4, 3, 2.4]}, 10: {"far": [20, 3, 5.0]}}
+    p = shot_allocation_from(tam, {}, minta)
+    d = season_shot_allocation_drill(tam, minta, 6)
+    # A 7-es közelről értékes, de ritkán lő; a 10-es távolról sokat, kevés
+    # értékkel.
+    assert p["dontes"] and p["tobbet"]["mez"] == 7
+    assert d["title"] == "Lövés-elosztás a szezonból"
+    assert d["why"] == f"{p['verdict']} — 6 meccs lövéseiből"
+    assert d["drill"].startswith("játékrendszer a 7-es ")
+    assert "a 10-es" in d["drill"]
+    assert season_shot_allocation_drill(AttackModel(), {}, 3) is None

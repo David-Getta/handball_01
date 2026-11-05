@@ -5214,7 +5214,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        repertoire: dict | None = None,
                        jatekos_modell: dict | None = None,
                        fejlodes: dict | None = None,
-                       modell_proba: dict | None = None) -> str:
+                       modell_proba: dict | None = None,
+                       kulcsemberek: list | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
 
@@ -5243,9 +5244,20 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
     """
     table = _trend_metrics_table(tr)
+    kulcs_html = ""
+    if kulcsemberek:
+        kulcs_html = (
+            "<h2>Kulcsemberek (gól-érték a cserénél)</h2><ul>"
+            + "".join(f"<li>{escape(str(r_['verdict']))}</li>"
+                      for r_ in kulcsemberek)
+            + '</ul><p class="note">A lövő várható gólja a szezon '
+            "meccseiből (a lövései, a helyzetei értéke és a tanult "
+            "befejezése) mínusz ugyanannyi lövés a csapat többi lövőjének "
+            "lövésenkénti várható góljával — nem az a kulcsember, aki a "
+            "legtöbbet lő, hanem akinek a lövése a legtöbbet ér.</p>")
     proba_html = ""
     mp = modell_proba or {}
-    if mp.get("verdict") or mp.get("kapus_verdict") \
+    if mp.get("verdict") or mp.get("kapus_verdict") or mp.get("vedo_verdict") \
             or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict") \
             or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict") \
             or mp.get("vedekezes_verdict") or mp.get("forma_verdict") \
@@ -5256,6 +5268,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                if mp.get("verdict") else "")
             + (f"<p><b>Kapus:</b> {escape(str(mp['kapus_verdict']))}.</p>"
                if mp.get("kapus_verdict") else "")
+            + (f"<p><b>Védők:</b> {escape(str(mp['vedo_verdict']))}.</p>"
+               if mp.get("vedo_verdict") else "")
             + (f"<p><b>Döntések:</b> {escape(str(mp['dontes_verdict']))}.</p>"
                if mp.get("dontes_verdict") else "")
             + ("<ul>" + "".join(
@@ -5467,6 +5481,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {opponents_html}
 {leaders_html}
 {modell_html}
+{kulcs_html}
 {proba_html}
 {fejl_html}
 {figures_html}

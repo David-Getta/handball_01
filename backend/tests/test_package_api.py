@@ -384,6 +384,14 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert "<b>Gólszerzők:</b>" not in r.text
     # Az élő esély próbája a csapat meccsein (in_play_backtest).
     assert f"<p><b>Élő esély:</b> {ip['verdict']}.</p>" in r.text
+    # A szezon kulcsemberei (gól-érték a cserénél) a motorból.
+    from handball.pipeline.play_simulation import season_key_players
+    ks = season_key_players([x["minta"]["home"]["lovo"] for x in jm])
+    if ks:
+        assert "Kulcsemberek (gól-érték a cserénél)" in r.text
+        assert f"<li>{ks[0]['verdict']}</li>" in r.text
+    else:
+        assert "Kulcsemberek (gól-érték a cserénél)" not in r.text
     # A figuráik próbája a csapat meccsein (a motorral egyezik; kevés
     # figuránál a sor elmarad).
     if fp:

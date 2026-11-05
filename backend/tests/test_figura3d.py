@@ -1467,7 +1467,9 @@ def test_az_elo_ai_megbizhatosag_vegpont_a_korabbi_meccsekbol(tmp_path,
         kp = keeper_model_backtest([x["kapus"] for x in mintak])
         dp = decision_model_check(decision_samples_sum(
             [decision_outcome_sample(m)[side] for m in korabbi]))
-        sor = model_trust_summary(lp, kp, dp)
+        from handball.pipeline.play_simulation import defender_model_backtest
+        vp = defender_model_backtest([x["vedok"] for x in mintak])
+        sor = model_trust_summary(lp, kp, dp, vp)
         talalt = [a for a in j["alerts"]
                   if a["team"] == side and a["fajta"] == "modellek"]
         if sor is None:
@@ -1743,6 +1745,10 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert j["kulcsember_text"] == {
         "home": key_player_text(gsz(range(7), "home")),
         "away": key_player_text(gsz(range(7), "away"))}
+    from handball.pipeline.play_simulation import key_player_absence
+    assert j["kulcs_hiany"] == {
+        "home": key_player_absence(gsz(range(7), "home"), f["home_goals"]),
+        "away": key_player_absence(gsz(range(7), "away"), f["away_goals"])}
     # A várható védekezési rendszer: a csapat meccseinek "formak" mintái.
     ved = {side: defense_system_forecast([jm[i][side]["formak"]
                                           for i in range(7)])
@@ -2053,11 +2059,22 @@ def test_az_ai_dontes_edzes_a_konyvtari_edzesfokuszban(tmp_path, monkeypatch):
         app.state.put_match(m)
     j = TestClient(app).get("/library/training-focus").json()
     assert set(j) == {"teams", "matches", "ai_dontes"}
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (player_model_sample,
+                                                   player_models_from_samples)
+    from handball.pipeline.training import season_shot_allocation_drill
     dm = [json.loads(json.dumps(decision_outcome_sample(m))) for m in meccsek]
     vart = {}
     for side, nev in (("home", meccsek[0].meta.home_team),
                       ("away", meccsek[0].meta.away_team)):
         d = proven_decision_drills(decision_samples_sum([x[side] for x in dm]))
+        mod = player_models_from_samples(
+            [json.loads(json.dumps(player_model_sample(m, Team(side))))
+             for m in meccsek])
+        le = season_shot_allocation_drill(mod["tamadas"], mod["lovo"],
+                                          len(meccsek))
+        if le:
+            d = d + [le]
         if d:
             vart[nev] = d
     assert j["ai_dontes"] == vart
@@ -2102,6 +2119,56 @@ def test_a_meccs_elotti_kapus_valasztas_a_konyvtarbol(tmp_path, monkeypatch):
                             params={"home": h, "away": a}).json()
     assert j["kapus_javaslat"]["away"] == vart
     assert j["kapus_javaslat"]["home"] is None     # a hazainak egy kapusa van
+
+
+def test_az_elo_felidei_varakozas_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-felido: a meccs előtti várakozás a két
+    csapat TÖBBI meccséből, a félidőig látottakhoz mérve — a valódi
+    láncon ugyanaz, mint a motor; várakozás nélkül üres; 404."""
+    import json
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (defense_system_forecast,
+                                                   halftime_review,
+                                                   match_forecast,
+                                                   match_forecast_sample,
+                                                   player_model_sample,
+                                                   scorer_forecast)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "FELIDO_PERC", 1)
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+        if seed == 1:
+            assert TestClient(app).get(
+                "/matches/gt1/live-felido").json()["alerts"] == []
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    tobbi = meccsek[:2]
+    fm = [json.loads(json.dumps(match_forecast_sample(m))) for m in tobbi]
+    jm = [{s_: json.loads(json.dumps(player_model_sample(m, Team(s_))))
+           for s_ in ("home", "away")} for m in tobbi]
+    f = match_forecast([(x["home"], x["away"]) for x in fm],
+                       [(x["away"], x["home"]) for x in fm])
+    vart = halftime_review(
+        meccsek[2], {"home": h, "away": a}, f,
+        golszerzok={s_: scorer_forecast([x[s_]["lovo"] for x in jm],
+                                        [x[o_]["kapus"] for x in jm])
+                    for s_, o_ in (("home", "away"), ("away", "home"))},
+        vedekezes={s_: defense_system_forecast([x[s_]["formak"] for x in jm])
+                   for s_ in ("home", "away")})
+    assert vart["sorok"]
+    [al] = TestClient(app).get("/matches/gt3/live-felido").json()["alerts"]
+    assert al["sorok"] == vart["sorok"] and al["t"] == vart["t"]
+    assert al["text"] == "Félidő — " + "; ".join(vart["sorok"])
+    assert TestClient(app).get("/matches/nincs/live-felido").status_code == 404
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

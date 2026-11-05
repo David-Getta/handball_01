@@ -205,6 +205,15 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Félidő: a meccs előtti várakozás (eredmény, gólszerzők, fal) az
+    // első félidő valóságához mérve — a félidei beszéd tényei.
+    try {
+      for (final a in await _api.fetchLiveHalftimeReview(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "ai", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Napi forma: a modell várakozása felett / alatt járó lövő — a tanács
     // a forró kéz próbájától függ (kitart-e a napi forma a könyvtárban).
     try {

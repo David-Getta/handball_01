@@ -288,6 +288,9 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final gProba = (_forecast?["golszerzo_proba"] as Map?)?["verdict"];
     final vedOk = ((_forecast?["vedekezes_text"] as Map?) ?? const {})["away"];
     final kulcs = (_forecast?["kulcsember_text"] as Map?) ?? const {};
+    // Mi lenne a kulcsemberük nélkül (a várható góljuk).
+    final hiany = ((_forecast?["kulcs_hiany"] as Map?)?["away"]
+        as Map?)?["text"];
     // Melyik kapusunk álljon az ő lövőik ellen ("home" = MI).
     final kapus = ((_forecast?["kapus_javaslat"] as Map?)?["home"]
         as Map?)?["verdict"];
@@ -325,7 +328,8 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (kulcs["away"] is String) ...[
                   const SizedBox(height: 4),
                   Text("Kulcsemberük — vegyétek ki a játékból: "
-                      "${kulcs["away"]}.",
+                      "${kulcs["away"]}"
+                      "${hiany is String ? " ($hiany)" : ""}.",
                       style: AppText.label.copyWith(
                           fontSize: 12.5, color: AppColors.gold)),
                 ],

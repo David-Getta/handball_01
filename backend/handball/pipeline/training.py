@@ -215,6 +215,34 @@ def proven_decision_drills(minta: dict) -> list:
     return ki
 
 
+def season_shot_allocation_drill(tamadas, minta: dict,
+                                 meccsek: int) -> dict | None:
+    """Lövés-elosztás a szezonból: a csapat könyvtári meccseiből tanult
+    lövői (`tamadas`, AttackModel) és az összegzett nyers lövő-minta
+    (`minta`) szerint ki lőhetne többet és ki kevesebbet
+    (play_simulation.shot_allocation_from, átlagos szemközti kapussal).
+    Mit jelent edzőileg: a 495. szabály egy meccs elosztását nézi — ez a
+    szezonét, ahol a véletlen kisimul: ha a szezon egészén is a gyengébb
+    lövő viszi a lövéseket, az begyakorolt játékrend, amit át kell írni.
+    Visszatérés: {"title", "area", "why", "drill"} vagy None (nincs
+    érdemi elosztási hiba, kevés minta)."""
+    from .play_simulation import (UTOLSO_LOVES_SAV_JELZO, mezszam_nevelovel,
+                                  shot_allocation_from)
+    p = shot_allocation_from(tamadas, {}, minta or {})
+    if not p or not p.get("dontes"):
+        return None
+    t, k = p["tobbet"], p["kevesebbet"]
+    return {"title": "Lövés-elosztás a szezonból", "area": "támadás",
+            "why": f"{p['verdict']} — {meccsek} meccs lövéseiből",
+            "drill": (f"játékrendszer {mezszam_nevelovel(t['mez'])} "
+                      f"{UTOLSO_LOVES_SAV_JELZO[t['sav']]} lövésére: elzárás "
+                      "és passz-sor, ami őt hozza helyzetbe onnan; "
+                      f"{mezszam_nevelovel(k['mez'])} "
+                      f"{UTOLSO_LOVES_SAV_JELZO[k['sav']]} lövése a második "
+                      "hullámba — a szezon lövés-elosztását a következő "
+                      "meccsek után újra megnézni")}
+
+
 def training_focus(match: Match,
                    config: Optional[TacticsConfig] = None) -> dict:
     """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}).

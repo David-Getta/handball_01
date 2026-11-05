@@ -8023,6 +8023,14 @@ def create_app():
                                   "meccsek": len(mintak)}
         except Exception:
             jatekos_modell = None
+        # A szezon kulcsemberei (gól-érték a cserénél) — hibatűrően.
+        kulcsemberek = None
+        try:
+            from ..pipeline.play_simulation import season_key_players
+            kulcsemberek = season_key_players(
+                [m_.get("lovo") or {} for m_ in mintak]) or None
+        except Exception:
+            kulcsemberek = None
         # A lövő-modell próbája: a meccsek időrendjében (az entries
         # rendezett) a korábbiakból tanult modell a következő meccsen —
         # hibatűrően; None, ha kevés a becsülhető csoport.
@@ -8034,14 +8042,19 @@ def create_app():
                                               decision_samples_sum)
             lp = shooter_model_backtest([m_.get("lovo") or {} for m_ in mintak])
             kp = keeper_model_backtest([m_.get("kapus") or {} for m_ in mintak])
+            from ..pipeline.play_simulation import defender_model_backtest
+            vp_ = defender_model_backtest(
+                [m_.get("vedok") or {} for m_ in mintak])
             dp = decision_model_check(decision_samples_sum(
                 [_dontes_minta_of(kilincs[mid_]).get(side_) or {}
                  for _d, mid_, side_ in entries if mid_ in kilincs]))
-            if lp or kp or dp:
+            if lp or kp or dp or vp_:
                 modell_proba = {"verdict": (lp or {}).get("verdict"),
                                 "kapus_verdict": (kp or {}).get("verdict"),
                                 "dontes_verdict": (dp or {}).get("verdict"),
-                                "lovo": lp, "kapus": kp, "dontes": dp}
+                                "vedo_verdict": (vp_ or {}).get("verdict"),
+                                "lovo": lp, "kapus": kp, "dontes": dp,
+                                "vedo": vp_}
         except Exception:
             modell_proba = None
         # A meccs-előrejelzés próbája a csapat meccsein (a könyvtári
@@ -8125,7 +8138,7 @@ def create_app():
             venue=venue, leaders=leaders, opponents=opponents,
             figure_library=figure_library, repertoire=repertoire,
             jatekos_modell=jatekos_modell, fejlodes=fejlodes,
-            modell_proba=modell_proba))
+            modell_proba=modell_proba, kulcsemberek=kulcsemberek))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
@@ -8589,12 +8602,16 @@ def create_app():
                    if m_.meta.match_id != match_id]
         except HTTPException:
             par = []
-        ki = {"lovo": None, "kapus": None, "dontes": None,
+        ki = {"lovo": None, "kapus": None, "dontes": None, "vedo": None,
               "meccsek": len(par)}
         if len(par) < 2:
             return ki
-        if "lovo" in kell or "kapus" in kell:
+        if "lovo" in kell or "kapus" in kell or "vedo" in kell:
             mintak = [_jatekos_minta_of(m_, t_.value) for m_, t_ in par]
+            if "vedo" in kell:
+                from ..pipeline.play_simulation import defender_model_backtest
+                ki["vedo"] = defender_model_backtest(
+                    [m.get("vedok") or {} for m in mintak])
             if "lovo" in kell:
                 ki["lovo"] = shooter_model_backtest(
                     [m.get("lovo") or {} for m in mintak])
@@ -9015,7 +9032,8 @@ def create_app():
         "vedekezes_proba": a várható védekezési rendszer próbája
         (defense_system_backtest) vagy None, "forma_proba": a forró kéz
         próbája (hot_hand_backtest) vagy None, "figura_proba": a figuráik
-        próbája (setplays.figure_recurrence_backtest) vagy None}."""
+        próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
+        csapatonként a védő-modell próbája (defender_model_backtest)}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -9026,6 +9044,7 @@ def create_app():
                                           decision_samples_sum)
         sorok = []
         kapus_sorok = []
+        vedo_sorok = []
         dontes_sorok = []
         dontes_ossz = {"jo": [0, 0], "rossz": [0, 0]}
         for nev in nevek:
@@ -9042,6 +9061,10 @@ def create_app():
             k = keeper_model_backtest([m.get("kapus") or {} for m in mintak])
             if k:
                 kapus_sorok.append({"team": nev, **k})
+            from ..pipeline.play_simulation import defender_model_backtest
+            v_ = defender_model_backtest([m.get("vedok") or {} for m in mintak])
+            if v_:
+                vedo_sorok.append({"team": nev, **v_})
             dm = [_dontes_minta_of(m_).get(t_.value) or {} for m_, t_ in par]
             dontes_ossz = decision_samples_sum([dontes_ossz] + dm)
             d = decision_model_check(decision_samples_sum(dm))
@@ -9063,7 +9086,9 @@ def create_app():
                 "elo_esely_proba": _elo_esely_proba(),
                 "vedekezes_proba": _vedekezes_proba(),
                 "forma_proba": _forma_proba(),
-                "figura_proba": _figura_proba()}
+                "figura_proba": _figura_proba(),
+                "vedok": sorted(vedo_sorok,
+                                key=lambda r: (-r["javulas_pct"], r["team"]))}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):
@@ -9080,7 +9105,10 @@ def create_app():
         "vedekezes_text", "vedekezes_proba", "kulcsember_text": {"home",
         "away"} (a legnagyobb gól-értékű lövő, key_player_text),
         "kapus_javaslat": {"home", "away"} (melyik kapusa álljon a másik
-        lövői ellen, keeper_choice_from — None: nincs két tanult kapus)}. 400:
+        lövői ellen, keeper_choice_from — None: nincs két tanult kapus),
+        "kulcs_hiany": {"home", "away"} (mi lenne a kulcsember nélkül:
+        key_player_absence — None, ha nincs kulcsember vagy
+        előrejelzés)}. 400:
         hiányzó csapatnév; 404: nincs ilyen csapat a könyvtárban."""
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 match_forecast,
@@ -9094,6 +9122,7 @@ def create_app():
                            _elorejelzes_tortenet(away))
         proba = _elorejelzes_proba()
         from ..pipeline.play_simulation import (defense_system_text,
+                                                key_player_absence,
                                                 key_player_text,
                                                 scorer_forecast_text)
         gsz = {"home": _golszerzok(home, away), "away": _golszerzok(away, home)}
@@ -9113,6 +9142,10 @@ def create_app():
                                     for k, v in gsz.items()},
                 "kapus_javaslat": {"home": _kapus_javaslat(home, away),
                                    "away": _kapus_javaslat(away, home)},
+                "kulcs_hiany": {
+                    k: key_player_absence(gsz[k], (f or {}).get(
+                        "home_goals" if k == "home" else "away_goals"))
+                    for k in ("home", "away")},
                 "figura_proba": _figura_proba()}
 
     @app.get("/library/leaders")
@@ -9271,7 +9304,8 @@ def create_app():
          "matches": {csapatnév: meccsek száma}, "ai_dontes": {csapatnév:
          [AI-döntés-edzés tételek — training.proven_decision_drills: ahol
          a pálya igazolta a modell tanácsát, és a csapat ritkán
-         választja]}}."""
+         választja; utánuk a szezon lövés-elosztása, training.
+         season_shot_allocation_drill]}}."""
         from ..pipeline.training import training_focus
         agg: dict = {}
         counts: dict = {}
@@ -9325,6 +9359,20 @@ def create_app():
                 d = proven_decision_drills(decision_samples_sum(
                     [_dontes_minta_of(m_).get(t_.value) or {}
                      for m_, t_ in par]))
+                # A szezon lövés-elosztása (a tanult lövők szerint).
+                try:
+                    from ..pipeline.play_simulation import (
+                        player_models_from_samples)
+                    from ..pipeline.training import (
+                        season_shot_allocation_drill)
+                    mod = player_models_from_samples(
+                        [_jatekos_minta_of(m_, t_.value) for m_, t_ in par])
+                    le = season_shot_allocation_drill(
+                        mod["tamadas"], mod["lovo"], len(par))
+                    if le:
+                        d = d + [le]
+                except Exception:
+                    pass
                 if d:
                     ai_dontes[name] = d
         except Exception:
@@ -14538,6 +14586,34 @@ def create_app():
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
 
+    @app.get("/matches/{match_id}/live-felido")
+    def get_live_halftime_review(match_id: str):
+        """ÉLŐ félidei várakozás és valóság: a félidőben (FELIDO_PERC) a
+        meccs előtti várakozás a két csapat könyvtári TÖBBI meccséből —
+        az eredmény, a várható gólszerzők, a várható fal — az addig
+        látottakhoz mérve (play_simulation.halftime_review — csak az
+        addigi kockák). Válasz: {"alerts": [{"t", "t_s", "perc", "sorok",
+        "text"}]} — üres, ha nincs várakozás vagy a meccs még nem ért a
+        félidőig. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import halftime_review, match_forecast
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h, a = match.meta.home_team, match.meta.away_team
+        f = match_forecast(_elorejelzes_tortenet(h, match_id),
+                           _elorejelzes_tortenet(a, match_id))
+        gsz = {"home": _golszerzok(h, a, match_id),
+               "away": _golszerzok(a, h, match_id)}
+        ved = {"home": _vedekezes_varhato(h, match_id),
+               "away": _vedekezes_varhato(a, match_id)}
+        r = halftime_review(match, {"home": h, "away": a}, f,
+                            golszerzok=gsz, vedekezes=ved)
+        if not r["sorok"] or r["t"] is None:
+            return {"alerts": []}
+        return {"alerts": [{"t": r["t"], "t_s": r["t_s"], "perc": r["perc"],
+                            "sorok": r["sorok"],
+                            "text": "Félidő — " + "; ".join(r["sorok"])}]}
+
     @app.get("/matches/{match_id}/forecast-review")
     def get_forecast_review(match_id: str):
         """Várakozás és valóság: a meccs előtti várakozás (a két csapat
@@ -14674,12 +14750,13 @@ def create_app():
         alerts = []
         for side in ("home", "away"):
             nev = match.meta.home_team if side == "home" else match.meta.away_team
-            pr = _modell_probak(match_id, nev)
+            pr = _modell_probak(match_id, nev,
+                                ("lovo", "kapus", "dontes", "vedo"))
             lp, kp, dp, n = (pr["lovo"], pr["kapus"], pr["dontes"],
                              pr["meccsek"])
             if n < 2:
                 continue
-            sor = model_trust_summary(lp, kp, dp)
+            sor = model_trust_summary(lp, kp, dp, pr["vedo"])
             if sor:
                 alerts.append({
                     "t": t0, "t_s": round(t0 / fps, 1), "team": side,

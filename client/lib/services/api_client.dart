@@ -2099,6 +2099,21 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Élő félidei várakozás és valóság (GET /matches/{id}/live-felido): a
+  /// félidőben a meccs előtti várakozás az addig látottakhoz mérve —
+  /// [{t, t_s, perc, sorok, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveHalftimeReview(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-felido"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a félidei összevetés", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Várakozás és valóság (GET /matches/{id}/forecast-review): a meccs
   /// előtti várakozás (a korábbi meccsekből) a valósághoz mérve — a
   /// mondatok listája ("sorok"); üres, ha nincs mihez mérni.

@@ -5,6 +5,49 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **Lövés-elosztás a szezonból és a szezon kulcsemberei** (edzés-fókusz
+  + edzésterv-képernyő + szezon-riport): a 495. szabály egy meccs
+  lövés-elosztását nézi — most a szezonét is, ahol a véletlen kisimul:
+  ha a szezon egészén is a gyengébb lövő viszi a lövéseket, az
+  begyakorolt játékrend ("Lövés-elosztás a szezonból: többet lőhetne a
+  7-es közelről (0,57 várható gól lövésenként, eddig 4 lövés — 17%),
+  kevesebbet a 10-es távolról …"), az edzésterv-képernyőn "AI · a
+  szezon lövései" jelzéssel. A szezon-riport új szakasza a csapat
+  kulcsemberei gól-érték szerint: "a 9-es: +1,4 gól meccsenként
+  ugyanannyi lövésből, mint a csapat többi lövője (7,5 lövés, 3,2 várható
+  gól meccsenként)" — nem az a kulcsember, aki a legtöbbet lő, hanem
+  akinek a lövése a legtöbbet ér (training.season_shot_allocation_drill,
+  play_simulation.season_key_players).
+
+- **Mi lenne a kulcsember nélkül** (végpont + meccsterv): a meccsterv
+  kártyáján a kulcsemberük mellé: "ha a 9-es kiesik, a várható gól 27
+  helyett 25,6" — a csapat várható góljából a kulcsember gól-értéke a
+  cserénél (a lövéseit a többiek viszik, a lövésenkénti átlagukkal).
+  Edzőileg: mennyit ér, ha kivesszük a játékból (a /library/forecast
+  "kulcs_hiany" mezője, play_simulation.key_player_absence).
+
+- **Félidei várakozás és valóság élőben** (motor + élő végpont + élő
+  képernyő): a félidőben a meccs előtti várakozás — a két csapat többi
+  meccséből: az eredmény, a várható gólszerzők és a fal — az első félidő
+  valóságához mérve (a perc-arányos részre, csak az addigi kockákból):
+  "Félidő — Félidei várakozás: Hazai 13–12 Vendég — a félidőben: 16–10
+  (Hazai 3,0 góllal a várt felett); Vendég: a 4-es 1 gólt lőtt a várt
+  2,6 helyett; Vendég 5-1 fallal védekezett a várt 6-0 helyett".
+  Edzőileg: a félidei beszéd tényei (a /matches/{id}/live-felido,
+  play_simulation.halftime_review).
+
+- **A védő-modell próbája** (motor + végpont + szezon-riport +
+  szezon-képernyő + élő AI-sor): a negyedik modell-próba a lövő, a kapus
+  és a döntés mellé — a védők egyéni kilépési (és kettőzési) hajlama a
+  korábbi meccsekből a következő meccsen pontosabban jósol-e, mint a fal
+  átlaga: "a védők egyéni kilépési hajlama 31%-kal pontosabban jósolt,
+  mint a fal átlaga — a kit kinek egyénre szabható (24 védő × meccs
+  pár)"; ha nem, "a kilépés inkább a fal közös szokása". Edzőileg:
+  egyénre szabható-e a fal-modell a kit kinekben és a figura-próbában. A
+  /library/player-model-check "vedok" mezője, a szezon-riport "Védők"
+  sora, a szezon-képernyő sorai és a meccs eleji AI-megbízhatóság
+  (play_simulation.defender_model_backtest).
+
 - **A figuráik próbája: visszatérnek-e** (motor + végpontok + meccsterv +
   élő képernyő + szezon-riport + szezon-képernyő): a felderítés figurái
   akkor érnek valamit, ha a csapat meccsről meccsre tényleg hozza őket. A

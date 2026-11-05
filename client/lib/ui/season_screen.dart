@@ -174,6 +174,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
             .toList();
     final teams = sorok("teams");
     final kapusok = sorok("kapusok");
+    final vedok = sorok("vedok");
     final dontesek = sorok("dontesek");
     final eloreSzoveg = _modelCheck["elorejelzes_text"];
     final golSzoveg = (_modelCheck["golszerzo_proba"] as Map?)?["verdict"];
@@ -182,6 +183,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final formaSzoveg = (_modelCheck["forma_proba"] as Map?)?["verdict"];
     final figSzoveg = (_modelCheck["figura_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
+        vedok.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
         eloSzoveg is! String && vedSzoveg is! String &&
         formaSzoveg is! String && figSzoveg is! String) {
@@ -222,6 +224,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Text("${t["team"]} kapusa: ${t["verdict"]}.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ),
+      // A védő-modell próbája: egyénre szabható-e a fal.
+      for (final t in vedok)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text("${t["team"]} védői: ${t["verdict"]}.",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ),
       if (dOsszes?["verdict"] is String) ...[

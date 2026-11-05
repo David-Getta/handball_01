@@ -1318,6 +1318,37 @@ def test_a_kapus_modell_probaja_a_kovetkezo_meccsen():
     assert keeper_model_backtest_summary([]) is None
 
 
+def test_a_vedo_modell_probaja():
+    """defender_model_backtest: ha a védők kilépési hajlama következetesen
+    egyéni (a 2-es mindig sokat, a 3-as keveset lép ki), a korábbi
+    meccsekből tanult egyéni arány pontosabban jósol, mint a fal átlaga
+    ("egyénre szabható"); ha mindenki ugyanúgy lép ki, nem; kevés párnál
+    None. A model_trust_summary "vedo" része."""
+    from handball.pipeline.play_simulation import (PROBA_MIN_CSOPORT,
+                                                   defender_model_backtest,
+                                                   model_trust_summary)
+
+    def v(kozel, ralepett):
+        return {"n": 100, "y_osszeg": 0.0, "kozel": kozel,
+                "ralepett": ralepett, "masodik": 10, "kettozott": 3}
+
+    egyeni = [{"2": v(20, 16), "3": v(20, 4)} for _ in range(6)]
+    p = defender_model_backtest(egyeni)
+    assert p["parok"] == 10 and p["javulas_pct"] > 0
+    assert p["verdict"].startswith("a védők egyéni kilépési hajlama")
+    assert "egyénre szabható" in p["verdict"]
+    assert p["kettozes"] is not None
+    kozos = [{"2": v(20, 10), "3": v(20, 10)} for _ in range(6)]
+    q = defender_model_backtest(kozos)
+    assert q["javulas_pct"] == 0.0 and "közös szokás" in q["verdict"]
+    assert defender_model_backtest(egyeni[:2]) is None
+    assert 2 < PROBA_MIN_CSOPORT
+    assert model_trust_summary(None, None, None, p).startswith(
+        "védő-modell: egyénre szabható (+")
+    assert model_trust_summary(None, None, None, q) == (
+        "védő-modell: a kilépés a fal közös szokása")
+
+
 def test_az_ai_megbizhatosag_egy_sorban():
     """A három próba egy sorban: a lövő-szorzó megbízható / csak csapat-
     szinten / óvatosan / semleges; a kapus-sávok ugyanígy (a sávok nélküli
@@ -1628,6 +1659,48 @@ def test_a_kulcsember_gol_erteke_a_csapat_tobbi_lovojehez():
     assert key_player_text(egyforma) is None
 
 
+def test_a_szezon_kulcsemberei_gol_ertek_szerint():
+    """season_key_players: a lövők a gól-érték (scorer_forecast "ertek",
+    átlagos kapussal) szerint csökkenőben, legfeljebb KULCS_SZEZON_MAX,
+    mondattal; egyetlen lövőnél (nincs viszonyítás) üres."""
+    from handball.pipeline.play_simulation import (KULCS_SZEZON_MAX,
+                                                   scorer_forecast,
+                                                   season_key_players)
+
+    lovo = [{"7": {"close": [5, 4, 4.0]}, "9": {"far": [10, 2, 2.0]},
+             "4": {"mid": [4, 1, 1.4]}}] * 2
+    sorok = season_key_players(lovo)
+    ert = {r["mez"]: r["ertek"] for r in scorer_forecast(lovo, [])}
+    assert [r["mez"] for r in sorok] == sorted(ert, key=lambda m: -ert[m])
+    hetes = sorok[0]
+    assert hetes["mez"] == 7 and hetes["verdict"].startswith(
+        "a 7-es: +" + f"{hetes['ertek']:.1f}".replace(".", ",")
+        + " gól meccsenként ugyanannyi lövésből, mint a csapat többi lövője")
+    assert len(season_key_players(lovo * 3)) <= KULCS_SZEZON_MAX
+    assert season_key_players([{"7": {"close": [5, 4, 4.0]}}] * 2) == []
+
+
+def test_mi_lenne_a_kulcsember_nelkul():
+    """key_player_absence: a kulcsember (legalább KULCS_MIN_ERTEK
+    gól-érték) kiesésekor a csapat várható gólja a gól-értékével kevesebb;
+    kulcsember vagy előrejelzés nélkül None."""
+    from handball.pipeline.play_simulation import (key_player_absence,
+                                                   scorer_forecast)
+
+    lovo = [{"7": {"close": [5, 4, 4.0]}, "9": {"far": [10, 2, 2.0]}}] * 2
+    sorok = scorer_forecast(lovo, [])
+    hetes = next(r for r in sorok if r["mez"] == 7)
+    k = key_player_absence(sorok, 27.0)
+    assert (k["mez"], k["vart"]) == (7, 27.0)
+    assert k["nelkule"] == round(27.0 - hetes["ertek"], 1)
+    assert k["text"] == ("ha a 7-es kiesik, a várható gól 27 helyett "
+                         + f"{k['nelkule']:.1f}".replace(".", ","))
+    assert key_player_absence(sorok, None) is None
+    egyforma = scorer_forecast([{"7": {"mid": [5, 2, 2.0]},
+                                 "9": {"mid": [5, 2, 2.0]}}] * 2, [])
+    assert key_player_absence(egyforma, 27.0) is None
+
+
 def test_a_varhato_golszerzok_probaja_idorendben():
     """scorer_forecast_backtest: a lövő várható gólja csak a korábbi
     meccsekből, összevetve a meccsen lőtt góljaival (csak aki lőtt); a
@@ -1756,6 +1829,42 @@ def test_varakozas_es_valosag_a_meccs_utan():
     assert nincs["sorok"][:2] == [
         "Vendég: a 4-es 2 gólt lőtt a várt 5,0 helyett",
         "Hazai: a 9-es 6 gólt lőtt a várt 3,0 helyett"]
+
+
+def test_felidei_varakozas_es_valosag():
+    """halftime_review: a félidőig (FELIDO_PERC) látott kockák — az
+    eredmény és a lövők várakozása a perc-arányos részre; a mondatok a
+    félidőre szólnak; a félidő előtt üres."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Match
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.pipeline.play_simulation import halftime_review
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=150, fps=25.0, seed=2,
+                              shots_per_min=8)
+    nevek = {"home": m.meta.home_team, "away": m.meta.away_team}
+    f = {"home_goals": 25.0, "away_goals": 25.0}
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "FELIDO_PERC", 2)
+        r = halftime_review(m, nevek, f)
+        mp.setattr(ps, "FELIDO_PERC", 30)       # a meccs nem ér el idáig
+        korai = halftime_review(m, nevek, f)
+    finally:
+        mp.undo()
+    hatar = m.frames[0].t + int(round(2 * 60 * m.meta.fps))
+    golok = [e for e in detect_shots(Match(meta=m.meta, frames=[
+        fr for fr in m.frames if fr.t <= hatar])) if e.type == EventType.GOAL]
+    gh = sum(1 for e in golok if e.team.value == "home")
+    assert r["eredmeny"]["home"] == gh and r["eredmeny"]["vart_home"] == round(
+        25.0 * 2 / ps.ELO_MECCS_PERC, 1)
+    assert r["sorok"][0].startswith(
+        f"Félidei várakozás: {nevek['home']} ") and " — a félidőben: " in \
+        r["sorok"][0]
+    assert r["perc"] == 2 and r["t"] == hatar
+    assert korai["sorok"] == [] and korai["t"] is None
 
 
 def test_a_forro_kez_probaja_es_az_elo_napi_forma():

@@ -2856,6 +2856,80 @@ def keeper_model_backtest(mintak: list) -> dict | None:
 
 
 
+# A védő-modell próbája: a védő egyéni kilépési (és kettőzési) hajlama a
+# KORÁBBI meccsekből (VEDO_PROBA_SULY képzelt alkalommal a fal átlaga
+# felé simítva) a következő meccsen — a fal átlagához mérve. Egy védő ×
+# meccs pár akkor számít, ha a meccsen legalább VEDO_PROBA_MIN_ALK
+# alkalma volt; az ítélethez legalább PROBA_MIN_CSOPORT pár kell.
+VEDO_PROBA_SULY = 10
+VEDO_PROBA_MIN_ALK = 5
+
+
+def defender_model_backtest(mintak: list) -> dict | None:
+    """A védő-modell próbája egy csapat meccsein: `mintak` — a csapat
+    meccseinek player_model_sample "vedok" mintái időrendben. Minden
+    meccsen a védők kilépési aránya (rálépett / labdás a közelében) a
+    korábbi meccsekből tanulva (simítva a fal korábbi átlaga felé),
+    összevetve a meccs valódi arányával — és ugyanez a fal korábbi
+    átlagával. Mit jelent edzőileg: ha az egyéni hajlam pontosabban jósol,
+    a "kit kinek" és a figura-szimuláció fala egyénre szabható; ha nem, a
+    kilépés a fal közös szokása, nem az egyes védőké. Visszatérés:
+    {"parok", "modell_hiba", "atlag_hiba" (az arány alkalmakkal súlyozott
+    átlagos abszolút hibája), "javulas_pct", "kettozes" (ugyanez a
+    kettőzésre, vagy None), "verdict"} — None, ha PROBA_MIN_CSOPORT-nál
+    kevesebb pár van."""
+    eredmeny = {}
+    for mezo, alk, tett in (("press", "kozel", "ralepett"),
+                            ("double", "masodik", "kettozott")):
+        kor: dict = {}
+        hm = ha = suly = 0.0
+        parok = 0
+        for m in mintak:
+            m = m or {}
+            fal_alk = sum(int(v.get(alk, 0)) for v in kor.values())
+            fal_tett = sum(int(v.get(tett, 0)) for v in kor.values())
+            if fal_alk > 0:
+                atlag = fal_tett / fal_alk
+                for mez, v in m.items():
+                    n = int(v.get(alk, 0))
+                    if n < VEDO_PROBA_MIN_ALK:
+                        continue
+                    k = kor.get(str(mez))
+                    if not k or int(k.get(alk, 0)) <= 0:
+                        continue
+                    becs = ((int(k[tett]) + VEDO_PROBA_SULY * atlag)
+                            / (int(k[alk]) + VEDO_PROBA_SULY))
+                    valodi = int(v.get(tett, 0)) / n
+                    hm += abs(becs - valodi) * n
+                    ha += abs(atlag - valodi) * n
+                    suly += n
+                    parok += 1
+            for mez, v in m.items():
+                r = kor.setdefault(str(mez), {alk: 0, tett: 0})
+                r[alk] += int(v.get(alk, 0))
+                r[tett] += int(v.get(tett, 0))
+        if parok >= PROBA_MIN_CSOPORT and suly > 0:
+            mh, ah = hm / suly, ha / suly
+            j = (ah - mh) / ah * 100.0 if ah > 0 else 0.0
+            eredmeny[mezo] = {"parok": parok, "modell_hiba": round(mh, 3),
+                              "atlag_hiba": round(ah, 3),
+                              "javulas_pct": round(j, 1)}
+    if "press" not in eredmeny:
+        return None
+    p = eredmeny["press"]
+    j = p["javulas_pct"]
+    itelet = (f"a védők egyéni kilépési hajlama {j:.0f}%-kal pontosabban "
+              "jósolt, mint a fal átlaga — a kit kinek egyénre szabható"
+              if j >= PROBA_ITELET_PCT else
+              f"a védők egyéni kilépési hajlama {-j:.0f}%-kal pontatlanabb "
+              "volt a fal átlagánál — a kilépés a fal közös szokása"
+              if j <= -PROBA_ITELET_PCT else
+              "a védők egyéni kilépési hajlama nem jósolt jobban a fal "
+              "átlagánál — a kilépés inkább a fal közös szokása")
+    return {**p, "kettozes": eredmeny.get("double"),
+            "verdict": f"{itelet} ({p['parok']} védő × meccs pár)"}
+
+
 def keeper_model_backtest_summary(sorok: list) -> dict | None:
     """Több csapat kapus-próbájának (keeper_model_backtest sorai) összege
     — {"csapatok", "csoportok", "lovesek", "atlag_hiba", "osszes_hiba",
@@ -2926,7 +3000,8 @@ def trust_levels(lovo: dict | None, kapus: dict | None,
 
 
 def model_trust_summary(lovo: dict | None, kapus: dict | None,
-                        dontes: dict | None) -> str | None:
+                        dontes: dict | None,
+                        vedo: dict | None = None) -> str | None:
     """A három próba (shooter_model_backtest, keeper_model_backtest,
     decisions.decision_model_check) egy sorban — az élő képernyő meccs
     eleji "AI-megbízhatóság" sorához: "lövő-szorzók: megbízhatók (+48%);
@@ -2957,6 +3032,11 @@ def model_trust_summary(lovo: dict | None, kapus: dict | None,
             "igazolt": f"döntés-tanácsok: igazoltak (+{k:.0f} százalékpont)",
             "ovatos": f"döntés-tanácsok: óvatosan ({k:.0f} százalékpont)",
             "semleges": "döntés-tanácsok: semlegesek"}[sz["dontes"]])
+    if vedo:
+        j = float(vedo["javulas_pct"])
+        reszek.append(f"védő-modell: egyénre szabható (+{j:.0f}%)"
+                      if j >= PROBA_ITELET_PCT else
+                      "védő-modell: a kilépés a fal közös szokása")
     return "; ".join(reszek) if reszek else None
 
 
@@ -3565,6 +3645,31 @@ def scorer_forecast(lovo_mintak: list, kapus_mintak: list) -> list:
 # A kulcsember-mondat ennyi gól-értéktől (meccsenként, a csapat többi
 # lövőjéhez képest ugyanannyi lövésből) szól.
 KULCS_MIN_ERTEK = 0.5
+# A szezon-riport kulcsember-listája legfeljebb ennyi lövőt sorol.
+KULCS_SZEZON_MAX = 5
+
+
+def season_key_players(lovo_mintak: list) -> list:
+    """A szezon kulcsemberei: a csapat meccsenkénti nyers lövő-mintáiból
+    (player_model_sample "lovo") a lövők gól-értéke a cserénél
+    (scorer_forecast "ertek", átlagos szemközti kapussal), a legnagyobb
+    elöl, legfeljebb KULCS_SZEZON_MAX — mondattal: "a 9-es: +1,4 gól
+    meccsenként ugyanannyi lövésből, mint a csapat többi lövője (7,5
+    lövés, 3,2 várható gól meccsenként)". Edzőileg: kire épül a
+    támadásunk, kinek a hiánya fáj a legjobban."""
+    sorok = [r for r in scorer_forecast(lovo_mintak, [])
+             if r.get("ertek") is not None]
+    sorok.sort(key=lambda r: (-r["ertek"], r["mez"]))
+
+    def sz(x, d=1):
+        return f"{x:.{d}f}".replace(".", ",")
+
+    return [{**r, "verdict": (
+        f"{mezszam_nevelovel(r['mez'])}: "
+        + f"{r['ertek']:+.1f}".replace(".", ",")
+        + " gól meccsenként ugyanannyi lövésből, mint a csapat többi "
+        f"lövője ({sz(r['vart_loves'])} lövés, {sz(r['vart_gol'])} várható "
+        "gól meccsenként)")} for r in sorok[:KULCS_SZEZON_MAX]]
 
 
 def key_player_text(sorok: list) -> str | None:
@@ -3582,6 +3687,28 @@ def key_player_text(sorok: list) -> str | None:
     return (f"{mezszam_nevelovel(r['mez'])}: ugyanannyi lövésből "
             + f"{r['ertek']:.1f}".replace(".", ",")
             + " góllal többet ér meccsenként, mint a csapat többi lövője")
+
+
+def key_player_absence(sorok: list, vart_gol: float | None) -> dict | None:
+    """Mi lenne nélküle: a kulcsember (a legnagyobb gól-értékű lövő,
+    legalább KULCS_MIN_ERTEK) kiesésekor a csapat várható gólja — a
+    meccs-előrejelzés várható góljából (`vart_gol`) a gól-értéke
+    levonva (a lövéseit a többiek viszik, a lövésenkénti átlagukkal).
+    Visszatérés: {"mez", "ertek", "vart", "nelkule", "text"} vagy None."""
+    if vart_gol is None:
+        return None
+    jo = [r for r in sorok or [] if r.get("ertek") is not None]
+    if not jo:
+        return None
+    r = min(jo, key=lambda r: (-r["ertek"], r["mez"]))
+    if r["ertek"] < KULCS_MIN_ERTEK:
+        return None
+    nelkule = round(max(0.0, vart_gol - r["ertek"]), 1)
+    return {"mez": r["mez"], "ertek": r["ertek"], "vart": vart_gol,
+            "nelkule": nelkule,
+            "text": (f"ha {mezszam_nevelovel(r['mez'])} kiesik, a várható "
+                     f"gól {vart_gol:.0f} helyett "
+                     + f"{nelkule:.1f}".replace(".", ","))}
 
 
 def scorer_forecast_text(sorok: list) -> str | None:
@@ -3759,6 +3886,62 @@ def forecast_review(nevek: dict, f: dict | None, golok: dict,
         sorok.append("A meccs nagyjából a várakozás szerint alakult")
     return {"eredmeny": eredmeny, "lovok": lovok, "vedekezes": vedek,
             "sorok": sorok}
+
+
+# A félidei várakozás és valóság ennyi játékpercnél szól (a meccs fele).
+FELIDO_PERC = 30
+
+
+def halftime_review(match: Match, nevek: dict, f: dict | None,
+                    golszerzok: dict | None = None,
+                    vedekezes: dict | None = None,
+                    config: TacticsConfig | None = None) -> dict:
+    """Várakozás és valóság a FÉLIDŐBEN: a meccs előtti várakozás (`f`,
+    `golszerzok`, `vedekezes` — a korábbi meccsekből) a FELIDO_PERC-ig
+    látott valósághoz mérve (CSAK az addigi kockák — okszerű): az
+    eredmény és a lövők várakozása a perc-arányos részre (fele), a fal a
+    félidő fő rendszere (forecast_review). Mit jelent edzőileg: a
+    félidei beszéd tényei — ki jár a várt felett / alatt, más fallal
+    jöttek-e. Visszatérés: {"t", "t_s", "perc", "sorok", …a
+    forecast_review mezői} — üres "sorok", ha a meccs még nem ért el a
+    félidőig."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    ures = {"t": None, "t_s": None, "perc": FELIDO_PERC, "eredmeny": None,
+            "lovok": [], "vedekezes": [], "sorok": []}
+    if not match.frames:
+        return ures
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    hatar = t0 + int(round(FELIDO_PERC * 60 * fps))
+    eddig = [fr for fr in match.frames if fr.t <= hatar]
+    if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+        return ures
+    resz = Match(meta=match.meta, frames=eddig)
+    arany = FELIDO_PERC / ELO_MECCS_PERC
+    golok = {"home": 0, "away": 0}
+    for e in detect_shots(resz, config):
+        if e.type == EventType.GOAL and e.team.value in golok:
+            golok[e.team.value] += 1
+    minta = {side: player_model_sample(resz, Team(side), config)
+             for side in ("home", "away")}
+    fh = ({**f, "home_goals": round(f["home_goals"] * arany, 1),
+           "away_goals": round(f["away_goals"] * arany, 1)} if f else None)
+    gh = {side: [{**r, "vart_gol": round(r["vart_gol"] * arany, 1)}
+                 for r in (golszerzok or {}).get(side) or []]
+          for side in ("home", "away")}
+    r = forecast_review(nevek, fh, golok, golszerzok=gh,
+                        lovo_valodi={k: v["lovo"] for k, v in minta.items()},
+                        vedekezes=vedekezes,
+                        formak_valodi={k: v["formak"] for k, v in minta.items()})
+    # A mondatok a félidőre szólnak (a forecast_review a meccs végére).
+    sorok = [x.replace("Várakozás: ", "Félidei várakozás: ", 1)
+              .replace(" — lett: ", " — a félidőben: ", 1)
+              .replace("A meccs nagyjából a várakozás szerint alakult",
+                       "Az első félidő nagyjából a várakozás szerint alakult")
+             for x in r["sorok"]]
+    return {**r, "sorok": sorok, "t": hatar, "t_s": round(hatar / fps, 1),
+            "perc": FELIDO_PERC}
 
 
 # ---- A forró kéz próbája: kitart-e a napi forma ----------------------------

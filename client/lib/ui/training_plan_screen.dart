@@ -304,7 +304,10 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           // itt a modell tanácsa a pályán is gólt hoz.
           for (final it in _aiDrills[_team] ?? const <Map<String, dynamic>>[])
             ...[
-            _focusCard(it, badge: "AI · a pálya igazolta"),
+            _focusCard(it,
+                badge: it["sit"] != null
+                    ? "AI · a pálya igazolta"
+                    : "AI · a szezon lövései"),
             const SizedBox(height: AppSpacing.sm),
           ],
           for (final it in items) ...[
