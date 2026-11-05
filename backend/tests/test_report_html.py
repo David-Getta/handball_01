@@ -685,6 +685,7 @@ def test_az_elorejelzes_blokk_a_dontes_probakkal():
 
     assert ("hetes_mi", "Hetes-dobónk") in ELOREJELZES_CIMKEK
     assert ("hetes_irany_ok", "Az ő hetes-dobóik irányai") in ELOREJELZES_CIMKEK
+    assert ("het_a_hat_mi", "A 7 a 6 mérlegünk") in ELOREJELZES_CIMKEK
     assert ELOREJELZES_PROBAK == ("proba", "golszerzo_proba", "kapus_proba",
                                   "felderites_proba", "hetes_proba",
                                   "hetes_irany_proba")

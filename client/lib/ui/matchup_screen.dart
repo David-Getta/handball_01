@@ -315,6 +315,9 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final hetesIrany = ((_forecast?["hetes_irany"] as Map?)?["away"]
         as Map?)?["verdict"];
     final hiProba = (_forecast?["hetes_irany_proba"] as Map?)?["verdict"];
+    // A saját 7 a 6 mérlegünk ("home" = MI) — a hajrá döntéséhez.
+    final hetAHat = ((_forecast?["het_a_hat_proba"] as Map?)?["home"]
+        as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
       // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
@@ -415,6 +418,12 @@ class _MatchupScreenState extends State<MatchupScreen> {
                   const SizedBox(height: 4),
                   Text("A hetes-irány próbája: $hiProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                if (hetAHat is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("A 7 a 6 mérlegünk a hajrára: $hetAHat.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
                 ],
                 // A figura-felderítés súlya: visszatérnek-e a figurák.
                 if (figProba is String) ...[

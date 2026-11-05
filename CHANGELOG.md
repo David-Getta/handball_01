@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **A 7 a 6 mérleg a meccstervben** (végpont + meccsterv + nyomtatható
+  meccsterv): a meccs előtti ELŐREJELZÉS kártya új sora, "A 7 a 6
+  mérlegünk a hajrára" — a csapat saját 7 a 6 mérlege a könyvtárból
+  (megéri / annyit hoz, mint a 6 a 6 / maradjon a kapus), és ugyanez a
+  nyomtatható meccsterv előrejelzés-szakaszában (a /library/forecast
+  "het_a_hat_proba" mezője csapatonként).
+
 - **AI-edzésterv: a hajrá szabálya** (motor + végpont + meccsterv): a
   következő meccs AI-edzésterve a csapat saját 7 a 6 mérlegéből szabályt
   ad a hátrányos hajrára — "Hajrá: 7 a 6 hátrányban" (gyakorlat: a 7 a 6

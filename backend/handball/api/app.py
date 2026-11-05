@@ -9358,6 +9358,8 @@ def create_app():
         seven_direction_profile — None: nincs kimondható irány),
         "hetes_irany_proba" (a hetes-irány próbája,
         seven_direction_backtest — None: kevés jósolt hetes),
+        "het_a_hat_proba": {"home", "away"} (a csapat saját 7 a 6
+        mérlege, seven_six_backtest — None: kevés 7 a 6 szakasz),
         "kulcs_hiany": {"home", "away"} (mi lenne a kulcsember nélkül:
         key_player_absence — None, ha nincs kulcsember vagy
         előrejelzés)}. 400:
@@ -9398,6 +9400,8 @@ def create_app():
                                "away": _hetes_javaslat(away)},
                 "hetes_irany": {"home": _hetes_irany_profil(home),
                                 "away": _hetes_irany_profil(away)},
+                "het_a_hat_proba": {"home": _het_a_hat_proba(home),
+                                    "away": _het_a_hat_proba(away)},
                 "kapus_valasztas_proba": _kapus_valasztas_proba(),
                 "felderites_proba": _felderites_proba(),
                 "hetes_proba": _hetes_proba(),
@@ -14774,7 +14778,9 @@ def create_app():
                 "hetes_proba": (f"A hetes-dobó választás próbája: "
                                 f"{hp['verdict']}" if hp else None),
                 "hetes_irany_proba": (f"A hetes-irány próbája: {hi['verdict']}"
-                                      if hi else None)}
+                                      if hi else None),
+                "het_a_hat_mi": (_het_a_hat_proba(csapat=mi) or {}).get(
+                    "verdict")}
 
     @app.get("/matches/{match_id}/coaching")
     def get_coaching(match_id: str, t: int = -1):

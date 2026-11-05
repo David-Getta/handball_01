@@ -532,6 +532,7 @@ ELOREJELZES_CIMKEK = (
     ("kapus_mi", "Kapus ellenük"),
     ("hetes_mi", "Hetes-dobónk"),
     ("hetes_irany_ok", "Az ő hetes-dobóik irányai"),
+    ("het_a_hat_mi", "A 7 a 6 mérlegünk"),
 )
 # Az előrejelzés-szakasz próba-jegyzetei (a sorok alatt, ebben a sorrendben).
 ELOREJELZES_PROBAK = ("proba", "golszerzo_proba", "kapus_proba",

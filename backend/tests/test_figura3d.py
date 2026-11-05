@@ -2623,6 +2623,13 @@ def test_az_elo_7_a_6_vegpont(tmp_path, monkeypatch):
     assert c.get("/matches/nincs/live-7a6").status_code == 404
     assert c.get("/library/player-model-check").json()["het_a_hat_proba"] == \
         seven_six_backtest(lista(meccsek))
+    # A /library/forecast csapatonként a saját 7 a 6 mérleget adja (a
+    # szimulált meccseken nincs 7 a 6: None).
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    f = c.get("/library/forecast", params={"home": h, "away": a}).json()
+    assert f["het_a_hat_proba"] == {
+        "home": seven_six_backtest(lista(meccsek), h),
+        "away": seven_six_backtest(lista(meccsek), a)}
 
 
 def test_az_elo_ai_dontesek_sora(tmp_path, monkeypatch):
