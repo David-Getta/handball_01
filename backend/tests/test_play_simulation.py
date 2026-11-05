@@ -1669,6 +1669,90 @@ def test_az_elo_esely_probaja_a_vegeredmenyhez():
     assert 3 < ELO_PROBA_MIN and in_play_backtest(meccsek[:4]) is None
 
 
+def test_a_varhato_vedekezesi_rendszer_es_probaja():
+    """defense_system_forecast: a korábbi meccsek védekező kockáinak
+    eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);
+    a mondat a második rendszerrel; a próba a korábbiakból jósolt fő
+    rendszert a meccs valódi fő rendszeréhez méri, a liga addigi
+    leggyakoribb rendszere mellé; a csapat-szűrő; kevés meccsnél None."""
+    from handball.pipeline.play_simulation import (VR_MIN_KOCKA,
+                                                   _rendszer_nevelovel,
+                                                   defense_system_backtest,
+                                                   defense_system_forecast,
+                                                   defense_system_text)
+
+    f = defense_system_forecast([{"6-0": 140, "5-1": 60},
+                                 {"6-0": 70, "5-1": 30}])
+    assert f == {"fo": "6-0", "eloszlas": {"6-0": 0.7, "5-1": 0.3},
+                 "meccsek": 2, "kockak": 300}
+    assert defense_system_text(f) == (
+        "6-0 (a korábbi védekezésük 70%-a), mellette 5-1 (30%)")
+    assert defense_system_forecast([{"6-0": 100}]) is None
+    assert defense_system_forecast([{"6-0": 10}, {"5-1": 10}]) is None
+    assert VR_MIN_KOCKA > 20
+    assert (_rendszer_nevelovel("5-1"), _rendszer_nevelovel("3-2-1")) == (
+        "az 5-1", "a 3-2-1")
+
+    def minta(fo):
+        return {"formak": {fo: 200, "6-0" if fo != "6-0" else "5-1": 20}}
+
+    meccsek = []
+    for i in range(8):
+        # A: mindig 5-1; B: mindig 6-0 (a liga leggyakoribbja is ez lesz).
+        meccsek.append({"match_id": f"m{i}", "home": "A", "away": "B",
+                        "minta": {"home": minta("5-1"),
+                                  "away": minta("6-0")}})
+    p = defense_system_backtest(meccsek)
+    # A 3. meccstől (két korábbi) mindkét oldal jósolható: 6 × 2.
+    assert p["meccsek"] == 12 and p["talalat"] == 12
+    assert p["liga_talalat"] < p["talalat"]
+    assert p["verdict"] == ("a várható fő védekezési rendszer 12 meccsből "
+                            f"12 alkalommal jött be (a liga leggyakoribb "
+                            f"rendszeréé: {p['liga_talalat']})")
+    assert defense_system_backtest(meccsek, "A")["meccsek"] == 6
+    assert defense_system_backtest(meccsek[:4]) is None
+
+
+def test_az_elo_eltero_vedekezes_jelzes():
+    """live_defense_system_alerts: a percekben az addigi kockák fő
+    rendszere (_tanulas_minta a részmeccsen) — ha eltér a várttól,
+    jelzés a VÉDŐ oldalnak, rendszerenként egyszer; ha egyezik, nincs."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Match, Team
+    from handball.pipeline.play_simulation import (_fo_rendszer,
+                                                   _tanulas_minta,
+                                                   live_defense_system_alerts)
+    from handball.pipeline.tactics import TacticsConfig
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=150, fps=25.0, seed=2,
+                              shots_per_min=8)
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "LIVE_AJANLO_PERCEK", (1, 2))
+        hatar = m.frames[0].t + int(round(60 * m.meta.fps))
+        resz = Match(meta=m.meta, frames=[f for f in m.frames if f.t <= hatar])
+        most = _fo_rendszer(_tanulas_minta(resz, Team.AWAY,
+                                           TacticsConfig())["formak"])
+        assert most is not None
+        mas = "3-3" if most != "3-3" else "6-0"
+        ki = live_defense_system_alerts(
+            m, {"away": {"fo": mas, "eloszlas": {mas: 1.0}}})["alerts"]
+        egyezo = live_defense_system_alerts(
+            m, {"away": {"fo": most, "eloszlas": {most: 1.0}}})["alerts"]
+    finally:
+        mp.undo()
+    assert ki and ki[0]["perc"] == 1 and ki[0]["team"] == "away"
+    assert ki[0]["most"] == most and ki[0]["vart"] == mas
+    assert ki[0]["text"].startswith(
+        f"Eltérő védekezés (1. perc): {m.meta.away_team} {most} fallal véd "
+        f"a várt {mas} helyett")
+    # Ugyanarra a rendszerre csak egyszer szól.
+    assert len({a["most"] for a in ki}) == len(ki)
+    assert all(a["most"] != most for a in egyezo)
+
+
 def test_az_elorejelzes_meccs_mintaja():
     """match_forecast_sample: oldalanként a látott lövések (xg.match_xg)
     sávonként, az összes felismert gól (a nem látott is) és a látott

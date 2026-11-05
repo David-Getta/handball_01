@@ -5,6 +5,36 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **Várható védekezési rendszer és az eltérő fal élőben** (motor +
+  végpontok + meccsterv + nyomtatható meccsterv + élő képernyő +
+  szezon-riport + szezon-képernyő): az ellenfél védekezési rendszere a
+  következő meccsen a korábbi meccsei védekező kockáiból — "6-0 (a
+  korábbi védekezésük 70%-a), mellette 5-1 (30%)" —, a próbával: a
+  könyvtár időrendjében a korábbiakból jósolt fő rendszer a meccs valódi
+  fő rendszeréhez mérve, a liga addigi leggyakoribb rendszere mellé ("a
+  várható fő védekezési rendszer 12 meccsből 10 alkalommal jött be (a
+  liga leggyakoribb rendszeréé: 6)"). Élőben a meccs elején a várható
+  rendszer, és a 15., 30. és 45. percben, ha az addigi fő rendszerük
+  eltér tőle: "Eltérő védekezés (15. perc): Vendég 5-1 fallal véd a
+  várt 6-0 helyett — a figura-tervet az 5-1 falhoz kell igazítani".
+  Edzőileg: melyik fal ellen tervezzük a figurákat, és mikor kell
+  átállni. A játékos-modell meccs-mintája a rendszerek kockáival bővült
+  ("jatekos-minta-v3"); a /library/forecast "vedekezes" mezője (a
+  meccsterv kártyáján és a nyomtatható meccstervben), a
+  /matches/{id}/live-vedekezes (a meccs nélkül, okszerűen), a
+  /library/player-model-check "vedekezes_proba" mezője és a
+  szezon-riport "Védekezési rendszer" sora (play_simulation.
+  defense_system_forecast, defense_system_backtest,
+  live_defense_system_alerts).
+
+- **Előrejelzés a nyomtatható meccstervben** (meccsterv-export): a meccs
+  előtti este a papírt viszi az edző, nem a laptopot — a nyomtatható
+  meccsterv a páros-specifikus terv után "Előrejelzés (a
+  csapat-modellekből)" szakaszt kap: a várakozás és az esélyek, az ő és
+  a mi várható gólszerzőink, a két próba mondatával. A két csapatot a
+  terv kijelölt meccseinek oldalaiból ismeri fel; a szakasz hibatűrő, a
+  terv enélkül is teljes (POST /scouting/export "own" kulccsal).
+
 - **Az élő esély próbája** (motor + végpont + szezon-riport +
   szezon-képernyő): hozzátesz-e a csapat-modell az álláshoz? A könyvtár
   időrendjében minden meccsen, ahol a meccs előtti előrejelzés megvan

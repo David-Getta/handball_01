@@ -8066,6 +8066,14 @@ def create_app():
                                 "elo_esely_verdict": ip["verdict"]}
         except Exception:
             pass
+        # A várható védekezési rendszer próbája a csapat meccsein.
+        try:
+            vp = _vedekezes_proba(team)
+            if vp:
+                modell_proba = {**(modell_proba or {}), "vedekezes": vp,
+                                "vedekezes_verdict": vp["verdict"]}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8625,6 +8633,33 @@ def create_app():
         return scorer_forecast([m.get("lovo") or {} for m in mintak(nev)],
                                [m.get("kapus") or {} for m in mintak(ellen)])
 
+    def _vedekezes_varhato(nev: str, kiveve: str | None = None):
+        """A `nev` csapat várható védekezési rendszere a könyvtári
+        meccseiből (a `kiveve` meccs nélkül — play_simulation.
+        defense_system_forecast a meccsenkénti minták "formak" mezőjéből,
+        a lemezes eredmény-tárból)."""
+        from ..pipeline.play_simulation import defense_system_forecast
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != kiveve]
+        except HTTPException:
+            return None
+        return defense_system_forecast(
+            [_jatekos_minta_of(m_, t_.value).get("formak") or {}
+             for m_, t_ in par])
+
+    def _vedekezes_proba(csapat: str | None = None):
+        """A várható védekezés próbája a könyvtár időrendjében
+        (play_simulation.defense_system_backtest — a `csapat`
+        megadásával csak a csapat meccsei)."""
+        from ..pipeline.play_simulation import defense_system_backtest
+        return defense_system_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _jatekos_minta_of(m_, "home"),
+                       "away": _jatekos_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())], csapat)
+
     def _golszerzo_proba(csapat: str | None = None):
         """A várható gólszerzők próbája a könyvtár időrendjében
         (play_simulation.scorer_forecast_backtest — a `csapat`
@@ -8679,7 +8714,7 @@ def create_app():
         from ..pipeline.play_simulation import player_model_sample
         # (A név verziója a minta ALAKJÁVAL nő — a v2 a kapusonkénti
         # mintát is hozza; a régi alakú tárolt minta így nem tér vissza.)
-        return _cached_result(m_.meta.match_id, f"jatekos-minta-v2-{side}",
+        return _cached_result(m_.meta.match_id, f"jatekos-minta-v3-{side}",
                               lambda: player_model_sample(m_, Team(side)))
 
     def _player_tally_of(m) -> dict:
@@ -8827,7 +8862,9 @@ def create_app():
         időrendjében (play_simulation.forecast_backtest) vagy None,
         "elorejelzes_text", "golszerzo_proba": a várható gólszerzők
         próbája (scorer_forecast_backtest) vagy None, "elo_esely_proba":
-        az élő esély próbája (in_play_backtest) vagy None}."""
+        az élő esély próbája (in_play_backtest) vagy None,
+        "vedekezes_proba": a várható védekezési rendszer próbája
+        (defense_system_backtest) vagy None}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -8872,7 +8909,8 @@ def create_app():
                 "elorejelzes": elore,
                 "elorejelzes_text": forecast_backtest_text(elore),
                 "golszerzo_proba": _golszerzo_proba(),
-                "elo_esely_proba": _elo_esely_proba()}
+                "elo_esely_proba": _elo_esely_proba(),
+                "vedekezes_proba": _vedekezes_proba()}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):
@@ -8884,7 +8922,9 @@ def create_app():
         a próbájukkal (scorer_forecast_backtest). Válasz: {"home",
         "away", "forecast" (vagy None: kevés meccs), "text", "proba",
         "proba_text", "golszerzok": {"home", "away"}, "golszerzok_text":
-        {"home", "away"}, "golszerzo_proba"}. 400: hiányzó csapatnév;
+        {"home", "away"}, "golszerzo_proba", "vedekezes": {"home",
+        "away"} (a várható védekezési rendszer, defense_system_forecast),
+        "vedekezes_text", "vedekezes_proba"}. 400: hiányzó csapatnév;
         404: nincs ilyen csapat a könyvtárban."""
         from ..pipeline.play_simulation import (forecast_backtest_text,
                                                 match_forecast,
@@ -8897,15 +8937,21 @@ def create_app():
         f = match_forecast(_elorejelzes_tortenet(home),
                            _elorejelzes_tortenet(away))
         proba = _elorejelzes_proba()
-        from ..pipeline.play_simulation import scorer_forecast_text
+        from ..pipeline.play_simulation import (defense_system_text,
+                                                scorer_forecast_text)
         gsz = {"home": _golszerzok(home, away), "away": _golszerzok(away, home)}
+        ved = {"home": _vedekezes_varhato(home), "away": _vedekezes_varhato(away)}
         return {"home": home, "away": away, "forecast": f,
                 "text": match_forecast_text(home, away, f),
                 "proba": proba, "proba_text": forecast_backtest_text(proba),
                 "golszerzok": gsz,
                 "golszerzok_text": {k: scorer_forecast_text(v)
                                     for k, v in gsz.items()},
-                "golszerzo_proba": _golszerzo_proba()}
+                "golszerzo_proba": _golszerzo_proba(),
+                "vedekezes": ved,
+                "vedekezes_text": {k: defense_system_text(v)
+                                   for k, v in ved.items()},
+                "vedekezes_proba": _vedekezes_proba()}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14061,10 +14107,13 @@ def create_app():
     def combined_scouting_export(body: dict):
         """Az egyesített felderítés NYOMTATHATÓ HTML-je (mint az
         egy-meccses export). Opcionális "own" kulccsal a meccsterv-
-        illesztés is bekerül a jelentésbe."""
+        illesztés is bekerül a jelentésbe, és mellé az előrejelzés (a két
+        csapat könyvtári meccseiből: várakozás, várható gólszerzők, a
+        próbákkal — _elorejelzes_lap)."""
         from fastapi import Response
         rep = _combined_report(body)
         matchup = None
+        elorejelzes = None
         own_body = body.get("own")
         if own_body:
             try:
@@ -14072,9 +14121,58 @@ def create_app():
                 matchup = matchup_plan(_combined_report(own_body), rep)
             except Exception:
                 matchup = None
+            # Az előrejelzés a meccsterv mellé (a két csapat könyvtári
+            # meccseiből, a gólszerzőkkel) — hibatűrően: a terv enélkül is
+            # teljes.
+            try:
+                elorejelzes = _elorejelzes_lap(
+                    _items_csapat(own_body.get("items")),
+                    _items_csapat(body.get("items")))
+            except Exception:
+                elorejelzes = None
         _lib_nevekkel(rep)
-        html = scouting_report_html(rep, matchup=matchup)
+        html = scouting_report_html(rep, matchup=matchup,
+                                    elorejelzes=elorejelzes)
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    def _items_csapat(items) -> str | None:
+        """A felderítés `items` listájának csapata ({"match_id", "team"}
+        elemek): a megnevezett oldalak csapatneve közül a leggyakoribb
+        (holtversenyben név szerint) — None, ha egy sem olvasható."""
+        db: dict = {}
+        for it in items or []:
+            m_ = _store.get((it or {}).get("match_id"))
+            if m_ is None:
+                continue
+            nev = (m_.meta.home_team if it.get("team", "away") == "home"
+                   else m_.meta.away_team)
+            if nev:
+                db[nev] = db.get(nev, 0) + 1
+        return min(db, key=lambda n: (-db[n], n)) if db else None
+
+    def _elorejelzes_lap(mi: str | None, ok: str | None) -> dict | None:
+        """A nyomtatható meccsterv "Előrejelzés" szakaszának adatai (lásd
+        report_html.scouting_report_html `elorejelzes`): a `mi` és az `ok`
+        csapat könyvtári meccseiből a várakozás, a próba, a két csapat
+        várható gólszerzői és a gólszerző-próba. None, ha a két név nem
+        ismert."""
+        from ..pipeline.play_simulation import (forecast_backtest_text,
+                                                match_forecast,
+                                                match_forecast_text,
+                                                scorer_forecast_text)
+        if not mi or not ok or mi == ok:
+            return None
+        f = match_forecast(_elorejelzes_tortenet(mi), _elorejelzes_tortenet(ok))
+        pt = forecast_backtest_text(_elorejelzes_proba())
+        gp = _golszerzo_proba()
+        from ..pipeline.play_simulation import defense_system_text
+        return {"text": match_forecast_text(mi, ok, f),
+                "proba": f"A próba a könyvtárban: {pt}" if pt and f else None,
+                "ok": scorer_forecast_text(_golszerzok(ok, mi)),
+                "mi": scorer_forecast_text(_golszerzok(mi, ok)),
+                "vedekezes": defense_system_text(_vedekezes_varhato(ok)),
+                "golszerzo_proba": (f"A gólszerző-becslés próbája: "
+                                    f"{gp['verdict']}" if gp else None)}
 
     @app.get("/matches/{match_id}/coaching")
     def get_coaching(match_id: str, t: int = -1):
@@ -14243,6 +14341,37 @@ def create_app():
                 kapus[side] = ellen["kapus"]
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/live-vedekezes")
+    def get_live_defense_system(match_id: str):
+        """ÉLŐ védekezési rendszer: a meccs elején csapatonként a várható
+        rendszer a könyvtári TÖBBI meccsükből (play_simulation.
+        defense_system_forecast — ez a meccs nélkül, okszerű), a próbával;
+        utána a 15., 30. és 45. percben, ha az addigi fő rendszerük eltér
+        a várttól (live_defense_system_alerts — csak az addigi kockák).
+        Válasz: {"alerts": [{"t", "t_s", "team", "team_name",
+        "varhato", "text"}, {"t", "t_s", "perc", "team", "team_name",
+        "most", "vart", "text"}, …]}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (defense_system_text,
+                                                live_defense_system_alerts)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+        t0 = match.frames[0].t if match.frames else 0
+        varhato, alerts = {}, []
+        for side in ("home", "away"):
+            nev = match.meta.home_team if side == "home" else match.meta.away_team
+            v = _vedekezes_varhato(nev, match_id)
+            if v is None:
+                continue
+            varhato[side] = v
+            alerts.append({"t": t0, "t_s": round(t0 / fps, 1), "team": side,
+                           "team_name": nev, "varhato": v,
+                           "text": (f"Várható védekezés ({nev}): "
+                                    f"{defense_system_text(v)}")})
+        return {"alerts": alerts
+                + live_defense_system_alerts(match, varhato)["alerts"]}
 
     @app.get("/matches/{match_id}/live-elorejelzes")
     def get_live_forecast(match_id: str):

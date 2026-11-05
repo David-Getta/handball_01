@@ -205,6 +205,18 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Várható védekezés: a meccs elején a többi meccsük fő rendszere
+    // ("ai"), és ha a 15., 30., 45. percben eltérnek tőle, a figura-terv
+    // igazítása ("taktika", magas súllyal).
+    try {
+      for (final a in await _api.fetchLiveDefenseSystem(matchId)) {
+        final valtas = a["perc"] != null;
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(valtas ? 5 : 3, valtas ? "taktika" : "ai",
+                "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Meccs-előrejelzés: a meccs elején a két csapat többi meccséből
     // jósolt eredmény és esélyek (a próbával) — a várakozás, amihez a
     // meccs alakulását mérni lehet.

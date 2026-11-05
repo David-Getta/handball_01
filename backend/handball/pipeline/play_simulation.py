@@ -3576,6 +3576,155 @@ def scorer_forecast_backtest(meccsek: list,
                         f"{sz(nh)}) — {itelet}")}
 
 
+# ---- Várható védekezési rendszer -------------------------------------------
+# Az ellenfél védekezési rendszere a következő meccsen a KORÁBBI meccsei
+# védekező kockáiból (detect_formation — a _tanulas_minta "formak"
+# számlálója): az eloszlás és a fő rendszer. A meccs fő rendszere csak
+# VR_MIN_KOCKA védekező kockától számít (a próbában és élőben is); a
+# próbához legalább VR_PROBA_MIN előre jelzett meccs kell. Élőben a
+# 15., 30. és 45. percben szól, ha az addigi fő rendszerük eltér a
+# várttól (csapatonként egy rendszerre egyszer).
+VR_MIN_KOCKA = 50
+VR_PROBA_MIN = 5
+
+
+def _rendszer_nevelovel(r: str) -> str:
+    """A rendszer névelővel: "az 5-1", "a 6-0", "a 3-2-1"."""
+    return f"{'az' if str(r).startswith('5') else 'a'} {r}"
+
+
+def _fo_rendszer(formak: dict) -> str | None:
+    """A legtöbb kockát kapott rendszer (holtversenyben név szerint) —
+    None VR_MIN_KOCKA-nál kevesebb kockánál."""
+    ossz = sum(int(v) for v in (formak or {}).values())
+    if ossz < VR_MIN_KOCKA:
+        return None
+    return min(formak, key=lambda k: (-int(formak[k]), k))
+
+
+def defense_system_forecast(form_mintak: list) -> dict | None:
+    """A várható védekezési rendszer a csapat korábbi meccseiből:
+    `form_mintak` meccsenként a player_model_sample "formak" mezője
+    ({rendszer: védekező kocka}). Mit jelent edzőileg: mire készüljön a
+    támadásunk — melyik fal ellen tervezzük a figurákat. Visszatérés:
+    {"fo" (a fő rendszer), "eloszlas" ({rendszer: arány}, csökkenőben),
+    "meccsek", "kockak"} — None, ha két meccsnél kevesebb van, vagy
+    VR_MIN_KOCKA-nál kevesebb a kocka."""
+    if len(form_mintak) < 2:
+        return None
+    ossz: dict = {}
+    for m in form_mintak:
+        for k, v in (m or {}).items():
+            ossz[str(k)] = ossz.get(str(k), 0) + int(v)
+    fo = _fo_rendszer(ossz)
+    if fo is None:
+        return None
+    n = sum(ossz.values())
+    return {"fo": fo, "eloszlas": {k: round(ossz[k] / n, 3) for k in sorted(
+                ossz, key=lambda k: (-ossz[k], k))},
+            "meccsek": len(form_mintak), "kockak": n}
+
+
+def defense_system_text(f: dict | None) -> str | None:
+    """A várható védekezés egy mondatban: "6-0 (a korábbi védekezésük
+    70%-a), mellette 5-1 (25%)" — a második rendszer 10%-tól. None
+    előrejelzés nélkül."""
+    if not f:
+        return None
+    sorok = list(f["eloszlas"].items())
+    ki = f"{f['fo']} (a korábbi védekezésük {sorok[0][1] * 100:.0f}%-a)"
+    if len(sorok) > 1 and sorok[1][1] >= 0.1:
+        ki += f", mellette {sorok[1][0]} ({sorok[1][1] * 100:.0f}%)"
+    return ki
+
+
+def defense_system_backtest(meccsek: list,
+                            csapat: str | None = None) -> dict | None:
+    """A várható védekezés próbája: `meccsek` időrendben [{"match_id",
+    "home", "away", "minta": {"home" / "away": player_model_sample}}].
+    Minden meccsen és oldalon, ahol a csapatnak legalább két korábbi
+    meccse van, a fő rendszer a korábbiakból (defense_system_forecast)
+    és a meccs valódi fő rendszere (VR_MIN_KOCKA kockától); a
+    viszonyítás a liga addigi leggyakoribb fő rendszere. A `csapat`
+    megadásával csak a csapat meccsei. Edzőileg: mennyire lehet a
+    "6-0-ra készüljetek" mondatra építeni. Visszatérés: {"meccsek",
+    "talalat", "liga_talalat", "verdict"} — None VR_PROBA_MIN-nél
+    kevesebb előre jelzett meccsnél."""
+    tort: dict = {}
+    liga: dict = {}
+    n = tal = liga_tal = 0
+    for m in meccsek:
+        mi = m.get("minta") or {}
+        uj = []
+        for side in ("home", "away"):
+            nev = m.get(side)
+            formak = (mi.get(side) or {}).get("formak") or {}
+            valodi = _fo_rendszer(formak)
+            f = defense_system_forecast(tort.get(nev, []))
+            if (f is not None and valodi is not None
+                    and (csapat is None or nev == csapat)):
+                n += 1
+                tal += int(f["fo"] == valodi)
+                if liga:
+                    liga_tal += int(min(liga, key=lambda k: (-liga[k], k))
+                                    == valodi)
+            uj.append((nev, formak, valodi))
+        for nev, formak, valodi in uj:
+            tort.setdefault(nev, []).append(formak)
+            if valodi is not None:
+                liga[valodi] = liga.get(valodi, 0) + 1
+    if n < VR_PROBA_MIN:
+        return None
+    return {"meccsek": n, "talalat": tal, "liga_talalat": liga_tal,
+            "verdict": (f"a várható fő védekezési rendszer {n} meccsből "
+                        f"{tal} alkalommal jött be (a liga leggyakoribb "
+                        f"rendszeréé: {liga_tal})")}
+
+
+def live_defense_system_alerts(match: Match, varhato: dict,
+                               config: TacticsConfig | None = None) -> dict:
+    """Élő eltérő védekezés: a LIVE_AJANLO_PERCEK perceiben csapatonként
+    az addigi védekező kockák fő rendszere (_tanulas_minta CSAK az
+    addigi kockákon — okszerű) a várttól (`varhato`: {"home" / "away":
+    defense_system_forecast}) eltér-e — csapatonként egy rendszerre
+    egyszer. Edzőileg: a megszokottól eltérő fallal jöttek — a
+    figura-tervet a mostani falhoz kell igazítani. Visszatérés:
+    {"alerts": [{"t" (kocka), "t_s", "perc", "team" (a VÉDŐ oldal),
+    "team_name", "most", "vart", "text"}]}."""
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    szolt: dict = {}
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [fr for fr in match.frames if fr.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+            v = (varhato or {}).get(side)
+            if not v:
+                continue
+            most = _fo_rendszer(_tanulas_minta(resz, team, config)["formak"])
+            if most is None or most == v["fo"] or szolt.get(side) == most:
+                continue
+            szolt[side] = most
+            alerts.append({
+                "t": hatar, "t_s": round(hatar / fps, 1), "perc": perc,
+                "team": side, "team_name": nevek[side], "most": most,
+                "vart": v["fo"],
+                "text": (f"Eltérő védekezés ({perc}. perc): {nevek[side]} "
+                         f"{most} fallal véd a várt {v['fo']} helyett — a "
+                         f"figura-tervet {_rendszer_nevelovel(most)} "
+                         "falhoz kell igazítani")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}
+
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a
@@ -4130,8 +4279,9 @@ def player_model_sample(match: Match, team: Team,
     [lövés, gól, xG]}}, "sav": {mez (str): [lövés sávonként]}, "kapus":
     {sáv: [kaputra érkezett, védett]}, "vedok": {mez (str): {"n",
     "y_osszeg", "kozel", "ralepett", "masodik", "kettozott"}}, "kockak",
-    "kapusok": {kapus mez (str): {sáv: [kaputra érkezett, védett]}}}
-    — a lövők a `team` lövései, a kapus és a fal a `team` védekezéséé."""
+    "kapusok": {kapus mez (str): {sáv: [kaputra érkezett, védett]}},
+    "formak": {védekezési rendszer: védekező kocka}} — a lövők a `team`
+    lövései, a kapus, a fal és a rendszer a `team` védekezéséé."""
     config = config or TacticsConfig()
     tm = _tanulas_minta(match, team, config)
     return {
@@ -4148,7 +4298,9 @@ def player_model_sample(match: Match, team: Team,
         "kockak": int(tm.get("kockak", 0)),
         "kapusok": {str(k): {s: [int(v[0]), int(v[1])] for s, v in sv.items()}
                     for k, sv in _kapus_minta_kapusonkent(match, team,
-                                                          config).items()}}
+                                                          config).items()},
+        "formak": {str(k): int(v) for k, v in sorted(
+            (tm.get("formak") or {}).items())}}
 
 
 def player_models_from_samples(mintak: list) -> dict:

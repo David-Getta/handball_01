@@ -240,7 +240,8 @@ def test_season_report_jatekos_modell_szakasz(monkeypatch):
     assert "a szezon 2 meccséből" in r.text
     [mintak] = latott[:1]
     assert len(mintak) == 2
-    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak", "kapusok"}
+    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak", "kapusok",
+                          "formak"}
                for m in mintak)
 
 

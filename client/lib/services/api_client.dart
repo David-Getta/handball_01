@@ -1811,6 +1811,22 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő védekezési rendszer (GET /matches/{id}/live-vedekezes): a meccs
+  /// elején csapatonként a várható rendszer a többi meccsükből, utána a
+  /// 15., 30., 45. percben, ha eltérnek tőle — [{t, t_s, team,
+  /// team_name, varhato | perc, most, vart, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveDefenseSystem(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-vedekezes"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a várható védekezés", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő meccs-előrejelzés (GET /matches/{id}/live-elorejelzes): a meccs
   /// elején a két csapat többi könyvtári meccséből jósolt eredmény és
   /// esélyek, a próbával — [{t, t_s, forecast, proba, text}].

@@ -1674,7 +1674,10 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
                                                    player_model_sample,
                                                    scorer_forecast,
                                                    scorer_forecast_backtest,
-                                                   scorer_forecast_text)
+                                                   scorer_forecast_text,
+                                                   defense_system_backtest,
+                                                   defense_system_forecast,
+                                                   defense_system_text)
     from handball.sim.match_simulator import simulate_ground_truth
 
     app = _app(tmp_path, monkeypatch)
@@ -1735,6 +1738,24 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
         {"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
          "minta": jm[i]} for i in range(7)])
     assert j["golszerzo_proba"] == gp
+    # A várható védekezési rendszer: a csapat meccseinek "formak" mintái.
+    ved = {side: defense_system_forecast([jm[i][side]["formak"]
+                                          for i in range(7)])
+           for side in ("home", "away")}
+    assert j["vedekezes"] == ved and ved["away"] is not None
+    assert j["vedekezes_text"]["away"] == defense_system_text(ved["away"])
+    vp = defense_system_backtest([
+        {"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
+         "minta": jm[i]} for i in range(7)])
+    assert j["vedekezes_proba"] == vp
+
+    # Élőben: a meccs eleji várható rendszer a többi hat meccsből.
+    lv = c.get("/matches/gt7/live-vedekezes").json()["alerts"]
+    v6 = defense_system_forecast([jm[i]["away"]["formak"] for i in range(6)])
+    nyito = [x for x in lv if "varhato" in x]
+    assert [(x["team"], x["text"]) for x in nyito] == [
+        ("away", f"Várható védekezés ({a}): {defense_system_text(v6)}")]
+    assert c.get("/matches/nincs/live-vedekezes").status_code == 404
 
     alerts = c.get("/matches/gt7/live-elorejelzes").json()["alerts"]
     al = alerts[0]
@@ -1758,6 +1779,7 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert mc["elorejelzes"] == json.loads(json.dumps(proba))
     assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
     assert mc["golszerzo_proba"] == gp
+    assert mc["vedekezes_proba"] == vp
     # Az élő esély próbája: a két perces felvételen fél percenként.
     import handball.pipeline.play_simulation as ps
     from handball.pipeline.play_simulation import in_play_backtest
@@ -1766,6 +1788,70 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert ip is not None and ip["pontok"] == 15
     assert c.get("/library/player-model-check").json()[
         "elo_esely_proba"] == ip
+
+
+def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
+    """POST /scouting/export az "own" kulccsal: a meccsterv mellé az
+    "Előrejelzés" szakasz — a két csapat (az items oldalainak neve)
+    könyvtári meccseiből a várakozás és a két csapat várható gólszerzői,
+    a valódi láncon ugyanaz, mint a motor a mintákból; "own" nélkül nincs
+    szakasz."""
+    import json
+    from html import escape
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (match_forecast,
+                                                   match_forecast_sample,
+                                                   match_forecast_text,
+                                                   player_model_sample,
+                                                   scorer_forecast,
+                                                   scorer_forecast_text)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    mintak = [json.loads(json.dumps(match_forecast_sample(m)))
+              for m in meccsek]
+    f = match_forecast([(x["home"], x["away"]) for x in mintak],
+                       [(x["away"], x["home"]) for x in mintak])
+    jm = [{side: json.loads(json.dumps(player_model_sample(m, t)))
+           for side, t in (("home", Team.HOME), ("away", Team.AWAY))}
+          for m in meccsek]
+    ok = scorer_forecast([x["away"]["lovo"] for x in jm],
+                         [x["home"]["kapus"] for x in jm])
+    mi = scorer_forecast([x["home"]["lovo"] for x in jm],
+                         [x["away"]["kapus"] for x in jm])
+    c = TestClient(app)
+    items = [{"match_id": m.meta.match_id, "team": "away"} for m in meccsek]
+    own = [{"match_id": m.meta.match_id, "team": "home"} for m in meccsek]
+    r = c.post("/scouting/export", json={"items": items,
+                                         "own": {"items": own}})
+    assert r.status_code == 200
+    assert "Előrejelzés (a csapat-modellekből)" in r.text
+    assert f is not None
+    assert f"<p><b>{escape(match_forecast_text(h, a, f))}</b></p>" in r.text
+    if ok:
+        assert (f"<li>Az ő várható gólszerzőik: "
+                f"{escape(scorer_forecast_text(ok))}.</li>") in r.text
+    assert mi, "a hazai lövői tanulhatók"
+    assert (f"<li>A mi várható gólszerzőink: "
+            f"{escape(scorer_forecast_text(mi))}.</li>") in r.text
+    from handball.pipeline.play_simulation import (defense_system_forecast,
+                                                   defense_system_text)
+    vo = defense_system_forecast([x["away"]["formak"] for x in jm])
+    assert vo is not None
+    assert (f"<li>Várható védekezésük: "
+            f"{escape(defense_system_text(vo))}.</li>") in r.text
+    r2 = c.post("/scouting/export", json={"items": items})
+    assert "Előrejelzés (a csapat-modellekből)" not in r2.text
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

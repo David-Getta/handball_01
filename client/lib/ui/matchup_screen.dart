@@ -286,6 +286,8 @@ class _MatchupScreenState extends State<MatchupScreen> {
     // A várható gólszerzők: "home" = MI, "away" = ŐK (a hívás sorrendje).
     final gsz = (_forecast?["golszerzok_text"] as Map?) ?? const {};
     final gProba = (_forecast?["golszerzo_proba"] as Map?)?["verdict"];
+    final vedOk = ((_forecast?["vedekezes_text"] as Map?) ?? const {})["away"];
+    final vedProba = (_forecast?["vedekezes_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
       // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
@@ -322,6 +324,18 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (gProba is String) ...[
                   const SizedBox(height: 4),
                   Text("A gólszerző-becslés próbája: $gProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                // Melyik fal ellen tervezzük a figurákat.
+                if (vedOk is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("Várható védekezésük: $vedOk.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (vedProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A védekezés-becslés próbája: $vedProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
               ]),

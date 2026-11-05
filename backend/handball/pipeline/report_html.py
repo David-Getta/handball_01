@@ -524,7 +524,8 @@ def scouting_report_html(rep: ScoutingReport,
                          playbook_match: dict | None = None,
                          matchup: list[str] | None = None,
                          figura_ajanlo: dict | None = None,
-                         vedekezesi_proba: dict | None = None) -> str:
+                         vedekezesi_proba: dict | None = None,
+                         elorejelzes: dict | None = None) -> str:
     """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
 
     `playbook_match` (opcionális): a mentett figurákkal való egyezés
@@ -538,9 +539,32 @@ def scouting_report_html(rep: ScoutingReport,
     falunk ellen (play_simulation.defense_test, a figurák "link"
     mezőjével — a /figura3d lekérdezése) — "Figuráik a falatok ellen"
     szakaszként kerül be.
+    `elorejelzes` (opcionális): a meccsterv mellé a csapat-modell
+    várakozása — {"text" (play_simulation.match_forecast_text),
+    "proba" (a próba mondata), "ok" / "mi" (a két csapat várható
+    gólszerzői, scorer_forecast_text), "vedekezes" (az ő várható
+    védekezési rendszerük, defense_system_text), "golszerzo_proba"} —
+    "Előrejelzés"
+    szakaszként, a meccsterv után; üres mezők kimaradnak.
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
+    ej = elorejelzes or {}
+    ej_sorok = [(c_, ej.get(k_)) for c_, k_ in (
+        ("Az ő várható gólszerzőik", "ok"),
+        ("A mi várható gólszerzőink", "mi"),
+        ("Várható védekezésük", "vedekezes")) if ej.get(k_)]
+    elorejelzes_html = ""
+    if ej.get("text") or ej_sorok:
+        elorejelzes_html = (
+            "<h2>Előrejelzés (a csapat-modellekből)</h2>"
+            + (f"<p><b>{escape(str(ej['text']))}</b></p>"
+               if ej.get("text") else "")
+            + ("<ul>" + "".join(f"<li>{escape(c_)}: {escape(str(v_))}.</li>"
+                                for c_, v_ in ej_sorok) + "</ul>"
+               if ej_sorok else "")
+            + "".join(f'<p class="note">{escape(str(ej[k_]))}.</p>'
+                      for k_ in ("proba", "golszerzo_proba") if ej.get(k_)))
 
     # Mennyire hihető a jelentés ALAPANYAGA. A meccsterv az, ami alapján
     # az edző dönt — ha a mögötte lévő feldolgozás gyenge volt, azt a lap
@@ -855,6 +879,8 @@ def scouting_report_html(rep: ScoutingReport,
   {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
      + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
     if matchup else ""}
+
+  {elorejelzes_html}
 
   {_breakpoints_block(rep)}
 
@@ -5176,7 +5202,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     csapat meccsein ("elorejelzes_verdict", forecast_rows_summary) és a
     várható gólszerzőké a csapat lövőire ("golszerzo_verdict",
     scorer_forecast_backtest), az élő esélyé a csapat meccsein
-    ("elo_esely_verdict", in_play_backtest).
+    ("elo_esely_verdict", in_play_backtest), a várható védekezési
+    rendszeré ("vedekezes_verdict", defense_system_backtest).
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
@@ -5186,7 +5213,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     mp = modell_proba or {}
     if mp.get("verdict") or mp.get("kapus_verdict") \
             or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict") \
-            or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict"):
+            or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict") \
+            or mp.get("vedekezes_verdict"):
         proba_html = (
             "<h2>A lövő-modell próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
@@ -5209,6 +5237,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Élő esély:</b> "
                f"{escape(str(mp['elo_esely_verdict']))}.</p>"
                if mp.get("elo_esely_verdict") else "")
+            + (f"<p><b>Védekezési rendszer:</b> "
+               f"{escape(str(mp['vedekezes_verdict']))}.</p>"
+               if mp.get("vedekezes_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "
