@@ -1655,6 +1655,76 @@ def test_az_elo_jelzesek_onkalibralasa_a_valodi_lancon(tmp_path,
         and a["text"].endswith(f"(óvatosan: {ok_})") for a in j2["alerts"])
 
 
+def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
+    """A meccs-előrejelzés a valódi láncon (hét rövid szimulált meccs,
+    időrendben): GET /library/forecast a két csapat összes meccséből —
+    ugyanaz, mint a motor a meccs-mintákból, a könyvtári próbával; 400
+    hiányzó csapatnévre, 404 ismeretlen csapatra. GET /matches/{id}/
+    live-elorejelzes a meccs NÉLKÜL (a többi hatból), a próba is a többi
+    meccsen; egyetlen másik meccsnél üres. A /library/player-model-check "elorejelzes" mezője a
+    könyvtár időrendjében a motor próbája."""
+    import json
+
+    from handball.pipeline.play_simulation import (forecast_backtest,
+                                                   forecast_backtest_text,
+                                                   match_forecast,
+                                                   match_forecast_sample,
+                                                   match_forecast_text)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in range(1, 8):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+        if seed == 2:
+            # Egyetlen MÁSIK meccs: az előrejelzéshez kevés → nincs sor.
+            assert TestClient(app).get(
+                "/matches/gt2/live-elorejelzes").json()["alerts"] == []
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    mintak = [json.loads(json.dumps(match_forecast_sample(m)))
+              for m in meccsek]
+
+    def lista(idx):
+        return [{"match_id": meccsek[i].meta.match_id, "home": h, "away": a,
+                 "minta": mintak[i]} for i in idx]
+
+    def tort(idx, side):
+        masik = "away" if side == "home" else "home"
+        return [(mintak[i][side], mintak[i][masik]) for i in idx]
+
+    c = TestClient(app)
+    j = c.get("/library/forecast", params={"home": h, "away": a}).json()
+    f = match_forecast(tort(range(7), "home"), tort(range(7), "away"))
+    assert f is not None and j["forecast"] == f
+    assert j["text"] == match_forecast_text(h, a, f)
+    proba = forecast_backtest(lista(range(7)))
+    assert proba is not None
+    assert j["proba"] == json.loads(json.dumps(proba))
+    assert j["proba_text"] == forecast_backtest_text(proba)
+    assert c.get("/library/forecast", params={"home": h}).status_code == 400
+    assert c.get("/library/forecast",
+                 params={"home": h, "away": "Nincs"}).status_code == 404
+
+    [al] = c.get("/matches/gt7/live-elorejelzes").json()["alerts"]
+    f6 = match_forecast(tort(range(6), "home"), tort(range(6), "away"))
+    p6 = forecast_backtest(lista(range(6)))
+    assert al["forecast"] == f6
+    vart = "Előrejelzés a korábbi meccsekből: " + match_forecast_text(h, a, f6)
+    if p6:
+        vart += f" (a próba: {forecast_backtest_text(p6)})"
+    assert al["text"] == vart
+    assert c.get("/matches/nincs/live-elorejelzes").status_code == 404
+
+    mc = c.get("/library/player-model-check").json()
+    assert mc["elorejelzes"] == json.loads(json.dumps(proba))
+    assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

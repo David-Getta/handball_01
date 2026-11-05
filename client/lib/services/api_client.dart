@@ -1811,6 +1811,34 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő meccs-előrejelzés (GET /matches/{id}/live-elorejelzes): a meccs
+  /// elején a két csapat többi könyvtári meccséből jósolt eredmény és
+  /// esélyek, a próbával — [{t, t_s, forecast, proba, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveForecast(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-elorejelzes"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az előrejelzés", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Meccs-előrejelzés a következő meccsre (GET /library/forecast): a két
+  /// csapat összes könyvtári meccséből — {home, away, forecast, text,
+  /// proba, proba_text}.
+  Future<Map<String, dynamic>> fetchLibraryForecast(
+      String home, String away) async {
+    final uri = Uri.parse("$baseUrl/library/forecast").replace(
+        queryParameters: {"home": home, "away": away});
+    final resp = await http.get(uri).timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az előrejelzés", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Élő AI-megbízhatóság (GET /matches/{id}/live-modell-proba): a meccs
   /// elején csapatonként egy sor arról, mennyire bizonyult megbízhatónak
   /// a lövő-, a kapus- és a döntés-modell a csapat korábbi meccsein —

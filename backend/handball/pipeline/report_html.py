@@ -5171,7 +5171,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     csak akkor jelenik meg, ha legalább egyik sor nem üres.
     `modell_proba` (opcionális): a lövő- és a kapus-modell próbája a
     szezon meccsein (play_simulation.shooter_model_backtest,
-    keeper_model_backtest) — a "verdict" és a "kapus_verdict" mondata.
+    keeper_model_backtest) — a "verdict" és a "kapus_verdict" mondata; a
+    döntés-próba ("dontes_verdict") és a meccs-előrejelzés próbája a
+    csapat meccsein ("elorejelzes_verdict", forecast_rows_summary).
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
@@ -5180,7 +5182,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     proba_html = ""
     mp = modell_proba or {}
     if mp.get("verdict") or mp.get("kapus_verdict") \
-            or mp.get("dontes_verdict"):
+            or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict"):
         proba_html = (
             "<h2>A lövő-modell próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
@@ -5194,11 +5196,16 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                    for h_ in ((mp.get("dontes") or {}).get("helyzetek") or []))
                + "</ul>"
                if (mp.get("dontes") or {}).get("helyzetek") else "")
+            + (f"<p><b>Előrejelzés:</b> "
+               f"{escape(str(mp['elorejelzes_verdict']))}.</p>"
+               if mp.get("elorejelzes_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "
             "(az átlagos kapushoz) meg a csapat egyetlen szorzójához mérjük — "
-            "melyik van közelebb a valódi gólokhoz.</p>")
+            "melyik van közelebb a valódi gólokhoz. Az előrejelzés a meccs "
+            "eredményét a két csapat korábbi meccseiből jósolja, a formához "
+            "(a lőtt és a kapott gólok átlagához) mérve.</p>")
     fejl_html = ""
     fj = fejlodes or {}
     fj_sorok = list(fj.get("lovo_sorok") or []) + list(fj.get("kapus_sorok") or [])

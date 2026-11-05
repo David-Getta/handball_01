@@ -3004,6 +3004,331 @@ def calibrate_alerts(alerts: list, szintek: dict) -> list:
     return ki
 
 
+# ---- Meccs-előrejelzés a csapat-modellekből --------------------------------
+# A következő meccs várható eredménye a két csapat KORÁBBI meccseiből
+# tanult csapat-modellből, sávonként (közeli / közép / távoli lövés):
+# - lövés-mennyiség: a támadó meccsenkénti lövései és a védő meccsenként
+#   kapott lövései átlaga;
+# - lövés-minőség: ugyanígy az xG / lövés;
+# - befejezés: a támadó gól / xG aránya, kapus + védelem: a védő kapott
+#   gól / xGA aránya — mindkettő ELOREJELZES_SULY képzelt lövéssel a
+#   liga-szint (a két csapat összes lövésének gól / xG aránya) felé
+#   simítva, és a liga-szinttel egyszer osztva (különben a liga xG-
+#   torzítása kétszer számítana);
+# - plusz a nem látott (középkezdésből következtetett) gólok átlaga.
+# Az esélyek a gólkülönbség normál közelítéséből (szórás: a két várható
+# gólszám összegének gyöke — Poisson); |különbség| < 0,5 a döntetlen.
+ELOREJELZES_SULY = 20
+# Csapatonként legalább ennyi korábbi meccs kell az előrejelzéshez.
+ELOREJELZES_MIN_MECCS = 2
+# A próba (forecast_backtest) ítéletéhez legalább ennyi előre jelzett meccs.
+ELOREJELZES_PROBA_MIN = 5
+ELOREJELZES_SAVOK = ("close", "mid", "far")
+
+
+def match_forecast_sample(match: Match,
+                          config: TacticsConfig | None = None) -> dict:
+    """A meccs-előrejelzés NYERS, JSON-barát meccs-mintája (a lemezes
+    eredmény-tárba tehető): oldalanként {"lovesek": {sáv: [lövés, gól,
+    xG]} (a látott lövések, xg.match_xg), "golok" (az összes felismert
+    gól, a nem látott is), "latott_golok"}. Meccsek közt összeadható."""
+    from .event_detection import EventType, detect_shots
+    from .xg import match_xg
+    config = config or TacticsConfig()
+    ki = {s: {"lovesek": {}, "golok": 0, "latott_golok": 0}
+          for s in ("home", "away")}
+    for sh in match_xg(match, config)["shots"]:
+        side = sh["team"]
+        if side not in ki:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        r = ki[side]["lovesek"].setdefault(
+            kapus_sav(sh["x"], sh["y"], goal_x), [0, 0, 0.0])
+        gol = sh["outcome"] == "goal"
+        r[0] += 1
+        r[1] += int(gol)
+        r[2] = round(r[2] + float(sh["xg"]), 3)
+        ki[side]["latott_golok"] += int(gol)
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.team.value in ki:
+            ki[e.team.value]["golok"] += 1
+    return ki
+
+
+def _elorejelzes_profil(tortenet: list) -> dict:
+    """Egy csapat profilja a korábbi meccseiből: `tortenet` = [(a csapat
+    oldalának mintája, az ellenfél oldalának mintája)] (match_forecast_
+    sample oldalai). Sávonként a leadott és a kapott lövés / gól / xG
+    összege, a gólok (összes és látott) mindkét irányban, a meccsszám."""
+    p = {"n": len(tortenet), "lo": {}, "kap": {}, "gf": 0, "ga": 0,
+         "gf_l": 0, "ga_l": 0}
+    for sajat, ellen in tortenet:
+        for kulcs, minta in (("lo", sajat), ("kap", ellen)):
+            for sav, (n, gol, xg) in (minta.get("lovesek") or {}).items():
+                r = p[kulcs].setdefault(sav, [0, 0, 0.0])
+                r[0] += int(n)
+                r[1] += int(gol)
+                r[2] += float(xg)
+        p["gf"] += int(sajat.get("golok") or 0)
+        p["gf_l"] += int(sajat.get("latott_golok") or 0)
+        p["ga"] += int(ellen.get("golok") or 0)
+        p["ga_l"] += int(ellen.get("latott_golok") or 0)
+    return p
+
+
+def _elorejelzes_gol(tam: dict, ved: dict, liga: float) -> float:
+    """A `tam` profilú csapat várható gólja a `ved` profilú ellen (lásd
+    az ELOREJELZES_ blokk kommentjét)."""
+    xg = 0.0
+    for sav in ELOREJELZES_SAVOK:
+        lo = tam["lo"].get(sav, [0, 0, 0.0])
+        kap = ved["kap"].get(sav, [0, 0, 0.0])
+        menny = (lo[0] / tam["n"] + kap[0] / ved["n"]) / 2.0
+        minos = [r[2] / r[0] for r in (lo, kap) if r[0] > 0]
+        if menny > 0 and minos:
+            xg += menny * sum(minos) / len(minos)
+
+    def simit(gol, xg_ossz, n_loves):
+        atlag = xg_ossz / n_loves if n_loves else 0.0
+        nevezo = xg_ossz + ELOREJELZES_SULY * atlag
+        return ((gol + ELOREJELZES_SULY * atlag * liga) / nevezo
+                if nevezo > 0 else liga)
+
+    lo_n = sum(r[0] for r in tam["lo"].values())
+    lo_xg = sum(r[2] for r in tam["lo"].values())
+    kap_n = sum(r[0] for r in ved["kap"].values())
+    kap_xg = sum(r[2] for r in ved["kap"].values())
+    befejezes = simit(tam["gf_l"], lo_xg, lo_n)
+    vedelem = simit(ved["ga_l"], kap_xg, kap_n)
+    szorzo = befejezes * vedelem / liga if liga > 0 else 1.0
+    nem_latott = ((tam["gf"] - tam["gf_l"]) / tam["n"]
+                  + (ved["ga"] - ved["ga_l"]) / ved["n"]) / 2.0
+    return xg * szorzo + max(0.0, nem_latott)
+
+
+def match_forecast(hazai: list, vendeg: list) -> dict | None:
+    """Meccs-előrejelzés a két csapat KORÁBBI meccseiből: `hazai` /
+    `vendeg` = [(a csapat oldalának mintája, az ellenfél oldalának
+    mintája)] (match_forecast_sample oldalai, meccsenként). Mit jelent
+    edzőileg: a meccs előtti várakozás a csapat-modellekből — ki a
+    favorit, és mennyivel; a "forma" (naiv: a csapat lőtt és az ellenfél
+    kapott góljainak átlaga) mellé. Visszatérés: {"home_goals",
+    "away_goals" (várható gól, 1 tizedes), "p_home", "p_draw", "p_away"
+    (esély, 0..1), "naiv_home", "naiv_away", "meccsek": {"home",
+    "away"}} — None, ha valamelyik csapatnál ELOREJELZES_MIN_MECCS-nél
+    kevesebb meccs van."""
+    if len(hazai) < ELOREJELZES_MIN_MECCS or len(vendeg) < ELOREJELZES_MIN_MECCS:
+        return None
+    h, v = _elorejelzes_profil(hazai), _elorejelzes_profil(vendeg)
+    gol = sum(p[k][s][1] for p in (h, v) for k in ("lo", "kap")
+              for s in p[k])
+    xg = sum(p[k][s][2] for p in (h, v) for k in ("lo", "kap")
+             for s in p[k])
+    liga = gol / xg if xg > 0 else 1.0
+    eh, ev = _elorejelzes_gol(h, v, liga), _elorejelzes_gol(v, h, liga)
+    mu, sd = eh - ev, math.sqrt(max(eh + ev, 1.0))
+
+    def phi(z):
+        return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+    p_home = phi((mu - 0.5) / sd)
+    p_away = 1.0 - phi((mu + 0.5) / sd)
+    return {"home_goals": round(eh, 1), "away_goals": round(ev, 1),
+            "p_home": round(p_home, 3), "p_away": round(p_away, 3),
+            "p_draw": round(max(0.0, 1.0 - p_home - p_away), 3),
+            "naiv_home": round((h["gf"] / h["n"] + v["ga"] / v["n"]) / 2, 1),
+            "naiv_away": round((v["gf"] / v["n"] + h["ga"] / h["n"]) / 2, 1),
+            "meccsek": {"home": h["n"], "away": v["n"]}}
+
+
+def match_forecast_text(hazai_nev: str, vendeg_nev: str,
+                        f: dict | None) -> str | None:
+    """Az előrejelzés egy mondatban: "Hazai 27–24 Vendég — esélyek:
+    Hazai 68%, döntetlen 9%, Vendég 23%" (a csapatnevekkel: a meccsterv
+    "mi · ők" párosításán nincs pálya-oldal). None előrejelzés nélkül."""
+    if not f:
+        return None
+    return (f"{hazai_nev} {f['home_goals']:.0f}–{f['away_goals']:.0f} "
+            f"{vendeg_nev} — esélyek: {hazai_nev} {f['p_home'] * 100:.0f}%, "
+            f"döntetlen {f['p_draw'] * 100:.0f}%, {vendeg_nev} "
+            f"{f['p_away'] * 100:.0f}%")
+
+
+# Élő esély: a meccs előtti előrejelzés és az addigi állás. A hátralévő
+# idő várt gólja a meccs előtti várakozás (ELO_ELOZETES_PERC perc
+# játéknak számít) és az addig lőtt gólok (a valódi játékidővel)
+# összevont üteméből; a rendes játékidő ELO_MECCS_PERC perc. A "várt
+# felett / alatt" mondat ELO_ELTERES_GOL góltól szól.
+ELO_MECCS_PERC = 60
+ELO_ELOZETES_PERC = 60
+ELO_ELTERES_GOL = 1.5
+
+
+def in_play_odds(f: dict, perc: float, gh: int, ga: int) -> dict:
+    """Élő esély a `perc`. percben `gh`–`ga` állásnál a meccs előtti
+    előrejelzésből (`f`, match_forecast): a hátralévő várt gól
+    csapatonként (f gól + addigi gól) / (ELO_ELOZETES_PERC + perc) ×
+    (ELO_MECCS_PERC − perc), a végső különbség normál közelítéssel (a
+    szórás a hátralévő várt gólok összegének gyöke, legalább 1).
+    Visszatérés: {"p_home", "p_draw", "p_away", "vart_home", "vart_away"
+    (a perc-arányos meccs előtti várakozás), "elteres_home",
+    "elteres_away" (addigi gól − várt)}."""
+    hatra = max(0.0, ELO_MECCS_PERC - perc)
+    uh = (f["home_goals"] + gh) / (ELO_ELOZETES_PERC + perc)
+    ua = (f["away_goals"] + ga) / (ELO_ELOZETES_PERC + perc)
+    rh, ra = uh * hatra, ua * hatra
+    mu, sd = (gh - ga) + (rh - ra), math.sqrt(max(rh + ra, 1.0))
+
+    def phi(z):
+        return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+    p_home = phi((mu - 0.5) / sd)
+    p_away = 1.0 - phi((mu + 0.5) / sd)
+    vh = f["home_goals"] * min(perc, ELO_MECCS_PERC) / ELO_MECCS_PERC
+    va = f["away_goals"] * min(perc, ELO_MECCS_PERC) / ELO_MECCS_PERC
+    return {"p_home": round(p_home, 3), "p_away": round(p_away, 3),
+            "p_draw": round(max(0.0, 1.0 - p_home - p_away), 3),
+            "vart_home": round(vh, 1), "vart_away": round(va, 1),
+            "elteres_home": round(gh - vh, 1),
+            "elteres_away": round(ga - va, 1)}
+
+
+def live_forecast_alerts(match: Match, f: dict | None,
+                         config: TacticsConfig | None = None) -> dict:
+    """Élő esély a csapat-modellből: a LIVE_AJANLO_PERCEK perceiben az
+    addigi állás (detect_shots CSAK az addigi kockákon — okszerű) és a
+    meccs előtti előrejelzés (`f`, match_forecast) → a végeredmény
+    esélye (in_play_odds), és ha egy csapat ELO_ELTERES_GOL-lal a
+    várakozása felett vagy alatt jár, az is. Edzőileg: a "hol tartunk a
+    várakozáshoz képest" — a félidei / időkérési beszéd alapja.
+    Visszatérés: {"alerts": [{"t" (kocka), "t_s", "perc", "home_goals",
+    "away_goals", "p_home", "p_draw", "p_away", "elteres_home",
+    "elteres_away", "text"}]} — üres előrejelzés nélkül."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not f or not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    hn, vn = match.meta.home_team, match.meta.away_team
+    for perc in LIVE_AJANLO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        eddig = [fr for fr in match.frames if fr.t <= hatar]
+        if len(eddig) < 2 or eddig[-1].t < hatar - fps:
+            continue      # a meccs még nem ért el idáig
+        resz = Match(meta=match.meta, frames=eddig)
+        gol = {"home": 0, "away": 0}
+        for e in detect_shots(resz, config):
+            if e.type == EventType.GOAL and e.team.value in gol:
+                gol[e.team.value] += 1
+        o = in_play_odds(f, perc, gol["home"], gol["away"])
+        szoveg = (f"Élő esély ({perc}. perc, {gol['home']}–{gol['away']}): "
+                  f"{hn} {o['p_home'] * 100:.0f}%, döntetlen "
+                  f"{o['p_draw'] * 100:.0f}%, {vn} {o['p_away'] * 100:.0f}% "
+                  f"— a meccs előtti várakozás {f['home_goals']:.0f}–"
+                  f"{f['away_goals']:.0f}")
+        nagy = max((("home", hn), ("away", vn)),
+                   key=lambda x: (abs(o[f"elteres_{x[0]}"]), x[0] == "home"))
+        el = o[f"elteres_{nagy[0]}"]
+        if abs(el) >= ELO_ELTERES_GOL:
+            irany = "felett" if el > 0 else "alatt"
+            szam = f"{abs(el):.1f}".replace(".", ",")
+            szoveg += f"; {nagy[1]} {szam} góllal a várt {irany}"
+        alerts.append({"t": hatar, "t_s": round(hatar / fps, 1),
+                       "perc": perc, "home_goals": gol["home"],
+                       "away_goals": gol["away"], **o, "text": szoveg})
+    return {"alerts": alerts}
+
+
+def forecast_backtest(meccsek: list) -> dict | None:
+    """Az előrejelzés próbája: `meccsek` időrendben [{"match_id", "home",
+    "away" (csapatnevek), "minta" (match_forecast_sample)}]. Minden
+    meccsre, ahol mindkét csapatnak legalább ELOREJELZES_MIN_MECCS
+    korábbi meccse van a listában, előrejelzés CSAK a korábbiakból
+    (match_forecast), és összevetés a tényleges eredménnyel — a modell és
+    a forma (naiv) győztes-találata (döntetlennel végződött meccs nem
+    számít a találatba) és a gólkülönbség átlagos abszolút hibája.
+    Edzőileg: mennyire lehet a meccs előtti előrejelzésre építeni.
+    Visszatérés: {"meccsek", "dontott" (nem döntetlen meccsek),
+    "modell_talalat", "naiv_talalat", "modell_hiba", "naiv_hiba" (gól),
+    "javulas_pct" (a modell hibája a formához képest; pozitív: a modell
+    a pontosabb), "sorok"} — None, ha ELOREJELZES_PROBA_MIN-nél kevesebb
+    meccs jelezhető előre."""
+    tortenet: dict = {}
+    sorok = []
+    for m in meccsek:
+        mi, h, v = m.get("minta") or {}, m.get("home"), m.get("away")
+        sh, sv = mi.get("home") or {}, mi.get("away") or {}
+        f = match_forecast(tortenet.get(h, []), tortenet.get(v, []))
+        if f is not None:
+            gh, gv = int(sh.get("golok") or 0), int(sv.get("golok") or 0)
+            sorok.append({"match_id": m.get("match_id"), "home": h,
+                          "away": v, "home_goals": gh, "away_goals": gv,
+                          "vart_home": f["home_goals"],
+                          "vart_away": f["away_goals"],
+                          "naiv_home": f["naiv_home"],
+                          "naiv_away": f["naiv_away"],
+                          "p_home": f["p_home"], "p_draw": f["p_draw"],
+                          "p_away": f["p_away"]})
+        tortenet.setdefault(h, []).append((sh, sv))
+        tortenet.setdefault(v, []).append((sv, sh))
+    return forecast_rows_summary(sorok)
+
+
+def forecast_rows_summary(sorok: list, csapat: str | None = None) -> dict | None:
+    """A próba-sorok (forecast_backtest "sorok") összegzése — a `csapat`
+    megadásával csak a csapat meccsei (a szezon-riport csapat-sora).
+    Visszatérés a forecast_backtest alakjában, vagy None
+    ELOREJELZES_PROBA_MIN-nél kevesebb sornál."""
+    if csapat is not None:
+        sorok = [r for r in sorok if csapat in (r["home"], r["away"])]
+    if len(sorok) < ELOREJELZES_PROBA_MIN:
+        return None
+
+    def elojel(x):
+        return (x > 0) - (x < 0)
+
+    dontott = [r for r in sorok if r["home_goals"] != r["away_goals"]]
+    talal = {k: sum(1 for r in dontott
+                    if elojel(r[f"{k}_home"] - r[f"{k}_away"])
+                    == elojel(r["home_goals"] - r["away_goals"]))
+             for k in ("vart", "naiv")}
+    hiba = {k: sum(abs((r[f"{k}_home"] - r[f"{k}_away"])
+                       - (r["home_goals"] - r["away_goals"]))
+                   for r in sorok) / len(sorok) for k in ("vart", "naiv")}
+    javulas = ((hiba["naiv"] - hiba["vart"]) / hiba["naiv"] * 100.0
+               if hiba["naiv"] > 0 else 0.0)
+    return {"meccsek": len(sorok), "dontott": len(dontott),
+            "modell_talalat": talal["vart"], "naiv_talalat": talal["naiv"],
+            "modell_hiba": round(hiba["vart"], 2),
+            "naiv_hiba": round(hiba["naiv"], 2),
+            "javulas_pct": round(javulas, 1), "sorok": sorok}
+
+
+def forecast_backtest_text(p: dict | None) -> str | None:
+    """A próba egy mondatban: "a modell 12 eldőlt meccsből 8 győztest
+    talált el (a formáé: 6); a gólkülönbség átlagos hibája 3,1 gól (a
+    formáé 4,0; 14 előre jelzett meccs) — a modell 22%-kal pontosabb a
+    formánál" (eldőlt meccs nélkül a találat-rész elmarad). Az ítélet a
+    lövő-próba küszöbével (PROBA_ITELET_PCT). None próba nélkül."""
+    if not p:
+        return None
+    j = p["javulas_pct"]
+    itelet = (f"a modell {j:.0f}%-kal pontosabb a formánál"
+              if j >= PROBA_ITELET_PCT else
+              f"a modell {-j:.0f}%-kal pontatlanabb a formánál"
+              if j <= -PROBA_ITELET_PCT else
+              "a modell nagyjából olyan pontos, mint a forma")
+    talalat = (f"a modell {p['dontott']} eldőlt meccsből "
+               f"{p['modell_talalat']} győztest talált el (a formáé: "
+               f"{p['naiv_talalat']}); " if p["dontott"] else "")
+    return (f"{talalat}a gólkülönbség átlagos hibája "
+            f"{str(p['modell_hiba']).replace('.', ',')} gól (a formáé "
+            f"{str(p['naiv_hiba']).replace('.', ',')}; {p['meccsek']} "
+            f"előre jelzett meccs) — {itelet}")
+
+
 # ---- A játékos-modell fejlődése: két időszak tanult szorzói -----------------
 # Két időszak (pl. a szezon két fele) tanult lövő- és kapus-szorzói
 # összevetve: egy sáv akkor hír, ha MINDKÉT időszakban tanult (a

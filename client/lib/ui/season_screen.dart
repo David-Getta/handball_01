@@ -173,7 +173,9 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final teams = sorok("teams");
     final kapusok = sorok("kapusok");
     final dontesek = sorok("dontesek");
-    if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty) {
+    final eloreSzoveg = _modelCheck["elorejelzes_text"];
+    if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
+        eloreSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -231,6 +233,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
           child: Text("${t["team"]} döntései: ${t["verdict"]}.",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ),
+      // A meccs-előrejelzés próbája a könyvtár időrendjében: a két csapat
+      // korábbi meccseiből jósolt eredmény a formához mérve.
+      if (eloreSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Meccs-előrejelzés: $eloreSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
     ];
   }
 

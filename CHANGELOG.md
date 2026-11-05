@@ -5,6 +5,32 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **Meccs-előrejelzés a csapat-modellekből, próbával** (motor + végpontok
+  + meccsterv + élő képernyő + szezon-riport + szezon-képernyő): a
+  következő meccs várható eredménye a két csapat korábbi meccseiből
+  tanult csapat-modellből — sávonként (közeli / közép / távoli) a
+  lövés-mennyiség és -minőség (a támadó lövései és a védő kapott lövései
+  átlaga), a befejezés (gól / xG) és a kapus + védelem (kapott gól /
+  xGA), a liga-szinthez simítva; plusz a nem látott gólok. "Hazai 27–24
+  Vendég — esélyek: Hazai 68%, döntetlen 9%, Vendég 23%". És a próbája:
+  a könyvtár időrendjében minden meccset csak a korábbiakból jósolunk,
+  és a formához (a lőtt és a kapott gólok átlagához) mérjük — "a modell
+  12 eldőlt meccsből 8 győztest talált el (a formáé: 6); a gólkülönbség
+  átlagos hibája 3,1 gól (a formáé 4,0; 14 előre jelzett meccs) — a
+  modell 22%-kal pontosabb a formánál". Edzőileg: ki a favorit és
+  mennyivel, és mennyire lehet erre a várakozásra építeni. Csapatonként
+  legalább két korábbi meccs, a próbához legalább öt előre jelzett meccs
+  kell. Élőben a 15., 30. és 45. percben az élő esély is: a meccs előtti
+  várakozás (egy teljes meccsnyi súllyal) és az addigi állás összevont
+  ütemével — "Élő esély (30. perc, 14–10): Hazai 83%, döntetlen 5%,
+  Vendég 12% — a meccs előtti várakozás 25–25; Vendég 2,5 góllal a várt
+  alatt". A /library/forecast (a meccsterv-képernyő ELŐREJELZÉS kártyája),
+  a /matches/{id}/live-elorejelzes (az élő képernyő "ai" sorai, a meccs
+  nélkül, okszerűen), a /library/player-model-check "elorejelzes"
+  mezője (a szezon-képernyő próba-szakasza) és a szezon-riport
+  "Előrejelzés" sora a csapat meccsein (play_simulation.match_forecast,
+  forecast_backtest, in_play_odds, live_forecast_alerts).
+
 - **Élő AI-megbízhatóság és önkalibráló élő jelzések** (motor + élő
   végpontok + élő képernyő): a meccs elején csapatonként egy sor arról,
   mennyire bizonyult megbízhatónak a csapat többi könyvtári meccsén a

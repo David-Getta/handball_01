@@ -305,6 +305,48 @@ def test_season_report_venue_split():
     assert int(row_h.group(1)) >= 1 and int(row_i.group(1)) >= 1
 
 
+def test_season_report_elorejelzes_sora():
+    """A szezon-riport próba-szakaszának "Előrejelzés" sora: a könyvtári
+    meccs-előrejelzés próbájából a csapat sorai (forecast_rows_summary) —
+    a valódi láncon (hét rövid meccs, időrendben) ugyanaz, mint a motor
+    a meccs-mintákból."""
+    import shutil
+
+    from handball.pipeline.play_simulation import (forecast_backtest,
+                                                   forecast_backtest_text,
+                                                   forecast_rows_summary,
+                                                   match_forecast_sample)
+    tmp2 = tempfile.mkdtemp(prefix="handball_elorejelzes_test_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    try:
+        matches_dir = Path(tmp2) / "data" / "matches"
+        matches_dir.mkdir(parents=True, exist_ok=True)
+        lista = []
+        for seed in range(1, 8):
+            m = simulate_ground_truth(duration_s=30, fps=10.0, seed=seed,
+                                      shots_per_min=8)
+            m.meta.match_id = f"ej{seed}"
+            m.meta.date = f"2026-10-0{seed}"
+            (matches_dir / f"{m.meta.match_id}.json").write_text(
+                json.dumps(m.to_dict()), encoding="utf-8")
+            lista.append({"match_id": m.meta.match_id,
+                          "home": m.meta.home_team, "away": m.meta.away_team,
+                          "minta": json.loads(json.dumps(
+                              match_forecast_sample(m)))})
+        ep = forecast_rows_summary(forecast_backtest(lista)["sorok"],
+                                   "Szimu Hazai")
+        assert ep is not None
+        r = TestClient(create_app()).get("/season/report",
+                                         params={"team": "Szimu Hazai"})
+    finally:
+        os.environ["HANDBALL_DATA_DIR"] = _tmp
+        shutil.rmtree(tmp2, ignore_errors=True)
+    assert r.status_code == 200
+    assert "A lövő-modell próbája" in r.text
+    assert (f"<p><b>Előrejelzés:</b> {forecast_backtest_text(ep)}.</p>"
+            in r.text)
+
+
 def test_season_report_leaders_section():
     """Ha van toplista-adat (hosszabb meccseken labdaszerzés már
     mérhető), a szezon-riport hozza A szezon játékosai szakaszt."""

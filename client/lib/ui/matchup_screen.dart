@@ -51,6 +51,9 @@ class _MatchupScreenState extends State<MatchupScreen> {
   String? _opp;
 
   Map<String, dynamic>? _result;
+  // A meccs-előrejelzés (GET /library/forecast): külön hívás, a hibája
+  // nem viszi el a tervet.
+  Map<String, dynamic>? _forecast;
 
   @override
   void initState() {
@@ -110,12 +113,18 @@ class _MatchupScreenState extends State<MatchupScreen> {
       _working = true;
       _error = null;
       _result = null;
+      _forecast = null;
     });
     try {
       final r = await _api.fetchMatchup(_itemsOf(own), _itemsOf(opp));
+      Map<String, dynamic>? f;
+      try {
+        f = await _api.fetchLibraryForecast(own, opp);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _result = r;
+        _forecast = f;
         _working = false;
       });
     } catch (e) {
@@ -272,7 +281,32 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final r = _result!;
     final plan = ((r["plan"] as List?) ?? const []).cast<String>();
     final style = (r["style"] as Map?) ?? const {};
+    final fText = _forecast?["text"];
+    final fProba = _forecast?["proba_text"];
     return ListView(children: [
+      // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
+      // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
+      // kapus) — a próbával, hogy látsszon, mennyire lehet rá építeni.
+      if (fText is String) ...[
+        Text("ELŐREJELZÉS", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: AppTheme.card(),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(fText,
+                    style: AppText.value.copyWith(
+                        fontSize: 13, color: AppColors.textPrimary)),
+                if (fProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A próba a könyvtárban: $fProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+              ]),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+      ],
       Text("TERV", style: AppText.sectionLabel),
       const SizedBox(height: AppSpacing.sm),
       if (plan.isEmpty)

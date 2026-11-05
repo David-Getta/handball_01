@@ -1390,6 +1390,183 @@ def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
         {**a, "megbizhatosag": {}, "ovatos": False} for a in be]
 
 
+def _ej_minta(n, gol, xg, golok=None, sav="close"):
+    """Egy oldal előrejelzés-mintája (match_forecast_sample alakban)."""
+    return {"lovesek": {sav: [n, gol, xg]},
+            "golok": gol if golok is None else golok, "latott_golok": gol}
+
+
+def test_a_meccs_elorejelzes_a_csapat_modellekbol():
+    """match_forecast: két egyforma csapat (meccsenként 10 közeli lövés,
+    5 gól, 5 xG — a liga-szint 1, a befejezés és a védelem szorzója 1)
+    → 5–5, egyforma esélyek, az esélyek összege 1; a nem látott gólok
+    átlaga hozzáadódik; az erősebb támadó a favorit; két meccsnél
+    kevesebb előzménynél None; a mondat a csapatnevekkel."""
+    from handball.pipeline.play_simulation import (match_forecast,
+                                                   match_forecast_text)
+
+    egy = [(_ej_minta(10, 5, 5.0), _ej_minta(10, 5, 5.0))] * 2
+    f = match_forecast(egy, egy)
+    assert (f["home_goals"], f["away_goals"]) == (5.0, 5.0)
+    assert f["p_home"] == f["p_away"] and f["p_draw"] > 0
+    assert abs(f["p_home"] + f["p_draw"] + f["p_away"] - 1.0) < 0.002
+    assert (f["naiv_home"], f["naiv_away"]) == (5.0, 5.0)
+    assert f["meccsek"] == {"home": 2, "away": 2}
+    # Meccsenként egy nem látott gól a hazainál: +0,5 (a saját lőtt és a
+    # vendég kapott nem látott góljainak átlaga).
+    latatlan = [(_ej_minta(10, 5, 5.0, golok=6), _ej_minta(10, 5, 5.0))] * 2
+    assert match_forecast(latatlan, egy)["home_goals"] == 5.5
+    # Erősebb támadó: kétszer annyi lövés → a hazai a favorit.
+    eros = [(_ej_minta(20, 10, 10.0), _ej_minta(10, 5, 5.0))] * 2
+    g = match_forecast(eros, egy)
+    assert g["home_goals"] > g["away_goals"] and g["p_home"] > g["p_away"]
+    assert match_forecast(egy[:1], egy) is None
+    assert match_forecast_text("A", "B", f) == (
+        "A 5–5 B — esélyek: A {:.0f}%, döntetlen {:.0f}%, B {:.0f}%".format(
+            f["p_home"] * 100, f["p_draw"] * 100, f["p_away"] * 100))
+    assert match_forecast_text("A", "B", None) is None
+
+
+def test_az_elorejelzes_probaja_idorendben():
+    """forecast_backtest: csak az a meccs jelezhető előre, ahol mindkét
+    csapatnak legalább két KORÁBBI meccse van; a sor előrejelzése a
+    match_forecast a korábbiakból; a találat a döntetlen nélküli
+    meccseken, a hiba a gólkülönbségé; kevés meccsnél None; a csapat-
+    összegzés csak a csapat sorai; a mondat három ítélete."""
+    from handball.pipeline.play_simulation import (ELOREJELZES_PROBA_MIN,
+                                                   forecast_backtest,
+                                                   forecast_backtest_text,
+                                                   forecast_rows_summary,
+                                                   match_forecast)
+
+    erosseg = {"A": 14, "B": 10, "C": 6}
+    parok = [("A", "B"), ("B", "C"), ("C", "A"), ("A", "C"), ("B", "A"),
+             ("C", "B"), ("A", "B"), ("C", "A"), ("B", "C"), ("A", "C")]
+    meccsek = []
+    for i, (h, v) in enumerate(parok):
+        mh, mv = erosseg[h], erosseg[v]
+        meccsek.append({"match_id": f"m{i}", "home": h, "away": v, "minta": {
+            "home": _ej_minta(2 * mh, mh, float(mh)),
+            "away": _ej_minta(2 * mv, mv, float(mv))}})
+    p = forecast_backtest(meccsek)
+    assert p is not None and p["meccsek"] == len(p["sorok"])
+    # Az első előre jelezhető meccs: ahol már mindkét csapatnak két
+    # korábbi meccse van (A: m0, m2; C: m1, m2 → m3).
+    assert p["sorok"][0]["match_id"] == "m3"
+    elso = match_forecast(
+        [(meccsek[0]["minta"]["home"], meccsek[0]["minta"]["away"]),
+         (meccsek[2]["minta"]["away"], meccsek[2]["minta"]["home"])],
+        [(meccsek[1]["minta"]["away"], meccsek[1]["minta"]["home"]),
+         (meccsek[2]["minta"]["home"], meccsek[2]["minta"]["away"])])
+    assert (p["sorok"][0]["vart_home"], p["sorok"][0]["vart_away"]) == (
+        elso["home_goals"], elso["away_goals"])
+    # Az erősebb csapat mindig nyer, a modell eltalálja.
+    assert p["dontott"] == p["meccsek"] and p["modell_talalat"] == p["meccsek"]
+    hiba = sum(abs((r["vart_home"] - r["vart_away"])
+                   - (r["home_goals"] - r["away_goals"]))
+               for r in p["sorok"]) / len(p["sorok"])
+    assert p["modell_hiba"] == round(hiba, 2)
+    assert forecast_backtest(meccsek[:ELOREJELZES_PROBA_MIN + 2]) is None
+    assert forecast_rows_summary(p["sorok"], "nincs") is None
+    a_sorai = [r for r in p["sorok"] if "A" in (r["home"], r["away"])]
+    if len(a_sorai) >= ELOREJELZES_PROBA_MIN:
+        assert forecast_rows_summary(p["sorok"], "A")["meccsek"] == len(a_sorai)
+
+    alap = {"meccsek": 14, "dontott": 12, "modell_talalat": 8,
+            "naiv_talalat": 6, "modell_hiba": 3.1, "naiv_hiba": 4.0}
+    assert forecast_backtest_text({**alap, "javulas_pct": 22.5}) == (
+        "a modell 12 eldőlt meccsből 8 győztest talált el (a formáé: 6); "
+        "a gólkülönbség átlagos hibája 3,1 gól (a formáé 4,0; 14 előre "
+        "jelzett meccs) — a modell 22%-kal pontosabb a formánál")
+    assert forecast_backtest_text({**alap, "javulas_pct": -9.0}).endswith(
+        "a modell 9%-kal pontatlanabb a formánál")
+    assert forecast_backtest_text(
+        {**alap, "dontott": 0, "javulas_pct": 1.0}) == (
+        "a gólkülönbség átlagos hibája 3,1 gól (a formáé 4,0; 14 előre "
+        "jelzett meccs) — a modell nagyjából olyan pontos, mint a forma")
+    assert forecast_backtest_text(None) is None
+
+
+def test_az_elo_esely_a_meccs_elotti_varakozasbol_es_az_allasbol():
+    """in_play_odds: döntetlen várakozásnál (25–25) a 30. percben 14–10
+    a hazai nagy favorit, a 0. percben 0–0 a két csapat egyforma; a
+    hátralévő ütem a várakozás és az addigi gólok összevonása; a "várt"
+    a perc-arányos várakozás. live_forecast_alerts: a percekben az
+    addigi kockák állása és a mondat; előrejelzés nélkül üres."""
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.pipeline.play_simulation import (in_play_odds,
+                                                   live_forecast_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    f = {"home_goals": 25.0, "away_goals": 25.0}
+    o = in_play_odds(f, 30, 14, 10)
+    assert o["p_home"] > 0.8 > o["p_away"]
+    assert abs(o["p_home"] + o["p_draw"] + o["p_away"] - 1.0) < 0.002
+    assert (o["vart_home"], o["elteres_home"], o["elteres_away"]) == (
+        12.5, 1.5, -2.5)
+    z = in_play_odds(f, 0, 0, 0)
+    assert z["p_home"] == z["p_away"]
+    # A hátralévő 30 perc várt gólja: (25 + 14) / 90 × 30 = 13 a
+    # hazainál, (25 + 10) / 90 × 30 ≈ 11,7 a vendégnél → a hazai
+    # végső várt előnye 4 + 1,3.
+    import math
+    mu, sd = 4 + (39 - 35) / 90 * 30, math.sqrt(74 / 90 * 30)
+    vart = 0.5 * (1 + math.erf((mu - 0.5) / sd / math.sqrt(2)))
+    assert o["p_home"] == round(vart, 3)
+
+    m = simulate_ground_truth(duration_s=150, fps=25.0, seed=2,
+                              shots_per_min=8)
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "LIVE_AJANLO_PERCEK", (1, 2, 30))
+        ki = live_forecast_alerts(m, f)["alerts"]
+    finally:
+        mp.undo()
+    assert [a["perc"] for a in ki] == [1, 2]      # a 30. perc még nem jött el
+    a = ki[1]
+    eddig = [fr for fr in m.frames if fr.t <= a["t"]]
+    from handball.models.tracking import Match
+    golok = [e for e in detect_shots(Match(meta=m.meta, frames=eddig))
+             if e.type == EventType.GOAL]
+    assert a["home_goals"] == sum(1 for e in golok if e.team.value == "home")
+    assert a["text"].startswith(
+        f"Élő esély (2. perc, {a['home_goals']}–{a['away_goals']}): "
+        f"{m.meta.home_team} ")
+    assert "a meccs előtti várakozás 25–25" in a["text"]
+    if abs(a["elteres_home"]) >= ps.ELO_ELTERES_GOL >= abs(a["elteres_away"]):
+        assert "góllal a várt" in a["text"]
+    assert live_forecast_alerts(m, None) == {"alerts": []}
+
+
+def test_az_elorejelzes_meccs_mintaja():
+    """match_forecast_sample: oldalanként a látott lövések (xg.match_xg)
+    sávonként, az összes felismert gól (a nem látott is) és a látott
+    gólok; JSON-barát."""
+    import json
+
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.pipeline.play_simulation import match_forecast_sample
+    from handball.pipeline.xg import match_xg
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=3,
+                              shots_per_min=8)
+    mi = match_forecast_sample(m)
+    assert json.loads(json.dumps(mi)) == mi
+    xs = match_xg(m)["shots"]
+    for side in ("home", "away"):
+        assert sum(v[0] for v in mi[side]["lovesek"].values()) == sum(
+            1 for sh in xs if sh["team"] == side)
+        assert mi[side]["latott_golok"] == sum(
+            1 for sh in xs if sh["team"] == side and sh["outcome"] == "goal")
+        assert mi[side]["golok"] == sum(
+            1 for e in detect_shots(m) if e.type == EventType.GOAL
+            and e.team.value == side)
+    assert mi["home"]["lovesek"]
+
+
 def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():
     """A két időszak tanult szorzói: csak a mindkét időszakban tanult sáv
     és csak FEJLODES_ELTERES feletti változás hír; a lövőnél a nagyobb,

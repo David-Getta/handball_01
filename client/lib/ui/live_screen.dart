@@ -205,6 +205,16 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Meccs-előrejelzés: a meccs elején a két csapat többi meccséből
+    // jósolt eredmény és esélyek (a próbával) — a várakozás, amihez a
+    // meccs alakulását mérni lehet.
+    try {
+      for (final a in await _api.fetchLiveForecast(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "ai", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // AI-megbízhatóság: a meccs elején csapatonként, mennyire bizonyult
     // megbízhatónak a lövő-, a kapus- és a döntés-modell a korábbi
     // meccseken — az élő jelzések súlya.

@@ -8037,6 +8037,19 @@ def create_app():
                                 "lovo": lp, "kapus": kp, "dontes": dp}
         except Exception:
             modell_proba = None
+        # A meccs-előrejelzés próbája a csapat meccsein (a könyvtári
+        # próba sorai közül a csapatéi) — hibatűrően.
+        try:
+            from ..pipeline.play_simulation import (forecast_backtest_text,
+                                                    forecast_rows_summary)
+            ep = forecast_rows_summary(
+                (_elorejelzes_proba() or {}).get("sorok") or [], team)
+            if ep:
+                modell_proba = {**(modell_proba or {}), "elorejelzes": ep,
+                                "elorejelzes_verdict":
+                                    forecast_backtest_text(ep)}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8553,6 +8566,42 @@ def create_app():
         return trust_levels(probak.get("lovo"), probak.get("kapus"),
                             probak.get("dontes"))[modell]
 
+    def _elorejelzes_minta_of(m_) -> dict:
+        """EGY meccs előrejelzés-mintája (play_simulation.match_forecast_
+        sample: oldalanként a látott lövések sávonként, a gólok) — a
+        lemezes eredmény-tárból, hogy a második hívás ne töltse vissza a
+        hideg meccseket."""
+        from ..pipeline.play_simulation import match_forecast_sample
+        return _cached_result(m_.meta.match_id, "elorejelzes-minta-v1",
+                              lambda: match_forecast_sample(m_))
+
+    def _elorejelzes_tortenet(nev: str, kiveve: str | None = None) -> list:
+        """A `nev` csapat könyvtári meccsei (a `kiveve` meccs nélkül)
+        előrejelzés-alakban: [(a csapat oldalának mintája, az ellenfél
+        oldalának mintája)] időrendben — a match_forecast bemenete."""
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != kiveve]
+        except HTTPException:
+            return []
+        ki = []
+        for m_, t_ in par:
+            mi = _elorejelzes_minta_of(m_)
+            masik = "away" if t_.value == "home" else "home"
+            ki.append((mi.get(t_.value) or {}, mi.get(masik) or {}))
+        return ki
+
+    def _elorejelzes_proba(kiveve: str | None = None):
+        """Az előrejelzés próbája a könyvtáron (play_simulation.
+        forecast_backtest — a meccsek időrendjében, a `kiveve` meccs
+        nélkül)."""
+        from ..pipeline.play_simulation import forecast_backtest
+        return forecast_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team, "minta": _elorejelzes_minta_of(m_)}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve])
+
     def _dontes_minta_of(m_) -> dict:
         """EGY meccs döntés-próba mintája (decisions.decision_outcome_sample:
         oldalanként a jó / többi döntés és utánuk a gól) — a lemezes
@@ -8716,7 +8765,9 @@ def create_app():
         "modell_hiba", "javulas_pct", "verdict"}, …] (csak a becsülhető
         csapatok, a javulás szerint csökkenőben, holtversenyben név),
         "osszes": a csapatok összege (shooter_model_backtest_summary) vagy
-        None}."""
+        None, … "elorejelzes": a meccs-előrejelzés próbája a könyvtár
+        időrendjében (play_simulation.forecast_backtest) vagy None,
+        "elorejelzes_text"}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -8751,11 +8802,39 @@ def create_app():
         sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
         kapus_sorok.sort(key=lambda r: (-r["javulas_pct"], r["team"]))
         dontes_sorok.sort(key=lambda r: (-r["kulonbseg_pp"], r["team"]))
+        from ..pipeline.play_simulation import forecast_backtest_text
+        elore = _elorejelzes_proba()
         return {"teams": sorok, "osszes": shooter_model_backtest_summary(sorok),
                 "kapusok": kapus_sorok,
                 "kapus_osszes": keeper_model_backtest_summary(kapus_sorok),
                 "dontesek": dontes_sorok,
-                "dontes_osszes": decision_model_check(dontes_ossz)}
+                "dontes_osszes": decision_model_check(dontes_ossz),
+                "elorejelzes": elore,
+                "elorejelzes_text": forecast_backtest_text(elore)}
+
+    @app.get("/library/forecast")
+    def get_library_forecast(home: str = "", away: str = ""):
+        """Meccs-előrejelzés a következő meccsre: a `home` és az `away`
+        nevű csapat ÖSSZES könyvtári meccséből tanult csapat-modell
+        (play_simulation.match_forecast) — a várható gólok, az esélyek, a
+        forma (naiv) mellé, és a könyvtári próba (forecast_backtest).
+        Válasz: {"home", "away", "forecast" (vagy None: kevés meccs),
+        "text", "proba", "proba_text"}. 400: hiányzó csapatnév; 404:
+        nincs ilyen csapat a könyvtárban."""
+        from ..pipeline.play_simulation import (forecast_backtest_text,
+                                                match_forecast,
+                                                match_forecast_text)
+        if not home or not away:
+            raise HTTPException(status_code=400,
+                                detail="home és away kötelező")
+        for nev in (home, away):
+            _csapat_meccsei(nev)
+        f = match_forecast(_elorejelzes_tortenet(home),
+                           _elorejelzes_tortenet(away))
+        proba = _elorejelzes_proba()
+        return {"home": home, "away": away, "forecast": f,
+                "text": match_forecast_text(home, away, f),
+                "proba": proba, "proba_text": forecast_backtest_text(proba)}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -14093,6 +14172,44 @@ def create_app():
                 kapus[side] = ellen["kapus"]
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/live-elorejelzes")
+    def get_live_forecast(match_id: str):
+        """ÉLŐ meccs-előrejelzés: a meccs elején a két csapat könyvtári
+        TÖBBI meccséből (ez a meccs nélkül — okszerű) tanult csapat-
+        modell várakozása (play_simulation.match_forecast), és a próba a
+        könyvtár többi meccsén (forecast_backtest); utána a 15., 30. és
+        45. percben az élő esély az addigi állással (live_forecast_
+        alerts). Válasz: {"alerts": [{"t", "t_s", "forecast", "proba",
+        "text"}, {"t", "t_s", "perc", "home_goals", "away_goals",
+        "p_home", "p_draw", "p_away", …, "text"}, …]} — üres, ha
+        valamelyik csapatnak kevés a meccse. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (forecast_backtest_text,
+                                                live_forecast_alerts,
+                                                match_forecast,
+                                                match_forecast_text)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h, a = match.meta.home_team, match.meta.away_team
+        f = match_forecast(_elorejelzes_tortenet(h, match_id),
+                           _elorejelzes_tortenet(a, match_id))
+        if f is None:
+            return {"alerts": []}
+        fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+        t0 = match.frames[0].t if match.frames else 0
+        proba = _elorejelzes_proba(match_id)
+        szoveg = ("Előrejelzés a korábbi meccsekből: "
+                  + match_forecast_text(h, a, f))
+        pt = forecast_backtest_text(proba)
+        if pt:
+            szoveg += f" (a próba: {pt})"
+        # Az élő esély a 15., 30. és 45. percben: a meccs előtti
+        # várakozás és az addigi állás (play_simulation.
+        # live_forecast_alerts — csak az addigi kockák).
+        return {"alerts": [{"t": t0, "t_s": round(t0 / fps, 1),
+                            "forecast": f, "proba": proba, "text": szoveg}]
+                + live_forecast_alerts(match, f)["alerts"]}
 
     @app.get("/matches/{match_id}/live-modell-proba")
     def get_live_model_trust(match_id: str):
