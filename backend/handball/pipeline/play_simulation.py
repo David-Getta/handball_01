@@ -3103,7 +3103,8 @@ def model_checks_overview(mc: dict) -> dict | None:
     kapus-választás, ha a lövők szerinti választás a sima mérlegnél
     többet tud (keeper_choice_backtest), a figura-felderítés, ha a
     visszatérő figurákra érdemes készülni, a felderítés, ha a kulcsai
-    átvihetők a következő meccsre (scouting_backtest). Mit
+    átvihetők a következő meccsre (scouting_backtest), a hetes-dobó, ha
+    a könyvtár dobója a többieknél jobb (seven_taker_backtest). Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3144,6 +3145,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     fd = mc.get("felderites_proba")
     if fd:
         add("felderítés", fd.get("itelet") == "atviheto")
+    hp = mc.get("hetes_proba")
+    if hp:
+        add("hetes-dobó", hp.get("itelet") == "igazolt")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -5371,6 +5375,190 @@ def keeper_choice_backtest(meccsek: list,
     return {"meccsek": n, "igazolt": k, "naiv_meccsek": len(naiv_sorok),
             "naiv_igazolt": nm, "atlag_pp": round(atlag, 1), "sorok": sorok,
             "itelet": itelet, "verdict": verdict}
+
+
+# ---- Hetes-dobó választás --------------------------------------------------
+# Ki dobja a hetest? A könyvtár hetesei dobónként (rules.seven_meter_
+# outcomes: gól / védés / kihagyva, a dobó mezszáma), simított aránnyal
+# (HETES_SULY képzelt hetes a csapat arányával — két hetesből nem lesz
+# valaki 100%-os dobó). A próba a könyvtár időrendjében: a KORÁBBI
+# meccsekből javasolt dobó a meccsen lőtt hetesei a többiekéhez mérve;
+# viszonyítás a szokásos dobó (aki eddig a legtöbbet dobta). Élőben a
+# hetes pillanatában szól a dobó csapat kispadjának.
+HETES_MIN_DOBAS = 3
+HETES_SULY = 4
+HETES_ALAP = 0.75
+HETES_PROBA_MIN = 10
+HETES_PROBA_MIN_TOBBI = 5
+HETES_ITELET_PP = 10.0
+
+
+def seven_taker_sample(match: Match, team: Team,
+                       config: TacticsConfig | None = None) -> dict:
+    """A hetes-dobó választás NYERS, JSON-barát meccs-mintája: a `team`
+    hetesei dobónként — {mez (str): [dobás, gól]} (rules.seven_meter_
+    outcomes; az ismeretlen kimenetű vagy dobó nélküli hetes kimarad).
+    Meccsek közt összeadható."""
+    from .rules import seven_meter_outcomes
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+    ki: dict = {}
+    for sm in seven_meter_outcomes(match, config):
+        if sm.get("team") != team.value or sm.get("shooter_id") is None \
+                or sm.get("outcome") in (None, "ismeretlen"):
+            continue
+        mez = jersey.get(sm["shooter_id"])
+        if mez is None:
+            continue
+        r = ki.setdefault(str(int(mez)), [0, 0])
+        r[0] += 1
+        r[1] += int(sm["outcome"] == "gól")
+    return ki
+
+
+def _hetes_osszeg(mintak: list) -> dict:
+    """Több meccs hetes-mintájának összege — {mez (int): [dobás, gól]}."""
+    ossz: dict = {}
+    for m in mintak or []:
+        for mez, v in (m or {}).items():
+            r = ossz.setdefault(int(mez), [0, 0])
+            r[0] += int(v[0])
+            r[1] += int(v[1])
+    return ossz
+
+
+def seven_taker_choice(mintak: list) -> dict | None:
+    """Hetes-dobó választás a kész mintákból (`mintak`: seven_taker_sample
+    meccsenként): a legalább HETES_MIN_DOBAS hetest dobók simított aránya
+    (gól + HETES_SULY × a csapat aránya) / (dobás + HETES_SULY) — a
+    legjobb a javaslat. Visszaad: {"mez", "dobas", "gol", "arany",
+    "masik" (a második vagy None), "dobok" ([{"mez", "dobas", "gol",
+    "arany", "simitott"}] simított arány szerint), "verdict"} — None, ha
+    senkinek nincs elég hetese."""
+    ossz = _hetes_osszeg(mintak)
+    n = sum(d for d, _g in ossz.values())
+    if not n:
+        return None
+    alap = (sum(g for _d, g in ossz.values()) + HETES_SULY * HETES_ALAP) \
+        / (n + HETES_SULY)
+    dobok = [{"mez": mez, "dobas": d, "gol": g,
+              "arany": round(100.0 * g / d, 1),
+              "simitott": round((g + HETES_SULY * alap) / (d + HETES_SULY), 3)}
+             for mez, (d, g) in ossz.items() if d >= HETES_MIN_DOBAS]
+    if not dobok:
+        return None
+    dobok.sort(key=lambda r: (-r["simitott"], -r["dobas"], r["mez"]))
+    b = dobok[0]
+    m = dobok[1] if len(dobok) > 1 else None
+    verdict = (f"a hetest {mezszam_nevelovel(b['mez'])} dobja ({b['gol']}/"
+               f"{b['dobas']} a könyvtárban, {b['arany']:.0f}%)"
+               + (f"; a második {mezszam_nevelovel(m['mez'])} ({m['gol']}/"
+                  f"{m['dobas']})" if m else ""))
+    return {"mez": b["mez"], "dobas": b["dobas"], "gol": b["gol"],
+            "arany": b["arany"], "masik": m, "dobok": dobok,
+            "verdict": verdict}
+
+
+def seven_taker_backtest(meccsek: list,
+                         csapat: str | None = None) -> dict | None:
+    """A hetes-dobó választás próbája: `meccsek` = [{"match_id", "home",
+    "away", "minta": {"home", "away"} (seven_taker_sample)}] időrendben.
+    Minden meccsre és oldalra a KORÁBBI meccsekből javasolt dobó
+    (seven_taker_choice) a meccsen lőtt hetesei a többi dobóéhoz mérve;
+    viszonyítás a szokásos dobó (aki eddig a legtöbbet dobta). A `csapat`
+    megadásával csak az ő hetesei. Mit jelent edzőileg: a hetest a
+    könyvtár legjobb dobója dobja-e, vagy a napi forma — ha a javasolt
+    dobó HETES_ITELET_PP százalékponttal jobb a többieknél, a választásra
+    lehet építeni. Visszatérés: {"meccsek", "javasolt" ([dobás, gól]),
+    "tobbi", "szokasos", "javasolt_pct", "tobbi_pct", "szokasos_pct",
+    "kulonbseg_pp", "sorok", "itelet" ("igazolt" / "nem"), "verdict"} —
+    None, ha a javasolt dobónak HETES_PROBA_MIN-nél, a többieknek
+    HETES_PROBA_MIN_TOBBI-nál kevesebb hetese mérhető."""
+    jav, tobbi, szok = [0, 0], [0, 0], [0, 0]
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            korabbi = [(x.get("minta") or {}).get(s) or {} for x in meccsek[:i]
+                       for s in ("home", "away") if x.get(s) == nev]
+            kc = seven_taker_choice(korabbi)
+            most = {int(k): v for k, v in
+                    ((m.get("minta") or {}).get(side) or {}).items()}
+            if not kc or not most:
+                continue
+            jd, jg = most.get(kc["mez"], [0, 0])
+            td = sum(int(v[0]) for k, v in most.items() if k != kc["mez"])
+            tg = sum(int(v[1]) for k, v in most.items() if k != kc["mez"])
+            ossz = _hetes_osszeg(korabbi)
+            sz = max(ossz.items(), key=lambda kv: (kv[1][0], -kv[0]))[0]
+            sd, sg = most.get(sz, [0, 0])
+            jav[0] += int(jd)
+            jav[1] += int(jg)
+            tobbi[0] += td
+            tobbi[1] += tg
+            szok[0] += int(sd)
+            szok[1] += int(sg)
+            sorok.append({"match_id": m.get("match_id"), "team": nev,
+                          "javasolt": kc["mez"], "javasolt_dobas": int(jd),
+                          "javasolt_gol": int(jg), "tobbi_dobas": td,
+                          "tobbi_gol": tg, "szokasos": sz})
+    if jav[0] < HETES_PROBA_MIN or tobbi[0] < HETES_PROBA_MIN_TOBBI:
+        return None
+    jp = 100.0 * jav[1] / jav[0]
+    tp = 100.0 * tobbi[1] / tobbi[0]
+    szp = 100.0 * szok[1] / szok[0] if szok[0] else None
+    d = jp - tp
+    igazolt = d >= HETES_ITELET_PP
+    return {"meccsek": len(sorok), "javasolt": jav, "tobbi": tobbi,
+            "szokasos": szok, "javasolt_pct": round(jp, 1),
+            "tobbi_pct": round(tp, 1),
+            "szokasos_pct": None if szp is None else round(szp, 1),
+            "kulonbseg_pp": round(d, 1), "sorok": sorok,
+            "itelet": "igazolt" if igazolt else "nem",
+            "verdict": (f"a könyvtár szerinti hetes-dobó {len(sorok)} meccsen "
+                        f"{jav[1]}/{jav[0]} hetest lőtt be ({jp:.0f}%), a "
+                        f"többiek {tobbi[1]}/{tobbi[0]} ({tp:.0f}%)"
+                        + (f"; a szokásos dobó {szok[1]}/{szok[0]} "
+                           f"({szp:.0f}%)" if szp is not None else "")
+                        + " — "
+                        + ("a hetes-dobó választásra lehet építeni" if igazolt
+                           else "a könyvtár szerinti dobó nem jobb a "
+                           "többieknél: a hetest a napi forma döntse el"))}
+
+
+def live_seven_taker_alerts(match: Match, javaslatok: dict | None = None,
+                            config: TacticsConfig | None = None) -> dict:
+    """Élő hetes-dobó: a hetes pillanatában (rules.detect_seven_meters) a
+    dobó csapat kispadjának a könyvtár szerinti dobó (`javaslatok`:
+    {"home" / "away": seven_taker_choice}). Visszatérés: {"alerts":
+    [{"t", "t_s", "perc", "team", "team_name", "mez", "text"}]}."""
+    from .rules import detect_seven_meters
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames or not javaslatok:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    for sm in detect_seven_meters(match, config):
+        side = sm.get("team")
+        j = (javaslatok or {}).get(side)
+        if not j or side not in nevek:
+            continue
+        perc = int((sm["t"] - t0) / fps // 60) + 1
+        alerts.append({"t": sm["t"], "t_s": round(sm["t"] / fps, 1),
+                       "perc": perc, "team": side, "team_name": nevek[side],
+                       "mez": int(j["mez"]),
+                       "text": f"Hetes ({perc}. perc): {nevek[side]} — "
+                               f"{j['verdict']}"})
+    return {"alerts": alerts}
 
 # ---- Élő kapus-választás ----------------------------------------------------
 # A LIVE_AJANLO_PERCEK perceiben a VÉDŐ kispadnak: az ő lövőik nyers

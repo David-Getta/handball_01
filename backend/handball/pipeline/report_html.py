@@ -530,14 +530,19 @@ ELOREJELZES_CIMKEK = (
     ("vedekezes", "Várható védekezésük"),
     ("vedekezes_mi", "A mi várható védekezésünk"),
     ("kapus_mi", "Kapus ellenük"),
+    ("hetes_mi", "Hetes-dobónk"),
 )
+# Az előrejelzés-szakasz próba-jegyzetei (a sorok alatt, ebben a sorrendben).
+ELOREJELZES_PROBAK = ("proba", "golszerzo_proba", "kapus_proba",
+                      "felderites_proba", "hetes_proba")
 
 
 def _elorejelzes_blokk(ej: dict | None, cim: str,
                        cimkek: tuple = ELOREJELZES_CIMKEK) -> str:
     """Az előrejelzés-szakasz HTML-je (a meccsterv-exportban és az
-    egymás-elleni riportban): `ej` = {"text", "proba", "golszerzo_proba"
-    és a `cimkek` kulcsai}; az üres mezők kimaradnak, üres adatnál ""."""
+    egymás-elleni riportban): `ej` = {"text", az ELOREJELZES_PROBAK
+    jegyzetei és a `cimkek` kulcsai}; az üres mezők kimaradnak, üres
+    adatnál ""."""
     ej = ej or {}
     sorok = [(c_, ej.get(k_)) for k_, c_ in cimkek if ej.get(k_)]
     if not ej.get("text") and not sorok:
@@ -549,7 +554,7 @@ def _elorejelzes_blokk(ej: dict | None, cim: str,
                                 for c_, v_ in sorok) + "</ul>"
                if sorok else "")
             + "".join(f'<p class="note">{escape(str(ej[k_]))}.</p>'
-                      for k_ in ("proba", "golszerzo_proba") if ej.get(k_)))
+                      for k_ in ELOREJELZES_PROBAK if ej.get(k_)))
 
 
 def scouting_report_html(rep: ScoutingReport,
@@ -5311,6 +5316,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Felderítés:</b> "
                f"{escape(str(mp['felderites_verdict']))}.</p>"
                if mp.get("felderites_verdict") else "")
+            + (f"<p><b>Hetes-dobó:</b> "
+               f"{escape(str(mp['hetes_verdict']))}.</p>"
+               if mp.get("hetes_verdict") else "")
             + (f"<p><b>Kapus napi formája:</b> "
                f"{escape(str(mp['kapus_forma_verdict']))}.</p>"
                if mp.get("kapus_forma_verdict") else "")

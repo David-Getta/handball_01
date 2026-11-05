@@ -5,6 +5,29 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **Hetes-dobó választás és a próbája** (motor + élő végpont + élő
+  képernyő + meccsterv + szezon-riport + szezon-képernyő + összkép): ki
+  dobja a hetest? A könyvtár hetesei dobónként (gól / védés / kihagyva,
+  a dobó mezszáma), simított aránnyal — két hetesből senki nem lesz
+  százszázalékos dobó —: "a hetest a 9-es dobja (11/13 a könyvtárban,
+  85%); a második a 7-es (6/9)". A próba a könyvtár időrendjében: a
+  KORÁBBI meccsekből javasolt dobó a meccsen lőtt hetesei a többi dobóéhoz
+  (és a szokásos, legtöbbet dobóhoz) mérve — "a könyvtár szerinti
+  hetes-dobó 8 meccsen 18/19 hetest lőtt be (95%), a többiek 3/12 (25%);
+  a szokásos dobó 18/19 (95%) — a hetes-dobó választásra lehet építeni";
+  ha nem jobb: "a hetest a napi forma döntse el". Élőben a hetes
+  pillanatában szól a dobó csapat kispadjának ("Hetes (23. perc): Hazai
+  — a hetest a 9-es dobja …"). A /matches/{id}/live-hetes (a javaslat a
+  csapat többi meccséből), a /library/forecast "hetes_dobo" és
+  "hetes_proba", a /library/player-model-check "hetes_proba" mezője, a
+  meccsterv ELŐREJELZÉS kártyájának "Hetes-dobónk" sora a próbával, az
+  élő képernyő taktika-jelzése, a szezon-képernyő és a szezon-riport
+  "Hetes-dobó" sora, az összkép új sora (play_simulation.
+  seven_taker_sample, seven_taker_choice, seven_taker_backtest,
+  live_seven_taker_alerts). A nyomtatható meccsterv előrejelzés-szakasza
+  is teljes lett: "Hetes-dobónk" sor, és a kapus-választás, a felderítés
+  és a hetes-dobó próbájának jegyzete (report_html.ELOREJELZES_PROBAK).
+
 - **A felderítés próbája** (motor + végpontok + meccsterv + szezon-riport
   + szezon-képernyő + összkép): a felderítő jelentésre lehet-e
   meccstervet építeni — visszaköszönnek-e az edzői kulcsai a következő

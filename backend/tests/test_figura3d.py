@@ -1910,6 +1910,20 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
     assert mi, "a hazai lövői tanulhatók"
     assert (f"<li>A mi várható gólszerzőink: "
             f"{escape(scorer_forecast_text(mi))}.</li>") in r.text
+    # A döntés-próbák a könyvtárból, a motorral egyezően: a kapus-választás
+    # próbája és a hetes-dobónk sora csak akkor, ha a motor is ítél (a
+    # három szimulált meccsen nem); a felderítés próbájához kevés a meccs.
+    from handball.pipeline.play_simulation import (keeper_choice_backtest,
+                                                   seven_taker_choice,
+                                                   seven_taker_sample)
+    kvp = keeper_choice_backtest(
+        [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+          "away": m.meta.away_team, "minta": x} for m, x in zip(meccsek, jm)])
+    assert ("A kapus-választás próbája" in r.text) == bool(kvp)
+    hj = seven_taker_choice([json.loads(json.dumps(
+        seven_taker_sample(m, Team.HOME))) for m in meccsek])
+    assert ("Hetes-dobónk" in r.text) == bool(hj)
+    assert "A felderítés próbája" not in r.text
     from handball.pipeline.play_simulation import (defense_system_forecast,
                                                    defense_system_text)
     vo = defense_system_forecast([x["away"]["formak"] for x in jm])
@@ -2426,6 +2440,58 @@ def test_az_elo_idokeres_vegpont(tmp_path, monkeypatch):
     assert c.get("/matches/nincs/live-idokeres").status_code == 404
     assert c.get("/library/player-model-check").json()[
         "idokeres_proba"] == timeout_run_backtest(lista(meccsek))
+
+
+def test_az_elo_hetes_dobo_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-hetes: a javaslat a csapat TÖBBI meccséből, a
+    próba a többi meccs mintáiból — a valódi láncon ugyanaz, mint a motor
+    (a szimulált hetesnek nincs azonosított dobója: üres minta, None
+    javaslat); a /library/player-model-check "hetes_proba" és a
+    /library/forecast "hetes_dobo" mezője; 404."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (live_seven_taker_alerts,
+                                                   seven_taker_backtest,
+                                                   seven_taker_choice,
+                                                   seven_taker_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: json.loads(json.dumps(
+                     seven_taker_sample(m, Team(s_))))
+                           for s_ in ("home", "away")}} for m in ms]
+
+    tobbi = lista(meccsek[:2])
+    jav = {s_: seven_taker_choice([x["minta"][s_] for x in tobbi])
+           for s_ in ("home", "away")}
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-hetes").json()
+    assert j["javaslat"] == jav
+    assert j["alerts"] == live_seven_taker_alerts(meccsek[2], jav)["alerts"]
+    assert j["proba"] == seven_taker_backtest(tobbi)
+    assert c.get("/matches/nincs/live-hetes").status_code == 404
+    mind = lista(meccsek)
+    assert c.get("/library/player-model-check").json()["hetes_proba"] == \
+        seven_taker_backtest(mind)
+    f = c.get("/library/forecast", params={"home": h, "away": a}).json()
+    assert f["hetes_dobo"] == {
+        s_: seven_taker_choice([x["minta"][s_] for x in mind])
+        for s_ in ("home", "away")}
+    assert f["hetes_proba"] == seven_taker_backtest(mind)
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

@@ -1826,6 +1826,20 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő hetes-dobó (GET /matches/{id}/live-hetes): a hetes pillanatában
+  /// a dobó csapat kispadjának a könyvtár szerinti dobó.
+  Future<List<Map<String, dynamic>>> fetchLiveSevenTaker(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-hetes"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a hetes-dobó", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő időkérés-tanács (GET /matches/{id}/live-idokeres): a 3-0-s
   /// sorozat pillanatában mindkét kispadnak — a sorozatot kapónak
   /// (kérjetek időt / váltással együtt kérjétek) és a sorozatot futónak —

@@ -1418,19 +1418,21 @@ def test_az_ai_probak_osszkepe():
           "kapus_valasztas_proba": {"itelet": "igazolt"},
           "figura_proba": {"verdict": "… — a visszatérő figuráikra érdemes "
                                       "készülni"},
-          "felderites_proba": {"itelet": "atviheto"}}
+          "felderites_proba": {"itelet": "atviheto"},
+          "hetes_proba": {"itelet": "igazolt"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (10, 7)
+    assert (o["itelt"], o["bizonyitott"]) == (11, 8)
     assert o["verdict"] == (
-        "10 próbából 7 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "11 próbából 8 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
-        "figura-felderítés, felderítés; még nem: kapus-sávok, védő-modell, "
-        "gólszerzők")
-    # A kapus-választás csak az "igazolt", a felderítés csak az
-    # "atviheto" ítélettel bizonyított.
+        "figura-felderítés, felderítés, hetes-dobó; még nem: kapus-sávok, "
+        "védő-modell, gólszerzők")
+    # A kapus-választás és a hetes-dobó csak az "igazolt", a felderítés
+    # csak az "atviheto" ítélettel bizonyított.
     o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
-        "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (10, 5)
+        "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"},
+        "hetes_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (11, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2225,6 +2227,93 @@ def test_a_kapus_valasztas_probaja():
     # A csapat-szűrő: a "B" csapatnak nincs kapus-választása.
     assert keeper_choice_backtest(ms, "A") == p
     assert keeper_choice_backtest(ms, "B") is None
+
+
+def test_a_hetes_dobo_valasztas_es_probaja(monkeypatch):
+    """seven_taker_sample: a hetesek dobónként a mezszámmal (a kimenetek
+    beadva); seven_taker_choice: simított arány, kevés hetesnél None;
+    seven_taker_backtest: a javasolt dobó a többiekhez és a szokásos
+    dobóhoz mérve, igazolt / nem / None, csapat-szűrő;
+    live_seven_taker_alerts: a hetes pillanatában a dobó kispadjának."""
+    import handball.pipeline.rules as rules
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (HETES_MIN_DOBAS,
+                                                   live_seven_taker_alerts,
+                                                   seven_taker_backtest,
+                                                   seven_taker_choice,
+                                                   seven_taker_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=1,
+                              shots_per_min=8)
+    mezek = sorted({p.track_id: p.jersey_number for f in m.frames
+                    for p in f.players if p.team == Team.HOME
+                    and p.jersey_number is not None}.items())
+    (pid1, mez1), (pid2, mez2) = mezek[0], mezek[1]
+    t0 = m.frames[0].t
+    monkeypatch.setattr(rules, "seven_meter_outcomes", lambda match, config=None: [
+        {"t": t0 + 100, "team": "home", "outcome": "gól", "shooter_id": pid1},
+        {"t": t0 + 400, "team": "home", "outcome": "védés", "shooter_id": pid1},
+        {"t": t0 + 700, "team": "home", "outcome": "gól", "shooter_id": pid2},
+        {"t": t0 + 900, "team": "home", "outcome": "ismeretlen",
+         "shooter_id": pid2},
+        {"t": t0 + 950, "team": "home", "outcome": "gól", "shooter_id": None},
+        {"t": t0 + 990, "team": "away", "outcome": "gól", "shooter_id": pid1}])
+    assert seven_taker_sample(m, Team.HOME) == {str(mez1): [2, 1],
+                                                str(mez2): [1, 1]}
+    # A vendég hetese a rekord csapata szerint számít (a dobó mezszáma a
+    # kockákból).
+    assert seven_taker_sample(m, Team.AWAY) == {str(mez1): [1, 1]}
+
+    mintak = [{"9": [6, 5], "7": [4, 2]}, {"9": [5, 4], "7": [3, 3],
+                                            "4": [2, 0]}]
+    kc = seven_taker_choice(mintak)
+    assert (kc["mez"], kc["dobas"], kc["gol"], kc["masik"]["mez"]) == \
+        (9, 11, 9, 7)
+    assert kc["verdict"] == ("a hetest a 9-es dobja (9/11 a könyvtárban, "
+                             "82%); a második a 7-es (5/7)")
+    assert [r["mez"] for r in kc["dobok"]] == [9, 7]       # a 4-es: 2 < 3
+    assert seven_taker_choice([{"9": [HETES_MIN_DOBAS - 1, 1]}]) is None
+    assert seven_taker_choice([]) is None
+
+    def meccs(i, most, home="A"):
+        return {"match_id": f"m{i}", "home": home, "away": "B",
+                "minta": {"home": most, "away": {}}}
+
+    jo = [meccs(0, mintak[0]), meccs(1, mintak[1])] + [
+        meccs(i, {"9": [2, 2], "7": [1, 0]}) for i in range(2, 9)]
+    p = seven_taker_backtest(jo)
+    assert (p["meccsek"], p["javasolt"], p["tobbi"], p["itelet"]) == \
+        (8, [19, 18], [12, 3], "igazolt")
+    assert p["sorok"][0] == {"match_id": "m1", "team": "A", "javasolt": 9,
+                             "javasolt_dobas": 5, "javasolt_gol": 4,
+                             "tobbi_dobas": 5, "tobbi_gol": 3, "szokasos": 9}
+    assert p["verdict"] == (
+        "a könyvtár szerinti hetes-dobó 8 meccsen 18/19 hetest lőtt be (95%), "
+        "a többiek 3/12 (25%); a szokásos dobó 18/19 (95%) — a hetes-dobó "
+        "választásra lehet építeni")
+    # Nagy múlttal a 9-es marad a javaslat, de a meccseken kihagy, a 7-es
+    # belövi: a választás nem igazolódik (hat meccs után a modell már
+    # váltana — a próba csak az addigiakat nézi).
+    rossz = [meccs(0, {"9": [30, 27], "7": [20, 12]})] + [
+        meccs(i, {"9": [2, 0], "7": [1, 1]}) for i in range(1, 6)]
+    q = seven_taker_backtest(rossz)
+    assert (q["javasolt"], q["tobbi"], q["itelet"]) == ([10, 0], [5, 5], "nem")
+    assert all(r["javasolt"] == 9 for r in q["sorok"])
+    assert q["verdict"].endswith("a hetest a napi forma döntse el")
+    assert seven_taker_backtest(jo[:4]) is None       # 9 hetes < 10
+    assert seven_taker_backtest(jo, "A") == p
+    assert seven_taker_backtest(jo, "B") is None
+
+    monkeypatch.setattr(rules, "detect_seven_meters", lambda match, config=None: [
+        {"t": t0 + 25 * 70, "team": "home", "goal_x": 40.0},
+        {"t": t0 + 25 * 100, "team": "away", "goal_x": 0.0}])
+    ki = live_seven_taker_alerts(m, {"home": kc})["alerts"]
+    assert len(ki) == 1 and (ki[0]["perc"], ki[0]["team"], ki[0]["mez"]) == \
+        (2, "home", 9)
+    assert ki[0]["text"] == f"Hetes (2. perc): {m.meta.home_team} — " + \
+        kc["verdict"]
+    assert live_seven_taker_alerts(m, None) == {"alerts": []}
 
 
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
