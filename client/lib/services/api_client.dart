@@ -2208,6 +2208,28 @@ class ApiClient {
     return ((json["sorok"] as List?) ?? const []).cast<String>();
   }
 
+  /// A pad döntései a könyvtár tükrében (GET /matches/{id}/decision-review):
+  /// csapatonként a mondatok — {"Hazai": [...], "Vendég": [...]} a
+  /// csapatnevekkel; üres, ha nincs mihez mérni.
+  Future<Map<String, List<String>>> fetchDecisionReview(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/decision-review"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a pad döntései", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    final nevek = (json["nevek"] as Map?) ?? const {};
+    final out = <String, List<String>>{};
+    for (final side in const ["home", "away"]) {
+      final sorok =
+          ((json[side] as Map?)?["sorok"] as List?)?.cast<String>() ?? const [];
+      if (sorok.isNotEmpty) out["${nevek[side] ?? side}"] = sorok;
+    }
+    return out;
+  }
+
   /// Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary):
   /// {"sections": [{"title","body"}...], "highlights": [...]} magyarul.
   Future<Map<String, dynamic>> fetchCoachSummary(String matchId) async {

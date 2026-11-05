@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **A pad döntései a könyvtár tükrében** (motor + végpont + meccs-jelentés
+  + meccs-képernyő): a meccs UTÁN hogyan döntött a pad a könyvtár
+  szabályaihoz képest — "Sorozat ellenük 2 alkalommal, időt kértek 1
+  alkalommal — az időkérés után 1 alkalommal ők szerezték a következő gólt;
+  időkérés nélkül 0 alkalommal (1 sorozatból) — a könyvtár szerint az
+  időkérés megtöri a sorozatot: a kihagyott sorozatnál is érdemes lett
+  volna időt kérni", "Heteseik: a 9-es 3/3, a 7-es 0/1 — a könyvtár dobója
+  (a 9-es) dobta, de nem mindet", "A kapuban az 1-es kezdett (3/10 az első
+  félidőben) — a könyvtár a 12-est javasolta", "Hideg első félidő (7
+  kapott gól a várt 4,5 helyett), a második félidőben a 12-es állt a
+  kapuban (6/9) — a próba szerint a napi forma kitart: jó csere". A
+  próbák és a javaslatok a meccs NÉLKÜL (okszerű); ahol nincs próba, a
+  mondat ítélet nélkül áll. Edzőileg: a meccs utáni értekezlet pad-oldali
+  tényei. A /matches/{id}/decision-review, a meccs-jelentés új szakasza
+  és az összefoglaló fül "A PAD DÖNTÉSEI A KÖNYVTÁR TÜKRÉBEN" kártyája
+  (play_simulation.decision_review).
+
 - **AI-edzésterv a döntés-próbákkal** (motor + végpont + meccsterv +
   nyomtatható meccsterv): a következő meccs AI-edzésterve négy új tétellel
   — "Hetes-dobó: a 9-es" (a könyvtár dobója, ha a próba nem mond

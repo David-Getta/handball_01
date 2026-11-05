@@ -40,6 +40,8 @@ class SummaryPanel extends StatelessWidget {
   /// előtti várakozás a korábbi meccsekből, a valósághoz mérve — üresnél
   /// a kártya elmarad.
   final List<String> forecastReview;
+  /// A pad döntései a könyvtár tükrében — csapatnév → mondatok.
+  final Map<String, List<String>> decisionReview;
 
   /// Gól-sorozatok az eredmény-grafikon kiemeléséhez (üresnél nincs sáv).
   final List<Map<String, dynamic>> runs;
@@ -90,6 +92,7 @@ class SummaryPanel extends StatelessWidget {
     this.formations = const [],
     this.coach,
     this.forecastReview = const [],
+    this.decisionReview = const {},
     this.runs = const [],
     this.training,
     this.keyPlayers,
@@ -870,6 +873,39 @@ class SummaryPanel extends StatelessWidget {
                         style: AppText.label.copyWith(
                             fontSize: 12.5, color: AppColors.textPrimary)),
                   ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        // A PAD DÖNTÉSEI: időkérés, hetes-dobó, kapus — a könyvtár
+        // szabályaihoz mérve (a próbák és a javaslatok a meccs nélkül).
+        if (decisionReview.isNotEmpty) ...[
+          Text("A PAD DÖNTÉSEI A KÖNYVTÁR TÜKRÉBEN",
+              style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final e in decisionReview.entries) ...[
+                  Text(e.key,
+                      style: AppText.label.copyWith(
+                          fontSize: 12, color: AppColors.gold)),
+                  for (final s in e.value)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text("· $s.",
+                          style: AppText.label.copyWith(
+                              fontSize: 12.5, color: AppColors.textPrimary)),
+                    ),
+                  const SizedBox(height: 6),
+                ],
               ],
             ),
           ),

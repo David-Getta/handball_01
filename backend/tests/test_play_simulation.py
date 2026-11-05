@@ -2416,6 +2416,75 @@ def test_a_hetes_irany_profilja_es_probaja(monkeypatch):
     assert live_seven_direction_alerts(m, None) == {"alerts": []}
 
 
+def test_a_pad_dontesei_a_konyvtar_tukreben():
+    """decision_review: időkérés a sorozat ellen (kért / kihagyott, a
+    próba ítéletével), a hetesek dobói a könyvtár dobójához mérve, a
+    kezdő kapus a könyvtár javaslatához mérve, a hideg első félidő utáni
+    csere (vagy maradás) a napi forma próbája szerint; üres mintáknál
+    üres sorok."""
+    from handball.pipeline.play_simulation import decision_review
+
+    nevek = {"home": "Hazai", "away": "Vendég"}
+    ido = {"golok": [[1, "away"], [2, "away"], [3, "away"], [5, "home"],
+                     [20, "away"], [21, "away"], [22, "away"], [25, "away"]],
+           "idokeresek": [[3.5, "home"]]}
+    hetes = {"home": {"9": [3, 3], "7": [1, 0]}, "away": {"4": [2, 1]}}
+    kf = {"home": {"1": [[10, 7, 4.5], [0, 0, 0.0]],
+                   "12": [[0, 0, 0.0], [9, 3, 4.2]]},
+          "away": {"16": [[8, 4, 4.0], [9, 5, 4.4]]}}
+    r = decision_review(
+        nevek, ido, hetes, kf,
+        idokeres_proba={"home": {"itelet": "megtori"}},
+        hetes_javaslat={"home": {"mez": 9, "gol": 11, "dobas": 13},
+                        "away": {"mez": 7, "gol": 5, "dobas": 6}},
+        kapus_javaslat={"home": {"kapus_mez": 12, "dontes": True}},
+        kapusforma_proba={"home": {"itelet": "kitart"}})
+    h, a = r["home"], r["away"]
+    assert h["idokeres"] == {"sorozat": 2, "kert": 1, "tores_kert": 1,
+                             "tores_nem": 0}
+    assert h["hetes"] == {"dobok": [[9, 3, 3], [7, 1, 0]], "konyvtar_dobo": 9}
+    assert h["kapus"] == {"kezdo": 1, "masodik": 12, "hideg": True,
+                          "csere": True}
+    assert h["sorok"] == [
+        "Sorozat ellenük 2 alkalommal, időt kértek 1 alkalommal — az "
+        "időkérés után 1 alkalommal ők szerezték a következő gólt; időkérés "
+        "nélkül 0 alkalommal (1 sorozatból) — a könyvtár szerint az "
+        "időkérés megtöri a sorozatot: a kihagyott sorozatnál is érdemes "
+        "lett volna időt kérni",
+        "Heteseik: a 9-es 3/3, a 7-es 0/1 — a könyvtár dobója (a 9-es) "
+        "dobta, de nem mindet",
+        "A kapuban az 1-es kezdett (3/10 az első félidőben) — a könyvtár a "
+        "12-est javasolta",
+        "Hideg első félidő (7 kapott gól a várt 4,5 helyett), a második "
+        "félidőben a 12-es állt a kapuban (6/9) — a próba szerint a napi "
+        "forma kitart: jó csere"]
+    assert a["idokeres"] is None and a["kapus"]["hideg"] is False
+    assert a["sorok"] == [
+        "Heteseik: a 4-es 1/2 — a könyvtár szerint a 7-es dobná (5/6 a "
+        "könyvtárban)",
+        "A kapuban a 16-os kezdett (4/8 az első félidőben)"]
+    # Hideg félidő után maradt a kapus — a próba szerint helyes; az
+    # időkérés próbája "nem_tori"; a könyvtár dobója dobta mindet.
+    r2 = decision_review(
+        nevek, ido, {"home": {"9": [3, 3]}},
+        {"home": {"1": [[10, 7, 4.5], [8, 5, 3.8]]}},
+        idokeres_proba={"home": {"itelet": "nem_tori"}},
+        hetes_javaslat={"home": {"mez": 9, "gol": 11, "dobas": 13}},
+        kapusforma_proba={"home": {"itelet": "visszaall"}})["home"]
+    assert r2["sorok"][0].endswith(
+        "— a könyvtár szerint az időkérés önmagában nem töri meg a "
+        "sorozatot: váltással együtt ér valamit")
+    assert r2["sorok"][1] == ("Heteseik: a 9-es 3/3 — a könyvtár dobója "
+                              "(a 9-es) dobta")
+    assert r2["sorok"][3] == (
+        "Hideg első félidő (7 kapott gól a várt 4,5 helyett), az 1-es "
+        "maradt (a második félidőben 3/8) — a próba szerint helyes: egy "
+        "gyenge félidő miatt nem kell cserélni")
+    ures = decision_review(nevek, None, None, None)
+    assert ures["home"] == {"sorok": [], "idokeres": None, "hetes": None,
+                            "kapus": None}
+
+
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
     """defense_system_forecast: a korábbi meccsek védekező kockáinak
     eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);

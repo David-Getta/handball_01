@@ -5773,6 +5773,141 @@ def live_seven_direction_alerts(match: Match, profilok: dict | None = None,
                                f"{pr['verdict']}"})
     return {"alerts": alerts}
 
+
+# ---- A pad döntései a könyvtár tükrében ------------------------------------
+# A meccs UTÁN: hogyan döntött a pad a könyvtár szabályaihoz képest —
+# kértek-e időt a sorozat ellen (és megtört-e), ki dobta a heteseket (a
+# könyvtár dobója-e), ki kezdett a kapuban (a könyvtár javaslata-e), és a
+# hideg első félidő után cseréltek-e (a napi forma próbája szerint jó
+# döntés-e). A próbák és a javaslatok a meccs NÉLKÜL (okszerű); ahol
+# nincs próba, a mondat ítélet nélkül áll.
+
+
+def decision_review(nevek: dict, idokeres_minta: dict | None,
+                    hetes_mintak: dict | None,
+                    kapusforma_mintak: dict | None, *,
+                    idokeres_proba: dict | None = None,
+                    hetes_javaslat: dict | None = None,
+                    kapus_javaslat: dict | None = None,
+                    kapusforma_proba: dict | None = None) -> dict:
+    """A pad döntései a könyvtár tükrében: `idokeres_minta` a meccs
+    run_timeout_sample-je, `hetes_mintak` és `kapusforma_mintak`
+    oldalanként a seven_taker_sample / keeper_form_sample; `idokeres_proba`
+    oldalanként (timeout_run_backtest, a csapat saját időkérései),
+    `hetes_javaslat` oldalanként (seven_taker_choice a többi meccsből),
+    `kapus_javaslat` oldalanként (keeper_choice_from a többi meccsből),
+    `kapusforma_proba` oldalanként (keeper_hot_hand_backtest). Mit jelent
+    edzőileg: a meccs utáni értekezlet pad-oldali tényei — mi volt a
+    döntés, és mit mond rá a klub könyvtára. Visszatérés oldalanként:
+    {"sorok": [mondatok], "idokeres": {"sorozat", "kert", "tores_kert",
+    "tores_nem"} vagy None, "hetes": {"dobok": [[mez, dobás, gól]],
+    "konyvtar_dobo"} vagy None, "kapus": {"kezdo", "masodik", "hideg",
+    "csere"} vagy None}."""
+    ki: dict = {}
+    helyzetek = _sorozat_helyzetek(idokeres_minta or {})
+    for side in ("home", "away"):
+        masik = "away" if side == "home" else "home"
+        sorok: list = []
+        # Időkérés a sorozat ellen.
+        sajat = [h for h in helyzetek if h[1] == masik]
+        ido = None
+        if sajat:
+            kert = [h for h in sajat if h[3]]
+            tk = sum(1 for h in kert if h[2] == side)
+            tn = sum(1 for h in sajat if not h[3] and h[2] == side)
+            ido = {"sorozat": len(sajat), "kert": len(kert), "tores_kert": tk,
+                   "tores_nem": tn}
+            sor = (f"Sorozat ellenük {len(sajat)} alkalommal, időt kértek "
+                   f"{len(kert)} alkalommal")
+            if kert:
+                sor += (f" — az időkérés után {tk} alkalommal ők szerezték a "
+                        f"következő gólt")
+            if len(kert) < len(sajat):
+                sor += (f"; időkérés nélkül {tn} alkalommal "
+                        f"({len(sajat) - len(kert)} sorozatból)")
+            pr = (idokeres_proba or {}).get(side)
+            if pr and pr.get("itelet") == "megtori":
+                sor += (" — a könyvtár szerint az időkérés megtöri a sorozatot"
+                        + (": a kihagyott sorozatnál is érdemes lett volna "
+                           "időt kérni" if len(kert) < len(sajat) else
+                           ": jó döntés"))
+            elif pr and pr.get("itelet") == "nem_tori":
+                sor += (" — a könyvtár szerint az időkérés önmagában nem töri "
+                        "meg a sorozatot: váltással együtt ér valamit")
+            sorok.append(sor)
+        # Hetesek: ki dobta, a könyvtár dobója-e.
+        hm = {int(k): v for k, v in ((hetes_mintak or {}).get(side) or {}).items()}
+        hetes = None
+        if hm:
+            dobok = sorted(hm.items(), key=lambda kv: (-int(kv[1][0]), kv[0]))
+            jav = (hetes_javaslat or {}).get(side)
+            kd = int(jav["mez"]) if jav else None
+            hetes = {"dobok": [[m, int(v[0]), int(v[1])] for m, v in dobok],
+                     "konyvtar_dobo": kd}
+            sor = "Heteseik: " + ", ".join(
+                f"{mezszam_nevelovel(m)} {int(v[1])}/{int(v[0])}" for m, v in dobok)
+            if kd is not None and kd in hm:
+                sor += f" — a könyvtár dobója ({mezszam_nevelovel(kd)}) dobta"
+                if any(m != kd for m, _v in dobok):
+                    sor += ", de nem mindet"
+            elif kd is not None:
+                sor += (f" — a könyvtár szerint {mezszam_nevelovel(kd)} dobná "
+                        f"({jav['gol']}/{jav['dobas']} a könyvtárban)")
+            sorok.append(sor)
+        # Kapus: ki kezdett, a könyvtár javaslata-e; csere a hideg félidő után.
+        kf = {int(k): v for k, v in
+              ((kapusforma_mintak or {}).get(side) or {}).items()}
+        kapus = None
+        elso = [(m, v[0]) for m, v in kf.items() if int(v[0][0]) > 0]
+        if elso:
+            kezdo, e1 = max(elso, key=lambda kv: (int(kv[1][0]), -kv[0]))
+            masodik_l = [(m, v[1]) for m, v in kf.items() if int(v[1][0]) > 0]
+            masodik, e2 = (max(masodik_l, key=lambda kv: (int(kv[1][0]), -kv[0]))
+                           if masodik_l else (None, None))
+            hideg = float(e1[2]) - int(e1[1]) <= -KF_ELO_GOL
+            csere = masodik is not None and masodik != kezdo
+            kapus = {"kezdo": kezdo, "masodik": masodik, "hideg": hideg,
+                     "csere": csere}
+            sor = (f"A kapuban {mezszam_nevelovel(kezdo)} kezdett "
+                   f"({int(e1[0]) - int(e1[1])}/{int(e1[0])} az első "
+                   f"félidőben)")
+            kj = (kapus_javaslat or {}).get(side)
+            if kj and kj.get("dontes"):
+                sor += (" — a könyvtár is őt javasolta" if int(kj["kapus_mez"])
+                        == kezdo else f" — a könyvtár "
+                        f"{mezszam_nevelovel(int(kj['kapus_mez']))}t javasolta")
+            sorok.append(sor)
+            if hideg:
+                vv = f"{float(e1[2]):.1f}".replace(".", ",")
+                pr = (kapusforma_proba or {}).get(side)
+                it = pr.get("itelet") if pr else None
+                if csere:
+                    sor = (f"Hideg első félidő ({int(e1[1])} kapott gól a várt "
+                           f"{vv} helyett), a második félidőben "
+                           f"{mezszam_nevelovel(masodik)} állt a kapuban "
+                           f"({int(e2[0]) - int(e2[1])}/{int(e2[0])})")
+                    if it == "kitart":
+                        sor += " — a próba szerint a napi forma kitart: jó csere"
+                    elif it == "visszaall":
+                        sor += (" — a próba szerint a napi forma nem tart ki: a "
+                                "csere nem a könyvtár szerinti")
+                else:
+                    sor = (f"Hideg első félidő ({int(e1[1])} kapott gól a várt "
+                           f"{vv} helyett), {mezszam_nevelovel(kezdo)} maradt")
+                    if e2 is not None:
+                        sor += (f" (a második félidőben "
+                                f"{int(e2[0]) - int(e2[1])}/{int(e2[0])})")
+                    if it == "kitart":
+                        sor += (" — a próba szerint a napi forma kitart: érdemes "
+                                "lett volna cserélni")
+                    elif it == "visszaall":
+                        sor += (" — a próba szerint helyes: egy gyenge félidő "
+                                "miatt nem kell cserélni")
+                sorok.append(sor)
+        ki[side] = {"sorok": sorok, "idokeres": ido, "hetes": hetes,
+                    "kapus": kapus}
+    return ki
+
 # ---- Élő kapus-választás ----------------------------------------------------
 # A LIVE_AJANLO_PERCEK perceiben a VÉDŐ kispadnak: az ő lövőik nyers
 # mintája (a szezon korábbi meccseiből + az ADDIG látottak) × a kapusaink

@@ -1455,7 +1455,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       figure_namer=None,
                       base_url: str | None = None,
                       felvetelek: list | None = None,
-                      varakozas: list | None = None) -> str:
+                      varakozas: list | None = None,
+                      dontesek: dict | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
@@ -1469,7 +1470,10 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     `felvetelek` a 3D megbeszélés-felvételek (_felvetelek_html); a
     `varakozas` a "Várakozás és valóság" mondatai (play_simulation.
     forecast_review — a korábbi meccsekből jósolt eredmény, lövők és fal
-    a valósághoz mérve; üresnél a szakasz elmarad).
+    a valósághoz mérve; üresnél a szakasz elmarad); a `dontesek` a pad
+    döntései a könyvtár tükrében (play_simulation.decision_review —
+    oldalanként a "sorok", a csapatnevek a "nevek" alatt; üresnél a szakasz
+    elmarad).
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -1483,7 +1487,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             match, tactics, events, quality, heatmaps=heatmaps,
             player_stats=player_stats, notes=notes,
             figure_namer=figure_namer, base_url=base_url,
-            felvetelek=felvetelek, varakozas=varakozas)
+            felvetelek=felvetelek, varakozas=varakozas, dontesek=dontesek)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
@@ -1494,7 +1498,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               figure_namer=None,
                               base_url: str | None = None,
                               felvetelek: list | None = None,
-                              varakozas: list | None = None) -> str:
+                              varakozas: list | None = None,
+                              dontesek: dict | None = None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
     varakozas_html = (
         "<h2>Várakozás és valóság</h2><ul>"
@@ -1503,6 +1508,19 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         "meccseiből jósolt eredmény, várható gólszerzők és fal — ahol a "
         "meccs eltért tőle, ott érdemes a videót és a felderítést "
         "újranézni.</p>") if varakozas else ""
+    # A pad döntései a könyvtár tükrében — csapatonként, a nevekkel.
+    d_nevek = (dontesek or {}).get("nevek") or {}
+    d_sorok = [(d_nevek.get(s_) or s_, ((dontesek or {}).get(s_) or {}).get("sorok") or [])
+               for s_ in ("home", "away")]
+    dontesek_html = (
+        "<h2>A pad döntései a könyvtár tükrében</h2>"
+        + "".join(f"<p><b>{escape(str(n_))}</b></p><ul>"
+                  + "".join(f"<li>{escape(str(s_))}.</li>" for s_ in sorok)
+                  + "</ul>" for n_, sorok in d_sorok if sorok)
+        + '<p class="note">Időkérés a sorozat ellen, a hetesek dobói, a '
+        "kezdő kapus és a hideg félidő utáni csere — a klub könyvtárának "
+        "próbáihoz és javaslataihoz mérve (a meccs nélkül).</p>"
+    ) if any(sorok for _n, sorok in d_sorok) else ""
 
     meta = match.meta
     # A csapatnevek EGYSZER escape-elve: a függvényben a home/away (és a
@@ -4136,6 +4154,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {xg_html}
 
   {varakozas_html}
+  {dontesek_html}
 
   {defense_html}
 

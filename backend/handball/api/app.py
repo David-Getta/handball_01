@@ -8987,12 +8987,12 @@ def create_app():
                             "away": m_.meta.away_team, "alakok": alakok})
         return figure_recurrence_backtest(meccsek, csapat)
 
-    def _kapus_javaslat(nev: str, ellen: str):
+    def _kapus_javaslat(nev: str, ellen: str, kiveve: str | None = None):
         """Meccs előtti kapus-választás: a `nev` csapat kapusai
         (kapusonkénti sáv-minta) az `ellen` csapat tanult lövői ellen
         (play_simulation.keeper_choice_from) — mindkettő a két csapat
-        ÖSSZES könyvtári meccséből, a lemezes mintatárból. None: nincs
-        két tanult kapus vagy tanult lövő."""
+        ÖSSZES könyvtári meccséből (a `kiveve` meccs nélkül), a lemezes
+        mintatárból. None: nincs két tanult kapus vagy tanult lövő."""
         from ..pipeline.play_simulation import (_kapus_mintak_osszege,
                                                 _lovo_mintak_osszege,
                                                 keeper_choice_from)
@@ -9000,7 +9000,8 @@ def create_app():
         def mintak(cs):
             try:
                 return [_jatekos_minta_of(m_, t_.value)
-                        for m_, t_ in _csapat_meccsei(cs)]
+                        for m_, t_ in _csapat_meccsei(cs)
+                        if m_.meta.match_id != kiveve]
             except HTTPException:
                 return None
         sajat, ok = mintak(nev), mintak(ellen)
@@ -14277,9 +14278,14 @@ def create_app():
             varakozas = _varakozas_valosag(match_id).get("sorok") or None
         except Exception:
             varakozas = None
+        # A pad döntései a könyvtár tükrében — hibatűrően.
+        try:
+            dontesek = _pad_dontesei(match_id)
+        except Exception:
+            dontesek = None
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
-                                 varakozas=varakozas,
+                                 varakozas=varakozas, dontesek=dontesek,
                                  notes=_load_notes(match_id),
                                  felvetelek=_meccs_felvetelei(match_id),
                                  figure_namer=_figure_name_for,
@@ -14975,6 +14981,50 @@ def create_app():
         return {"alerts": [{"t": r["t"], "t_s": r["t_s"], "perc": r["perc"],
                             "sorok": r["sorok"],
                             "text": "Félidő — " + "; ".join(r["sorok"])}]}
+
+    def _pad_dontesei(match_id: str) -> dict:
+        """A pad döntései a könyvtár tükrében (play_simulation.
+        decision_review): a meccs időkérés-, hetes- és kapus-forma mintái
+        a könyvtár próbáihoz és javaslataihoz mérve — a próbák és a
+        javaslatok a meccs NÉLKÜL. Válasz: {"home", "away" (sorok, idokeres,
+        hetes, kapus), "nevek"}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import decision_review
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        def biztos(fn):
+            try:
+                return fn()
+            except Exception:
+                return None
+        r = decision_review(
+            nevek, biztos(lambda: _idokeres_minta_of(match)),
+            {s_: biztos(lambda s_=s_: _hetes_minta_of(match, s_))
+             for s_ in ("home", "away")},
+            {s_: biztos(lambda s_=s_: _kapusforma_minta_of(match, s_))
+             for s_ in ("home", "away")},
+            idokeres_proba={s_: biztos(lambda s_=s_: _idokeres_proba(
+                kiveve=match_id, csapat=nevek[s_])) for s_ in ("home", "away")},
+            hetes_javaslat={s_: biztos(lambda s_=s_: _hetes_javaslat(
+                nevek[s_], match_id)) for s_ in ("home", "away")},
+            kapus_javaslat={s_: biztos(lambda s_=s_: _kapus_javaslat(
+                nevek[s_], nevek["away" if s_ == "home" else "home"], match_id))
+                for s_ in ("home", "away")},
+            kapusforma_proba={s_: biztos(lambda s_=s_: _kapusforma_proba(
+                kiveve=match_id, csapat=nevek[s_])) for s_ in ("home", "away")})
+        return {**r, "nevek": nevek}
+
+    @app.get("/matches/{match_id}/decision-review")
+    def get_decision_review(match_id: str):
+        """A pad döntései a könyvtár tükrében — a meccs UTÁN: kértek-e
+        időt a sorozat ellen (és megtört-e), ki dobta a heteseket (a
+        könyvtár dobója-e), ki kezdett a kapuban (a könyvtár javaslata-e),
+        a hideg első félidő után cseréltek-e (a napi forma próbája
+        szerint) — csapatonként mondatokban (_pad_dontesei). 404: nincs
+        ilyen meccs."""
+        return _pad_dontesei(match_id)
 
     @app.get("/matches/{match_id}/forecast-review")
     def get_forecast_review(match_id: str):

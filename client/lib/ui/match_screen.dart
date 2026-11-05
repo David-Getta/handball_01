@@ -99,6 +99,7 @@ class _MatchScreenState extends State<MatchScreen> {
   // Várakozás és valóság: a korábbi meccsekből jósolt eredmény, lövők és
   // fal a meccs valóságához mérve (a mondatok).
   List<String> _forecastReview = const [];
+  Map<String, List<String>> _decisionReview = const {};
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
   List<Map<String, dynamic>> _attacks = [];
   // Támadás-hatékonyság csapatonként/típusonként (a /attacks "efficiency").
@@ -467,6 +468,11 @@ class _MatchScreenState extends State<MatchScreen> {
       final r = await _api.fetchForecastReview(_mid);
       if (elavult()) return;
       setState(() => _forecastReview = r);
+    } catch (_) {}
+    try {
+      final r = await _api.fetchDecisionReview(_mid);
+      if (elavult()) return;
+      setState(() => _decisionReview = r);
     } catch (_) {}
     try {
       final r = await _api.fetchAttacks(_mid);
@@ -4625,6 +4631,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           formations: _formations,
                           coach: _coach,
                           forecastReview: _forecastReview,
+                          decisionReview: _decisionReview,
                           runs: _momentum,
                           training: _training,
                           keyPlayers: _keyPlayers,

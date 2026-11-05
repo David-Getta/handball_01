@@ -2516,6 +2516,62 @@ def test_az_elo_hetes_dobo_vegpont(tmp_path, monkeypatch):
     assert f["hetes_irany_proba"] == seven_direction_backtest(mind_ir)
 
 
+def test_a_pad_dontesei_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/decision-review: a meccs mintái a könyvtár TÖBBI
+    meccséből vett próbákhoz és javaslatokhoz mérve — a valódi láncon
+    ugyanaz, mint a motor; a csapatnevek; 404."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (
+        _kapus_mintak_osszege, _lovo_mintak_osszege, decision_review,
+        keeper_choice_from, keeper_form_sample, keeper_hot_hand_backtest,
+        player_model_sample, run_timeout_sample, seven_taker_choice,
+        seven_taker_sample, timeout_run_backtest)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=300, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    m3 = meccsek[2]
+    nevek = {"home": m3.meta.home_team, "away": m3.meta.away_team}
+    tobbi = meccsek[:2]
+    jj = lambda x: json.loads(json.dumps(x))
+    jm = {s_: [jj(player_model_sample(m, Team(s_))) for m in tobbi]
+          for s_ in ("home", "away")}
+    vart = decision_review(
+        nevek, jj(run_timeout_sample(m3)),
+        {s_: jj(seven_taker_sample(m3, Team(s_))) for s_ in ("home", "away")},
+        {s_: jj(keeper_form_sample(m3, Team(s_))) for s_ in ("home", "away")},
+        idokeres_proba={s_: timeout_run_backtest(
+            [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+              "away": m.meta.away_team, "minta": jj(run_timeout_sample(m))}
+             for m in tobbi], nevek[s_]) for s_ in ("home", "away")},
+        hetes_javaslat={s_: seven_taker_choice(
+            [jj(seven_taker_sample(m, Team(s_))) for m in tobbi])
+            for s_ in ("home", "away")},
+        kapus_javaslat={s_: keeper_choice_from(
+            _lovo_mintak_osszege([x["lovo"] for x in jm[o_]]),
+            _kapus_mintak_osszege([x["kapusok"] for x in jm[s_]]))
+            for s_, o_ in (("home", "away"), ("away", "home"))},
+        kapusforma_proba={s_: keeper_hot_hand_backtest(
+            [jj(keeper_form_sample(m, Team(s_))) for m in tobbi])
+            for s_ in ("home", "away")})
+    assert vart["home"]["sorok"] or vart["away"]["sorok"]
+    c = TestClient(app)
+    j = c.get("/matches/gt3/decision-review").json()
+    assert j["nevek"] == nevek
+    for s_ in ("home", "away"):
+        assert j[s_] == vart[s_]
+    assert c.get("/matches/nincs/decision-review").status_code == 404
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

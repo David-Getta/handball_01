@@ -707,3 +707,30 @@ def test_az_elorejelzes_blokk_a_dontes_probakkal():
                       '<p class="note">A hetes-dobó választás próbája: z.</p>'
                       '<p class="note">A hetes-irány próbája: w.</p>')
     assert _elorejelzes_blokk({"hetes_proba": None}, "x") == ""
+
+
+def test_a_meccs_jelentes_a_pad_donteseivel():
+    """match_report_html `dontesek`: "A pad döntései a könyvtár tükrében"
+    szakasz csapatonként a nevekkel; üres soroknál a szakasz elmarad."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.report_html import match_report_html
+
+    m = Match(MatchMeta(match_id="r", home_team="Hazai", away_team="Vendég",
+                        fps=25.0), [])
+    tactics = {"home": {}, "away": {}}
+    d = {"nevek": {"home": "Hazai", "away": "Vendég"},
+         "home": {"sorok": ["Heteseik: a 9-es 3/3 — a könyvtár dobója (a "
+                            "9-es) dobta", "A kapuban az 1-es kezdett (3/10 "
+                            "az első félidőben)"]},
+         "away": {"sorok": []}}
+    h = match_report_html(m, tactics, [], None, dontesek=d)
+    # A címsor azonosítót kap (a tartalomjegyzékhez): <h2 id="szN">.
+    assert (">A pad döntései a könyvtár tükrében</h2><p><b>Hazai</b></p>"
+            "<ul><li>Heteseik: a 9-es 3/3 — a könyvtár dobója (a 9-es) "
+            "dobta.</li><li>A kapuban az 1-es kezdett (3/10 az első "
+            "félidőben).</li></ul>") in h
+    assert "<p><b>Vendég</b></p>" not in h
+    assert "A pad döntései" not in match_report_html(m, tactics, [], None)
+    assert "A pad döntései" not in match_report_html(
+        m, tactics, [], None, dontesek={"nevek": d["nevek"],
+                                        "home": {"sorok": []}, "away": {}})
