@@ -3,7 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.192 óta)
+## v0.1.193 — kiadva (2026-11-05)
+
+> Kiadás-jegyzet: A PAD DÖNTÉSEI, A KÖNYVTÁR PRÓBÁJÁVAL. Hat új
+> önellenőrző réteg a meccs közbeni és meccs előtti döntésekhez: a kapus
+> napi formája (kitart-e egy jó vagy rossz félidő — élőben mindkét
+> kispadnak), az időkérés a sorozat ellen (megtöri-e; a 3-0-s sorozat
+> pillanatában szól) és az időkérés-jegyzet (az utolsó öt perc, a
+> sorozat, a várakozás eddig — a felismert időkérésnél és a pad gombjára),
+> a meccs előtti kapus-választás próbája (a lövők szerinti választás a
+> sima mérlegnél többet tud-e), a felderítés próbája (visszaköszönnek-e
+> a kulcsai a következő meccsen), a hetes-dobó választás (ki dobja a
+> hetest — a könyvtár dobója, a próbával) és a hetes-irány a kapusnak (a
+> dobók fő iránya, jósolható-e). Mindegyik a könyvtár időrendjében, csak
+> a korábbi meccsekből, egy sima viszonyítással mérve; az összkép már
+> tizenkét próbát számol. Az AI-edzésterv a döntés-próbák tételeivel és a
+> pad szabályaival (időkérés, kapus-csere) bővült; a nyomtatható
+> meccsterv a döntés-próbák sorait és jegyzeteit is hozza. A meccs után
+> a pad döntései a könyvtár tükrében: időkérés, hetes-dobó, kezdő kapus
+> és a hideg félidő utáni csere, a próbák ítéletével.
 
 - **A pad döntései a könyvtár tükrében** (motor + végpont + meccs-jelentés
   + meccs-képernyő): a meccs UTÁN hogyan döntött a pad a könyvtár
