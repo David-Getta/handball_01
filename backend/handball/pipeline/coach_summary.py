@@ -7571,6 +7571,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 pass_line += f" A(z) {name} falának engedett lövője: {v}."
     except Exception:
         pass
+    # Lövés-elosztás: ki lőhetne többet és ki kevesebbet a modell szerint
+    # (play_simulation.shot_allocation) — csak ha van ilyen pár.
+    try:
+        from .play_simulation import shot_allocation
+        le = shot_allocation(match)
+        for side, name in (("home", home), ("away", away)):
+            p = le.get(side)
+            if p and p.get("dontes"):
+                pass_line += (f" A(z) {name} lövés-elosztása a modell "
+                              f"szerint: {p['verdict']}.")
+    except Exception:
+        pass
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 

@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **Lövés-elosztás: ki lő túl sokat és ki túl keveset** (`shot_allocation`
+  — motor + API + összefoglaló + felderítés + meccsterv + edzésterv +
+  kliens-csempe): az utolsó lövés párja a teljes meccsre. A csapat tanult
+  lövői × sávjai értéke az ellenfél kapusa ellen (xG a sáv tipikus
+  helyén × a lövő szorzója × a kapus sáv-szorzója) szemben a tényleges
+  lövés-részesedéssel (ki honnan hányat lőtt): aki a legtöbbet ér, de az
+  átlagnál kevesebbet lő, "többet lőhetne"; aki az átlagnál többet lő,
+  pedig lövésenként legalább 0,05 várható góllal kevesebbet ér,
+  "kevesebbet" — "többet lőhetne a 7-es közelről (0,61 várható gól
+  lövésenként, eddig 3 lövés — 25%), kevesebbet a 10-es közelről (0,44;
+  9 lövés — 75%)". Legalább 10 mezszámos lövés és 2 tanult páros kell;
+  ha nincs ilyen pár, "kiegyensúlyozott". A TÁMADÓ oldal szemszögéből.
+  Felületek: `/analyze` és a meccs-csomag; az összefoglaló mondata; a
+  felderítés kulcsa "Lövés-elosztásuk: … — a 7-es közeli lövését
+  vegyétek el, a 10-es közeli lövése engedhető" (az összegzett
+  lövő-mintából újraszámolt kép, új tárolt mező nélkül); a meccsterv
+  475. szabálya (a lövőik × a TI kapusotok sávjai); az edzés-fókusz 495.
+  szabálya (játékrendszer a ritkán lövő értékes lövőre); a felderítő
+  csempe.
+
 - **A nyomtatható felderítő lap figura-ajánlója a mi lövőinkkel**
   (javítás): a felderítő lap figura-ajánlója a felderített csapat
   szezon-fala ellen rangsorolt, de a MI tanult lövőink nélkül — most a

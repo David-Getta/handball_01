@@ -9003,6 +9003,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "sávból (${p["lovesek"]} lövés) · a sávjában a kilépő védőtök álljon";
   }
 
+  // Lövés-elosztásuk: ki lő náluk túl keveset és ki túl sokat a tanult
+  // lövőik szerint — a backend play_simulation.shot_allocation_from képe
+  // (le_kep; a küszöbök a backendé, itt csak a mondat).
+  String? _shotAllocation(Map<String, dynamic> r) {
+    final p = r["le_kep"];
+    if (p is! Map || p["dontes"] != true) return null;
+    final v = p["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    final t = p["tobbet"];
+    final k = p["kevesebbet"];
+    if (t is! Map || k is! Map) return null;
+    const jelzo = {"close": "közeli", "mid": "közepes távolságú",
+                   "far": "távoli"};
+    return "$v · a ${t["mez"]}-es ${jelzo[t["sav"]] ?? ""} lövését "
+        "vegyétek el, a ${k["mez"]}-es ${jelzo[k["sav"]] ?? ""} lövése "
+        "engedhető";
+  }
+
   // Engedett lövő: akire NEM kell kilépni — a backend play_simulation
   // allowed_shooters_from képe (el_lovok: a tanult lövőik gyenge távoli
   // sávja; a küszöbök a backendé, itt csak a sor).
@@ -12290,6 +12308,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kit kinek: távoli lövőjük", _shooterDefenderMatchup(r)!],
       if (_allowedShooters(r) != null)
         ["Engedett lövőjük: a fal ne lépjen ki", _allowedShooters(r)!],
+      if (_shotAllocation(r) != null)
+        ["Lövés-elosztásuk: ki lő sokat, ki keveset", _shotAllocation(r)!],
       if (_keeperChoice(r) != null)
         ["Kapusaik sávonként", _keeperChoice(r)!],
       if (_defenseSystemChoice(r) != null)

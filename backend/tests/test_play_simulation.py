@@ -1222,6 +1222,117 @@ def test_a_jatekos_modell_nyers_mintaja_a_learn_many_parja():
     assert player_models_from_samples([])["vedok"] == []
 
 
+def test_a_loves_elosztas_a_kesz_modellbol():
+    """Lövés-elosztás a kész modellből: a 7-es közelről többet ér (1,3×),
+    mégis kevesebbet lő (25%), a 10-es kevesebbet ér (0,8×) és többet lő
+    (75%) → döntés, a motor mondatával; a kapus-szorzó az értékbe
+    számít; fordított részesedésnél kiegyensúlyozott; kevés lövésből
+    (LE_MIN_LOVES alatt) és egy tanult párosból None."""
+    from handball.pipeline.play_simulation import (LE_ELTERES, LE_MIN_LOVES,
+                                                   LE_MIN_PAROS, AttackModel,
+                                                   _lovo_parosok,
+                                                   shot_allocation_from)
+
+    assert (LE_MIN_LOVES, LE_MIN_PAROS, LE_ELTERES) == (10, 2, 0.05)
+    tam = AttackModel(lovok={7: {"close": 1.3}, 10: {"close": 0.8}})
+    minta = {7: {"close": [3, 3, 1.5]}, "10": {"close": [9, 3, 4.5]}}
+    r = shot_allocation_from(tam, {}, minta)
+    par = {p["mez"]: p["ertek"] for p in _lovo_parosok(tam, {})}
+    assert r["lovesek"] == 12 and r["atlag_pct"] == 50.0 and r["dontes"]
+    assert [(s["mez"], s["lovesek"], s["arany_pct"]) for s in r["parosok"]] == [
+        (7, 3, 25.0), (10, 9, 75.0)]
+    assert (r["tobbet"]["mez"], r["kevesebbet"]["mez"]) == (7, 10)
+    sz = {m: f"{v:.2f}".replace(".", ",") for m, v in par.items()}
+    assert r["verdict"] == (
+        f"többet lőhetne a 7-es közelről ({sz[7]} várható gól lövésenként, "
+        f"eddig 3 lövés — 25%), kevesebbet a 10-es közelről ({sz[10]}; 9 "
+        "lövés — 75%)")
+    # A kapus-szorzó az értékbe számít (közelről 1,2× annyit kap).
+    k = shot_allocation_from(tam, {"close": 1.2}, minta)
+    assert abs(k["parosok"][0]["ertek"] - par[7] * 1.2) < 0.002
+    # Fordított részesedés: a jobb lövő lő többet → nincs döntés.
+    forditott = shot_allocation_from(
+        tam, {}, {7: {"close": [9, 6, 4.5]}, 10: {"close": [3, 1, 1.5]}})
+    assert not forditott["dontes"] and forditott["kevesebbet"] is None
+    assert forditott["verdict"] == ("a lövés-elosztás a modell szerint "
+                                    "kiegyensúlyozott (12 lövés, 2 tanult "
+                                    "páros)")
+    assert shot_allocation_from(
+        tam, {}, {7: {"close": [3, 3, 1.5]}, 10: {"close": [6, 2, 3.0]}}
+    ) is None                                             # 9 lövés < 10
+    assert shot_allocation_from(AttackModel(lovok={7: {"close": 1.3}}), {},
+                                minta) is None             # egy páros
+    assert shot_allocation_from(None, {}, minta) is None
+
+
+def test_a_loves_elosztas_a_meccsbol_a_felderitesben_es_az_edzestervben(
+        monkeypatch):
+    """A meccs-szintű réteg a TÁMADÓ oldalról nevez (a hazai lövőinek
+    elosztása, a vendégnek nincs lövése → None); a felderítés képe az
+    összegzett lövő-mintából, a kulcs és a meccsterv (475 — a lövőik × a
+    ti kapusotok sávjai) a motor mondatával; az edzésterv (495) és az
+    összefoglaló a hazai oldalon; a valódi láncon (szimulált meccs) a
+    réteg a kész modellekből számolt képpel egyezik."""
+    import handball.pipeline.play_simulation as ps
+    import handball.pipeline.training as tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.play_simulation import (AttackModel, _kapus_tanul,
+                                                   _lovo_minta,
+                                                   shot_allocation,
+                                                   shot_allocation_from)
+    from handball.pipeline.scouting import (combine_reports, matchup_plan,
+                                            scout_team)
+    from handball.pipeline.training import training_focus
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    valodi = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                                   shots_per_min=8, halftime_break_s=30)
+    cfg = TacticsConfig()
+    va = shot_allocation(valodi)
+    assert va["home"] == shot_allocation_from(
+        AttackModel.learn(valodi, Team.HOME, cfg),
+        _kapus_tanul(valodi, Team.AWAY, cfg),
+        _lovo_minta(valodi, Team.HOME, cfg))
+    assert va["away"] is None
+
+    # A hazai 7-es: közelről 3 lövés 3 gól (1,5 xG → 1,3×), a 10-es 9
+    # lövés 3 gól (4,5 xG → 0,8×); a vendég nem lő.
+    monkeypatch.setattr(ps, "_lovo_minta", lambda match, team, config: (
+        {7: {"close": [3, 3, 1.5]}, 10: {"close": [9, 3, 4.5]}}
+        if team == Team.HOME else {}))
+    m = _proba_match()
+    le = shot_allocation(m)
+    assert le["away"] is None
+    p = le["home"]
+    assert p["dontes"] and (p["tobbet"]["mez"], p["kevesebbet"]["mez"]) == (7, 10)
+
+    opp = scout_team(m, Team.HOME)
+    assert opp.le_kep and opp.le_kep["verdict"] == p["verdict"]
+    kulcs = (f"Lövés-elosztásuk: {p['verdict']} — a 7-es közeli lövését "
+             "vegyétek el, a 10-es közeli lövése engedhető.")
+    assert kulcs in opp.keys_to_game
+    own = scout_team(m, Team.AWAY)
+    assert own.le_kep is None
+    assert not any(k.startswith("Lövés-elosztásuk") for k in own.keys_to_game)
+    ketto = combine_reports([opp, opp])
+    assert ketto.le_kep["lovesek"] == 24 and ketto.le_kep["dontes"]
+    [terv] = [s for s in matchup_plan(own, opp)
+              if s.startswith("Lövés-elosztásuk a ti kapusotok ellen:")]
+    assert terv.endswith("— a 7-es közeli lövését zárjátok, a 10-es "
+                         "közeli lövése engedhető.")
+    assert not [s for s in matchup_plan(opp, own)
+                if s.startswith("Lövés-elosztásuk a ti kapusotok ellen:")]
+    monkeypatch.setattr(tr, "MAX_ITEMS", 10_000)
+    cim = "Lövés-elosztás a modell szerint"
+    tetel = [i for i in training_focus(m)["home"] if i["title"] == cim]
+    assert len(tetel) == 1 and tetel[0]["why"] == p["verdict"]
+    assert tetel[0]["area"] == "támadás"
+    assert tetel[0]["drill"].startswith("játékrendszer a 7-es közeli lövésére")
+    assert not [i for i in training_focus(m)["away"] if i["title"] == cim]
+    szoveg = " ".join(s["body"] for s in coach_summary(m)["sections"])
+    assert f"lövés-elosztása a modell szerint: {p['verdict']}." in szoveg
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba

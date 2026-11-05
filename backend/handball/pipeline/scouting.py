@@ -175,6 +175,11 @@ class ScoutingReport:
     # scout_team és a combine_reports végén ÚJRASZÁMOLVA; új tárolt
     # mező nem kell.
     el_lovok: list = field(default_factory=list)
+    # Lövés-elosztás (play_simulation.shot_allocation_from): ki lő túl
+    # sokat és ki túl keveset a tanult lövőik szerint (átlagos kapus
+    # ellen) — a kép az összegzett lövő-mintából (lsp_lovo_minta)
+    # származtatott, a végén ÚJRASZÁMOLVA; új tárolt mező nem kell.
+    le_kep: dict | None = None
     # Kapus-választás (play_simulation.keeper_choice_from): a SAJÁT
     # kapusaik kapusonkénti sáv-mérlege {kapus mez (str): {sáv: [kaputra
     # érkezett, védett]}} — meccsek közt összeadódik; a kép (kc_kapusok:
@@ -10758,6 +10763,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Lövés-elosztásuk: ki lő náluk túl keveset (az értékes lövőjük —
+    # azt vegyétek el) és ki túl sokat (engedhető)
+    # (play_simulation.shot_allocation_from; a mondat a motoré).
+    try:
+        from .play_simulation import UTOLSO_LOVES_SAV_JELZO, mezszam_nevelovel
+        _le = rep.le_kep
+        if _le and _le.get("dontes"):
+            _t, _k = _le["tobbet"], _le["kevesebbet"]
+            keys.append(
+                f"Lövés-elosztásuk: {_le['verdict']} — "
+                f"{mezszam_nevelovel(_t['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[_t['sav']]} lövését vegyétek el, "
+                f"{mezszam_nevelovel(_k['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[_k['sav']]} lövése engedhető.")
+    except Exception:
+        pass
+
     # Kapus-választás: a kapusaik gyenge sávja kapusonként — ha X áll a
     # kapuban, onnan lőjetek (play_simulation.keeper_choice_from
     # mintája; a sáv-szorzó LOVO_FELIRAT_ELTERES felett hír).
@@ -13566,6 +13588,10 @@ def _scout_team_cached(match: Match, team: Team,
     except Exception:
         rep.el_lovok = []
     try:
+        rep.le_kep = _le_kep_of(rep)
+    except Exception:
+        rep.le_kep = None
+    try:
         rep.kc_kapusok = _kc_kapusok_of(rep)
     except Exception:
         rep.kc_kapusok = []
@@ -13621,6 +13647,17 @@ def _el_lovok_of(rep: "ScoutingReport") -> list:
     from .play_simulation import AttackModel, allowed_shooters_from
     minta = rep.lsp_lovo_minta or {}
     return allowed_shooters_from(AttackModel._modell_mintabol(minta), minta)
+
+
+def _le_kep_of(rep: "ScoutingReport", kapus: dict | None = None) -> dict | None:
+    """A lövés-elosztásuk a (összegzett) lövő-mintából
+    (play_simulation.shot_allocation_from) — `kapus` nélkül átlagos
+    kapus ellen (a jelentés képe), `kapus`-sal (a MI kapusunk sávjai) a
+    meccsterv párosához."""
+    from .play_simulation import AttackModel, shot_allocation_from
+    minta = rep.lsp_lovo_minta or {}
+    return shot_allocation_from(AttackModel._modell_mintabol(minta), kapus,
+                                minta)
 
 
 def _kk_parok_of(own: "ScoutingReport", opp: "ScoutingReport") -> list:
@@ -15665,6 +15702,26 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 475) Lövés-elosztásuk a TI kapusotok ellen: a tanult lövőik × a ti
+    # kapusotok összegzett sávjai szerint ki ér náluk a legtöbbet
+    # lövésenként, és ki lő ehhez képest túl keveset / túl sokat — az
+    # értékes, ritkán lövő lövőjüket zárjátok, a feleslegesen sokat lövő
+    # engedhető (a kapusotok ott erős).
+    try:
+        from .play_simulation import (UTOLSO_LOVES_SAV_JELZO, _kapus_szorzo,
+                                      mezszam_nevelovel)
+        _le475 = _le_kep_of(opp, _kapus_szorzo(own.lsp_kapus_minta or {}))
+        if _le475 and _le475.get("dontes"):
+            _t475, _k475 = _le475["tobbet"], _le475["kevesebbet"]
+            plan.append(
+                f"Lövés-elosztásuk a ti kapusotok ellen: {_le475['verdict']} "
+                f"— {mezszam_nevelovel(_t475['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[_t475['sav']]} lövését zárjátok, "
+                f"{mezszam_nevelovel(_k475['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[_k475['sav']]} lövése engedhető.")
     except Exception:
         pass
 
@@ -24705,6 +24762,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rep.el_lovok = _el_lovok_of(rep)
     except Exception:
         rep.el_lovok = []
+    try:
+        rep.le_kep = _le_kep_of(rep)
+    except Exception:
+        rep.le_kep = None
     try:
         rep.kc_kapusok = _kc_kapusok_of(rep)
     except Exception:

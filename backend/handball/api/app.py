@@ -9921,6 +9921,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.play_simulation import shot_allocation
+            res["shot_allocation"] = shot_allocation(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import conceded_chance_quality
             res["conceded_chance_quality"] = (
                 conceded_chance_quality(match))
@@ -12138,6 +12143,8 @@ def create_app():
                        lambda: defense_system_choice(match))
                 from ..pipeline.play_simulation import allowed_shooters
                 _layer("allowed_shooters", lambda: allowed_shooters(match))
+                from ..pipeline.play_simulation import shot_allocation
+                _layer("shot_allocation", lambda: shot_allocation(match))
                 from ..pipeline.xg import conceded_chance_quality
                 _layer("conceded_chance_quality",
                        lambda: conceded_chance_quality(match))

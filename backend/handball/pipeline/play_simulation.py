@@ -797,22 +797,15 @@ UTOLSO_LOVES_SAV_JELZO = {"close": "közeli", "mid": "közepes távolságú",
                           "far": "távoli"}
 
 
-def last_shot_choice(tamadas, kapus: dict | None = None) -> dict | None:
-    """Az utolsó lövés a kész modellekből: `tamadas` (AttackModel — a
-    lövők), `kapus` (a SZEMKÖZTI kapus sávonkénti szorzója,
-    DefenseModel.kapus; üres = átlagos kapus). Minden tanult lövő × sáv
-    párosra: érték = xG a sáv képviselő-helyén × lövő-szorzó × kapus-
-    szorzó; a legjobb az "utolsó labda".
-
-    Edzőileg: a hajrában, egyenlő állásnál az utolsó támadást nem a
-    szokás, hanem a számok szerint kell megjátszani — kinek a kezében és
-    honnan ér a legtöbbet a lövés ELLENÜK (az ő kapusukkal), és kit nem
-    szabad lövőhelyzetbe hozni.
-
-    Visszaad: {"mez", "sav", "sav_nev", "tav_m", "xg", "lovo_szorzo",
-    "kapus_szorzo", "ertek", "jeloltek" (hány páros), "kerulendo"
-    ({"mez", "sav", "sav_nev", "ertek"} vagy None), "verdict"} — None,
-    ha nincs tanult lövő-sáv (kevés minta)."""
+def _lovo_parosok(tamadas, kapus: dict | None = None) -> list:
+    """A tanult lövő × sáv párosok értéke ELLENÜK: `tamadas` (AttackModel),
+    `kapus` (a SZEMKÖZTI kapus sávonkénti szorzója; üres = átlagos kapus)
+    — [{"mez", "sav", "sav_nev", "tav_m", "xg", "lovo_szorzo",
+    "kapus_szorzo", "ertek"}, …] az érték szerint csökkenőben
+    (holtversenyben mezszám, sáv); érték = xG a sáv képviselő-helyén
+    (UTOLSO_LOVES_TAV_M) × lövő-szorzó × kapus-szorzó. Az utolsó lövés
+    (last_shot_choice) és a lövés-elosztás (shot_allocation_from) közös
+    alapja; üres, ha nincs tanult lövő-sáv."""
     from .xg import xg_of_position
     kapus = kapus or {}
     jeloltek = []
@@ -829,9 +822,29 @@ def last_shot_choice(tamadas, kapus: dict | None = None) -> dict | None:
                 "tav_m": tav, "xg": xg, "lovo_szorzo": float(lsz),
                 "kapus_szorzo": ksz,
                 "ertek": round(xg * float(lsz) * ksz, 3)})
+    jeloltek.sort(key=lambda r: (-r["ertek"], r["mez"], r["sav"]))
+    return jeloltek
+
+
+def last_shot_choice(tamadas, kapus: dict | None = None) -> dict | None:
+    """Az utolsó lövés a kész modellekből: `tamadas` (AttackModel — a
+    lövők), `kapus` (a SZEMKÖZTI kapus sávonkénti szorzója,
+    DefenseModel.kapus; üres = átlagos kapus). Minden tanult lövő × sáv
+    párosra: érték = xG a sáv képviselő-helyén × lövő-szorzó × kapus-
+    szorzó; a legjobb az "utolsó labda".
+
+    Edzőileg: a hajrában, egyenlő állásnál az utolsó támadást nem a
+    szokás, hanem a számok szerint kell megjátszani — kinek a kezében és
+    honnan ér a legtöbbet a lövés ELLENÜK (az ő kapusukkal), és kit nem
+    szabad lövőhelyzetbe hozni.
+
+    Visszaad: {"mez", "sav", "sav_nev", "tav_m", "xg", "lovo_szorzo",
+    "kapus_szorzo", "ertek", "jeloltek" (hány páros), "kerulendo"
+    ({"mez", "sav", "sav_nev", "ertek"} vagy None), "verdict"} — None,
+    ha nincs tanult lövő-sáv (kevés minta)."""
+    jeloltek = _lovo_parosok(tamadas, kapus)
     if not jeloltek:
         return None
-    jeloltek.sort(key=lambda r: (-r["ertek"], r["mez"], r["sav"]))
     b = dict(jeloltek[0])
     rossz = jeloltek[-1]
     kerul = None
@@ -2387,6 +2400,102 @@ def allowed_shooters(match: Match, config: TacticsConfig | None = None) -> dict:
                                       _lovo_minta(match, masik, config))
         out[side] = {"lovok": lovok,
                      "verdict": lovok[0]["verdict"] if lovok else None}
+    return out
+
+
+# ---- Lövés-elosztás: ki lő túl sokat és ki túl keveset ---------------------
+# Az utolsó lövés párja a TELJES meccsre: a tanult lövő × sáv párosok
+# értéke ellenük (_lovo_parosok: xG a sáv képviselő-helyén × lövő-szorzó
+# × az ő kapusuk sáv-szorzója) szemben a TÉNYLEGES lövés-részesedéssel
+# (a nyers lövő-minta: ki honnan hányat lőtt). Az átlagos részesedés
+# 100% / a tanult párosok száma. Aki a legtöbbet ér, de az átlagnál
+# kevesebbet lő → "többet lőhetne"; aki az átlagnál többet lő, pedig
+# legalább LE_ELTERES várható góllal kevesebbet ér lövésenként →
+# "kevesebbet". Legalább LE_MIN_LOVES mezszámos lövés és LE_MIN_PAROS
+# tanult páros kell (különben None — a modell nem találgat); ha nincs
+# ilyen pár, "kiegyensúlyozott".
+LE_MIN_LOVES = 10
+LE_MIN_PAROS = 2
+LE_ELTERES = 0.05
+
+
+def shot_allocation_from(tamadas, kapus: dict | None, minta: dict) -> dict | None:
+    """Lövés-elosztás a kész modellekből: `tamadas` (AttackModel — a
+    lövők), `kapus` (a SZEMKÖZTI kapus sávonkénti szorzója; üres =
+    átlagos), `minta` (a nyers lövő-minta, _lovo_minta alakban, mezszám-
+    kulccsal — a részesedéshez). Visszaad: {"parosok": [{"mez", "sav",
+    "sav_nev", "ertek", "lovesek", "arany_pct"}, …] az érték szerint
+    csökkenőben, "lovesek" (összes mezszámos lövés), "atlag_pct",
+    "tobbet" / "kevesebbet" ({"mez", "sav", "sav_nev", "ertek", "lovesek",
+    "arany_pct"} vagy None), "dontes" (igaz, ha mindkettő megvan),
+    "verdict"} — None, ha kevés a minta."""
+    parosok = _lovo_parosok(tamadas, kapus)
+    if len(parosok) < LE_MIN_PAROS:
+        return None
+    ossz = 0
+    for savok in minta.values():
+        for v in savok.values():
+            ossz += int(v[0])
+    if ossz < LE_MIN_LOVES:
+        return None
+    sorok = []
+    for p in parosok:
+        n = int(((minta.get(p["mez"]) or minta.get(str(p["mez"])) or {})
+                 .get(p["sav"]) or [0, 0, 0.0])[0])
+        sorok.append({"mez": p["mez"], "sav": p["sav"], "sav_nev": p["sav_nev"],
+                      "ertek": p["ertek"], "lovesek": n,
+                      "arany_pct": round(100.0 * n / ossz, 1)})
+    atlag = round(100.0 / len(sorok), 1)
+    tobbet = next((s for s in sorok if s["arany_pct"] < atlag), None)
+    kevesebbet = None
+    if tobbet is not None:
+        kevesebbet = next((s for s in reversed(sorok)
+                           if s["arany_pct"] > atlag
+                           and s["ertek"] <= tobbet["ertek"] - LE_ELTERES),
+                          None)
+    dontes = tobbet is not None and kevesebbet is not None
+
+    def szam(v):
+        return f"{v:.2f}".replace(".", ",")
+
+    if dontes:
+        verdict = (f"többet lőhetne {mezszam_nevelovel(tobbet['mez'])} "
+                   f"{tobbet['sav_nev']} ({szam(tobbet['ertek'])} várható gól "
+                   f"lövésenként, eddig {tobbet['lovesek']} lövés — "
+                   f"{tobbet['arany_pct']:.0f}%), kevesebbet "
+                   f"{mezszam_nevelovel(kevesebbet['mez'])} "
+                   f"{kevesebbet['sav_nev']} ({szam(kevesebbet['ertek'])}; "
+                   f"{kevesebbet['lovesek']} lövés — "
+                   f"{kevesebbet['arany_pct']:.0f}%)")
+    else:
+        verdict = (f"a lövés-elosztás a modell szerint kiegyensúlyozott "
+                   f"({ossz} lövés, {len(sorok)} tanult páros)")
+    return {"parosok": sorok, "lovesek": ossz, "atlag_pct": atlag,
+            "tobbet": tobbet, "kevesebbet": kevesebbet if dontes else None,
+            "dontes": dontes, "verdict": verdict}
+
+
+def shot_allocation(match: Match, config: TacticsConfig | None = None) -> dict:
+    """Lövés-elosztás — csapatonként, a TÁMADÓ oldal szemszögéből: a
+    csapat tanult lövői (AttackModel.learn) × a SZEMKÖZTI kapus tanult
+    sávjai (_kapus_tanul) szerint ki ér a legtöbbet lövésenként, és ehhez
+    képest ki lőtt túl sokat vagy túl keveset (shot_allocation_from a
+    nyers lövő-mintával).
+
+    Edzőileg: a lövés-választás csapat-szinten — "kinek kell többet
+    lőnie ellenük, és ki lő feleslegesen". Az utolsó lövés egy labdáról
+    szól; ez a teljes meccs lövés-elosztásáról.
+
+    Visszaad csapatonként: shot_allocation_from kimenete vagy None
+    (kevés minta — a modell nem találgat)."""
+    config = config or TacticsConfig()
+    out = {}
+    for side, team, masik in (("home", Team.HOME, Team.AWAY),
+                              ("away", Team.AWAY, Team.HOME)):
+        out[side] = shot_allocation_from(
+            AttackModel.learn(match, team, config),
+            _kapus_tanul(match, masik, config),
+            _lovo_minta(match, team, config))
     return out
 
 

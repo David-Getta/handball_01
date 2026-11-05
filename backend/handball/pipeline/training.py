@@ -1562,6 +1562,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 495) Lövés-elosztás: a tanult lövőink × az ő kapusuk szerint ki ér
+    # a legtöbbet lövésenként, és ehhez képest ki lőtt túl keveset vagy
+    # túl sokat — a játékrendszer a ritkán lövő értékes lövőt hozza
+    # helyzetbe, a feleslegesen sokat lövőt a második hullámba.
+    _szabaly = 495
+    try:
+        from .play_simulation import (UTOLSO_LOVES_SAV_JELZO,
+                                      mezszam_nevelovel, shot_allocation)
+        le495 = shot_allocation(match, config)
+        for side in ("home", "away"):
+            p495 = le495.get(side)
+            if not p495 or not p495.get("dontes"):
+                continue
+            t495, k495 = p495["tobbet"], p495["kevesebbet"]
+            add(side, "támadás", "Lövés-elosztás a modell szerint",
+                p495["verdict"],
+                f"játékrendszer {mezszam_nevelovel(t495['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[t495['sav']]} lövésére: elzárás és "
+                "passz-sor, ami őt hozza helyzetbe onnan; "
+                f"{mezszam_nevelovel(k495['mez'])} "
+                f"{UTOLSO_LOVES_SAV_JELZO[k495['sav']]} lövése a második "
+                "hullámba — 6 a 6 "
+                "ellen a lövés-választás jelzésre, utána a lövőhely-lista "
+                "ellenőrzése")
+    except Exception:
+        pass
+
     # 494) Engedett lövő: az ellenfél távoli lövője, aki a helyzeteinél
     # érdemben kevesebbet lő be (a tanult lövő-modell gyenge sávja) — rá
     # a falnak NEM kell kilépnie; a hátul maradást (és a betörés zárását)
