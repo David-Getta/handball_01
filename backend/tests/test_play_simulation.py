@@ -1619,6 +1619,56 @@ def test_a_varhato_golszerzok_probaja_idorendben():
     assert scorer_forecast_backtest(meccsek[:3]) is None
 
 
+def test_az_elo_esely_probaja_a_vegeredmenyhez():
+    """in_play_backtest: a meccs előtti előrejelzés csak a korábbiakból;
+    a percekben az addigi gólok (gol_percek) — a felvétel hosszán túli
+    perc kimarad; a Brier-hiba a három kimenetre, a viszonyítás a
+    semleges várakozás; ha az erősebb csapat mindig nyer, a csapat-modell
+    pontosít; a csapat-szűrő; kevés percpontnál None."""
+    from handball.pipeline.play_simulation import (ELO_PROBA_MIN,
+                                                   in_play_backtest,
+                                                   in_play_odds,
+                                                   match_forecast)
+
+    erosseg = {"A": 30, "B": 22, "C": 14}
+
+    def oldal(g):
+        return {"lovesek": {"close": [2 * g, g, float(g)]}, "golok": g,
+                "latott_golok": g,
+                "gol_percek": [round(60.0 * (i + 0.5) / g, 2)
+                               for i in range(g)]}
+
+    parok = [("A", "B"), ("B", "C"), ("C", "A"), ("A", "C"), ("B", "A"),
+             ("C", "B"), ("A", "B"), ("C", "A"), ("B", "C"), ("A", "C")]
+    meccsek = [{"match_id": f"m{i}", "home": h, "away": v,
+                "minta": {"home": oldal(erosseg[h]), "away": oldal(erosseg[v]),
+                          "perc_hossz": 60.0 if i != 3 else 40.0}}
+               for i, (h, v) in enumerate(parok)]
+    p = in_play_backtest(meccsek)
+    assert p is not None
+    # m3-tól jósolható minden meccs; az m3 felvétele 40 perces → csak a
+    # 15. és a 30. perc számít.
+    assert p["meccsek"] == 7 and p["pontok"] == 7 * 3 - 1
+    assert p["modell_brier"] < p["semleges_brier"]
+    assert p["javulas_pct"] > 0
+    assert "a csapat-modell" in p["verdict"] and "pontosít" in p["verdict"]
+    # Az m3 15. perces pontja kézzel: az előrejelzés az m0–m2-ből.
+    tort = {}
+    for m in meccsek[:3]:
+        mi = m["minta"]
+        tort.setdefault(m["home"], []).append((mi["home"], mi["away"]))
+        tort.setdefault(m["away"], []).append((mi["away"], mi["home"]))
+    f = match_forecast(tort["A"], tort["C"])
+    o = in_play_odds(f, 15, sum(1 for x in meccsek[3]["minta"]["home"][
+        "gol_percek"] if x <= 15), sum(1 for x in meccsek[3]["minta"][
+            "away"]["gol_percek"] if x <= 15))
+    assert o["p_home"] > o["p_away"]
+    csak_c = in_play_backtest(meccsek, "C")
+    assert csak_c is None or csak_c["pontok"] < p["pontok"]
+    # Négy meccsből csak az m3 jósolható: 3 percpont < ELO_PROBA_MIN.
+    assert 3 < ELO_PROBA_MIN and in_play_backtest(meccsek[:4]) is None
+
+
 def test_az_elorejelzes_meccs_mintaja():
     """match_forecast_sample: oldalanként a látott lövések (xg.match_xg)
     sávonként, az összes felismert gól (a nem látott is) és a látott
@@ -1644,6 +1694,12 @@ def test_az_elorejelzes_meccs_mintaja():
             1 for e in detect_shots(m) if e.type == EventType.GOAL
             and e.team.value == side)
     assert mi["home"]["lovesek"]
+    # A gólok perce időrendben, a felvétel hossza percben.
+    for side in ("home", "away"):
+        assert len(mi[side]["gol_percek"]) == mi[side]["golok"]
+        assert mi[side]["gol_percek"] == sorted(mi[side]["gol_percek"])
+    assert mi["perc_hossz"] == round(
+        (m.frames[-1].t - m.frames[0].t) / m.meta.fps / 60.0, 2)
 
 
 def test_a_jatekos_modell_fejlodese_ket_idoszak_kozott():

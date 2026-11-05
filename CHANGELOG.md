@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.190 óta)
 
+- **Az élő esély próbája** (motor + végpont + szezon-riport +
+  szezon-képernyő): hozzátesz-e a csapat-modell az álláshoz? A könyvtár
+  időrendjében minden meccsen, ahol a meccs előtti előrejelzés megvan
+  (csak a korábbiakból), a 15., 30. és 45. percben az élő esély az
+  addigi állással, és ugyanez semleges várakozással (csak az állás és
+  az idő számít) — a végeredményhez mért Brier-hibával: "az élő esély 42
+  percponton (14 meccs) átlagosan 0,38 Brier-hibával jósolta a
+  végeredményt (a csak az állásból számolté 0,44) — a csapat-modell
+  14%-kal pontosít az álláshoz képest". Edzőileg: érdemes-e a padon az
+  élő esélyre figyelni. Legalább 10 percpont kell. A meccs-minta a gólok
+  percével és a felvétel hosszával bővült ("elorejelzes-minta-v2"); a
+  /library/player-model-check "elo_esely_proba" mezője (szezon-képernyő)
+  és a szezon-riport "Élő esély" sora a csapat meccsein
+  (play_simulation.in_play_backtest).
+
 - **Várható gólszerzők: ki dönthet a következő meccsen** (motor +
   végpontok + meccsterv + élő képernyő + szezon-riport + szezon-képernyő):
   a lövők várható gólja a következő ellenfél ellen a játékos-modellből —

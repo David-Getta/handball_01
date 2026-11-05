@@ -305,21 +305,26 @@ def test_season_report_venue_split():
     assert int(row_h.group(1)) >= 1 and int(row_i.group(1)) >= 1
 
 
-def test_season_report_elorejelzes_sora():
+def test_season_report_elorejelzes_sora(monkeypatch):
     """A szezon-riport próba-szakaszának "Előrejelzés" sora: a könyvtári
     meccs-előrejelzés próbájából a csapat sorai (forecast_rows_summary) —
     a valódi láncon (hét rövid meccs, időrendben) ugyanaz, mint a motor
     a meccs-mintákból; a "Gólszerzők" sor a csapat lövőinek próbája
-    (scorer_forecast_backtest)."""
+    (scorer_forecast_backtest), az "Élő esély" sor a csapat meccsein
+    (in_play_backtest)."""
     import shutil
 
+    import handball.pipeline.play_simulation as ps
     from handball.models.tracking import Team
     from handball.pipeline.play_simulation import (forecast_backtest,
                                                    forecast_backtest_text,
                                                    forecast_rows_summary,
+                                                   in_play_backtest,
                                                    match_forecast_sample,
                                                    player_model_sample,
                                                    scorer_forecast_backtest)
+    # Az élő esély percei a félperces felvételhez igazítva.
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (0.1, 0.2, 0.3))
     tmp2 = tempfile.mkdtemp(prefix="handball_elorejelzes_test_")
     os.environ["HANDBALL_DATA_DIR"] = tmp2
     try:
@@ -346,6 +351,8 @@ def test_season_report_elorejelzes_sora():
                                    "Szimu Hazai")
         assert ep is not None
         gp = scorer_forecast_backtest(jm, "Szimu Hazai")
+        ip = in_play_backtest(lista, "Szimu Hazai")
+        assert ip is not None
         r = TestClient(create_app()).get("/season/report",
                                          params={"team": "Szimu Hazai"})
     finally:
@@ -361,6 +368,8 @@ def test_season_report_elorejelzes_sora():
         assert f"<p><b>Gólszerzők:</b> {gp['verdict']}.</p>" in r.text
     else:
         assert "<b>Gólszerzők:</b>" not in r.text
+    # Az élő esély próbája a csapat meccsein (in_play_backtest).
+    assert f"<p><b>Élő esély:</b> {ip['verdict']}.</p>" in r.text
 
 
 def test_season_report_leaders_section():

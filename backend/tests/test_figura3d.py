@@ -1758,6 +1758,14 @@ def test_az_elorejelzes_vegpontjai_a_valodi_lancon(tmp_path, monkeypatch):
     assert mc["elorejelzes"] == json.loads(json.dumps(proba))
     assert mc["elorejelzes_text"] == forecast_backtest_text(proba)
     assert mc["golszerzo_proba"] == gp
+    # Az élő esély próbája: a két perces felvételen fél percenként.
+    import handball.pipeline.play_simulation as ps
+    from handball.pipeline.play_simulation import in_play_backtest
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (0.5, 1.0, 1.5))
+    ip = in_play_backtest(lista(range(7)))
+    assert ip is not None and ip["pontok"] == 15
+    assert c.get("/library/player-model-check").json()[
+        "elo_esely_proba"] == ip
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

@@ -175,8 +175,10 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final dontesek = sorok("dontesek");
     final eloreSzoveg = _modelCheck["elorejelzes_text"];
     final golSzoveg = (_modelCheck["golszerzo_proba"] as Map?)?["verdict"];
+    final eloSzoveg = (_modelCheck["elo_esely_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
-        eloreSzoveg is! String && golSzoveg is! String) {
+        eloreSzoveg is! String && golSzoveg is! String &&
+        eloSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -245,6 +247,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (golSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Várható gólszerzők: $golSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // Az élő esély próbája: hozzátesz-e a csapat-modell az álláshoz.
+      if (eloSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Élő esély: $eloSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
     ];

@@ -8058,6 +8058,14 @@ def create_app():
                                 "golszerzo_verdict": gp["verdict"]}
         except Exception:
             pass
+        # Az élő esély próbája a csapat meccsein — hibatűrően.
+        try:
+            ip = _elo_esely_proba(team)
+            if ip:
+                modell_proba = {**(modell_proba or {}), "elo_esely": ip,
+                                "elo_esely_verdict": ip["verdict"]}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8580,7 +8588,8 @@ def create_app():
         lemezes eredmény-tárból, hogy a második hívás ne töltse vissza a
         hideg meccseket."""
         from ..pipeline.play_simulation import match_forecast_sample
-        return _cached_result(m_.meta.match_id, "elorejelzes-minta-v1",
+        # (A név verziója a minta alakjával nő — a v2 a gólok percével.)
+        return _cached_result(m_.meta.match_id, "elorejelzes-minta-v2",
                               lambda: match_forecast_sample(m_))
 
     def _elorejelzes_tortenet(nev: str, kiveve: str | None = None) -> list:
@@ -8629,6 +8638,16 @@ def create_app():
                 "minta": {"home": _jatekos_minta_of(m_, "home"),
                           "away": _jatekos_minta_of(m_, "away")}})
         return scorer_forecast_backtest(meccsek, csapat)
+
+    def _elo_esely_proba(csapat: str | None = None):
+        """Az élő esély próbája a könyvtár időrendjében (play_simulation.
+        in_play_backtest — a `csapat` megadásával csak a csapat
+        meccsei)."""
+        from ..pipeline.play_simulation import in_play_backtest
+        return in_play_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team, "minta": _elorejelzes_minta_of(m_)}
+            for m_ in _idorendben(_season_matches())], csapat)
 
     def _elorejelzes_proba(kiveve: str | None = None):
         """Az előrejelzés próbája a könyvtáron (play_simulation.
@@ -8807,7 +8826,8 @@ def create_app():
         None, … "elorejelzes": a meccs-előrejelzés próbája a könyvtár
         időrendjében (play_simulation.forecast_backtest) vagy None,
         "elorejelzes_text", "golszerzo_proba": a várható gólszerzők
-        próbája (scorer_forecast_backtest) vagy None}."""
+        próbája (scorer_forecast_backtest) vagy None, "elo_esely_proba":
+        az élő esély próbája (in_play_backtest) vagy None}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -8851,7 +8871,8 @@ def create_app():
                 "dontes_osszes": decision_model_check(dontes_ossz),
                 "elorejelzes": elore,
                 "elorejelzes_text": forecast_backtest_text(elore),
-                "golszerzo_proba": _golszerzo_proba()}
+                "golszerzo_proba": _golszerzo_proba(),
+                "elo_esely_proba": _elo_esely_proba()}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):

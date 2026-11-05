@@ -5175,7 +5175,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     döntés-próba ("dontes_verdict"), a meccs-előrejelzés próbája a
     csapat meccsein ("elorejelzes_verdict", forecast_rows_summary) és a
     várható gólszerzőké a csapat lövőire ("golszerzo_verdict",
-    scorer_forecast_backtest).
+    scorer_forecast_backtest), az élő esélyé a csapat meccsein
+    ("elo_esely_verdict", in_play_backtest).
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
@@ -5185,7 +5186,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     mp = modell_proba or {}
     if mp.get("verdict") or mp.get("kapus_verdict") \
             or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict") \
-            or mp.get("golszerzo_verdict"):
+            or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict"):
         proba_html = (
             "<h2>A lövő-modell próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
@@ -5205,6 +5206,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Gólszerzők:</b> "
                f"{escape(str(mp['golszerzo_verdict']))}.</p>"
                if mp.get("golszerzo_verdict") else "")
+            + (f"<p><b>Élő esély:</b> "
+               f"{escape(str(mp['elo_esely_verdict']))}.</p>"
+               if mp.get("elo_esely_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "

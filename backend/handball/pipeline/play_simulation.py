@@ -3031,12 +3031,16 @@ def match_forecast_sample(match: Match,
     """A meccs-előrejelzés NYERS, JSON-barát meccs-mintája (a lemezes
     eredmény-tárba tehető): oldalanként {"lovesek": {sáv: [lövés, gól,
     xG]} (a látott lövések, xg.match_xg), "golok" (az összes felismert
-    gól, a nem látott is), "latott_golok"}. Meccsek közt összeadható."""
+    gól, a nem látott is), "latott_golok", "gol_percek" (a gólok perce a
+    felvétel kezdetétől, időrendben — az élő esély próbájához)}, és a
+    felvétel hossza percben ("perc_hossz"). Meccsek közt összeadható."""
     from .event_detection import EventType, detect_shots
     from .xg import match_xg
     config = config or TacticsConfig()
-    ki = {s: {"lovesek": {}, "golok": 0, "latott_golok": 0}
+    ki = {s: {"lovesek": {}, "golok": 0, "latott_golok": 0, "gol_percek": []}
           for s in ("home", "away")}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t if match.frames else 0
     for sh in match_xg(match, config)["shots"]:
         side = sh["team"]
         if side not in ki:
@@ -3049,9 +3053,13 @@ def match_forecast_sample(match: Match,
         r[1] += int(gol)
         r[2] = round(r[2] + float(sh["xg"]), 3)
         ki[side]["latott_golok"] += int(gol)
-    for e in detect_shots(match, config):
+    for e in sorted(detect_shots(match, config), key=lambda e: e.t):
         if e.type == EventType.GOAL and e.team.value in ki:
             ki[e.team.value]["golok"] += 1
+            ki[e.team.value]["gol_percek"].append(
+                round((e.t - t0) / fps / 60.0, 2))
+    ki["perc_hossz"] = (round((match.frames[-1].t - t0) / fps / 60.0, 2)
+                        if match.frames else 0.0)
     return ki
 
 
@@ -3191,6 +3199,80 @@ def in_play_odds(f: dict, perc: float, gh: int, ga: int) -> dict:
             "vart_home": round(vh, 1), "vart_away": round(va, 1),
             "elteres_home": round(gh - vh, 1),
             "elteres_away": round(ga - va, 1)}
+
+
+# Az élő esély próbájához legalább ennyi percpont (meccs × perc) kell.
+ELO_PROBA_MIN = 10
+
+
+def in_play_backtest(meccsek: list, csapat: str | None = None) -> dict | None:
+    """Az élő esély próbája: `meccsek` időrendben [{"match_id", "home",
+    "away", "minta" (match_forecast_sample — "gol_percek",
+    "perc_hossz")}]. Minden meccsen, ahol a meccs előtti előrejelzés
+    megvan (csak a korábbiakból, match_forecast), a LIVE_AJANLO_PERCEK
+    perceiben (amíg a felvétel tart) az élő esély (in_play_odds) az
+    addigi állással, és a viszonyítás: ugyanez SEMLEGES várakozással (a
+    két csapat a két várható gól átlagával — csak az állás és az idő
+    számít). A mérték a végeredményhez mért Brier-hiba (a három kimenet
+    esélyének négyzetes hibája). A `csapat` megadásával csak a csapat
+    meccsei. Edzőileg: hozzátesz-e a csapat-modell az álláshoz — érdemes-e
+    a padon az élő esélyre figyelni. Visszatérés: {"meccsek", "pontok",
+    "modell_brier", "semleges_brier", "javulas_pct", "verdict"} — None
+    ELO_PROBA_MIN-nél kevesebb percpontnál."""
+    tortenet: dict = {}
+    pontok = 0
+    mb = sb = 0.0
+    meccs_db = 0
+    for m in meccsek:
+        mi, h, v = m.get("minta") or {}, m.get("home"), m.get("away")
+        sh, sv = mi.get("home") or {}, mi.get("away") or {}
+        f = match_forecast(tortenet.get(h, []), tortenet.get(v, []))
+        tortenet.setdefault(h, []).append((sh, sv))
+        tortenet.setdefault(v, []).append((sv, sh))
+        if f is None or (csapat is not None and csapat not in (h, v)):
+            continue
+        gh, gv = int(sh.get("golok") or 0), int(sv.get("golok") or 0)
+        kimenet = (1.0 if gh > gv else 0.0, 1.0 if gh == gv else 0.0,
+                   1.0 if gh < gv else 0.0)
+        atlag = (f["home_goals"] + f["away_goals"]) / 2.0
+        semleges = {"home_goals": atlag, "away_goals": atlag}
+        volt = False
+        for perc in LIVE_AJANLO_PERCEK:
+            if perc > float(mi.get("perc_hossz") or 0.0):
+                continue
+            ah = sum(1 for x in sh.get("gol_percek") or [] if x <= perc)
+            av = sum(1 for x in sv.get("gol_percek") or [] if x <= perc)
+            for vart, gy in ((f, "m"), (semleges, "s")):
+                o = in_play_odds(vart, perc, ah, av)
+                b = sum((p - k) ** 2 for p, k in zip(
+                    (o["p_home"], o["p_draw"], o["p_away"]), kimenet))
+                if gy == "m":
+                    mb += b
+                else:
+                    sb += b
+            pontok += 1
+            volt = True
+        meccs_db += int(volt)
+    if pontok < ELO_PROBA_MIN:
+        return None
+    mbr, sbr = mb / pontok, sb / pontok
+    j = (sbr - mbr) / sbr * 100.0 if sbr > 0 else 0.0
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    itelet = (f"a csapat-modell {j:.0f}%-kal pontosít az álláshoz képest"
+              if j >= PROBA_ITELET_PCT else
+              f"a csapat-modell {-j:.0f}%-kal ront az álláshoz képest"
+              if j <= -PROBA_ITELET_PCT else
+              "a csapat-modell nem tesz hozzá érdemben az álláshoz")
+    return {"meccsek": meccs_db, "pontok": pontok,
+            "modell_brier": round(mbr, 3), "semleges_brier": round(sbr, 3),
+            "javulas_pct": round(j, 1),
+            "verdict": (f"az élő esély {pontok} percponton ({meccs_db} "
+                        f"meccs) átlagosan {sz(mbr)} Brier-hibával jósolta "
+                        f"a végeredményt (a csak az állásból számolté "
+                        f"{sz(sbr)}) — {itelet}")}
 
 
 def live_forecast_alerts(match: Match, f: dict | None,
