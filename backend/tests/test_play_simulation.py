@@ -1696,6 +1696,122 @@ def test_az_elo_esely_probaja_a_vegeredmenyhez():
     assert 3 < ELO_PROBA_MIN and in_play_backtest(meccsek[:4]) is None
 
 
+def test_varakozas_es_valosag_a_meccs_utan():
+    """forecast_review: az eredmény a várakozáshoz (VISSZA_GOL góltól a
+    nagyobb eltérésű csapat), a lövők (VISSZA_LOVO_GOL góltól, a
+    legnagyobb eltérés elöl), a fal (ha a fő rendszer más); ha semmi sem
+    tér el, "a várakozás szerint"; előrejelzés nélkül csak a lövők és a
+    fal."""
+    from handball.pipeline.play_simulation import forecast_review
+
+    nevek = {"home": "Hazai", "away": "Vendég"}
+    f = {"home_goals": 25.0, "away_goals": 25.0}
+    gsz = {"home": [{"mez": 9, "vart_gol": 3.0}, {"mez": 7, "vart_gol": 2.0}],
+           "away": [{"mez": 4, "vart_gol": 5.0}]}
+    lovo = {"home": {"9": {"far": [8, 6, 2.0]}, "7": {"close": [3, 2, 1.5]}},
+            "away": {"4": {"mid": [6, 2, 2.0]}}}
+    ved = {"home": None, "away": {"fo": "6-0", "eloszlas": {"6-0": 1.0}}}
+    r = forecast_review(nevek, f, {"home": 30, "away": 24}, golszerzok=gsz,
+                        lovo_valodi=lovo, vedekezes=ved,
+                        formak_valodi={"away": {"5-1": 120, "6-0": 30}})
+    assert r["eredmeny"] == {"vart_home": 25.0, "vart_away": 25.0,
+                             "home": 30, "away": 24, "elteres_home": 5.0,
+                             "elteres_away": -1.0}
+    assert r["sorok"][0] == ("Várakozás: Hazai 25–25 Vendég — lett: 30–24 "
+                             "(Hazai 5,0 góllal a várt felett)")
+    # Egyforma eltérésnél az oldal szerint (determinisztikus).
+    assert [(x["team"], x["mez"], x["elteres"]) for x in r["lovok"]] == [
+        ("away", 4, -3.0), ("home", 9, 3.0)]
+    assert "Hazai: a 9-es 6 gólt lőtt a várt 3,0 helyett" in r["sorok"]
+    assert r["vedekezes"] == [{"team": "away", "vart": "6-0", "valodi": "5-1"}]
+    assert r["sorok"][-1] == "Vendég 5-1 fallal védekezett a várt 6-0 helyett"
+    nyugi = forecast_review(nevek, f, {"home": 26, "away": 24})
+    assert nyugi["sorok"][-1] == "A meccs nagyjából a várakozás szerint alakult"
+    nincs = forecast_review(nevek, None, {"home": 30, "away": 24},
+                            golszerzok=gsz, lovo_valodi=lovo)
+    assert nincs["eredmeny"] is None
+    assert nincs["sorok"][:2] == [
+        "Vendég: a 4-es 2 gólt lőtt a várt 5,0 helyett",
+        "Hazai: a 9-es 6 gólt lőtt a várt 3,0 helyett"]
+
+
+def test_a_forro_kez_probaja_es_az_elo_napi_forma():
+    """hot_hand_backtest: ha az első félidőben forró lövők a másodikban
+    is a helyzeteik felett fejeznek be, a napi forma kitart; ha
+    visszaállnak, nem; kevés párnál None. shooter_form_sample: a lövők
+    félidőnként. live_form_alerts: a modell várakozása felett járó lövő
+    a próba ítéletével, lövőnként és irányonként egyszer."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (FORMA_MIN_PAR,
+                                                   AttackModel,
+                                                   _lovesek_mezszammal,
+                                                   hot_hand_backtest,
+                                                   live_form_alerts,
+                                                   shooter_form_sample)
+    from handball.pipeline.tactics import TacticsConfig
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    forro = {"7": [[5, 4, 2.0], [5, 4, 2.0]]}      # +0,4 / lövés mindkétszer
+    hideg = {"9": [[5, 0, 2.0], [5, 0, 2.0]]}      # −0,4 / lövés mindkétszer
+    p = hot_hand_backtest([forro, hideg] * FORMA_MIN_PAR)
+    assert (p["forro"], p["hideg"]) == (FORMA_MIN_PAR, FORMA_MIN_PAR)
+    assert (p["forro_pp"], p["hideg_pp"], p["kulonbseg_pp"]) == (
+        40.0, -40.0, 80.0)
+    assert p["itelet"] == "kitart" and "a napi forma kitart" in p["verdict"]
+    vissza = hot_hand_backtest(
+        [{"7": [[5, 4, 2.0], [5, 2, 2.0]]}, {"9": [[5, 0, 2.0], [5, 2, 2.0]]}]
+        * FORMA_MIN_PAR)
+    assert vissza["itelet"] == "visszaall" and vissza["kulonbseg_pp"] == 0.0
+    assert "a modellre" in vissza["verdict"]
+    assert hot_hand_backtest([forro, hideg]) is None
+    # Kevés lövés egy félidőben: a pár nem számít.
+    assert hot_hand_backtest([{"7": [[3, 3, 1.0], [5, 4, 2.0]]}] * 20) is None
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    mi = shooter_form_sample(m, Team.HOME)
+    lov = list(_lovesek_mezszammal(m, Team.HOME, TacticsConfig()))
+    assert sum(v[0][0] + v[1][0] for v in mi.values()) == len(lov)
+    # A félidő-határ (itt a felvétel közepe) előtti lövések az elsőben.
+    kozep = m.frames[len(m.frames) // 2].t
+    assert sum(v[0][0] for v in mi.values()) == sum(
+        1 for _mez, sh in lov if sh["t"] < kozep)
+
+    import pytest
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(ps, "LIVE_AJANLO_PERCEK", (2, 4))
+        ki = live_form_alerts(m, tamadas={"home": AttackModel()},
+                              proba=vissza)["alerts"]
+        nincs = live_form_alerts(m)["alerts"]
+    finally:
+        mp.undo()
+    # A szimulált meccsen minden lövés gól: a hazai lövők forrók — a
+    # hazai kispadnak a támadó, a vendégnek a védő szemszögéből.
+    tam = [a for a in ki if a["nezopont"] == "tamado"]
+    ved = [a for a in ki if a["nezopont"] == "vedo"]
+    assert tam and all(a["team"] == "home" and a["irany"] == "forro"
+                       for a in tam)
+    assert [(a["mez"], a["perc"]) for a in ved] == [
+        (a["mez"], a["perc"]) for a in tam]
+    assert all(a["team"] == "away" for a in ved)
+    assert ved[0]["text"].startswith(
+        f"Forró kéz az ellenfélnél ({ved[0]['perc']}. perc): "
+        f"{m.meta.home_team} — ")
+    assert ved[0]["text"].endswith("ne bontsátok meg miatta a falat")
+    ki = tam
+    a = ki[0]
+    assert a["golok"] - a["vart"] >= ps.FORMA_ELO_GOL
+    assert a["text"].startswith(f"Forró kéz ({a['perc']}. perc): "
+                                f"{m.meta.home_team} — ")
+    assert a["text"].endswith("a könyvtár szerint a napi forma nem tart ki: "
+                              "ne építsetek csak rá a hajrában")
+    assert len({(x["mez"], x["irany"]) for x in ki}) == len(ki)
+    assert nincs and all(x["text"].endswith(
+        "a könyvtár még nem dönti el, kitart-e a napi forma") for x in nincs)
+
+
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
     """defense_system_forecast: a korábbi meccsek védekező kockáinak
     eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);

@@ -643,7 +643,7 @@ def test_a_sav_kep_a_nyers_mintabol():
 
 
 def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
-    """A szezon-riport "A lövő-modell próbája" szakasza a motor
+    """A szezon-riport "A modellek próbája" szakasza a motor
     mondatával; ítélet nélkül elmarad."""
     from handball.pipeline.report_html import season_report_html
 
@@ -655,7 +655,7 @@ def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
          "góljait 51%-kal pontosabban becsülte, mint az átlagos kapus")
     html = season_report_html("Szeged", tr, [], 4,
                               modell_proba={"verdict": v, "kapus_verdict": k})
-    assert "A lövő-modell próbája" in html
+    assert "A modellek próbája" in html
     assert f"<p><b>Lövők:</b> {v}.</p>" in html
     assert f"<p><b>Kapus:</b> {k}.</p>" in html
     dv = ("a modell legjobb opcióját választó 40 döntés után 8 mp-en belül "
@@ -671,5 +671,5 @@ def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
     assert "<b>Lövők:</b>" not in csak and f"<p><b>Kapus:</b> {k}.</p>" in csak
     for ures in (None, {}, {"verdict": ""}, {"verdict": None,
                                               "kapus_verdict": None}):
-        assert "A lövő-modell próbája" not in season_report_html(
+        assert "A modellek próbája" not in season_report_html(
             "Szeged", tr, [], 4, modell_proba=ures)

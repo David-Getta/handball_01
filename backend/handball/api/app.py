@@ -8074,6 +8074,14 @@ def create_app():
                                 "vedekezes_verdict": vp["verdict"]}
         except Exception:
             pass
+        # A forró kéz próbája a csapat lövőin — hibatűrően.
+        try:
+            fp_ = _forma_proba(csapat=team)
+            if fp_:
+                modell_proba = {**(modell_proba or {}), "forma": fp_,
+                                "forma_verdict": fp_["verdict"]}
+        except Exception:
+            pass
         # A játékos-modell fejlődése: a két fél (ugyanaz a vágás, mint a
         # fejlődés-tábláé) külön tanult lövői és kapusa — hibatűrően.
         fejlodes = None
@@ -8633,6 +8641,83 @@ def create_app():
         return scorer_forecast([m.get("lovo") or {} for m in mintak(nev)],
                                [m.get("kapus") or {} for m in mintak(ellen)])
 
+    def _varakozas_valosag(match_id: str) -> dict:
+        """Várakozás és valóság a meccs után (play_simulation.
+        forecast_review): a két csapat könyvtári meccsei közül CSAK a
+        meccs ELŐTTIEK (időrendben) adják a várakozást — az eredményt
+        (match_forecast), a várható gólszerzőket (scorer_forecast) és a
+        várható falat (defense_system_forecast) —, a meccs saját mintái a
+        valóságot. A minták a lemezes eredmény-tárból. 404: nincs ilyen
+        meccs."""
+        from ..pipeline.play_simulation import (defense_system_forecast,
+                                                forecast_review,
+                                                match_forecast,
+                                                scorer_forecast)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        kulcs = ((match.meta.date or ""), match.meta.match_id)
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        def elotte(nev):
+            try:
+                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                        if ((m_.meta.date or ""), m_.meta.match_id) < kulcs]
+            except HTTPException:
+                return []
+
+        par = {side: elotte(nevek[side]) for side in ("home", "away")}
+        tort, jm = {}, {}
+        for side, lista in par.items():
+            tort[side], jm[side] = [], []
+            for m_, t_ in lista:
+                mi = _elorejelzes_minta_of(m_)
+                masik = "away" if t_.value == "home" else "home"
+                tort[side].append((mi.get(t_.value) or {}, mi.get(masik) or {}))
+                jm[side].append(_jatekos_minta_of(m_, t_.value))
+        f = match_forecast(tort["home"], tort["away"])
+        gsz = {side: scorer_forecast(
+                   [x.get("lovo") or {} for x in jm[side]],
+                   [x.get("kapus") or {} for x in jm[masik]])
+               for side, masik in (("home", "away"), ("away", "home"))}
+        ved = {side: defense_system_forecast(
+                   [x.get("formak") or {} for x in jm[side]])
+               for side in ("home", "away")}
+        sajat = _elorejelzes_minta_of(match)
+        valodi = {side: _jatekos_minta_of(match, side)
+                  for side in ("home", "away")}
+        r = forecast_review(
+            nevek, f, {side: (sajat.get(side) or {}).get("golok", 0)
+                       for side in ("home", "away")},
+            golszerzok=gsz,
+            lovo_valodi={k: v.get("lovo") or {} for k, v in valodi.items()},
+            vedekezes=ved,
+            formak_valodi={k: v.get("formak") or {} for k, v in valodi.items()})
+        return {**r, "korabbi_meccsek": {k: len(v) for k, v in par.items()}}
+
+    def _forma_minta_of(m_, side: str) -> dict:
+        """EGY meccs lövő-forma mintája az adott oldalra (play_simulation.
+        shooter_form_sample: a mezszámos lövők félidőnként) — a lemezes
+        eredmény-tárból."""
+        from ..pipeline.play_simulation import shooter_form_sample
+        return _cached_result(m_.meta.match_id, f"forma-minta-v1-{side}",
+                              lambda: shooter_form_sample(m_, Team(side)))
+
+    def _forma_proba(kiveve: str | None = None, csapat: str | None = None):
+        """A forró kéz próbája a könyvtáron (play_simulation.
+        hot_hand_backtest — a `kiveve` meccs nélkül; a `csapat`
+        megadásával csak a csapat lövői)."""
+        from ..pipeline.play_simulation import hot_hand_backtest
+        mintak = []
+        for m_ in _idorendben(_season_matches()):
+            if m_.meta.match_id == kiveve:
+                continue
+            for side, nev in (("home", m_.meta.home_team),
+                              ("away", m_.meta.away_team)):
+                if csapat is None or nev == csapat:
+                    mintak.append(_forma_minta_of(m_, side))
+        return hot_hand_backtest(mintak)
+
     def _vedekezes_varhato(nev: str, kiveve: str | None = None):
         """A `nev` csapat várható védekezési rendszere a könyvtári
         meccseiből (a `kiveve` meccs nélkül — play_simulation.
@@ -8864,7 +8949,8 @@ def create_app():
         próbája (scorer_forecast_backtest) vagy None, "elo_esely_proba":
         az élő esély próbája (in_play_backtest) vagy None,
         "vedekezes_proba": a várható védekezési rendszer próbája
-        (defense_system_backtest) vagy None}."""
+        (defense_system_backtest) vagy None, "forma_proba": a forró kéz
+        próbája (hot_hand_backtest) vagy None}."""
         from ..pipeline.play_simulation import (keeper_model_backtest,
                                                 keeper_model_backtest_summary,
                                                 shooter_model_backtest,
@@ -8910,7 +8996,8 @@ def create_app():
                 "elorejelzes_text": forecast_backtest_text(elore),
                 "golszerzo_proba": _golszerzo_proba(),
                 "elo_esely_proba": _elo_esely_proba(),
-                "vedekezes_proba": _vedekezes_proba()}
+                "vedekezes_proba": _vedekezes_proba(),
+                "forma_proba": _forma_proba()}
 
     @app.get("/library/forecast")
     def get_library_forecast(home: str = "", away: str = ""):
@@ -13800,8 +13887,14 @@ def create_app():
             player_stats = summarize(match)  # terhelés-tábla a jelentésbe
         except Exception:
             player_stats = None
+        # Várakozás és valóság (a korábbi meccsekből) — hibatűrően.
+        try:
+            varakozas = _varakozas_valosag(match_id).get("sorok") or None
+        except Exception:
+            varakozas = None
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
+                                 varakozas=varakozas,
                                  notes=_load_notes(match_id),
                                  felvetelek=_meccs_felvetelei(match_id),
                                  figure_namer=_figure_name_for,
@@ -14349,6 +14442,39 @@ def create_app():
                 kapus[side] = ellen["kapus"]
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
                 "szezon_meccsek": db}
+
+    @app.get("/matches/{match_id}/forecast-review")
+    def get_forecast_review(match_id: str):
+        """Várakozás és valóság: a meccs előtti várakozás (a két csapat
+        KORÁBBI meccseiből) a meccs valóságához mérve — az eredmény, a
+        lövők és a fal eltérése (_varakozas_valosag). Válasz:
+        {"eredmeny", "lovok", "vedekezes", "sorok", "korabbi_meccsek"}.
+        404: nincs ilyen meccs."""
+        return _varakozas_valosag(match_id)
+
+    @app.get("/matches/{match_id}/live-forma")
+    def get_live_form(match_id: str):
+        """ÉLŐ napi forma: a 15., 30. és 45. percben az a lövő, aki az
+        addigi lövéseiből a modell várakozása felett vagy alatt jár
+        (play_simulation.live_form_alerts — csak az addigi kockák). A
+        lövők a csapat, a kapus az ellenfél könyvtári TÖBBI meccséből; a
+        tanács a forró kéz próbájától függ (hot_hand_backtest a könyvtár
+        többi meccsén). Válasz: {"alerts": [...], "proba"}. 404: nincs
+        ilyen meccs."""
+        from ..pipeline.play_simulation import live_form_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+        tamadas, kapus = {}, {}
+        for side in ("home", "away"):
+            sajat, n_s = _korabbi_modellek(match_id, nevek[side])
+            if n_s:
+                tamadas[side] = sajat["tamadas"]
+                kapus[side] = sajat["kapus"]
+        proba = _forma_proba(kiveve=match_id)
+        return {**live_form_alerts(match, tamadas=tamadas, kapus=kapus,
+                                   proba=proba), "proba": proba}
 
     @app.get("/matches/{match_id}/live-vedekezes")
     def get_live_defense_system(match_id: str):

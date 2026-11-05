@@ -1419,7 +1419,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       notes: list | None = None,
                       figure_namer=None,
                       base_url: str | None = None,
-                      felvetelek: list | None = None) -> str:
+                      felvetelek: list | None = None,
+                      varakozas: list | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
@@ -1430,7 +1431,10 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     `figure_namer(csapatnév, alak) -> név|None` — az elnevezett figurák
     neve a "Figuráik (alakkal)" szakaszban; a `base_url` a motor címe (a
     videózandó jelenetek "3D ↗" linkjéhez — None: link nélkül); a
-    `felvetelek` a 3D megbeszélés-felvételek (_felvetelek_html).
+    `felvetelek` a 3D megbeszélés-felvételek (_felvetelek_html); a
+    `varakozas` a "Várakozás és valóság" mondatai (play_simulation.
+    forecast_review — a korábbi meccsekből jósolt eredmény, lövők és fal
+    a valósághoz mérve; üresnél a szakasz elmarad).
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -1444,7 +1448,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             match, tactics, events, quality, heatmaps=heatmaps,
             player_stats=player_stats, notes=notes,
             figure_namer=figure_namer, base_url=base_url,
-            felvetelek=felvetelek)
+            felvetelek=felvetelek, varakozas=varakozas)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
@@ -1454,8 +1458,16 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               notes: list | None = None,
                               figure_namer=None,
                               base_url: str | None = None,
-                              felvetelek: list | None = None) -> str:
+                              felvetelek: list | None = None,
+                              varakozas: list | None = None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
+    varakozas_html = (
+        "<h2>Várakozás és valóság</h2><ul>"
+        + "".join(f"<li>{escape(str(s_))}.</li>" for s_ in varakozas)
+        + '</ul><p class="note">A várakozás a két csapat KORÁBBI '
+        "meccseiből jósolt eredmény, várható gólszerzők és fal — ahol a "
+        "meccs eltért tőle, ott érdemes a videót és a felderítést "
+        "újranézni.</p>") if varakozas else ""
 
     meta = match.meta
     # A csapatnevek EGYSZER escape-elve: a függvényben a home/away (és a
@@ -4088,6 +4100,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 
   {xg_html}
 
+  {varakozas_html}
+
   {defense_html}
 
   {lineups_html}
@@ -5206,7 +5220,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     várható gólszerzőké a csapat lövőire ("golszerzo_verdict",
     scorer_forecast_backtest), az élő esélyé a csapat meccsein
     ("elo_esely_verdict", in_play_backtest), a várható védekezési
-    rendszeré ("vedekezes_verdict", defense_system_backtest).
+    rendszeré ("vedekezes_verdict", defense_system_backtest), a forró
+    kézé a csapat lövőin ("forma_verdict", hot_hand_backtest).
     `fejlodes` (opcionális): a játékos-modell változása a szezon két fele
     között (play_simulation.player_model_development) — a "lovo_sorok" és
     "kapus_sorok" mondatai; üres sorokkal a szakasz elmarad.
@@ -5217,9 +5232,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     if mp.get("verdict") or mp.get("kapus_verdict") \
             or mp.get("dontes_verdict") or mp.get("elorejelzes_verdict") \
             or mp.get("golszerzo_verdict") or mp.get("elo_esely_verdict") \
-            or mp.get("vedekezes_verdict"):
+            or mp.get("vedekezes_verdict") or mp.get("forma_verdict"):
         proba_html = (
-            "<h2>A lövő-modell próbája</h2>"
+            "<h2>A modellek próbája</h2>"
             + (f"<p><b>Lövők:</b> {escape(str(mp['verdict']))}.</p>"
                if mp.get("verdict") else "")
             + (f"<p><b>Kapus:</b> {escape(str(mp['kapus_verdict']))}.</p>"
@@ -5243,6 +5258,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Védekezési rendszer:</b> "
                f"{escape(str(mp['vedekezes_verdict']))}.</p>"
                if mp.get("vedekezes_verdict") else "")
+            + (f"<p><b>Napi forma:</b> "
+               f"{escape(str(mp['forma_verdict']))}.</p>"
+               if mp.get("forma_verdict") else "")
             + '<p class="note">A szezon meccseit időrendben vesszük: minden '
             "meccs lövő × sáv (és kapus-sáv) csoportjainak gólját a KORÁBBI "
             "meccsekből tanult szorzóval becsüljük, és a nyers várható gólhoz "

@@ -360,7 +360,7 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         os.environ["HANDBALL_DATA_DIR"] = _tmp
         shutil.rmtree(tmp2, ignore_errors=True)
     assert r.status_code == 200
-    assert "A lövő-modell próbája" in r.text
+    assert "A modellek próbája" in r.text
     assert (f"<p><b>Előrejelzés:</b> {forecast_backtest_text(ep)}.</p>"
             in r.text)
     # A várható gólszerzők próbája a csapat lövőire (a motorral egyezik;

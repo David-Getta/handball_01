@@ -1865,6 +1865,118 @@ def test_a_nyomtathato_meccsterv_az_elorejelzessel(tmp_path, monkeypatch):
     assert "Előrejelzés (a csapat-modellekből)" not in r2.text
 
 
+def test_az_elo_napi_forma_vegpont_a_valodi_lancon(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-forma: a lövők a csapat, a kapus az
+    ellenfél könyvtári TÖBBI meccséből (player_models_from_samples), a
+    forró kéz próbája a többi meccs lövő-forma mintáiból — a valódi
+    láncon ugyanaz, mint a motor; a /library/player-model-check
+    "forma_proba" mezője a motor próbája; 404 ismeretlen meccsre."""
+    import json
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (hot_hand_backtest,
+                                                   live_form_alerts,
+                                                   player_model_sample,
+                                                   player_models_from_samples,
+                                                   shooter_form_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (2, 4))
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=300, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    tobbi = meccsek[:2]
+
+    def modell(side):
+        return player_models_from_samples(
+            [json.loads(json.dumps(player_model_sample(m, Team(side))))
+             for m in tobbi])
+
+    proba = hot_hand_backtest(
+        [json.loads(json.dumps(shooter_form_sample(m, Team(side))))
+         for m in tobbi for side in ("home", "away")])
+    vart = live_form_alerts(
+        meccsek[2], tamadas={s_: modell(s_)["tamadas"] for s_ in ("home", "away")},
+        kapus={s_: modell(s_)["kapus"] for s_ in ("home", "away")},
+        proba=proba)["alerts"]
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-forma").json()
+    assert vart and [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert j["proba"] == proba
+    assert c.get("/matches/nincs/live-forma").status_code == 404
+    mc = c.get("/library/player-model-check").json()
+    assert mc["forma_proba"] == hot_hand_backtest(
+        [json.loads(json.dumps(shooter_form_sample(m, Team(side))))
+         for m in meccsek for side in ("home", "away")])
+
+
+def test_varakozas_es_valosag_vegpont_es_jelentes(tmp_path, monkeypatch):
+    """GET /matches/{id}/forecast-review: a várakozás CSAK a meccs előtti
+    meccsekből (időrendben) — a valódi láncon ugyanaz, mint a motor a
+    mintákból; az első meccsnél nincs várakozás; a meccs-jelentés
+    "Várakozás és valóság" szakasza a mondatokkal; 404 ismeretlen
+    meccsre."""
+    import json
+    from html import escape
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (defense_system_forecast,
+                                                   forecast_review,
+                                                   match_forecast,
+                                                   match_forecast_sample,
+                                                   player_model_sample,
+                                                   scorer_forecast)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (3, 1, 2):          # a beolvasás sorrendje ne számítson
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    meccsek.sort(key=lambda m: m.meta.date)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+    fm = [json.loads(json.dumps(match_forecast_sample(m))) for m in meccsek]
+    jm = [{side: json.loads(json.dumps(player_model_sample(m, Team(side))))
+           for side in ("home", "away")} for m in meccsek]
+    f = match_forecast([(x["home"], x["away"]) for x in fm[:2]],
+                       [(x["away"], x["home"]) for x in fm[:2]])
+    vart = forecast_review(
+        {"home": h, "away": a}, f,
+        {"home": fm[2]["home"]["golok"], "away": fm[2]["away"]["golok"]},
+        golszerzok={"home": scorer_forecast([x["home"]["lovo"] for x in jm[:2]],
+                                            [x["away"]["kapus"] for x in jm[:2]]),
+                    "away": scorer_forecast([x["away"]["lovo"] for x in jm[:2]],
+                                            [x["home"]["kapus"] for x in jm[:2]])},
+        lovo_valodi={s_: jm[2][s_]["lovo"] for s_ in ("home", "away")},
+        vedekezes={s_: defense_system_forecast([x[s_]["formak"] for x in jm[:2]])
+                   for s_ in ("home", "away")},
+        formak_valodi={s_: jm[2][s_]["formak"] for s_ in ("home", "away")})
+    c = TestClient(app)
+    j = c.get("/matches/gt3/forecast-review").json()
+    assert f is not None and vart["sorok"]
+    assert j["sorok"] == vart["sorok"] and j["eredmeny"] == vart["eredmeny"]
+    assert j["korabbi_meccsek"] == {"home": 2, "away": 2}
+    elso = c.get("/matches/gt1/forecast-review").json()
+    assert elso["eredmeny"] is None and elso["korabbi_meccsek"] == {
+        "home": 0, "away": 0}
+    assert c.get("/matches/nincs/forecast-review").status_code == 404
+    r = c.get("/matches/gt3/report/export")
+    assert r.status_code == 200
+    assert "Várakozás és valóság" in r.text
+    assert f"<li>{escape(vart['sorok'][0])}.</li>" in r.text
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

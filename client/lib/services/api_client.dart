@@ -1811,6 +1811,21 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő napi forma (GET /matches/{id}/live-forma): a 15., 30., 45.
+  /// percben a modell várakozása felett / alatt járó lövő, a forró kéz
+  /// próbája szerinti tanáccsal — [{t, t_s, perc, team, team_name, mez,
+  /// lovesek, golok, vart, irany, text}].
+  Future<List<Map<String, dynamic>>> fetchLiveForm(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-forma"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a napi forma", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő védekezési rendszer (GET /matches/{id}/live-vedekezes): a meccs
   /// elején csapatonként a várható rendszer a többi meccsükből, utána a
   /// 15., 30., 45. percben, ha eltérnek tőle — [{t, t_s, team,
@@ -2082,6 +2097,20 @@ class ApiClient {
       throw Exception(_hiba("Nem sikerült lekérni a támadásokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Várakozás és valóság (GET /matches/{id}/forecast-review): a meccs
+  /// előtti várakozás (a korábbi meccsekből) a valósághoz mérve — a
+  /// mondatok listája ("sorok"); üres, ha nincs mihez mérni.
+  Future<List<String>> fetchForecastReview(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/forecast-review"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a várakozás és valóság", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((json["sorok"] as List?) ?? const []).cast<String>();
   }
 
   /// Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary):

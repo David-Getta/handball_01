@@ -205,6 +205,15 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Napi forma: a modell várakozása felett / alatt járó lövő — a tanács
+    // a forró kéz próbájától függ (kitart-e a napi forma a könyvtárban).
+    try {
+      for (final a in await _api.fetchLiveForm(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Várható védekezés: a meccs elején a többi meccsük fő rendszere
     // ("ai"), és ha a 15., 30., 45. percben eltérnek tőle, a figura-terv
     // igazítása ("taktika", magas súllyal).

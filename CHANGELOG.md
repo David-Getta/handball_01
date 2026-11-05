@@ -5,6 +5,41 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.191 óta)
 
+- **Várakozás és valóság a meccs után** (motor + végpont + meccs-jelentés
+  + meccs-képernyő): hol lepett meg minket a meccs? A meccs előtti
+  várakozás — CSAK a két csapat korábbi meccseiből: a várható eredmény,
+  a várható gólszerzők és a várható fal — a valósághoz mérve: "Várakozás:
+  Hazai 25–25 Vendég — lett: 30–24 (Hazai 5,0 góllal a várt felett)",
+  "Hazai: a 9-es 6 gólt lőtt a várt 3,0 helyett", "Vendég 5-1 fallal
+  védekezett a várt 6-0 helyett". Edzőileg: ahol a meccs eltért a
+  várakozástól, ott érdemes a videót és a felderítést újranézni. Az
+  eredmény két góltól, a lövő másfél góltól szól (legfeljebb négy lövő);
+  ha semmi sem tér el, azt is kimondja. A /matches/{id}/forecast-review,
+  a meccs-jelentés "Várakozás és valóság" szakasza és az összefoglaló
+  fül kártyája (play_simulation.forecast_review).
+
+- **A forró kéz próbája és a napi forma élőben** (motor + élő végpont +
+  élő képernyő + szezon-riport + szezon-képernyő): kitart-e a napi forma?
+  A könyvtár lövő × meccs párjain (félidőnként legalább négy lövés) az
+  első félidőben a helyzeteik felett ("forró") és alatt ("hideg")
+  befejező lövők második félideje: "az első félidőben forró kezű lövők
+  (14 pár) a második félidőben lövésenként +2 százalékpont gólt
+  szereztek a helyzeteikhez képest (a hidegek, 11 pár: +1) — a napi
+  forma nem tart ki: a modellre (a szezon szorzójára) építsetek". Élőben
+  a 15., 30. és 45. percben, ha egy lövő az addigi lövéseiből 1,5 góllal
+  a modell várakozása felett vagy alatt jár, a tanács a próbától függ:
+  "Hideg kéz (30. perc): Hazai — a 9-es ma 1/6 (a modell szerint 2,8
+  gól) — a könyvtár szerint a napi forma nem tart ki: ne vegyétek el
+  tőle a lövést, a modell szerint jön"; a másik kispad a saját
+  szemszögéből kapja: "Forró kéz az ellenfélnél … — ne bontsátok meg
+  miatta a falat" / "fogjátok szorosan, kettőzzetek rá". Edzőileg: a "járassátok a forró
+  kezűre" / "vegyétek el a lövést a hidegtől" ösztön csak akkor jó, ha a
+  napi forma a pályán is kitart. A /matches/{id}/live-forma (a meccs
+  nélkül, okszerűen), a /library/player-model-check "forma_proba" mezője
+  (szezon-képernyő) és a szezon-riport "Napi forma" sora a csapat
+  lövőire (play_simulation.shooter_form_sample, hot_hand_backtest,
+  live_form_alerts).
+
 - **Kulcsember: gól-érték a cserénél** (motor + végpont + meccsterv +
   nyomtatható meccsterv): a várható gólszerzők mellé, hogy ki ér a
   legtöbbet — a lövő várható gólja mínusz ugyanannyi lövés a csapat

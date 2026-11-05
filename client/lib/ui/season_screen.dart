@@ -161,9 +161,11 @@ class _SeasonScreenState extends State<SeasonScreen> {
     } catch (_) {}
   }
 
-  /// A LÖVŐ-MODELL PRÓBÁJA: a könyvtár összesítője és csapatonként a
-  /// motor mondata (play_simulation.shooter_model_backtest). Nincs
-  /// becsülhető csapat → a szakasz elmarad.
+  /// A MODELLEK PRÓBÁJA: a lövő-, a kapus- és a döntés-modell
+  /// könyvtári összesítője és csapatonként a motor mondata, alatta a
+  /// meccs-előrejelzés, a várható gólszerzők, az élő esély, a várható
+  /// védekezés és a napi forma próbája (/library/player-model-check).
+  /// Nincs ítélet → a szakasz elmarad.
   List<Widget> _modelCheckSection() {
     List<Map<String, dynamic>> sorok(String k) =>
         ((_modelCheck[k] as List?) ?? const [])
@@ -177,9 +179,11 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final golSzoveg = (_modelCheck["golszerzo_proba"] as Map?)?["verdict"];
     final eloSzoveg = (_modelCheck["elo_esely_proba"] as Map?)?["verdict"];
     final vedSzoveg = (_modelCheck["vedekezes_proba"] as Map?)?["verdict"];
+    final formaSzoveg = (_modelCheck["forma_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
-        eloSzoveg is! String && vedSzoveg is! String) {
+        eloSzoveg is! String && vedSzoveg is! String &&
+        formaSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -189,12 +193,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
         (_modelCheck["kapus_osszes"] as Map?)?.cast<String, dynamic>();
     return [
       const SizedBox(height: AppSpacing.lg),
-      Text("A LÖVŐ-MODELL PRÓBÁJA", style: AppText.sectionLabel),
+      Text("A MODELLEK PRÓBÁJA", style: AppText.sectionLabel),
       const SizedBox(height: 4),
-      Text("A meccsek időrendjében: minden meccs góljait a KORÁBBI "
-          "meccsekből tanult lövő-szorzóval becsüljük, és a nyers várható "
-          "gólhoz mérjük. Ha a modell közelebb van a valódi gólokhoz, a "
-          "\"7-es távolról 1,3×\" mondatokra lehet építeni.",
+      Text("A meccsek időrendjében minden modell CSAK a korábbi meccsekből "
+          "jósol, és a pálya dönt: a lövő- és a kapus-szorzó a nyers "
+          "várható gólhoz, a döntés-tanács a többi döntéshez, az "
+          "előrejelzés a formához mérve. Ahol a modell pontosabb, a "
+          "mondataira lehet építeni.",
           style: AppText.label),
       const SizedBox(height: AppSpacing.sm),
       if (osszes?["verdict"] is String)
@@ -260,6 +265,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (vedSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Védekezési rendszer: $vedSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // A forró kéz próbája: kitart-e a napi forma, vagy a modell a jobb.
+      if (formaSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Napi forma: $formaSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
     ];

@@ -36,6 +36,11 @@ class SummaryPanel extends StatelessWidget {
   /// a panel a grafikonokkal kezd (pl. demónál nincs backend-összefoglaló).
   final Map<String, dynamic>? coach;
 
+  /// Várakozás és valóság (GET /matches/{id}/forecast-review): a meccs
+  /// előtti várakozás a korábbi meccsekből, a valósághoz mérve — üresnél
+  /// a kártya elmarad.
+  final List<String> forecastReview;
+
   /// Gól-sorozatok az eredmény-grafikon kiemeléséhez (üresnél nincs sáv).
   final List<Map<String, dynamic>> runs;
 
@@ -84,6 +89,7 @@ class SummaryPanel extends StatelessWidget {
     this.intensity = const [],
     this.formations = const [],
     this.coach,
+    this.forecastReview = const [],
     this.runs = const [],
     this.training,
     this.keyPlayers,
@@ -840,6 +846,32 @@ class SummaryPanel extends StatelessWidget {
                     ]),
               ),
             ]),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        // VÁRAKOZÁS ÉS VALÓSÁG: hol lepett meg minket a meccs a korábbi
+        // meccsekből jósolthoz képest — ide érdemes a videót újranézni.
+        if (forecastReview.isNotEmpty) ...[
+          Text("VÁRAKOZÁS ÉS VALÓSÁG", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final s in forecastReview)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text("· $s.",
+                        style: AppText.label.copyWith(
+                            fontSize: 12.5, color: AppColors.textPrimary)),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
         ],
