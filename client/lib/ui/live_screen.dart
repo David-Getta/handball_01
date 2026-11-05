@@ -214,6 +214,14 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "ai", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // 7 a 6: a hajrában a vesztő csapatnak a könyvtár mérlege szerint.
+    try {
+      for (final a in await _api.fetchLiveSevenSix(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Hetes-dobó: a hetes pillanatában a könyvtár szerinti dobó.
     try {
       for (final a in await _api.fetchLiveSevenTaker(matchId)) {

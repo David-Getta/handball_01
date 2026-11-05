@@ -3,6 +3,31 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.193 óta)
+
+- **Megéri-e a 7 a 6?** (motor + élő végpont + élő képernyő + szezon-riport
+  + szezon-képernyő): a hátrányos hajrá klasszikus döntése, a klub
+  könyvtárából — a 7 a 6 szakaszok nettó hozama (a lőtt gólok mínusz az
+  üres kapura kapottak, szakaszonként) a 6 a 6 támadások gól-hozamához
+  mérve: "a 7 a 6 12 szakaszból 12 gólt hozott és 4 gólt kapott üres
+  kapura — nettó 0,67 gól szakaszonként, a 6 a 6 támadások 0,40 góljához
+  mérve: a hátrányos hajrában megéri lehozni a kapust"; ha többe kerül:
+  "maradjon a kapus"; ha nagyjából ugyanannyi: "a döntés a hetedik ember
+  figuráján múlik". Legalább 8 szakasz és 20 támadás kell. Élőben az 50.
+  és 55. percben szól a legfeljebb három góllal vesztő csapatnak ("7 a 6?
+  (55. perc, 24–26): Hazai 2 gól hátrányban — a könyvtár szerint megéri
+  lehozni a kapust …"). A /matches/{id}/live-7a6 (a mérleg a meccs
+  nélkül), a /library/player-model-check "het_a_hat_proba" mezője, a
+  szezon-képernyő és a szezon-riport "7 a 6" sora, az élő képernyő
+  taktika-jelzése (play_simulation.seven_six_sample, seven_six_backtest,
+  live_seven_six_alerts).
+  A meccs eleji AI-sorok mellé egy harmadik: "AI-döntések (Hazai, 6
+  korábbi meccs): kapus-választás: igazolt; hetes-dobó: a napi forma
+  döntsön; időkérés: megtöri a sorozatot; 7 a 6: nem éri meg" — a pad
+  döntés-próbái a csapat saját döntésein, a meccs nélkül
+  (play_simulation.decision_trust_summary, a /matches/{id}/live-modell-
+  proba "dontesek" sora).
+
 ## v0.1.193 — kiadva (2026-11-05)
 
 > Kiadás-jegyzet: A PAD DÖNTÉSEI, A KÖNYVTÁR PRÓBÁJÁVAL. Hat új

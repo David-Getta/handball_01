@@ -2572,6 +2572,93 @@ def test_a_pad_dontesei_vegpont(tmp_path, monkeypatch):
     assert c.get("/matches/nincs/decision-review").status_code == 404
 
 
+def test_az_elo_7_a_6_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-7a6: a mérleg a TÖBBI meccs mintáiból — a
+    valódi láncon ugyanaz, mint a motor (a szimulált meccseken nincs 7 a
+    6: a mérleg None, a jelzés ítélet nélkül szól); a /library/
+    player-model-check "het_a_hat_proba" mezője; 404."""
+    import json
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (live_seven_six_alerts,
+                                                   seven_six_backtest,
+                                                   seven_six_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setattr(ps, "HN_ELO_PERCEK", (1, 2))
+    monkeypatch.setattr(ps, "HN_HATRANY_MAX", 1000)
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=180, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: json.loads(json.dumps(
+                     seven_six_sample(m, Team(s_)))) for s_ in ("home", "away")}}
+                for m in ms]
+
+    proba = seven_six_backtest(lista(meccsek[:2]))
+    vart = live_seven_six_alerts(meccsek[2], proba)["alerts"]
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-7a6").json()
+    assert vart and [a["text"] for a in j["alerts"]] == [a["text"] for a in vart]
+    assert j["proba"] == proba
+    assert c.get("/matches/nincs/live-7a6").status_code == 404
+    assert c.get("/library/player-model-check").json()["het_a_hat_proba"] == \
+        seven_six_backtest(lista(meccsek))
+
+
+def test_az_elo_ai_dontesek_sora(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-modell-proba "dontesek" sora: a pad
+    döntés-próbái a csapat SAJÁT döntésein, a meccs nélkül — a próbák a
+    csapat nevével és a meccs kihagyásával hívódnak (itt beadott
+    ítéletekkel: a szimulált meccseken egyik sem ítél); ítélet nélkül
+    nincs sor."""
+    import handball.pipeline.play_simulation as ps
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=180, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        app.state.put_match(m)
+    h = m.meta.home_team
+    c = TestClient(app)
+    assert not [a for a in c.get("/matches/gt3/live-modell-proba").json()[
+        "alerts"] if a["fajta"] == "dontesek"]
+    hivasok = []
+
+    def ido(meccsek, csapat=None):
+        hivasok.append(("ido", csapat, sorted(x["match_id"] for x in meccsek)))
+        return {"itelet": "megtori"} if csapat == h else None
+
+    def het(meccsek, csapat=None):
+        hivasok.append(("het", csapat, sorted(x["match_id"] for x in meccsek)))
+        return {"itelet": "nem"} if csapat == h else None
+
+    monkeypatch.setattr(ps, "timeout_run_backtest", ido)
+    monkeypatch.setattr(ps, "seven_six_backtest", het)
+    j = c.get("/matches/gt3/live-modell-proba").json()
+    d = [a for a in j["alerts"] if a["fajta"] == "dontesek"]
+    assert [(a["team"], a["text"]) for a in d] == [
+        ("home", f"AI-döntések ({h}, 2 korábbi meccs): időkérés: megtöri a "
+                 "sorozatot; 7 a 6: nem éri meg")]
+    # A meccs nélkül (a többi két meccs és a segéd "fm" meccse), a csapat
+    # nevével.
+    assert ("ido", h, ["fm", "gt1", "gt2"]) in hivasok
+    assert ("het", h, ["fm", "gt1", "gt2"]) in hivasok
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

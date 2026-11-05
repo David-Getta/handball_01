@@ -1826,6 +1826,19 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Élő 7 a 6 tanács (GET /matches/{id}/live-7a6): a hajrában a vesztő
+  /// csapatnak a 7 a 6 könyvtári mérlege szerint.
+  Future<List<Map<String, dynamic>>> fetchLiveSevenSix(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/live-7a6"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a 7 a 6 tanács", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Élő hetes-dobó (GET /matches/{id}/live-hetes): a hetes pillanatában
   /// a dobó csapat kispadjának a könyvtár szerinti dobó.
   Future<List<Map<String, dynamic>>> fetchLiveSevenTaker(

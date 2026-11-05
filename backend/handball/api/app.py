@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # A 7 a 6 mérlegük — hibatűrően.
+        try:
+            hh_ = _het_a_hat_proba(csapat=team)
+            if hh_:
+                modell_proba = {**(modell_proba or {}), "het_a_hat": hh_,
+                                "het_a_hat_verdict": hh_["verdict"]}
+        except Exception:
+            pass
         # A hetes-irányuk próbája — hibatűrően.
         try:
             hi_ = _hetes_irany_proba(csapat=team)
@@ -8910,6 +8918,27 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _hetahat_minta_of(m_, side: str) -> dict:
+        """EGY meccs 7 a 6 mintája az adott oldalra (play_simulation.
+        seven_six_sample) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import seven_six_sample
+        return _cached_result(m_.meta.match_id, f"het-a-hat-minta-v1-{side}",
+                              lambda: seven_six_sample(m_, Team(side)))
+
+    def _het_a_hat_proba(csapat: str | None = None,
+                         kiveve: str | None = None):
+        """A 7 a 6 mérlege a könyvtáron (play_simulation.
+        seven_six_backtest; a `kiveve` meccs nélkül, a `csapat`
+        megadásával csak az ő 7 a 6-uk)."""
+        from ..pipeline.play_simulation import seven_six_backtest
+        return seven_six_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _hetahat_minta_of(m_, "home"),
+                       "away": _hetahat_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _felderites_proba(csapat: str | None = None,
                           kiveve: str | None = None):
         """A felderítés próbája a könyvtár időrendjében (scouting.
@@ -9229,7 +9258,8 @@ def create_app():
         "felderites_proba": a felderítés próbája (scouting_backtest) vagy
         None, "hetes_proba": a hetes-dobó választás próbája
         (seven_taker_backtest) vagy None, "hetes_irany_proba": a hetes-irány
-        próbája (seven_direction_backtest) vagy None,
+        próbája (seven_direction_backtest) vagy None, "het_a_hat_proba": a 7 a 6
+        mérlege (seven_six_backtest) vagy None,
         "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
@@ -9292,6 +9322,7 @@ def create_app():
                 "felderites_proba": _felderites_proba(),
                 "hetes_proba": _hetes_proba(),
                 "hetes_irany_proba": _hetes_irany_proba(),
+                "het_a_hat_proba": _het_a_hat_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -15087,6 +15118,20 @@ def create_app():
                 "proba": _hetes_proba(kiveve=match_id), "iranyok": ir,
                 "irany_proba": _hetes_irany_proba(kiveve=match_id)}
 
+    @app.get("/matches/{match_id}/live-7a6")
+    def get_live_seven_six(match_id: str):
+        """ÉLŐ 7 a 6 tanács: a hajrá perceiben (HN_ELO_PERCEK) a legfeljebb
+        három góllal vesztő csapat kispadjának a 7 a 6 könyvtári mérlege
+        szerint (play_simulation.live_seven_six_alerts; a mérleg a meccs
+        nélkül). Válasz: {"alerts": [...], "proba"}. 404: nincs ilyen
+        meccs."""
+        from ..pipeline.play_simulation import live_seven_six_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        proba = _het_a_hat_proba(kiveve=match_id)
+        return {**live_seven_six_alerts(match, proba), "proba": proba}
+
     @app.get("/matches/{match_id}/live-idokeres")
     def get_live_timeout(match_id: str):
         """ÉLŐ időkérés-tanács a sorozat ellen: amikor egy csapat 3
@@ -15214,11 +15259,15 @@ def create_app():
         mondja meg: melyik mondatra lehet építeni. Mellette ("fajta":
         "elorejelzesek") az előrejelző modellek próbái a csapat többi
         meccsén (play_simulation.forecast_trust_summary: eredmény,
-        gólszerzők, élő esély, fal, napi forma). Válasz: {"alerts": [{"t",
-        "t_s", "team", "team_name", "meccsek", "fajta" ("modellek" /
-        "elorejelzesek"), ("lovo", "kapus", "dontes"), "text"}]} — csak
-        ahol legalább egy próba ítélt. 404: nincs ilyen meccs."""
-        from ..pipeline.play_simulation import (forecast_rows_summary,
+        gólszerzők, élő esély, fal, napi forma), és ("fajta": "dontesek")
+        a pad döntés-próbái a csapat saját döntésein (decision_trust_summary:
+        kapus-választás, hetes-dobó, hetes-irány, időkérés, kapus napi
+        formája, 7 a 6). Válasz: {"alerts": [{"t", "t_s", "team",
+        "team_name", "meccsek", "fajta" ("modellek" / "elorejelzesek" /
+        "dontesek"), ("lovo", "kapus", "dontes"), "text"}]} — csak ahol
+        legalább egy próba ítélt. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import (decision_trust_summary,
+                                                forecast_rows_summary,
                                                 forecast_trust_summary,
                                                 model_trust_summary)
         match = _store.get(match_id)
@@ -15263,6 +15312,23 @@ def create_app():
                     "team_name": nev, "meccsek": n, "fajta": "elorejelzesek",
                     "text": (f"AI-előrejelzések ({nev}, {n} korábbi "
                              f"meccs): {sor2}")})
+            # A pad döntés-próbái: a csapat saját döntései a többi meccsen.
+            try:
+                sor3 = decision_trust_summary(
+                    kapus_valasztas=_kapus_valasztas_proba(nev, match_id),
+                    hetes=_hetes_proba(nev, match_id),
+                    hetes_irany=_hetes_irany_proba(nev, match_id),
+                    idokeres=_idokeres_proba(match_id, nev),
+                    kapus_forma=_kapusforma_proba(match_id, nev),
+                    het_a_hat=_het_a_hat_proba(nev, match_id))
+            except Exception:
+                sor3 = None
+            if sor3:
+                alerts.append({
+                    "t": t0, "t_s": round(t0 / fps, 1), "team": side,
+                    "team_name": nev, "meccsek": n, "fajta": "dontesek",
+                    "text": (f"AI-döntések ({nev}, {n} korábbi meccs): "
+                             f"{sor3}")})
         return {"alerts": alerts}
 
     @app.get("/matches/{match_id}/live-kapus-valasztas")

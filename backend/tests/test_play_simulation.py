@@ -2485,6 +2485,94 @@ def test_a_pad_dontesei_a_konyvtar_tukreben():
                             "kapus": None}
 
 
+def test_a_dontes_probak_egy_sorban():
+    """decision_trust_summary: a hat döntés-próba ítéletének rövid alakja
+    a megadott sorrendben; ítélet nélkül None."""
+    from handball.pipeline.play_simulation import decision_trust_summary
+
+    assert decision_trust_summary() is None
+    assert decision_trust_summary(
+        kapus_valasztas={"itelet": "igazolt"}, hetes={"itelet": "nem"},
+        hetes_irany={"itelet": "josolhato"}, idokeres={"itelet": "nem_tori"},
+        kapus_forma={"itelet": "visszaall"},
+        het_a_hat={"itelet": "megeri"}) == (
+        "kapus-választás: igazolt; hetes-dobó: a napi forma döntsön; "
+        "hetes-irány: jósolható; időkérés: csak váltással ér valamit; "
+        "kapus napi formája: nem tart ki; 7 a 6: megéri")
+    assert decision_trust_summary(
+        kapus_valasztas={"itelet": "egyenlo"}, hetes={"itelet": "igazolt"},
+        idokeres={"itelet": "megtori"}, kapus_forma={"itelet": "kitart"},
+        het_a_hat={"itelet": "nem"}) == (
+        "kapus-választás: a szokásos kapus is jó; hetes-dobó: a könyvtár "
+        "dobója jobb; időkérés: megtöri a sorozatot; kapus napi formája: "
+        "kitart; 7 a 6: nem éri meg")
+
+
+def test_megeri_e_a_7_a_6(monkeypatch):
+    """seven_six_sample: a 7 a 6 szakaszok és a 6 a 6 támadások mérlege
+    (a szimulált meccsen nincs 7 a 6); seven_six_backtest: megéri /
+    egyenlő / nem, kevés szakasznál None, csapat-szűrő;
+    live_seven_six_alerts: a hajrá perceiben a vesztő csapatnak, a mérleg
+    szerinti tanáccsal."""
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (HN_MIN_ABLAK,
+                                                   live_seven_six_alerts,
+                                                   seven_six_backtest,
+                                                   seven_six_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    h = seven_six_sample(m, Team.HOME)
+    assert h["ablak"] == h["lott"] == h["kapott"] == 0
+    assert h["tamadas"] > 0 and h["gol"] > 0
+    assert seven_six_sample(m, Team.AWAY)["gol"] == 0
+
+    def meccsek(mi, n=4, home="A"):
+        return [{"home": home, "away": "B", "minta": {"home": mi, "away": {}}}
+                ] * n
+
+    jo = meccsek({"ablak": 3, "lott": 3, "kapott": 1, "tamadas": 10,
+                  "gol": 4})
+    p = seven_six_backtest(jo)
+    assert (p["ablak"], p["het_netto"], p["hat_hozam"], p["itelet"]) == \
+        (12, 0.667, 0.4, "megeri")
+    assert p["verdict"] == (
+        "a 7 a 6 12 szakaszból 12 gólt hozott és 4 gólt kapott üres kapura — "
+        "nettó 0,67 gól szakaszonként, a 6 a 6 támadások 0,40 góljához mérve: "
+        "a hátrányos hajrában megéri lehozni a kapust")
+    rossz = seven_six_backtest(meccsek({"ablak": 3, "lott": 2, "kapott": 1,
+                                        "tamadas": 10, "gol": 4}))
+    assert rossz["itelet"] == "nem" and rossz["verdict"].endswith(
+        "maradjon a kapus")
+    egy = seven_six_backtest(meccsek({"ablak": 3, "lott": 2, "kapott": 1,
+                                      "tamadas": 10, "gol": 3}))
+    assert egy["itelet"] == "egyenlo"          # 0,33 a 0,30 mellett
+    assert seven_six_backtest(meccsek({"ablak": HN_MIN_ABLAK - 1, "lott": 1,
+                                       "kapott": 0, "tamadas": 30,
+                                       "gol": 9}, n=1)) is None
+    assert seven_six_backtest(jo, "A") == p
+    assert seven_six_backtest(jo, "B") is None
+
+    # Élőben: a percek a rövid felvételhez, a hátrány-korlát a
+    # szimulált (egyoldalú) meccshez igazítva — a vendég vesztésre áll.
+    monkeypatch.setattr(ps, "HN_ELO_PERCEK", (2, 4, 9))
+    monkeypatch.setattr(ps, "HN_HATRANY_MAX", 1000)
+    ki = live_seven_six_alerts(m, p)["alerts"]
+    assert [(a["perc"], a["team"]) for a in ki] == [(2, "away"), (4, "away")]
+    assert ki[0]["allas"][1] == 0 and ki[0]["hatrany"] == ki[0]["allas"][0]
+    assert ki[0]["text"] == (
+        f"7 a 6? (2. perc, {ki[0]['allas'][0]}–0): {m.meta.away_team} "
+        f"{ki[0]['hatrany']} gól hátrányban — a könyvtár szerint megéri "
+        f"lehozni a kapust ({p['verdict']})")
+    k2 = live_seven_six_alerts(m)["alerts"]
+    assert k2[0]["text"].endswith("a könyvtár még nem dönti el, megéri-e a "
+                                  "7 a 6")
+    monkeypatch.setattr(ps, "HN_HATRANY_MAX", 3)
+    assert live_seven_six_alerts(m, p)["alerts"] == []
+
+
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
     """defense_system_forecast: a korábbi meccsek védekező kockáinak
     eloszlása és a fő rendszer (két meccstől, VR_MIN_KOCKA kockától);

@@ -3093,6 +3093,50 @@ def forecast_trust_summary(elore: dict | None = None,
     return "; ".join(reszek) if reszek else None
 
 
+def decision_trust_summary(kapus_valasztas: dict | None = None,
+                           hetes: dict | None = None,
+                           hetes_irany: dict | None = None,
+                           idokeres: dict | None = None,
+                           kapus_forma: dict | None = None,
+                           het_a_hat: dict | None = None) -> str | None:
+    """A pad döntés-próbái egy sorban — az élő képernyő meccs eleji
+    harmadik AI-sorához: a kapus-választás (keeper_choice_backtest), a
+    hetes-dobó (seven_taker_backtest), a hetes-irány
+    (seven_direction_backtest), az időkérés a sorozat ellen
+    (timeout_run_backtest), a kapus napi formája (keeper_hot_hand_backtest)
+    és a 7 a 6 mérlege (seven_six_backtest) — az ítéletük rövid alakja.
+    Mit jelent edzőileg: a meccs elején látszik, a pad melyik döntésénél
+    lehet a könyvtár szabályára építeni. None, ha egyik próba sem ítélt."""
+    reszek = []
+    if kapus_valasztas:
+        reszek.append({"igazolt": "kapus-választás: igazolt",
+                       "egyenlo": "kapus-választás: a szokásos kapus is jó",
+                       "nem": "kapus-választás: nem igazolódott"}.get(
+            kapus_valasztas.get("itelet"), "kapus-választás: nincs ítélet"))
+    if hetes:
+        reszek.append("hetes-dobó: a könyvtár dobója jobb"
+                      if hetes.get("itelet") == "igazolt" else
+                      "hetes-dobó: a napi forma döntsön")
+    if hetes_irany:
+        reszek.append("hetes-irány: jósolható"
+                      if hetes_irany.get("itelet") == "josolhato" else
+                      "hetes-irány: nem jósolható")
+    if idokeres:
+        reszek.append("időkérés: megtöri a sorozatot"
+                      if idokeres.get("itelet") == "megtori" else
+                      "időkérés: csak váltással ér valamit")
+    if kapus_forma:
+        reszek.append("kapus napi formája: kitart"
+                      if kapus_forma.get("itelet") == "kitart" else
+                      "kapus napi formája: nem tart ki")
+    if het_a_hat:
+        reszek.append({"megeri": "7 a 6: megéri",
+                       "egyenlo": "7 a 6: annyit hoz, mint a 6 a 6",
+                       "nem": "7 a 6: nem éri meg"}.get(
+            het_a_hat.get("itelet"), "7 a 6: nincs ítélet"))
+    return "; ".join(reszek) if reszek else None
+
+
 def model_checks_overview(mc: dict) -> dict | None:
     """Az AI-próbák összképe: a /library/player-model-check válaszából
     (`mc`) próbánként, hogy ítélt-e, és bizonyított-e — a lövő-szorzók,
@@ -5773,6 +5817,143 @@ def live_seven_direction_alerts(match: Match, profilok: dict | None = None,
                                f"{pr['verdict']}"})
     return {"alerts": alerts}
 
+
+
+# ---- Megéri-e a 7 a 6? -----------------------------------------------------
+# A hátrányos hajrá klasszikus döntése: lehozzuk-e a kapust a hetedik
+# mezőnyjátékosért. A könyvtár mérlege: a 7 a 6 szakaszok (goalkeeper.
+# empty_net_goals) nettó hozama — a lőtt gólok mínusz az üres kapura
+# kapottak, szakaszonként — a 6 a 6 elleni támadások gól-hozamához mérve
+# (setplays.segment_attacks). Ha a 7 a 6 legalább HN_ITELET_GOL góllal
+# többet hoz támadásonként, megéri; ha ennyivel kevesebbet, nem. Élőben a
+# HN_ELO_PERCEK perceiben szól a HN_HATRANY_MAX góllal vesztő csapatnak.
+HN_MIN_ABLAK = 8         # legalább ennyi 7 a 6 szakasz kell az ítélethez
+HN_MIN_TAMADAS = 20      # és ennyi 6 a 6 támadás a viszonyításhoz
+HN_ITELET_GOL = 0.05     # támadásonkénti gól-különbség az ítélethez
+HN_ELO_PERCEK = (50, 55)
+HN_HATRANY_MAX = 3
+
+
+def seven_six_sample(match: Match, team: Team,
+                     config: TacticsConfig | None = None) -> dict:
+    """A 7 a 6 mérleg NYERS, JSON-barát meccs-mintája a `team` csapatra:
+    {"ablak" (7 a 6 szakasz), "lott" (gól 7 a 6-ban), "kapott" (üres
+    kapura kapott gól), "tamadas" (6 a 6 támadás: a támadás-szakaszok a 7
+    a 6 szakaszok nélkül), "gol" (gól a 7 a 6-on kívül)}. Meccsek közt
+    összeadható."""
+    from .event_detection import EventType, detect_shots
+    from .goalkeeper import empty_net_goals
+    from .setplays import segment_attacks
+    config = config or TacticsConfig()
+    if not match.frames:
+        return {"ablak": 0, "lott": 0, "kapott": 0, "tamadas": 0, "gol": 0}
+    en = empty_net_goals(match, config).get(team.value) or {}
+    ablak = int(en.get("windows", 0))
+    lott = int(en.get("scored_7v6", 0))
+    tam = sum(1 for sq in segment_attacks(match, config) if sq.team == team)
+    gol = sum(1 for e in detect_shots(match, config)
+              if e.type == EventType.GOAL and e.team == team)
+    return {"ablak": ablak, "lott": lott,
+            "kapott": int(en.get("conceded_empty", 0)),
+            "tamadas": max(0, tam - ablak), "gol": max(0, gol - lott)}
+
+
+def seven_six_backtest(meccsek: list,
+                       csapat: str | None = None) -> dict | None:
+    """A 7 a 6 mérlege a könyvtáron: `meccsek` = [{"home", "away",
+    "minta": {"home", "away"} (seven_six_sample)}]. A 7 a 6 szakaszok
+    nettó hozama ((lőtt − üres kapura kapott) / szakasz) a 6 a 6
+    támadások gól-hozamához (gól / támadás) mérve; a `csapat` megadásával
+    csak az ő 7 a 6-uk. Mit jelent edzőileg: a hátrányos hajrában a kapus
+    lehozása a klub meccsein többet hozott-e, mint amennyibe került.
+    Visszatérés: {"ablak", "lott", "kapott", "tamadas", "gol",
+    "het_netto", "hat_hozam", "kulonbseg", "itelet" ("megeri" /
+    "egyenlo" / "nem"), "verdict"} — None, ha HN_MIN_ABLAK-nál kevesebb a
+    7 a 6 szakasz vagy HN_MIN_TAMADAS-nál a 6 a 6 támadás."""
+    o = {"ablak": 0, "lott": 0, "kapott": 0, "tamadas": 0, "gol": 0}
+    for m in meccsek or []:
+        for side in ("home", "away"):
+            if csapat is not None and m.get(side) != csapat:
+                continue
+            mi = (m.get("minta") or {}).get(side) or {}
+            for k in o:
+                o[k] += int(mi.get(k, 0))
+    if o["ablak"] < HN_MIN_ABLAK or o["tamadas"] < HN_MIN_TAMADAS:
+        return None
+    het = (o["lott"] - o["kapott"]) / o["ablak"]
+    hat = o["gol"] / o["tamadas"]
+    d = het - hat
+    itelet = ("megeri" if d >= HN_ITELET_GOL else
+              "nem" if d <= -HN_ITELET_GOL else "egyenlo")
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    return {**o, "het_netto": round(het, 3), "hat_hozam": round(hat, 3),
+            "kulonbseg": round(d, 3), "itelet": itelet,
+            "verdict": (f"a 7 a 6 {o['ablak']} szakaszból {o['lott']} gólt "
+                        f"hozott és {o['kapott']} gólt kapott üres kapura — "
+                        f"nettó {sz(het)} gól szakaszonként, a 6 a 6 "
+                        f"támadások {sz(hat)} góljához mérve: "
+                        + {"megeri": "a hátrányos hajrában megéri lehozni "
+                                     "a kapust",
+                           "egyenlo": "a 7 a 6 nagyjából annyit hoz, mint a "
+                                      "6 a 6 — a döntés a hetedik ember "
+                                      "figuráján múlik",
+                           "nem": "a 7 a 6 többe kerül, mint amennyit hoz: "
+                                  "maradjon a kapus"}[itelet])}
+
+
+def live_seven_six_alerts(match: Match, proba: dict | None = None,
+                          config: TacticsConfig | None = None) -> dict:
+    """Élő 7 a 6 tanács: a HN_ELO_PERCEK perceiben (CSAK az addigi gólok
+    — okszerű) a legfeljebb HN_HATRANY_MAX góllal vesztő csapat
+    kispadjának a 7 a 6 könyvtári mérlege (`proba`, seven_six_backtest)
+    szerint. Visszatérés: {"alerts": [{"t", "t_s", "perc", "team",
+    "team_name", "hatrany", "allas", "text"}]}."""
+    from .event_detection import EventType, detect_shots
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    golok = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL
+                   and e.team.value in ("home", "away"))
+    itelet = (proba or {}).get("itelet")
+    tanacs = {"megeri": "a könyvtár szerint megéri lehozni a kapust",
+              "egyenlo": "a könyvtár szerint a 7 a 6 annyit hoz, mint a 6 a "
+                         "6 — csak kész figurával hozzátok le a kapust",
+              "nem": "a könyvtár szerint a 7 a 6 többe kerül, mint amennyit "
+                     "hoz: maradjon a kapus"}.get(
+        itelet, "a könyvtár még nem dönti el, megéri-e a 7 a 6")
+    for perc in HN_ELO_PERCEK:
+        hatar = t0 + int(round(perc * 60 * fps))
+        if match.frames[-1].t < hatar - fps:
+            continue                      # a meccs még nem ért el idáig
+        al = {"home": 0, "away": 0}
+        for t, side in golok:
+            if t <= hatar:
+                al[side] += 1
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            hatrany = al[masik] - al[side]
+            if not 1 <= hatrany <= HN_HATRANY_MAX:
+                continue
+            at = f"{al['home']}–{al['away']}"
+            alerts.append({"t": hatar, "t_s": round(hatar / fps, 1),
+                           "perc": perc, "team": side,
+                           "team_name": nevek[side], "hatrany": hatrany,
+                           "allas": [al["home"], al["away"]],
+                           "text": (f"7 a 6? ({perc}. perc, {at}): "
+                                    f"{nevek[side]} {hatrany} gól hátrányban "
+                                    f"— {tanacs}"
+                                    + (f" ({proba['verdict']})"
+                                       if proba and proba.get("verdict")
+                                       else ""))})
+    return {"alerts": alerts}
 
 # ---- A pad döntései a könyvtár tükrében ------------------------------------
 # A meccs UTÁN: hogyan döntött a pad a könyvtár szabályaihoz képest —
