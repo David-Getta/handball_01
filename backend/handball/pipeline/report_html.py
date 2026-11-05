@@ -531,10 +531,11 @@ ELOREJELZES_CIMKEK = (
     ("vedekezes_mi", "A mi várható védekezésünk"),
     ("kapus_mi", "Kapus ellenük"),
     ("hetes_mi", "Hetes-dobónk"),
+    ("hetes_irany_ok", "Az ő hetes-dobóik irányai"),
 )
 # Az előrejelzés-szakasz próba-jegyzetei (a sorok alatt, ebben a sorrendben).
 ELOREJELZES_PROBAK = ("proba", "golszerzo_proba", "kapus_proba",
-                      "felderites_proba", "hetes_proba")
+                      "felderites_proba", "hetes_proba", "hetes_irany_proba")
 
 
 def _elorejelzes_blokk(ej: dict | None, cim: str,
@@ -5319,6 +5320,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Hetes-dobó:</b> "
                f"{escape(str(mp['hetes_verdict']))}.</p>"
                if mp.get("hetes_verdict") else "")
+            + (f"<p><b>Hetes-irány:</b> "
+               f"{escape(str(mp['hetes_irany_verdict']))}.</p>"
+               if mp.get("hetes_irany_verdict") else "")
             + (f"<p><b>Kapus napi formája:</b> "
                f"{escape(str(mp['kapus_forma_verdict']))}.</p>"
                if mp.get("kapus_forma_verdict") else "")

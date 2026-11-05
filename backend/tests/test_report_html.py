@@ -684,19 +684,26 @@ def test_az_elorejelzes_blokk_a_dontes_probakkal():
                                                _elorejelzes_blokk)
 
     assert ("hetes_mi", "Hetes-dobónk") in ELOREJELZES_CIMKEK
+    assert ("hetes_irany_ok", "Az ő hetes-dobóik irányai") in ELOREJELZES_CIMKEK
     assert ELOREJELZES_PROBAK == ("proba", "golszerzo_proba", "kapus_proba",
-                                  "felderites_proba", "hetes_proba")
+                                  "felderites_proba", "hetes_proba",
+                                  "hetes_irany_proba")
     ej = {"text": "Hazai 27–25 Vendég", "kapus_mi": "az 1-es álljon a kapuban",
           "hetes_mi": "a hetest a 9-es dobja (11/13 a könyvtárban, 85%)",
           "proba": None, "golszerzo_proba": "A gólszerző-becslés próbája: x",
           "kapus_proba": "A kapus-választás próbája: y",
           "felderites_proba": None,
-          "hetes_proba": "A hetes-dobó választás próbája: z"}
+          "hetes_proba": "A hetes-dobó választás próbája: z",
+          "hetes_irany_ok": "hetes-irányaik (a dobó felől nézve): a 9-es "
+                            "70% jobbra (7/10)",
+          "hetes_irany_proba": "A hetes-irány próbája: w"}
     h = _elorejelzes_blokk(ej, "Előrejelzés")
     assert ("<li>Kapus ellenük: az 1-es álljon a kapuban.</li>"
             "<li>Hetes-dobónk: a hetest a 9-es dobja (11/13 a könyvtárban, "
-            "85%).</li></ul>") in h
+            "85%).</li><li>Az ő hetes-dobóik irányai: hetes-irányaik (a dobó "
+            "felől nézve): a 9-es 70% jobbra (7/10).</li></ul>") in h
     assert h.endswith('<p class="note">A gólszerző-becslés próbája: x.</p>'
                       '<p class="note">A kapus-választás próbája: y.</p>'
-                      '<p class="note">A hetes-dobó választás próbája: z.</p>')
+                      '<p class="note">A hetes-dobó választás próbája: z.</p>'
+                      '<p class="note">A hetes-irány próbája: w.</p>')
     assert _elorejelzes_blokk({"hetes_proba": None}, "x") == ""

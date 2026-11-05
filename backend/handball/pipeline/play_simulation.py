@@ -3104,7 +3104,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     többet tud (keeper_choice_backtest), a figura-felderítés, ha a
     visszatérő figurákra érdemes készülni, a felderítés, ha a kulcsai
     átvihetők a következő meccsre (scouting_backtest), a hetes-dobó, ha
-    a könyvtár dobója a többieknél jobb (seven_taker_backtest). Mit
+    a könyvtár dobója a többieknél jobb (seven_taker_backtest), a
+    hetes-irány, ha a dobók fő iránya jósolható (seven_direction_backtest).
+    Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3148,6 +3150,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     hp = mc.get("hetes_proba")
     if hp:
         add("hetes-dobó", hp.get("itelet") == "igazolt")
+    hi = mc.get("hetes_irany_proba")
+    if hi:
+        add("hetes-irány", hi.get("itelet") == "josolhato")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -5558,6 +5563,214 @@ def live_seven_taker_alerts(match: Match, javaslatok: dict | None = None,
                        "mez": int(j["mez"]),
                        "text": f"Hetes ({perc}. perc): {nevek[side]} — "
                                f"{j['verdict']}"})
+    return {"alerts": alerts}
+
+
+# ---- Hetes-irány: merre lő a dobó ------------------------------------------
+# A kapus felkészítése a hetesre: a dobó fő iránya a könyvtárból (a dobó
+# felől nézve bal / közép / jobb — rules.seven_meter_outcomes "irany").
+# Egy dobó fő iránya akkor mondható ki, ha legalább HI_MIN_DOBAS
+# irány-mérhető hetese van, és a fő irány részaránya legalább
+# HI_DOMINANS. A próba a könyvtár időrendjében: a KORÁBBI meccsekből jósolt
+# fő irány a meccs heteseiből hányat talált — a csapat fő irányához és a
+# véletlenhez (három irány: 33%) mérve. Élőben a hetes pillanatában a
+# VÉDEKEZŐ kispadnak szól.
+HI_MIN_DOBAS = 3
+HI_DOMINANS = 0.5
+HI_PROBA_MIN = 8
+HI_ITELET_PP = 15.0
+HI_IRANYOK = ("bal", "közép", "jobb")
+HI_IRANY_HU = {"bal": "balra", "közép": "középre", "jobb": "jobbra"}
+
+
+def seven_direction_sample(match: Match, team: Team,
+                           config: TacticsConfig | None = None) -> dict:
+    """A hetes-irány NYERS, JSON-barát meccs-mintája: a `team` dobóinak
+    hetesei irány szerint — {mez (str): {"bal", "közép", "jobb"}} (a dobó
+    felől nézve; az irány vagy dobó nélküli hetes kimarad). Meccsek közt
+    összeadható."""
+    from .rules import seven_meter_outcomes
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+    ki: dict = {}
+    for sm in seven_meter_outcomes(match, config):
+        if sm.get("team") != team.value or sm.get("shooter_id") is None \
+                or sm.get("irany") not in HI_IRANYOK:
+            continue
+        mez = jersey.get(sm["shooter_id"])
+        if mez is None:
+            continue
+        r = ki.setdefault(str(int(mez)), {d: 0 for d in HI_IRANYOK})
+        r[sm["irany"]] += 1
+    return ki
+
+
+def _irany_osszeg(mintak: list) -> dict:
+    """Több meccs hetes-irány mintájának összege — {mez (int): {irány: n}}."""
+    ossz: dict = {}
+    for m in mintak or []:
+        for mez, iranyok in (m or {}).items():
+            r = ossz.setdefault(int(mez), {d: 0 for d in HI_IRANYOK})
+            for d in HI_IRANYOK:
+                r[d] += int((iranyok or {}).get(d, 0))
+    return ossz
+
+
+def _fo_irany(iranyok: dict, min_dobas: int = HI_MIN_DOBAS) -> tuple | None:
+    """Egy irány-eloszlás fő iránya: (irány, dobás, részarány) — None, ha
+    min_dobas-nál kevesebb a hetes, vagy a fő irány HI_DOMINANS alatt
+    van. Holtversenyben a sorrend: bal, közép, jobb."""
+    n = sum(int(iranyok.get(d, 0)) for d in HI_IRANYOK)
+    if n < min_dobas:
+        return None
+    d = max(HI_IRANYOK, key=lambda x: (int(iranyok.get(x, 0)),
+                                       -HI_IRANYOK.index(x)))
+    arany = int(iranyok.get(d, 0)) / n
+    if arany < HI_DOMINANS:
+        return None
+    return d, n, arany
+
+
+def seven_direction_profile(mintak: list) -> dict | None:
+    """A dobók hetes-irányai a kész mintákból (seven_direction_sample
+    meccsenként): dobónként a fő irány (legalább HI_MIN_DOBAS hetes, a fő
+    irány legalább HI_DOMINANS részarány), és a csapat egészének fő
+    iránya. Visszaad: {"dobok": [{"mez", "dobas", "irany", "arany_pct",
+    "verdict"}] (dobás szerint), "csapat": {"irany", "dobas",
+    "arany_pct"} vagy None, "verdict"} — None, ha egy dobónak és a
+    csapatnak sincs kimondható fő iránya."""
+    ossz = _irany_osszeg(mintak)
+    dobok = []
+    for mez, iranyok in ossz.items():
+        fo = _fo_irany(iranyok)
+        if fo is None:
+            continue
+        d, n, arany = fo
+        dobok.append({"mez": mez, "dobas": n, "irany": d,
+                      "arany_pct": round(100.0 * arany, 1),
+                      "verdict": (f"{mezszam_nevelovel(mez)} {100.0 * arany:.0f}% "
+                                  f"{HI_IRANY_HU[d]} ({int(iranyok[d])}/{n})")})
+    dobok.sort(key=lambda r: (-r["dobas"], r["mez"]))
+    csapat_ir = {d: sum(int(v.get(d, 0)) for v in ossz.values())
+                 for d in HI_IRANYOK}
+    fo = _fo_irany(csapat_ir)
+    csapat = None
+    if fo is not None:
+        d, n, arany = fo
+        csapat = {"irany": d, "dobas": n, "arany_pct": round(100.0 * arany, 1)}
+    if not dobok and csapat is None:
+        return None
+    if dobok:
+        verdict = "hetes-irányaik (a dobó felől nézve): " + ", ".join(
+            r["verdict"] for r in dobok)
+    else:
+        verdict = (f"hetes-irányuk (a dobó felől nézve): a csapat "
+                   f"{csapat['arany_pct']:.0f}% {HI_IRANY_HU[csapat['irany']]} "
+                   f"({csapat['dobas']} hetesből)")
+    return {"dobok": dobok, "csapat": csapat, "verdict": verdict}
+
+
+def seven_direction_backtest(meccsek: list,
+                             csapat: str | None = None) -> dict | None:
+    """A hetes-irány próbája: `meccsek` = [{"match_id", "home", "away",
+    "minta": {"home", "away"} (seven_direction_sample)}] időrendben.
+    Minden meccsre és oldalra a KORÁBBI meccsekből a dobók fő iránya; a
+    meccs heteseiből (azoknak a dobóknak, akiknek van jósolt irányuk)
+    hány ment a jósolt irányba — a csapat fő irányához (ugyanazokra a
+    hetesekre) és a véletlenhez (33%) mérve. A `csapat` megadásával csak
+    az ő dobóik. Mit jelent edzőileg: készülhet-e a kapus a dobó fő
+    irányára, vagy a hetes-irány nem jósolható. Visszatérés: {"hetesek",
+    "talalt", "talalat_pct", "csapat_talalt", "csapat_pct", "sorok",
+    "itelet" ("josolhato" / "nem"), "verdict"} — None, ha HI_PROBA_MIN-nél
+    kevesebb a jósolt hetes."""
+    n = talalt = cs_talalt = 0
+    cs_n = 0
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            korabbi = [(x.get("minta") or {}).get(s) or {} for x in meccsek[:i]
+                       for s in ("home", "away") if x.get(s) == nev]
+            ossz = _irany_osszeg(korabbi)
+            if not ossz:
+                continue
+            cs_fo = _fo_irany({d: sum(int(v.get(d, 0)) for v in ossz.values())
+                               for d in HI_IRANYOK})
+            most = (m.get("minta") or {}).get(side) or {}
+            for mez, iranyok in most.items():
+                fo = _fo_irany(ossz.get(int(mez)) or {})
+                if fo is None:
+                    continue
+                db = sum(int(iranyok.get(d, 0)) for d in HI_IRANYOK)
+                if not db:
+                    continue
+                t = int(iranyok.get(fo[0], 0))
+                n += db
+                talalt += t
+                ct = None
+                if cs_fo is not None:
+                    ct = int(iranyok.get(cs_fo[0], 0))
+                    cs_n += db
+                    cs_talalt += ct
+                sorok.append({"match_id": m.get("match_id"), "team": nev,
+                              "mez": int(mez), "josolt": fo[0], "hetesek": db,
+                              "talalt": t, "csapat_irany":
+                              cs_fo[0] if cs_fo else None, "csapat_talalt": ct})
+    if n < HI_PROBA_MIN:
+        return None
+    pct = 100.0 * talalt / n
+    cs_pct = 100.0 * cs_talalt / cs_n if cs_n else None
+    josolhato = pct - 100.0 / 3 >= HI_ITELET_PP
+    return {"hetesek": n, "talalt": talalt, "talalat_pct": round(pct, 1),
+            "csapat_talalt": cs_talalt,
+            "csapat_pct": None if cs_pct is None else round(cs_pct, 1),
+            "sorok": sorok, "itelet": "josolhato" if josolhato else "nem",
+            "verdict": (f"a dobók fő iránya {n} hetesből {talalt} alkalommal "
+                        f"jött be ({pct:.0f}%"
+                        + (f"; a csapat fő iránya: {cs_pct:.0f}%"
+                           if cs_pct is not None else "")
+                        + "; véletlen: 33%) — "
+                        + ("a kapus készülhet a dobó fő irányára" if josolhato
+                           else "a hetes-irányuk nem jósolható: a kapus a "
+                           "mozdulatra figyeljen, ne a könyvtárra"))}
+
+
+def live_seven_direction_alerts(match: Match, profilok: dict | None = None,
+                                config: TacticsConfig | None = None) -> dict:
+    """Élő hetes-irány: a hetes pillanatában (rules.detect_seven_meters) a
+    VÉDEKEZŐ kispadnak a dobó csapat hetes-irányai (`profilok`: {"home" /
+    "away": seven_direction_profile}). Visszatérés: {"alerts": [{"t",
+    "t_s", "perc", "team" (a védekező), "team_name", "dobo_team",
+    "text"}]}."""
+    from .rules import detect_seven_meters
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames or not profilok:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    for sm in detect_seven_meters(match, config):
+        side = sm.get("team")
+        if side not in nevek:
+            continue
+        pr = (profilok or {}).get(side)
+        if not pr:
+            continue
+        masik = "away" if side == "home" else "home"
+        perc = int((sm["t"] - t0) / fps // 60) + 1
+        alerts.append({"t": sm["t"], "t_s": round(sm["t"] / fps, 1),
+                       "perc": perc, "team": masik, "team_name": nevek[masik],
+                       "dobo_team": side,
+                       "text": f"Hetes ellenünk ({perc}. perc): {nevek[side]} — "
+                               f"{pr['verdict']}"})
     return {"alerts": alerts}
 
 # ---- Élő kapus-választás ----------------------------------------------------

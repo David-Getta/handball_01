@@ -5,6 +5,29 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.192 óta)
 
+- **Hetes-irány: merre lő a dobó** (motor + élő végpont + élő képernyő +
+  meccsterv + nyomtatható meccsterv + szezon-riport + szezon-képernyő +
+  összkép): a kapus felkészítése a hetesre — a dobók fő iránya a
+  könyvtárból (a dobó felől nézve), ha legalább három irány-mérhető
+  hetese van és a fő irány legalább a fele: "hetes-irányaik (a dobó felől
+  nézve): a 9-es 70% jobbra (7/10), a 7-es 67% balra (2/3)". A próba a
+  könyvtár időrendjében: a KORÁBBI meccsekből jósolt fő irány a meccs
+  heteseiből hányat talált — a csapat fő irányához és a véletlenhez (33%)
+  mérve: "a dobók fő iránya 20 hetesből 18 alkalommal jött be (90%; a
+  csapat fő iránya: 65%; véletlen: 33%) — a kapus készülhet a dobó fő
+  irányára"; ha nem: "a hetes-irányuk nem jósolható: a kapus a mozdulatra
+  figyeljen, ne a könyvtárra". Élőben a hetes pillanatában a VÉDEKEZŐ
+  kispadnak szól ("Hetes ellenünk (23. perc): Vendég — hetes-irányaik
+  …"). A /matches/{id}/live-hetes "iranyok" és "irany_proba" mezője (a
+  jelzés a közös folyamban), a /library/forecast "hetes_irany" és
+  "hetes_irany_proba", a /library/player-model-check "hetes_irany_proba"
+  mezője, a meccsterv ELŐREJELZÉS kártyájának "Az ő hetes-dobóik — a
+  kapusunknak" sora a próbával, a nyomtatható meccsterv sora és
+  jegyzete, a szezon-képernyő és a szezon-riport "Hetes-irány" sora, az
+  összkép új sora (play_simulation.seven_direction_sample,
+  seven_direction_profile, seven_direction_backtest,
+  live_seven_direction_alerts).
+
 - **Hetes-dobó választás és a próbája** (motor + élő végpont + élő
   képernyő + meccsterv + szezon-riport + szezon-képernyő + összkép): ki
   dobja a hetest? A könyvtár hetesei dobónként (gól / védés / kihagyva,

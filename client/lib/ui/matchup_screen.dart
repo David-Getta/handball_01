@@ -311,6 +311,10 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final hetes = ((_forecast?["hetes_dobo"] as Map?)?["home"]
         as Map?)?["verdict"];
     final hetesProba = (_forecast?["hetes_proba"] as Map?)?["verdict"];
+    // Az ő dobóik hetes-irányai ("away" = ŐK) — a kapusunknak.
+    final hetesIrany = ((_forecast?["hetes_irany"] as Map?)?["away"]
+        as Map?)?["verdict"];
+    final hiProba = (_forecast?["hetes_irany_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
       // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
@@ -399,6 +403,17 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (hetes is String && hetesProba is String) ...[
                   const SizedBox(height: 4),
                   Text("A hetes-dobó választás próbája: $hetesProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                if (hetesIrany is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("Az ő hetes-dobóik — a kapusunknak: $hetesIrany.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (hetesIrany is String && hiProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A hetes-irány próbája: $hiProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
                 // A figura-felderítés súlya: visszatérnek-e a figurák.

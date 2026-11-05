@@ -188,6 +188,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
         (_modelCheck["kapus_valasztas_proba"] as Map?)?["verdict"];
     final fdSzoveg = (_modelCheck["felderites_proba"] as Map?)?["verdict"];
     final hetesSzoveg = (_modelCheck["hetes_proba"] as Map?)?["verdict"];
+    final hiSzoveg = (_modelCheck["hetes_irany_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
         vedok.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
@@ -195,7 +196,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
         formaSzoveg is! String && figSzoveg is! String &&
         kfSzoveg is! String && idoSzoveg is! String &&
         kvSzoveg is! String && fdSzoveg is! String &&
-        hetesSzoveg is! String) {
+        hetesSzoveg is! String && hiSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -328,6 +329,12 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (hetesSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Hetes-dobó: $hetesSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // A hetes-irány próbája: jósolható-e a dobók fő iránya.
+      if (hiSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Hetes-irány: $hiSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
       // A figuráik próbája: visszatérnek-e a felderítés figurái.

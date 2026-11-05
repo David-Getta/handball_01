@@ -2475,23 +2475,45 @@ def test_az_elo_hetes_dobo_vegpont(tmp_path, monkeypatch):
                      seven_taker_sample(m, Team(s_))))
                            for s_ in ("home", "away")}} for m in ms]
 
-    tobbi = lista(meccsek[:2])
+    from handball.pipeline.play_simulation import (
+        live_seven_direction_alerts, seven_direction_backtest,
+        seven_direction_profile, seven_direction_sample)
+
+    def lista_ir(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: json.loads(json.dumps(
+                     seven_direction_sample(m, Team(s_))))
+                           for s_ in ("home", "away")}} for m in ms]
+
+    tobbi, tobbi_ir = lista(meccsek[:2]), lista_ir(meccsek[:2])
     jav = {s_: seven_taker_choice([x["minta"][s_] for x in tobbi])
            for s_ in ("home", "away")}
+    ir = {s_: seven_direction_profile([x["minta"][s_] for x in tobbi_ir])
+          for s_ in ("home", "away")}
     c = TestClient(app)
     j = c.get("/matches/gt3/live-hetes").json()
-    assert j["javaslat"] == jav
-    assert j["alerts"] == live_seven_taker_alerts(meccsek[2], jav)["alerts"]
+    assert j["javaslat"] == jav and j["iranyok"] == ir
+    assert j["alerts"] == sorted(
+        live_seven_taker_alerts(meccsek[2], jav)["alerts"]
+        + live_seven_direction_alerts(meccsek[2], ir)["alerts"],
+        key=lambda x: (x["t"], x["team"]))
     assert j["proba"] == seven_taker_backtest(tobbi)
+    assert j["irany_proba"] == seven_direction_backtest(tobbi_ir)
     assert c.get("/matches/nincs/live-hetes").status_code == 404
-    mind = lista(meccsek)
-    assert c.get("/library/player-model-check").json()["hetes_proba"] == \
-        seven_taker_backtest(mind)
+    mind, mind_ir = lista(meccsek), lista_ir(meccsek)
+    mc = c.get("/library/player-model-check").json()
+    assert mc["hetes_proba"] == seven_taker_backtest(mind)
+    assert mc["hetes_irany_proba"] == seven_direction_backtest(mind_ir)
     f = c.get("/library/forecast", params={"home": h, "away": a}).json()
     assert f["hetes_dobo"] == {
         s_: seven_taker_choice([x["minta"][s_] for x in mind])
         for s_ in ("home", "away")}
     assert f["hetes_proba"] == seven_taker_backtest(mind)
+    assert f["hetes_irany"] == {
+        s_: seven_direction_profile([x["minta"][s_] for x in mind_ir])
+        for s_ in ("home", "away")}
+    assert f["hetes_irany_proba"] == seven_direction_backtest(mind_ir)
 
 
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(

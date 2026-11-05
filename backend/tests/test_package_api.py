@@ -382,6 +382,13 @@ def test_season_report_elorejelzes_sora(monkeypatch):
                 (matches_dir / f"{x['match_id']}.json").read_text(
                     encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
             for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            seven_direction_backtest, seven_direction_sample)
+        hip = seven_direction_backtest([{**x, "minta": {
+            s_: seven_direction_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
         from handball.pipeline.scouting import scouting_backtest, scout_team
         fdp = scouting_backtest([{**x, "reports": {
             s_: scout_team(Match.from_dict(json.loads(
@@ -437,6 +444,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert f"<p><b>Hetes-dobó:</b> {hp['verdict']}.</p>" in r.text
     else:
         assert "<b>Hetes-dobó:</b>" not in r.text
+    # A hetes-irányuk próbája (a motorral egyezik; a szimulált hetesnek
+    # nincs azonosított dobója — a sor elmarad).
+    if hip:
+        assert f"<p><b>Hetes-irány:</b> {hip['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Hetes-irány:</b>" not in r.text
     # A felderítésük próbája (a motorral egyezik; hét meccsen öt mérhető).
     if fdp:
         assert f"<p><b>Felderítés:</b> {fdp['verdict']}.</p>" in r.text

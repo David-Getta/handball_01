@@ -1419,20 +1419,23 @@ def test_az_ai_probak_osszkepe():
           "figura_proba": {"verdict": "… — a visszatérő figuráikra érdemes "
                                       "készülni"},
           "felderites_proba": {"itelet": "atviheto"},
-          "hetes_proba": {"itelet": "igazolt"}}
+          "hetes_proba": {"itelet": "igazolt"},
+          "hetes_irany_proba": {"itelet": "josolhato"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (11, 8)
+    assert (o["itelt"], o["bizonyitott"]) == (12, 9)
     assert o["verdict"] == (
-        "11 próbából 8 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "12 próbából 9 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
-        "figura-felderítés, felderítés, hetes-dobó; még nem: kapus-sávok, "
-        "védő-modell, gólszerzők")
+        "figura-felderítés, felderítés, hetes-dobó, hetes-irány; még nem: "
+        "kapus-sávok, védő-modell, gólszerzők")
     # A kapus-választás és a hetes-dobó csak az "igazolt", a felderítés
-    # csak az "atviheto" ítélettel bizonyított.
+    # csak az "atviheto", a hetes-irány csak a "josolhato" ítélettel
+    # bizonyított.
     o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
         "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"},
-        "hetes_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (11, 5)
+        "hetes_proba": {"itelet": "nem"},
+        "hetes_irany_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (12, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2314,6 +2317,103 @@ def test_a_hetes_dobo_valasztas_es_probaja(monkeypatch):
     assert ki[0]["text"] == f"Hetes (2. perc): {m.meta.home_team} — " + \
         kc["verdict"]
     assert live_seven_taker_alerts(m, None) == {"alerts": []}
+
+
+def test_a_hetes_irany_profilja_es_probaja(monkeypatch):
+    """seven_direction_sample: a hetesek irány szerint dobónként (az
+    irány nélküli kimarad); _fo_irany: kevés hetes vagy nem domináns →
+    None, holtversenyben bal; seven_direction_profile: dobónként és a
+    csapatra; seven_direction_backtest: jósolható / nem / None, a csapat
+    fő iránya, csapat-szűrő; live_seven_direction_alerts: a védekező
+    kispadnak."""
+    import handball.pipeline.rules as rules
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (
+        _fo_irany, live_seven_direction_alerts, seven_direction_backtest,
+        seven_direction_profile, seven_direction_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=1,
+                              shots_per_min=8)
+    mezek = sorted({p.track_id: p.jersey_number for f in m.frames
+                    for p in f.players if p.team == Team.HOME
+                    and p.jersey_number is not None}.items())
+    (pid1, mez1), (pid2, mez2) = mezek[0], mezek[1]
+    t0 = m.frames[0].t
+    monkeypatch.setattr(rules, "seven_meter_outcomes", lambda match, config=None: [
+        {"t": t0 + 100, "team": "home", "outcome": "gól", "shooter_id": pid1,
+         "irany": "jobb"},
+        {"t": t0 + 400, "team": "home", "outcome": "védés", "shooter_id": pid1,
+         "irany": "jobb"},
+        {"t": t0 + 700, "team": "home", "outcome": "gól", "shooter_id": pid2,
+         "irany": "bal"},
+        {"t": t0 + 900, "team": "home", "outcome": "gól", "shooter_id": pid2,
+         "irany": None},
+        {"t": t0 + 950, "team": "home", "outcome": "gól", "shooter_id": None,
+         "irany": "bal"}])
+    assert seven_direction_sample(m, Team.HOME) == {
+        str(mez1): {"bal": 0, "közép": 0, "jobb": 2},
+        str(mez2): {"bal": 1, "közép": 0, "jobb": 0}}
+    assert seven_direction_sample(m, Team.AWAY) == {}
+
+    assert _fo_irany({"bal": 2, "közép": 0, "jobb": 2}) == ("bal", 4, 0.5)
+    assert _fo_irany({"bal": 1, "közép": 1, "jobb": 1}) is None
+    assert _fo_irany({"bal": 2, "közép": 0, "jobb": 0}) is None
+    assert _fo_irany({"bal": 2, "közép": 0, "jobb": 0}, 2) == ("bal", 2, 1.0)
+
+    mintak = [{"9": {"bal": 1, "közép": 0, "jobb": 4},
+               "7": {"bal": 2, "közép": 1, "jobb": 0}},
+              {"9": {"bal": 1, "közép": 1, "jobb": 3},
+               "4": {"bal": 1, "közép": 0, "jobb": 1}}]
+    pr = seven_direction_profile(mintak)
+    assert pr["verdict"] == ("hetes-irányaik (a dobó felől nézve): a 9-es "
+                             "70% jobbra (7/10), a 7-es 67% balra (2/3)")
+    assert pr["csapat"] == {"irany": "jobb", "dobas": 15, "arany_pct": 53.3}
+    assert [r["mez"] for r in pr["dobok"]] == [9, 7]      # a 4-es: 2 hetes
+    cs = seven_direction_profile([{"9": {"bal": 0, "közép": 0, "jobb": 2},
+                                   "7": {"bal": 0, "közép": 0, "jobb": 2}}])
+    assert cs["dobok"] == [] and cs["verdict"] == (
+        "hetes-irányuk (a dobó felől nézve): a csapat 100% jobbra "
+        "(4 hetesből)")
+    assert seven_direction_profile([]) is None
+
+    def meccs(i, most):
+        return {"match_id": f"m{i}", "home": "A", "away": "B",
+                "minta": {"home": most, "away": {}}}
+
+    jo = [meccs(0, mintak[0]), meccs(1, mintak[1])] + [
+        meccs(i, {"9": {"bal": 0, "közép": 0, "jobb": 2},
+                  "7": {"bal": 1, "közép": 0, "jobb": 0}}) for i in range(2, 7)]
+    p = seven_direction_backtest(jo)
+    assert (p["hetesek"], p["talalt"], p["talalat_pct"], p["csapat_pct"],
+            p["itelet"]) == (20, 18, 90.0, 65.0, "josolhato")
+    assert p["sorok"][0] == {"match_id": "m1", "team": "A", "mez": 9,
+                             "josolt": "jobb", "hetesek": 5, "talalt": 3,
+                             "csapat_irany": "jobb", "csapat_talalt": 3}
+    assert p["verdict"] == (
+        "a dobók fő iránya 20 hetesből 18 alkalommal jött be (90%; a csapat "
+        "fő iránya: 65%; véletlen: 33%) — a kapus készülhet a dobó fő "
+        "irányára")
+    # A 9-es a könyvtárban jobbra lő, a meccseken balra: nem jósolható.
+    rossz = [meccs(0, {"9": {"bal": 2, "közép": 1, "jobb": 17}})] + [
+        meccs(i, {"9": {"bal": 3, "közép": 0, "jobb": 0}}) for i in range(1, 5)]
+    q = seven_direction_backtest(rossz)
+    assert (q["hetesek"], q["talalt"], q["itelet"]) == (12, 0, "nem")
+    assert q["verdict"].endswith("a kapus a mozdulatra figyeljen, ne a "
+                                 "könyvtárra")
+    assert seven_direction_backtest(jo[:2]) is None     # 5 hetes < 8
+    assert seven_direction_backtest(jo, "A") == p
+    assert seven_direction_backtest(jo, "B") is None
+
+    monkeypatch.setattr(rules, "detect_seven_meters", lambda match, config=None: [
+        {"t": t0 + 25 * 70, "team": "home", "goal_x": 40.0},
+        {"t": t0 + 25 * 100, "team": "away", "goal_x": 0.0}])
+    ki = live_seven_direction_alerts(m, {"home": pr})["alerts"]
+    assert len(ki) == 1 and (ki[0]["perc"], ki[0]["team"],
+                             ki[0]["dobo_team"]) == (2, "away", "home")
+    assert ki[0]["text"] == (f"Hetes ellenünk (2. perc): {m.meta.home_team} "
+                             f"— {pr['verdict']}")
+    assert live_seven_direction_alerts(m, None) == {"alerts": []}
 
 
 def test_a_varhato_vedekezesi_rendszer_es_probaja():
