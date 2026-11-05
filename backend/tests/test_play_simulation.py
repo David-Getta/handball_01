@@ -1189,6 +1189,39 @@ def test_az_engedett_lovo_a_meccsbol_a_felderitesben_es_az_edzestervben(
     assert f"falának engedett lövője: {sor['verdict']}." in szoveg
 
 
+def test_a_jatekos_modell_nyers_mintaja_a_learn_many_parja():
+    """A meccsenkénti nyers, JSON-barát játékos-modell minta
+    (player_model_sample) összegéből (player_models_from_samples)
+    ugyanazok a modellek épülnek, mint a learn_many / kapus_many /
+    DefenseModel.learn_many útján — JSON-körbejárás után is (a lemezes
+    eredmény-tár így tárolja)."""
+    import json as _json
+
+    from handball.pipeline.play_simulation import (
+        AttackModel, _lovo_sav_minta, kapus_many, player_model_sample,
+        player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m1 = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                               shots_per_min=8, halftime_break_s=30)
+    m2 = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                               shots_per_min=8, halftime_break_s=30)
+    cfg = TacticsConfig()
+    for team in (Team.HOME, Team.AWAY):
+        par = [(m1, team), (m2, team)]
+        mintak = [_json.loads(_json.dumps(player_model_sample(m, t)))
+                  for m, t in par]
+        mod = player_models_from_samples(mintak)
+        assert mod["tamadas"].lovok == AttackModel.learn_many(par).lovok
+        assert mod["kapus"] == kapus_many(par)
+        assert mod["vedok"] == DefenseModel.learn_many(par).vedok
+        egy = player_models_from_samples(mintak[:1])
+        assert egy["tamadas"].lovok == AttackModel.learn(m1, team).lovok
+        assert egy["sav"] == {str(k): v for k, v in
+                              _lovo_sav_minta(m1, team, cfg).items()}
+    assert player_models_from_samples([])["vedok"] == []
+
+
 def test_a_tanult_lovo_szorzoja_simitott_es_szoritott():
     """A lövő sávonkénti szorzója a gól és az xG hányadosa LOVO_SULY
     képzelt, a sáv átlagos értékű lövésével simítva, a LOVO_SZORZO sávba

@@ -440,6 +440,45 @@ def test_az_elo_dontes_figyelo_idoben_szol_es_nem_nez_elore():
     assert live_decision_alerts(fele)["alerts"][0]["t"] == a["t"]
 
 
+def test_az_elo_dontes_figyelo_a_szezon_modelljevel():
+    """A kész (szezon-) modellekkel az élő figyelő a játékosból is
+    számol: a jelzés "modell" mezője a felirat, a szöveg záradéka
+    megnevezi; modell nélkül a mező üres és a szöveg záradék nélküli; a
+    decision_models_from a hiányzó oldalnak üres modellt ad, és a
+    decision_models részeiből ugyanazt a feliratot építi."""
+    from handball.pipeline.decisions import (decision_models,
+                                             decision_models_from,
+                                             live_decision_alerts)
+    from handball.pipeline.play_simulation import AttackModel
+
+    m = _sit_match()
+    nelkul = live_decision_alerts(m)["alerts"]
+    assert len(nelkul) == 1 and nelkul[0]["modell"] == ""
+    assert "a szezon korábbi meccseiből" not in nelkul[0]["text"]
+    dm = decision_models_from(
+        {"home": AttackModel(lovok={2: {"close": 1.3}})},
+        {"home": {"far": 1.2, "mid": 1.0}})
+    felirat = ("a lövők: a 2-es közelről 1,3× annyit lő be, mint amennyit a "
+               "helyzetei érnek; a kapusuk távolról 1,2× annyi gólt kap, mint "
+               "az átlag")
+    assert dm["home"]["felirat"] == felirat
+    assert dm["away"] == {"tamadas": AttackModel(), "kapus": {}, "felirat": ""}
+    vele = live_decision_alerts(m, modellek=dm)["alerts"]
+    assert len(vele) == 1 and vele[0]["modell"] == felirat
+    assert vele[0]["text"] == (nelkul[0]["text"]
+                               + f" (a szezon korábbi meccseiből: {felirat})")
+    assert vele[0]["t"] == nelkul[0]["t"]
+    # Üres modell-készlettel ugyanaz, mint modell nélkül.
+    assert live_decision_alerts(m, modellek=decision_models_from({}, {})
+                                )["alerts"] == nelkul
+    # A decision_models részeiből ugyanaz a felirat épül.
+    d = decision_models(m)
+    ujra = decision_models_from({s: d[s]["tamadas"] for s in d},
+                                {s: d[s]["kapus"] for s in d})
+    assert {s: ujra[s]["felirat"] for s in ujra} == \
+        {s: d[s]["felirat"] for s in d}
+
+
 def test_a_jatekos_modell_a_dontes_opciokban():
     """A tanult lövő (AttackModel) és a szemközti kapus sávjai az opciók
     értékébe mennek: a biztos kezű (1,3×) társnak adott passz 1,3-szoros,

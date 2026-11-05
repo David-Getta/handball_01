@@ -336,6 +336,91 @@ def test_befejezes_a_gyenge_savbol_a_valodi_lovo_modellbol():
     assert kaptak("away") == set()
 
 
+def _ketoldali_match():
+    """Mindkét oldalon van 4-es mezszám (a hazai az 1-es, a vendég a 2-es
+    track), a vendég 6-osa a 3-as track — a mezszámból induló tételek a
+    SAJÁT oldal track-jét kell megtalálják."""
+    frames = []
+    for t in range(50):
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=4),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=4),
+            PlayerPosition(track_id=3, team=Team.AWAY, x=31.0, y=8.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=6),
+        ], ball=None))
+    return Match(_meta(), frames)
+
+
+def test_kilepes_a_savod_lovojere_a_valodi_kit_kinekbol():
+    """(c4) A valódi láncon (szimulált meccs: a hazai lő, a vendég véd
+    mezszámos fallal): a tételt a vendég oldalon azok a védők kapják,
+    akik a kit kinek párjaiban a sávban állnak ÉS a modell cserét javasol
+    — pontosan ők; a javasolt kilépő és a hazai senkije nem."""
+    from handball.pipeline.play_simulation import shooter_defender_matchup
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    parok = shooter_defender_matchup(m)["away"]["parok"]
+    vart = {p["vedo_mez"] for p in parok if p["javasolt_mez"] is not None}
+    javasolt = {p["javasolt_mez"] for p in parok if p["javasolt_mez"] is not None}
+    rec = player_training_focus(m)
+    cim = "Kilépés a sávod lövőjére"
+
+    def kaptak(side):
+        return {p["jersey"] for p in rec[side]["players"]
+                for i in p["items"] if i["title"] == cim}
+
+    assert kaptak("away") == vart
+    assert not (kaptak("away") & javasolt)
+    assert kaptak("home") == set()
+
+
+def test_kilepes_a_savod_lovojere_a_sajat_oldal_trackjen(monkeypatch):
+    """(c4) Patchelt kit kinek: a vendég 4-ese kapja a tételt (a sáv neve,
+    a lövő, a szorzó, a kilépés-arány és a javasolt védő a miértben, a
+    gyakorlat a kilépés időzítése), és a VENDÉG 4-es track-jére kerül —
+    nem a hazai 4-esére, aki korábban látszott; a 6-os (a javasolt) nem
+    kap; a kilépés ismeretlen aránya is kimondva."""
+    _csend(monkeypatch)
+    par = {"lovo_mez": 9, "sav": 0, "sav_nev": "szélső", "band": "far",
+           "szorzo": 1.3, "lovesek": 5, "vedo_mez": 4, "vedo_kilepes": 0.12,
+           "javasolt_mez": 6, "javasolt_kilepes": 0.62, "verdict": "x"}
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.shooter_defender_matchup",
+        lambda m, c=None: {"home": {"parok": [], "verdict": None},
+                           "away": {"parok": [par], "verdict": "x"}})
+    rec = player_training_focus(_ketoldali_match())
+    cim = "Kilépés a sávod lövőjére"
+    tetel = {(p["player_id"], p["jersey"]): i for p in rec["away"]["players"]
+             for i in p["items"] if i["title"] == cim}
+    assert list(tetel) == [(2, 4)]
+    t = tetel[(2, 4)]
+    assert t["area"] == "védekezés"
+    assert t["why"] == (
+        "a sávodból lő a 9-es (távolról 1,3× annyit lő be, mint amennyit a "
+        "helyzetei érnek, 5 lövés), és ritkán lépsz ki rá (12%) — a modell "
+        "a 6-ost állítaná eléd")
+    assert t["drill"].startswith("kilépés-időzítés 1 az 1 ellen 9 méteren")
+    assert t["clips"] == ["free_shot", "shot"]
+    assert not [i for p in rec["home"]["players"] for i in p["items"]
+                if i["title"] == cim]
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.shooter_defender_matchup",
+        lambda m, c=None: {"home": {"parok": [], "verdict": None},
+                           "away": {"parok": [{**par, "vedo_kilepes": None}],
+                                    "verdict": "x"}})
+    rec2 = player_training_focus(_ketoldali_match())
+    [t2] = [i for p in rec2["away"]["players"] for i in p["items"]
+            if i["title"] == cim]
+    assert "és a kilépésedet nem ismerjük — a modell a 6-ost" in t2["why"]
+
+
 def test_befejezes_a_gyenge_savbol_a_savhoz_igazitott_gyakorlattal(
         monkeypatch):
     """(c3) A gyenge sáv tétele: a sáv neve, a lövésszám, a gól, az xG és

@@ -197,8 +197,51 @@ def test_season_report_endpoint():
     # A rövid (5 mp-es) sim-meccseken nincs toplista-adat — a szakasz
     # ilyenkor elegánsan elmarad (lásd a dedikált leaders-tesztet).
     assert "A szezon játékosai" not in r.text
+    # Lövés nélkül tanult lövő és kapus-sáv sincs — a játékos-modell
+    # szakasza is elmarad (lásd a dedikált modell-tesztet).
+    assert "A szezon játékos-modellje" not in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
+
+
+def test_season_report_jatekos_modell_szakasz(monkeypatch):
+    """A szezon-riport a csapat SZEZONBÓL tanult lövőit és a kapus
+    sávjait hozza egy-egy sorban — a motor mondataival; a modell a csapat
+    meccsenkénti nyers mintáiból épül (player_models_from_samples — itt
+    két hazai meccs mintája, a lemezes eredmény-tárból)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=2)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    latott = []
+
+    def _modellek(mintak):
+        latott.append(mintak)
+        return {"tamadas": AttackModel(lovok={7: {"far": 1.3}}),
+                "kapus": {"far": 1.2, "mid": 1.0}, "vedok": [], "sav": {},
+                "lovo": {}}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report", params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    # (a kész riport a címeket tartalomjegyzék-azonosítóval látja el —
+    # a cím szövegét nézzük, nem a nyers <h2>-t)
+    assert "A szezon játékos-modellje" in r.text
+    assert ("<p><b>Lövők:</b> a lövők: a 7-es távolról 1,3× annyit lő be, "
+            "mint amennyit a helyzetei érnek</p>") in r.text
+    assert ("<p><b>Kapus:</b> a kapus távolról 1,2× annyi gólt kap, mint az "
+            "átlag</p>") in r.text
+    assert "a szezon 2 meccséből" in r.text
+    [mintak] = latott[:1]
+    assert len(mintak) == 2
+    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak"}
+               for m in mintak)
 
 
 def test_season_report_venue_split():
@@ -265,6 +308,61 @@ def test_head_to_head_report_endpoint():
     assert "EGYMÁS ELLEN" in r.text
     assert "Mérleg (Szimu Hazai szemszögéből)" in r.text
     assert "Meccsről meccsre" in r.text
+    # A rövid (5 mp-es) meccseken nincs tanult lövő és kapus-sáv — a
+    # játékos-modell szakasza elmarad (lásd a dedikált tesztet).
+    assert "Játékos-modell egymás ellen" not in r.text
     assert client2.get("/head-to-head/report",
                        params={"team_a": "Szimu Hazai",
                                "team_b": "Nincs Ilyen"}).status_code == 404
+
+
+def test_head_to_head_report_jatekos_modell_szakasz(monkeypatch):
+    """Az egymás-elleni riport a KÖZÖS meccsekből tanult lövőkkel és
+    kapussal hozza a játékos-modell szakaszt mindkét csapatra: a lövők
+    sora, az utolsó labda ellenük (a lövőik × a másik kapusa), az
+    engedett lövő a falukban — a modellek csapatonként a közös meccsek
+    nyers mintáiból épülnek (player_models_from_samples: előbb az A, aztán
+    a B csapaté, ugyanannyi mintából)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=3)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    latott = []
+
+    def _modellek(mintak):
+        latott.append(len(mintak))
+        if len(latott) % 2 == 1:      # az A csapat (Szimu Hazai)
+            return {"tamadas": AttackModel(lovok={7: {"far": 1.3}}),
+                    "kapus": {}, "vedok": [], "sav": {},
+                    "lovo": {}}
+        return {"tamadas": AttackModel(lovok={4: {"far": 0.8}}),
+                "kapus": {"far": 1.2}, "vedok": [], "sav": {},
+                "lovo": {"4": {"far": [6, 1, 2.1]}}}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/head-to-head/report",
+                    params={"team_a": "Szimu Hazai",
+                            "team_b": "Szimu Vendég"})
+    assert r.status_code == 200
+    assert "Játékos-modell egymás ellen (a közös meccsekből)" in r.text
+    assert ("<h3>Szimu Hazai</h3><ul><li><b>Lövőik:</b> a lövők: a 7-es "
+            "távolról 1,3× annyit lő be, mint amennyit a helyzetei érnek</li>"
+            "<li><b>Utolsó labdájuk ellenük:</b> a 7-esé távolról") in r.text
+    assert ("<li><b>Engedett lövő a falukban:</b> a 4-es ellen nem kell "
+            "kilépni: távolról 0,8× annyit lő be, mint amennyit a helyzetei "
+            "érnek (6 lövés, 1 gól)") in r.text
+    assert ("<h3>Szimu Vendég</h3><ul><li><b>Lövőik:</b> a lövők: a 4-es "
+            "távolról 0,8×") in r.text
+    assert ("<li><b>Kapusuk:</b> a kapus távolról 1,2× annyi gólt kap, mint "
+            "az átlag</li>") in r.text
+    # A közös meccsek száma a könyvtár állapotától függ (a modul más
+    # tesztjei is tesznek be közös meccset) — a két csapat modellje
+    # ugyanannyi (legalább két) mintából épül.
+    assert len(latott) == 2 and latott[0] == latott[1] >= 2
+    assert f"a közös {latott[0]} meccsből tanulva" in r.text

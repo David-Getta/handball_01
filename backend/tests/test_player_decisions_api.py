@@ -152,10 +152,58 @@ def test_az_elo_dontes_figyelo_vegpontja():
     """Az élő képernyő a /decision-alerts listát teszi időzített jelzésnek:
     kocka ("t") és szöveg kell; nem létező meccsre 404."""
     client, mid = _client()
-    al = client.get(f"/matches/{mid}/decision-alerts").json()["alerts"]
+    r = client.get(f"/matches/{mid}/decision-alerts").json()
+    al = r["alerts"]
     assert len(al) == 1 and al[0]["t"] > 0, al
     assert "kilépnek rájuk" in al[0]["text"], al
+    # Egyetlen könyvtári meccs: nincs korábbi, a modell nélkül számol.
+    assert r["szezon_meccsek"] == {"home": 0, "away": 0}
+    assert al[0]["modell"] == "" and "szezon korábbi" not in al[0]["text"]
     assert client.get("/matches/nincs/decision-alerts").status_code == 404
+
+
+def test_az_elo_dontes_figyelo_vegpontja_a_szezon_modelljevel(monkeypatch):
+    """Ha a könyvtárban van a csapatnak KORÁBBI meccse, a figyelő a belőle
+    tanult lövőkkel (AttackModel.learn_many a csapat meccseiből) és a
+    szemközti kapus sávjaival (kapus_many az ellenfél meccseiből) számol
+    — a jelzés megnevezi; a szezon_meccsek oldalanként a korábbi meccsek
+    száma; ez a meccs nem számít bele (okszerű)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client()
+    m2 = _match(match_id="pdapi2")
+    (Path(_tmp) / "data" / "matches" / "pdapi2.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    latott = []
+
+    def _learn_many(cls, meccsek, config=None):
+        latott.append(("lovok", [(m.meta.match_id, t) for m, t in meccsek]))
+        return (AttackModel(lovok={2: {"close": 1.3}})
+                if meccsek[0][1] == Team.HOME else AttackModel())
+
+    def _kapus_many(meccsek, config=None):
+        latott.append(("kapus", [(m.meta.match_id, t) for m, t in meccsek]))
+        return {"far": 1.2} if meccsek[0][1] == Team.AWAY else {}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.AttackModel.learn_many",
+        classmethod(_learn_many))
+    monkeypatch.setattr("handball.pipeline.play_simulation.kapus_many",
+                        _kapus_many)
+    from handball.api.app import create_app
+    client2 = TestClient(create_app())
+    r = client2.get(f"/matches/{mid}/decision-alerts").json()
+    assert r["szezon_meccsek"] == {"home": 1, "away": 1}
+    felirat = ("a lövők: a 2-es közelről 1,3× annyit lő be, mint amennyit a "
+               "helyzetei érnek; a kapusuk távolról 1,2× annyi gólt kap, mint "
+               "az átlag")
+    [a] = r["alerts"]
+    assert a["team"] == "home" and a["modell"] == felirat
+    assert a["text"].endswith(f"(a szezon korábbi meccseiből: {felirat})")
+    # Minden modell csak a KORÁBBI (pdapi2) meccsből tanult.
+    assert latott and all(ids == [("pdapi2", t)] for _, ids in latott
+                          for t in [ids[0][1]])
+    assert {m for _, ids in latott for m, _t in ids} == {"pdapi2"}
 
 
 def test_a_jatekos_lap_viszi_a_donteseit():

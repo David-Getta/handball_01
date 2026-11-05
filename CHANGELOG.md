@@ -5,6 +5,61 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.189 óta)
 
+- **A nyomtatható felderítő lap figura-ajánlója a mi lövőinkkel**
+  (javítás): a felderítő lap figura-ajánlója a felderített csapat
+  szezon-fala ellen rangsorolt, de a MI tanult lövőink nélkül — most a
+  szezon összes meccsünkből tanult lövőkkel (mint a képernyő ajánlója):
+  a mezszámmal mentett figura záró lövőjének szorzója a lapon is
+  számít, és a mondat megnevezi ("— a 7-es lövésével, aki innen 1,3×
+  annyit lő be, mint amennyit a helyzet ér").
+
+- **Egymás-elleni riport: játékos-modell egymás ellen** (nyomtatható
+  riport): új szakasz a két csapat KÖZÖS meccseiből tanult játékos-
+  modelljével, csapatonként — a lövőik és a kapusuk sora, az utolsó
+  labdájuk ellenük (a tanult lövőik × a másik kapusa: "a 7-esé távolról
+  (10 m): 0,33 várható gól — …"), a kit kinek a falukban (az ellenfél
+  veszélyes távoli lövője × a saját fal ott álló védője) és az engedett
+  lövő a falukban (akire nem kell kilépni). Csak a nem üres sorok; ha
+  egy sem, a szakasz elmarad. A visszavágó előtt egy lapon: kinek a
+  kezében az utolsó labda, ki álljon a 9-es elé, kire ne lépjünk ki.
+  A meccsenkénti nyers játékos-minta a lemezes eredmény-tárba kerül
+  (play_simulation.player_model_sample), így a riport — és a szezon-
+  riport játékos-modell szakasza — a második hívásra nem tölti vissza a
+  hideg meccseket.
+
+- **Élő döntés-figyelő a szezon modelljével** (motor + végpont + élő
+  képernyő): az élő döntés-figyelő eddig a játékos-modell nélkül számolt
+  (az ebből a meccsből tanult lövő élőben előre nézne). Most a könyvtár
+  KORÁBBI meccseiből tanult lövőkkel és a szemközti kapus sávjaival
+  számol — okszerűen, ebből a meccsből semmit nem tanulva: a passz annak
+  ér többet, aki onnan betalál, a lövés abból a sávból, ahol a kapusuk
+  gyenge. A jelzés megnevezi, kivel számolt: "… — lépjetek ki rájuk (a
+  szezon korábbi meccseiből: a lövők: a 7-es közelről 1,3× …; a kapusuk
+  távolról 1,2× annyi gólt kap, mint az átlag)". A /decision-alerts
+  válasz "szezon_meccsek" mezője mondja, oldalanként hány korábbi
+  meccsből; ahol nincs ilyen, a figyelő a helyzetből számol, mint eddig.
+
+- **Szezon-riport: a szezon játékos-modellje** (nyomtatható szezon-
+  riport): új szakasz a csapat SZEZONBÓL tanult lövőivel (mezszámonként
+  és lövőhely-sávonként, a csapat összes elemzett meccséből összeadva —
+  "a lövők: a 7-es távolról 1,3×, a 10-es közelről 0,8× annyit lőnek
+  be, mint amennyit a helyzeteik érnek") és a kapus sávjaival ("a kapus
+  távolról 1,2× annyi gólt kap, mint az átlag"); a jegyzet megmondja,
+  hány meccsből tanult, és hogy ugyanez a modell számol a figura-
+  pontozásban, a kit kinekben és az utolsó labdában. Ha egyik sor sem
+  tér el az átlagtól, a szakasz elmarad.
+
+- **Játékos-edzésterv: kilépés a sávod lövőjére** (egyéni edzés-fókusz):
+  a kit kinek a védő lapjára is kerül — ha az ellenfél veszélyes távoli
+  lövőjének sávjában ő áll, és ritkán lép ki (a modell a kilépő védőt
+  állítaná elé), tételt kap: "Kilépés a sávod lövőjére — a sávodból lő
+  a 9-es (távolról 1,3× annyit lő be, mint amennyit a helyzetei érnek,
+  5 lövés), és ritkán lépsz ki rá (12%) — a modell a 6-ost állítaná
+  eléd", a gyakorlat a kilépés időzítése (a lövő-karra a labda
+  átvételekor). A javasolt kilépő nem kap tételt: ő a megoldás. Javítás
+  mellé: a mezszámból induló egyéni tételek (a gyenge sáv befejezése is)
+  a SAJÁT oldal track-jét keresik — a 7-es mindkét csapatban lehet.
+
 - **Élő kit kinek** (motor + végpont + élő képernyő): az élő képernyő a
   15., 30. és 45. percben a VÉDŐ kispadnak megmondja, az ADDIG látott
   falunk védői és az ellenfél tanult lövői szerint ki álljon a veszélyes

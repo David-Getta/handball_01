@@ -233,12 +233,36 @@ def decision_models(match: Match,
                               ("away", Team.AWAY, Team.HOME)):
         tam = AttackModel.learn(match, team, config)
         kap = _kapus_tanul(match, masik, config)
-        reszek = [s for s in (lovo_felirat(tam),
-                              kapus_felirat(kap).replace("a kapus ",
-                                                         "a kapusuk ", 1))
-                  if s]
         out[side] = {"tamadas": tam, "kapus": kap,
-                     "felirat": "; ".join(reszek)}
+                     "felirat": _modell_felirat(tam, kap)}
+    return out
+
+
+def _modell_felirat(tam, kap: dict) -> str:
+    """A döntés-modell felirata a felületeknek: a lövők sora és a
+    szemközti kapus sora ("a kapusuk …"), pontosvesszővel; üres, ha
+    egyik sem mond érdemit."""
+    from .play_simulation import kapus_felirat, lovo_felirat
+    return "; ".join(s for s in (
+        lovo_felirat(tam),
+        kapus_felirat(kap or {}).replace("a kapus ", "a kapusuk ", 1)) if s)
+
+
+def decision_models_from(tamadas: dict | None, kapus: dict | None) -> dict:
+    """A döntés-modell KÉSZ modellekből (decision_models alakja):
+    `tamadas` ({"home" / "away": play_simulation.AttackModel — a csapat
+    lövői}) és `kapus` ({"home" / "away": a SZEMKÖZTI kapus sávonkénti
+    szorzói}) — pl. a szezon KORÁBBI meccseiből (AttackModel.learn_many,
+    kapus_many), hogy az élő figyelő okszerűen, ebből a meccsből semmit
+    nem tanulva számolhasson a játékosokkal. A hiányzó oldal üres modellt
+    kap (átlagos lövők, átlagos kapus)."""
+    from .play_simulation import AttackModel
+    out = {}
+    for side in ("home", "away"):
+        tam = (tamadas or {}).get(side) or AttackModel()
+        kap = dict((kapus or {}).get(side) or {})
+        out[side] = {"tamadas": tam, "kapus": kap,
+                     "felirat": _modell_felirat(tam, kap)}
     return out
 
 
@@ -1425,10 +1449,18 @@ LIVE_SIT_MIN = 6
 
 
 def live_decision_alerts(match: Match,
-                         config: Optional[TacticsConfig] = None) -> dict:
+                         config: Optional[TacticsConfig] = None, *,
+                         modellek: Optional[dict] = None) -> dict:
     """Élő döntés-figyelő: a meccs KÖZBEN, időrendben, előre nézés
     nélkül — mikor válik láthatóvá, hogy egy csapat egy helyzetben rossz
     szokással dönt.
+
+    `modellek` (opcionális, decision_models_from alakja): a játékos-
+    modell a szezon KORÁBBI meccseiből (tanult lövők, a szemközti kapus
+    sávjai) — ezzel az opciók értéke a játékosból is számol, és a jelzés
+    "modell" mezője / zárójeles záradéka megmondja, kivel. Ebből a
+    meccsből tanult modellt NEM szabad ideadni (előre nézne); nélküle a
+    figyelő a helyzetből számol.
 
     A situational_decisions egyenkénti döntéseit időrendben számoljuk;
     csapatonként és helyzetenként az első olyan döntésnél szólunk, ahol
@@ -1445,11 +1477,13 @@ def live_decision_alerts(match: Match,
 
     Visszatérés: {"alerts": [{"t" (a jelzést kiváltó döntés kockája),
     "team" (a rossz szokású csapat), "situation", "habit", "best_action",
-    "decisions", "best", "text"}]} időrendben.
+    "decisions", "best", "modell" (a felirat vagy ""), "text"}]}
+    időrendben.
     """
     config = config or TacticsConfig()
     recs: list = []
-    situational_decisions(match, config, records_out=recs, modellek=False)
+    situational_decisions(match, config, records_out=recs,
+                          modellek=modellek if modellek else False)
     recs.sort(key=lambda r: (r["t"], r["side"]))
     names = {"home": match.meta.home_team, "away": match.meta.away_team}
     acc: dict = {}
@@ -1474,14 +1508,17 @@ def live_decision_alerts(match: Match,
                 or match_pct > SIT_MATCH_LOW_PCT:
             continue
         fired.add(key)
+        felirat = ((modellek or {}).get(r["side"]) or {}).get("felirat", "")
         alerts.append({
             "t": r["t"], "team": r["side"], "situation": r["sit"],
             "habit": habit, "best_action": best, "decisions": a["n"],
-            "best": a["m"],
+            "best": a["m"], "modell": felirat,
             "text": (f"{names[r['side']]}: ha {SIT_PHRASE[r['sit']]}, eddig "
                      f"{a['n']} döntésükből {a['acts'].get(habit, 0)} "
                      f"{habit} volt, pedig {sit_article(best)} {best} érne "
-                     f"többet — {SIT_ADVICE[r['sit']]}")})
+                     f"többet — {SIT_ADVICE[r['sit']]}"
+                     + (f" (a szezon korábbi meccseiből: {felirat})"
+                        if felirat else ""))})
     return {"alerts": alerts}
 
 

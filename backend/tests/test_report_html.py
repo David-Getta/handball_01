@@ -163,6 +163,33 @@ def test_a_szezon_riport_a_sajat_visszatero_figurakat_is_rajzolja():
         "Szeged", tr, [], 4)
 
 
+def test_a_szezon_riport_a_jatekos_modellt_is_hozza():
+    """A szezon-riportban a tanult játékos-modell szakasza: a lövők és a
+    kapus sora (a motor mondatai), a meccsszám a jegyzetben; ha csak az
+    egyik sor van, a másik "nincs eltérő sáv"; mindkettő üresen (vagy
+    modell nélkül) a szakasz elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    jm = {"lovok": "a lövők: a 7-es távolról 1,3× annyit lő be, mint "
+                   "amennyit a helyzetei érnek",
+          "kapus": "a kapus távolról 1,2× annyi gólt kap, mint az átlag",
+          "meccsek": 4}
+    html = season_report_html("Szeged", tr, [], 4, jatekos_modell=jm)
+    assert "<h2>A szezon játékos-modellje</h2>" in html
+    assert f"<p><b>Lövők:</b> {jm['lovok']}</p>" in html
+    assert f"<p><b>Kapus:</b> {jm['kapus']}</p>" in html
+    assert "a szezon 4 meccséből" in html
+    csak = season_report_html("Szeged", tr, [], 4,
+                              jatekos_modell={"lovok": jm["lovok"],
+                                              "kapus": "", "meccsek": 4})
+    assert "<p><b>Kapus:</b> nincs az átlagtól érdemben eltérő tanult sáv</p>" in csak
+    for ures in (None, {}, {"lovok": "", "kapus": "", "meccsek": 4}):
+        assert "A szezon játékos-modellje" not in season_report_html(
+            "Szeged", tr, [], 4, jatekos_modell=ures)
+
+
 def test_playbook_section_empty_states():
     """Üres egyezésnél tájékoztató szöveg (nem üres blokk)."""
     html = scouting_report_html(_rep(), playbook_match={"total_attacks": 4, "matched": {}, "unmatched": 4})
@@ -312,6 +339,41 @@ def test_player_season_html_goalkeeper_columns():
                      "gk_saves": None, "gk_prevented": None}]
     html2 = player_season_html("Mi", 7, field_points)
     assert "Védés összesen" not in html2 and "GSAx" not in html2
+
+
+def test_h2h_report_html_jatekos_modell_szakasz():
+    """Az egymás-elleni riport játékos-modell szakasza: csapatonként csak
+    a nem üres sorok (lövőik, kapusuk, utolsó labdájuk ellenük, kit
+    kinek, engedett lövő), a meccsszám a jegyzetben; üres / hiányzó
+    modellel a szakasz elmarad."""
+    from handball.pipeline.report_html import h2h_report_html
+
+    stats = {"matches": 2, "wins_a": 1, "wins_b": 1, "draws": 0,
+             "goals_a": 50, "goals_b": 48}
+    timeline = [{"date": "2026-01-01", "score": "25 – 24", "headline": "x"}]
+    jm = {"meccsek": 2,
+          "Mi": {"lovok": "a lövők: a 7-es távolról 1,3× annyit lő be, mint "
+                          "amennyit a helyzetei érnek",
+                 "kapus": "", "utolso": "a 7-esé távolról (10 m): 0,33 "
+                                        "várható gól",
+                 "kit_kinek": None, "engedett": None},
+          "Ok": {"lovok": "", "kapus": "a kapus távolról 1,2× annyi gólt "
+                                       "kap, mint az átlag",
+                 "utolso": None,
+                 "kit_kinek": "a 9-es (távolról 1,3× …) a szélső sávból lő",
+                 "engedett": "a 4-es ellen nem kell kilépni"}}
+    html = h2h_report_html("Mi", "Ok", stats, timeline, jatekos_modell=jm)
+    assert "Játékos-modell egymás ellen (a közös meccsekből)" in html
+    assert "<h3>Mi</h3><ul><li><b>Lövőik:</b> a lövők: a 7-es" in html
+    assert "<li><b>Utolsó labdájuk ellenük:</b> a 7-esé távolról" in html
+    assert "<h3>Ok</h3><ul><li><b>Kapusuk:</b> a kapus távolról" in html
+    assert "<li><b>Kit kinek a falukban:</b> a 9-es" in html
+    assert "<li><b>Engedett lövő a falukban:</b> a 4-es ellen" in html
+    assert html.count("<li><b>") == 5
+    assert "a közös 2 meccsből tanulva" in html
+    for ures in (None, {}, {"meccsek": 2, "Mi": {}, "Ok": {"lovok": ""}}):
+        assert "Játékos-modell egymás ellen" not in h2h_report_html(
+            "Mi", "Ok", stats, timeline, jatekos_modell=ures)
 
 
 def test_h2h_report_html_matchup_section():

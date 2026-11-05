@@ -1248,6 +1248,30 @@ def test_a_felderites_probaja_es_ajanloja_a_szezon_falbol(tmp_path,
     assert r.status_code == 200
     assert r.json()["vedelem"].startswith("Tanult védelem — Mi (2 meccs)")
     assert r.json()["lovo_felirat"] == ""      # a mi lövőink: nincs lövés
+    # A nyomtatható felderítő lap ajánlója a MI szezon-lövőinkkel
+    # rangsorol (a felderített vendég ellenfele a hazai — mindkét
+    # meccsünkből), nem a lövők nélkül.
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import AttackModel
+    kapott = {}
+    eredeti = ps.rank_playbook
+
+    def _rp(figurak, defense, **kw):
+        kapott["tamadas"] = kw.get("tamadas")
+        return eredeti(figurak, defense, **kw)
+
+    monkeypatch.setattr(ps, "rank_playbook", _rp)
+    monkeypatch.setattr(ps.AttackModel, "learn_many", classmethod(
+        lambda cls, meccsek, config=None: (
+            kapott.setdefault("meccsek", [(m.meta.match_id, tm)
+                                          for m, tm in meccsek])
+            and AttackModel(lovok={1: {"close": 1.3}}))))
+    r = c.get("/matches/pr/scouting/export", params={"team": "away"})
+    assert r.status_code == 200
+    assert "Figuráink ellenük" in r.text and "Ellenük a(z)" in r.text
+    assert kapott["tamadas"].lovok == {1: {"close": 1.3}}
+    assert sorted(kapott["meccsek"]) == [("pr", Team.HOME), ("pr2", Team.HOME)]
 
 
 def test_a_mezszammal_mentett_figura_zaro_lovoje_a_rangsorban(tmp_path,

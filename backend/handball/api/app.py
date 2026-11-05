@@ -7762,10 +7762,45 @@ def create_app():
                 _scout_cached(m_last, side_b)) or None
         except Exception:
             matchup = None
+        # Játékos-modell egymás ellen: a KÖZÖS meccsekből tanult lövők,
+        # kapus és fal mindkét oldalon — az utolsó labda ellenük (a
+        # lövőik × a másik kapusa), a kit kinek (az ő veszélyes távoli
+        # lövőjük × a saját fal ott álló védője) és az engedett lövő
+        # (akire nem kell kilépni) — hibatűrően, csak nem üres sorokkal.
+        # (A meccsenkénti nyers minta a lemezes eredmény-tárból — a
+        # második hívás nem tölti vissza a hideg meccseket.)
+        jatekos_modell = None
+        try:
+            from ..pipeline.play_simulation import (
+                allowed_shooters_from, last_shot_choice,
+                player_models_from_samples, shooter_defender_pairs)
+            mod = {t: player_models_from_samples([
+                       _jatekos_minta_of(
+                           m_, "home" if m_.meta.home_team == t else "away")
+                       for _d, m_ in entries])
+                   for t in (team_a, team_b)}
+            tam = {t: mod[t]["tamadas"] for t in mod}
+            kap = {t: mod[t]["kapus"] for t in mod}
+            fal = {t: mod[t]["vedok"] for t in mod}
+            jm: dict = {"meccsek": len(entries)}
+            for mi, ok in ((team_a, team_b), (team_b, team_a)):
+                p = last_shot_choice(tam[mi], kap[ok])
+                kk = (shooter_defender_pairs(tam[ok], mod[ok]["sav"], fal[mi])
+                      if fal[mi] else [])
+                el = allowed_shooters_from(tam[ok], mod[ok]["lovo"])
+                jm[mi] = {"lovok": lovo_felirat(tam[mi]),
+                          "kapus": kapus_felirat(kap[mi]),
+                          "utolso": p["verdict"] if p else None,
+                          "kit_kinek": kk[0]["verdict"] if kk else None,
+                          "engedett": el[0]["verdict"] if el else None}
+            if any(v for t in (team_a, team_b) for v in jm[t].values()):
+                jatekos_modell = jm
+        except Exception:
+            jatekos_modell = None
         from ..pipeline.report_html import h2h_report_html
         return HTMLResponse(content=h2h_report_html(
             team_a, team_b, stats, timeline, matchup=matchup,
-            scorers=scorers))
+            scorers=scorers, jatekos_modell=jatekos_modell))
 
     def _season_halves(team: str):
         """A csapat szezon-meccsei időrendben, két félre vágva.
@@ -7962,11 +7997,31 @@ def create_app():
                 team, figure_library.get("recurring"))
         except Exception:
             figure_library = None
+        # A szezon játékos-modellje: a csapat tanult lövői (AttackModel a
+        # szezon összes meccséből) és a kapus sávjai (kapus_many) egy-egy
+        # sorban — hibatűrően; üres, ha egyik sem tér el az átlagtól.
+        # (A meccsenkénti nyers minta a lemezes eredmény-tárból — a
+        # második hívás nem tölti vissza a hideg meccseket.)
+        jatekos_modell = None
+        try:
+            from ..pipeline.play_simulation import player_models_from_samples
+            kilincs = {m_.meta.match_id: m_ for m_ in _season_matches()}
+            mintak = [_jatekos_minta_of(kilincs[mid_], side_)
+                      for _d, mid_, side_ in entries if mid_ in kilincs]
+            mod = player_models_from_samples(mintak)
+            lf = lovo_felirat(mod["tamadas"])
+            kf = kapus_felirat(mod["kapus"])
+            if lf or kf:
+                jatekos_modell = {"lovok": lf, "kapus": kf,
+                                  "meccsek": len(mintak)}
+        except Exception:
+            jatekos_modell = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
             venue=venue, leaders=leaders, opponents=opponents,
-            figure_library=figure_library, repertoire=repertoire))
+            figure_library=figure_library, repertoire=repertoire,
+            jatekos_modell=jatekos_modell))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
@@ -8365,6 +8420,16 @@ def create_app():
 
     _TALLY_CATS = ("goals", "assists", "blocks", "steals", "saves",
                    "matches")
+
+    def _jatekos_minta_of(m_, side: str) -> dict:
+        """EGY meccs nyers játékos-modell mintája az adott oldalra
+        (play_simulation.player_model_sample: lövők, sávok, kapus, fal) —
+        a lemezes eredmény-tárból, hogy a több meccses riport második
+        hívása ne töltse vissza a hideg meccseket; JSON-barát, meccsek
+        közt összeadható (player_models_from_samples)."""
+        from ..pipeline.play_simulation import player_model_sample
+        return _cached_result(m_.meta.match_id, f"jatekos-minta-{side}",
+                              lambda: player_model_sample(m_, Team(side)))
 
     def _player_tally_of(m) -> dict:
         """EGY meccs hozzájárulása a szezon-összegekhez:
@@ -13414,7 +13479,15 @@ def create_app():
                         else match.meta.away_team))
                 except Exception:
                     fal = DefenseModel.learn(match, t)
-                ajanlo = rank_playbook(plays, fal)
+                # A MI tanult lövőink a szezon összes meccsünkből (a
+                # felderített csapat ellenfele vagyunk): a mezszámmal
+                # mentett figura záró lövőjének szorzója is számít — ha
+                # bármi hiba, a lövők nélkül.
+                try:
+                    tamadas = _sajat_lovok(match_id, t.value, True)
+                except Exception:
+                    tamadas = None
+                ajanlo = rank_playbook(plays, fal, tamadas=tamadas)
             except Exception:
                 ajanlo = None
         # Védekezési próba: az ő visszatérő figuráik a MI falunk (a meccs
@@ -13935,13 +14008,44 @@ def create_app():
         """Élő döntés-figyelő (decisions.live_decision_alerts): időrendben,
         előre nézés nélkül, mikor válik láthatóvá egy csapat rossz
         döntési szokása egy helyzetben — az élő képernyő időzített
-        jelzései közé kerül."""
+        jelzései közé kerül. A játékos-modell (a csapat tanult lövői és a
+        szemközti kapus sávjai) a könyvtár KORÁBBI meccseiből (ez a meccs
+        nélkül — okszerű; decisions.decision_models_from); ahol nincs
+        ilyen, a figyelő a helyzetből számol. Válasz: {"alerts": [...],
+        "szezon_meccsek": {"home", "away"}} — a szám a csapat korábbi
+        meccsei."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        from ..pipeline.decisions import live_decision_alerts
-        return _cached_result(match_id, "decision-alerts",
-                              lambda: live_decision_alerts(match))
+        from ..pipeline.decisions import (decision_models_from,
+                                          live_decision_alerts)
+        from ..pipeline.play_simulation import kapus_many
+        nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+
+        def korabbi(nev: str) -> list:
+            try:
+                return [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                        if m_.meta.match_id != match_id]
+            except HTTPException:
+                return []
+
+        tamadas, kapus, db = {}, {}, {}
+        for side in ("home", "away"):
+            masik = "away" if side == "home" else "home"
+            sajat = korabbi(nevek[side])
+            ellen = korabbi(nevek[masik])
+            db[side] = len(sajat)
+            if sajat:
+                tamadas[side] = AttackModel.learn_many(sajat)
+            if ellen:
+                kapus[side] = kapus_many(ellen)
+        if not tamadas and not kapus:
+            return {**_cached_result(match_id, "decision-alerts",
+                                     lambda: live_decision_alerts(match)),
+                    "szezon_meccsek": db}
+        return {**live_decision_alerts(
+                    match, modellek=decision_models_from(tamadas, kapus)),
+                "szezon_meccsek": db}
 
     @app.get("/matches/{match_id}/players/{player_id}/decisions")
     def get_player_decisions(match_id: str, player_id: int):

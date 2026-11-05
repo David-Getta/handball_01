@@ -12623,6 +12623,22 @@ def _player_training_focus_cached(match: Match,
         v = getattr(ertek, "value", ertek)
         return v if v in ("home", "away") else None
 
+    # Track → oldal: a mezszám csapatonként ismétlődhet (a 7-es mindkét
+    # oldalon lehet), a mezszámból induló tételek a SAJÁT oldal track-jét
+    # keresik.
+    oldal_of: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            oldal_of.setdefault(p.track_id, _oldal(p.team))
+
+    def _pid_of(side):
+        """mezszám → track az adott oldalon (az első látott track)."""
+        ki: dict = {}
+        for tid, j in mez.items():
+            if oldal_of.get(tid) == side:
+                ki.setdefault(int(j), tid)
+        return ki
+
     def add(side, pid, jersey, area, title, why, drill, clips=()):
         """A `clips` az a klip-típus-lista, amelyen a hiba LÁTSZIK.
 
@@ -12736,9 +12752,7 @@ def _player_training_focus_cached(match: Match,
             lovok = AttackModel.learn(match, team, config).lovok
             minta = _lovo_minta(match, team, config)
             # mezszám → track (a játékos-lap a track-azonosítóval megy)
-            pid_of = {}
-            for tid, j in mez.items():
-                pid_of.setdefault(int(j), tid)
+            pid_of = _pid_of(side)
             for jersey, savok in sorted(lovok.items()):
                 gyenge = [(v, s) for s, v in savok.items()
                           if v <= LOVO_GYENGE_SZORZO]
@@ -12753,6 +12767,41 @@ def _player_training_focus_cached(match: Match,
                     + f"{v:.1f}".replace(".", ",")
                     + "× annyit lő be, mint amennyit a helyzetei érnek",
                     gyak[s], clips=["missed_chance", "shot"])
+    except Exception:
+        pass
+
+    # (c4) Kilépés a sávod lövőjére — a kit kinek (shooter_defender_pairs):
+    #    az ellenfél veszélyes távoli lövőjének sávjában a MI védőnk áll,
+    #    aki ritkán lép ki (a modell cserét javasol a kilépőre) — a védő
+    #    egyéni tétele a kilépés időzítése; a kilépő, akit elé javasol,
+    #    nem kap tételt (ő a megoldás).
+    try:
+        from .play_simulation import (KAPUS_SAV_NEV, mezszam_nevelovel,
+                                      shooter_defender_matchup)
+        kk = shooter_defender_matchup(match, config)
+        for side in ("home", "away"):
+            pid_of = _pid_of(side)
+            for p in (kk.get(side) or {}).get("parok") or []:
+                if p.get("vedo_mez") is None or p.get("javasolt_mez") is None:
+                    continue
+                vm = int(p["vedo_mez"])
+                if vm not in pid_of:
+                    continue
+                vk = p.get("vedo_kilepes")
+                sz = f"{p['szorzo']:.1f}".replace(".", ",")
+                add(side, pid_of[vm], vm, "védekezés",
+                    "Kilépés a sávod lövőjére",
+                    f"a sávodból lő {mezszam_nevelovel(p['lovo_mez'])} "
+                    f"({KAPUS_SAV_NEV[p['band']]} {sz}× annyit lő be, mint "
+                    f"amennyit a helyzetei érnek, {p['lovesek']} lövés), és "
+                    + (f"ritkán lépsz ki rá ({vk * 100:.0f}%)"
+                       if vk is not None else "a kilépésedet nem ismerjük")
+                    + f" — a modell {mezszam_nevelovel(p['javasolt_mez'])}t "
+                    "állítaná eléd",
+                    "kilépés-időzítés 1 az 1 ellen 9 méteren: a lövő-karra "
+                    "lépj ki a labda átvételekor, ne a lendületnél; 10 "
+                    "ismétlés, aztán 6 a 6-ban jelzésre a sávod lövőjére",
+                    clips=["free_shot", "shot"])
     except Exception:
         pass
 

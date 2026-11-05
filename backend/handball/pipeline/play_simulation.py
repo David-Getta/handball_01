@@ -2684,6 +2684,63 @@ def kapus_many(meccsek: list, config: TacticsConfig | None = None) -> dict:
     return _kapus_szorzo(minta)
 
 
+def player_model_sample(match: Match, team: Team,
+                        config: TacticsConfig | None = None) -> dict:
+    """A csapat játékos-modelljének NYERS, JSON-barát mintája egy meccsről
+    — a lemezes eredmény-tárba tehető (a több meccses riport így a
+    második hívásra nem tölti vissza a hideg meccseket), és meccsek közt
+    összeadható (player_models_from_samples). {"lovo": {mez (str): {sáv:
+    [lövés, gól, xG]}}, "sav": {mez (str): [lövés sávonként]}, "kapus":
+    {sáv: [kaputra érkezett, védett]}, "vedok": {mez (str): {"n",
+    "y_osszeg", "kozel", "ralepett", "masodik", "kettozott"}}, "kockak"}
+    — a lövők a `team` lövései, a kapus és a fal a `team` védekezéséé."""
+    config = config or TacticsConfig()
+    tm = _tanulas_minta(match, team, config)
+    return {
+        "lovo": {str(m): {s: [int(v[0]), int(v[1]), float(v[2])]
+                          for s, v in sv.items()}
+                 for m, sv in _lovo_minta(match, team, config).items()},
+        "sav": {str(m): [int(x) for x in v]
+                for m, v in _lovo_sav_minta(match, team, config).items()},
+        "kapus": {s: [int(v[0]), int(v[1])]
+                  for s, v in (tm.get("kapus") or {}).items()},
+        "vedok": {str(m): {k: (float(x) if k == "y_osszeg" else int(x))
+                           for k, x in v.items()}
+                  for m, v in (tm.get("vedok") or {}).items()},
+        "kockak": int(tm.get("kockak", 0))}
+
+
+def player_models_from_samples(mintak: list) -> dict:
+    """Több meccs player_model_sample-jéből a kész modellek: {"tamadas"
+    (AttackModel), "kapus" ({sáv: szorzó}), "vedok" (DefenseModel.vedok
+    alakban), "sav" ({mez (str): [lövés sávonként]}), "lovo" (az
+    összegzett nyers lövő-minta)} — a minták összeadva, a küszöbök az
+    összegre (mint a learn_many / kapus_many)."""
+    lovo = _lovo_mintak_osszege([m.get("lovo") or {} for m in mintak])
+    sav: dict = {}
+    kap: dict = {}
+    vedok: dict = {}
+    kockak = 0
+    for m in mintak:
+        for mez, db in (m.get("sav") or {}).items():
+            r = sav.setdefault(str(mez), [0] * KITKINEK_SAVOK)
+            for i, x in enumerate(db):
+                r[i] += int(x)
+        for s, (faced, saves) in (m.get("kapus") or {}).items():
+            r = kap.setdefault(s, [0, 0])
+            r[0] += int(faced)
+            r[1] += int(saves)
+        kockak += int(m.get("kockak") or 0)
+        for mez, v in (m.get("vedok") or {}).items():
+            r = vedok.setdefault(str(mez), {})
+            for k, x in v.items():
+                r[k] = r.get(k, 0) + x
+    return {"tamadas": AttackModel._modell_mintabol(lovo),
+            "kapus": _kapus_szorzo(kap),
+            "vedok": _vedok_mintabol(vedok, kockak) if vedok else [],
+            "sav": sav, "lovo": lovo}
+
+
 def live_last_shot_alerts(match: Match, config: TacticsConfig | None = None,
                           *, tamadas: dict | None = None,
                           kapus: dict | None = None) -> dict:

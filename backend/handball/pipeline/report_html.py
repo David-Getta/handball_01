@@ -5106,7 +5106,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        leaders: dict | None = None,
                        opponents: list[dict] | None = None,
                        figure_library: dict | None = None,
-                       repertoire: dict | None = None) -> str:
+                       repertoire: dict | None = None,
+                       jatekos_modell: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
 
@@ -5116,8 +5117,26 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     `repertoire` (opcionális): a figura-repertoár változása a szezon
     két fele között (setplays.figure_repertoire_change) — mi jött be,
     mi tűnt el, mi maradt (a két fél hozamával).
+    `jatekos_modell` (opcionális): a szezon tanult játékos-modellje —
+    {"lovok": a lövők sora (play_simulation.lovo_felirat), "kapus": a
+    kapus sora (kapus_felirat), "meccsek": hány meccsből}; a szakasz
+    csak akkor jelenik meg, ha legalább egyik sor nem üres.
     """
     table = _trend_metrics_table(tr)
+    modell_html = ""
+    jm = jatekos_modell or {}
+    if jm.get("lovok") or jm.get("kapus"):
+        nincs = "nincs az átlagtól érdemben eltérő tanult sáv"
+        modell_html = (
+            "<h2>A szezon játékos-modellje</h2>"
+            f"<p><b>Lövők:</b> {escape(str(jm.get('lovok') or nincs))}</p>"
+            f"<p><b>Kapus:</b> {escape(str(jm.get('kapus') or nincs))}</p>"
+            '<p class="note">A csapat lövői mezszámonként és lövőhely-'
+            f"sávonként a szezon {int(jm.get('meccsek') or 0)} meccséből "
+            "tanulva (a szerzett gól a helyzetei várható góljához mérve, "
+            "sávonként legalább három lövésből), a kapus sávonként. "
+            "Ugyanez a modell számol a figura-pontozásban, a kit kinekben "
+            "és az utolsó labdában.</p>")
     figures_html = ""
     if (figure_library or {}).get("recurring"):
         figures_html = ("<h2>Saját visszatérő figuráink (meccsről meccsre)</h2>"
@@ -5271,6 +5290,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {venue_html}
 {opponents_html}
 {leaders_html}
+{modell_html}
 {figures_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
@@ -5286,10 +5306,40 @@ legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
 def h2h_report_html(team_a: str, team_b: str, stats: dict,
                     timeline: list[dict],
                     matchup: list[str] | None = None,
-                    scorers: dict | None = None) -> str:
+                    scorers: dict | None = None,
+                    jatekos_modell: dict | None = None) -> str:
     """Egymás ellen: a két csapat egymás elleni mérlege a könyvtárból
     — győzelmi mérleg, gól-mérleg és meccs-lista főcímekkel.
+
+    `jatekos_modell` (opcionális): a KÖZÖS meccsekből tanult játékos-
+    modell csapatonként — {csapat: {"lovok", "kapus", "utolso",
+    "kit_kinek", "engedett"} (mondatok vagy üres / None), "meccsek"}; a
+    szakasz csak a nem üres sorokat hozza, és elmarad, ha egy sem.
     """
+    modell_html = ""
+    jm = jatekos_modell or {}
+    blokkok = []
+    for tname in (team_a, team_b):
+        rec = jm.get(tname) or {}
+        sorok = [(cim, rec.get(k)) for cim, k in (
+            ("Lövőik", "lovok"), ("Kapusuk", "kapus"),
+            ("Utolsó labdájuk ellenük", "utolso"),
+            ("Kit kinek a falukban", "kit_kinek"),
+            ("Engedett lövő a falukban", "engedett")) if rec.get(k)]
+        if sorok:
+            blokkok.append(
+                f"<h3>{escape(str(tname))}</h3><ul>"
+                + "".join(f"<li><b>{cim}:</b> {escape(str(v))}</li>"
+                          for cim, v in sorok) + "</ul>")
+    if blokkok:
+        modell_html = (
+            "<h2>Játékos-modell egymás ellen (a közös meccsekből)</h2>"
+            + "".join(blokkok)
+            + '<p class="note">A két csapat lövői és kapusa a közös '
+              f"{int(jm.get('meccsek') or 0)} meccsből tanulva: az utolsó "
+              "labda a tanult lövők × a másik kapusa, a kit kinek az ő "
+              "veszélyes távoli lövőjük × a saját fal ott álló védője, az "
+              "engedett lövő az, akire nem kell kilépni.</p>")
     rows = "".join(
         f"<tr><td>{escape(str(e.get('date') or ''))}</td>"
         f'<td class="num">{escape(str(e.get("score") or ""))}</td>'
@@ -5367,6 +5417,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 <table><tr><th>Dátum</th><th class="num">Eredmény</th>
 <th>Mi történt</th></tr>{rows}</table>
 {scorers_html}
+{modell_html}
 {matchup_html}
 <footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
 meccsterv.txt, a felderítő képernyőn pedig a több-meccses
