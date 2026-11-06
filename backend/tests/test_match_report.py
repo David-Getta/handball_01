@@ -523,9 +523,13 @@ def test_report_team_pace_row():
     sort kap (üres meccsen 0.0 / 0.0)."""
     from handball.models.tracking import Frame, Match, MatchMeta
 
-    n = int(12 * 60 * 25)
+    # A "támadás / perc" sorhoz elég hosszú felvétel kell — a hosszt
+    # MÁSODPERCBEN méri a réteg, tehát alacsony fps-sel ugyanaz a
+    # tizenkét perc ötödannyi kockából kijön.
+    fps = 5.0
+    n = int(12 * 60 * fps)
     m = Match(MatchMeta(match_id="pcr", home_team="H", away_team="A",
-                        fps=25.0),
+                        fps=fps),
               [Frame(t=i, players=[], ball=None) for i in range(n)])
     html = match_report_html(m, {}, [], None)
     assert "Támadás / perc" in html
@@ -763,11 +767,13 @@ def test_report_suspension_row_with_offender():
 
     full = [100, 101, 102, 103, 104, 105]
     down = [100, 101, 102, 103, 104]
-    frames = [mk(t, full) for t in range(750)]
-    frames += [mk(t, down) for t in range(750, 2250)]
-    frames += [mk(t, full) for t in range(2250, 3000)]
+    # 5 fps: a kiállítás-felismerés másodpercekben számol (az fps-ből),
+    # a jelenet így ugyanaz a 30 / 60 / 30 mp — ötödannyi kockából.
+    frames = [mk(t, full) for t in range(150)]
+    frames += [mk(t, down) for t in range(150, 450)]
+    frames += [mk(t, full) for t in range(450, 600)]
     m = Match(MatchMeta(match_id="ppr", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=5.0), frames)
     html = match_report_html(m, {}, [], None)
     assert "Kiállítás (2 perc)" in html
     assert "1 (105.)" in html
@@ -788,9 +794,12 @@ def test_report_drought_row():
                               source=PositionSource.MEASURED,
                               confidence=1.0)
 
+    # A gólcsendet a réteg MÁSODPERCBEN méri, tehát alacsony fps-sel
+    # ugyanaz a hat perc ötödannyi kockából kijön.
+    fps = 5.0
     frames = []
     t = 0
-    for _ in range(4400):  # ~3 perc játék gól nélkül
+    for _ in range(880):   # ~3 perc játék gól nélkül
         frames.append(Frame(t=t, players=[pl()],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
@@ -799,12 +808,12 @@ def test_report_drought_row():
                             ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                       confidence=1.0)))
         t += 1
-    for _ in range(4400):  # ~3 perc újra gól nélkül
+    for _ in range(880):   # ~3 perc újra gól nélkül
         frames.append(Frame(t=t, players=[pl()],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
     m = Match(MatchMeta(match_id="drr", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=fps), frames)
     html = match_report_html(m, {}, [], None)
     assert "Leghosszabb gólcsend" in html
     # A vendég egyszer sem szerzett gólt → a teljes felvétel a csendje.
@@ -824,9 +833,14 @@ def test_report_goal_timeline_halftime_marker():
                               source=PositionSource.MEASURED,
                               confidence=1.0)
 
+    # 10 fps: a lövés-fizika m/s-ban számol, ezért a labda kockánként
+    # 2.5 m-t lép (25 m/s, mint 25 fps mellett kockánként 1 m) — a
+    # jelenet ugyanaz, a kocka-szám a 40%-a.
+    fps, step = 10.0, 2.5
+
     def play(t0, seconds):
         frames = []
-        for i in range(int(seconds * 25)):
+        for i in range(int(seconds * fps)):
             players = [pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
                        for k in range(6)]
             players += [pl(200 + k, Team.AWAY, 26.0 + k, 4.0 + k)
@@ -836,30 +850,34 @@ def test_report_goal_timeline_halftime_marker():
                                           confidence=1.0)))
         return frames
 
-    frames = play(0, 60)
+    # A kitöltő szakaszok RÖVIDEBBEK, az arányok viszont maradnak: a
+    # szünet-felismerésnek 60-90 mp-es üres rész kell a felvétel
+    # középső 20-80%-ában. 30 mp-es szakaszokkal a 90 mp-es szünet a
+    # 29-71% sávba esik — a jelenet ugyanaz, a kocka-szám fele.
+    frames = play(0, 30)
     t = len(frames)
-    for i in range(8):  # hazai gól az 1. félidőben
+    for i in range(4):  # hazai gól az 1. félidőben
         frames.append(Frame(t=t + i,
                             players=[pl(101, Team.HOME, 33.5, 10.0)],
-                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                            ball=Ball(x=min(34.0 + step * i, 40.0), y=10.0,
                                       confidence=1.0)))
-    t += 8
-    frames += play(t, 60)
+    t += 4
+    frames += play(t, 30)
     t = len(frames)
     frames += [Frame(t=t + i, players=[], ball=None)
-               for i in range(int(90 * 25))]  # szünet
+               for i in range(int(90 * fps))]  # szünet
     t = len(frames)
-    frames += play(t, 60)
+    frames += play(t, 30)
     t = len(frames)
-    for i in range(8):  # vendég gól a 2. félidőben (a -x kapuba)
+    for i in range(4):  # vendég gól a 2. félidőben (a -x kapuba)
         frames.append(Frame(t=t + i,
                             players=[pl(201, Team.AWAY, 6.5, 10.0)],
-                            ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                            ball=Ball(x=max(6.0 - step * i, 0.0), y=10.0,
                                       confidence=1.0)))
-    t += 8
-    frames += play(t, 60)
+    t += 4
+    frames += play(t, 30)
     m = Match(MatchMeta(match_id="htm", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=fps), frames)
     html = match_report_html(m, {}, detect_events(m), None)
     assert "— FÉLIDŐ (1 – 0) —" in html
 
@@ -952,9 +970,13 @@ def test_player_report_goalkeeper_block():
                                 ball=Ball(x=min(33.6 + i, 38.8), y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk()],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # A lövés-csendidő (SHOT_COOLDOWN_S) miatt valós szünet kell két
+        # kapu-megközelítés közé: fél másodpercen belül a felismerés —
+        # helyesen — egy lövésnek veszi a jelet.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkp", home_team="H", away_team="A",
                         fps=25.0), frames)
     html = player_report_html(m, 9)
@@ -995,9 +1017,11 @@ def test_player_report_goalkeeper_tips():
                                 ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk()],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # Lövés-csendidő: valós szünet kell két kapu-megközelítés közé.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkt", home_team="H", away_team="A",
                         fps=25.0), frames)
     html = player_report_html(m, 9)
@@ -1258,12 +1282,14 @@ def test_player_report_shows_turnovers():
     frames = []
     t = 0
     # HAZAI 1-es birtokol, majd a VENDÉG 20-as szerzi meg → 1-es eladása.
-    for _ in range(6):
+    # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+    for _ in range(10):
         frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
                                           pl(20, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
-    for _ in range(6):
+    for _ in range(10):
         frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
                                           pl(20, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.5, y=10.0, confidence=1.0)))
@@ -1313,15 +1339,21 @@ def test_report_faradas_kep_section_lists_verdicts():
     from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
                                           PlayerPosition, Team)
 
+    # ALACSONY képkocka-sebesség: a jelenet MÁSODPERCEKBEN van
+    # megfogalmazva (60 mp létszám, 120 mp szünet), a rétegek pedig az
+    # fps-ből számolnak időt — ugyanaz a tizenhárom perc így ötödannyi
+    # kockából kijön. A teljes jelentés minden réteget végigfuttat, és
+    # a kocka-szám a fő költség.
+    FPS = 5.0
     meta = MatchMeta(match_id="rep-df", home_team="Hazai",
-                     away_team="Vendég", fps=25.0)
+                     away_team="Vendég", fps=FPS)
 
     def pl(tid, team, x, y):
         return PlayerPosition(track_id=tid, team=team, x=x, y=y)
 
     def roster(t0, seconds, home_n):
         out = []
-        for i in range(int(seconds * 25)):
+        for i in range(int(seconds * FPS)):
             players = [pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
                        for k in range(home_n)]
             players += [pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
@@ -1337,7 +1369,7 @@ def test_report_faradas_kep_section_lists_verdicts():
     frames += roster(frames[-1].t + 1, 60, 5)
     frames += roster(frames[-1].t + 1, 60, 6)
     t = frames[-1].t + 1
-    for i in range(int(120 * 25)):
+    for i in range(int(120 * FPS)):
         frames.append(Frame(t=t + i, players=[], ball=None))
     t = frames[-1].t + 1
     for _ in range(3):
@@ -1432,8 +1464,11 @@ def test_report_szunet_lencse_section_lists_verdicts():
     from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
                                           PlayerPosition, Team)
 
+    # 5 fps: a fal-felismerés és a félidő-keresés is másodpercekben
+    # számol (az fps-ből) — a jelenet ugyanaz, ötödannyi kockából.
+    fps = 5.0
     meta = MatchMeta(match_id="rep-dfs", home_team="Hazai",
-                     away_team="Vendég", fps=25.0)
+                     away_team="Vendég", fps=fps)
 
     def pl(tid, team, x, y):
         return PlayerPosition(track_id=tid, team=team, x=x, y=y)
@@ -1442,7 +1477,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
         out = []
         t = t0
         for _ in range(5):
-            for _ in range(int(8 * 25)):
+            for _ in range(int(8 * fps)):
                 players = [pl(1, Team.HOME, 30.0, 10.0)]
                 for k in range(6):
                     if advanced_one and k == 0:
@@ -1454,7 +1489,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
                                  ball=Ball(x=30.0, y=10.0,
                                            confidence=1.0)))
                 t += 1
-            for _ in range(10):
+            for _ in range(2):
                 out.append(Frame(t=t, players=[],
                                  ball=Ball(x=18.0, y=10.0,
                                            confidence=1.0)))
@@ -1462,7 +1497,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
         return out, t
 
     frames, t = half(0, False)          # 1. félidő: 6-0
-    for _ in range(int(90 * 25)):
+    for _ in range(int(90 * fps)):
         frames.append(Frame(t=t, players=[], ball=None))
         t += 1
     sh, t = half(t, True)               # 2. félidő: 5-1
@@ -1622,3 +1657,668 @@ def test_report_shows_the_role_lens_when_a_post_layer_speaks():
     # Üres meccsen egyetlen poszt-réteg sem szólal meg → nincs szekció.
     empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     assert "Poszt-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_befejezo_lencse_a_jelentesben():
+    """A befejező-lencse ítéletei (pl. a hetes-oldal) a meccs-jelentés
+    táblájában is megjelennek — nem csak az app csempéin."""
+    from tests.test_rules import _svd_match
+
+    match = _svd_match([8.8, 8.8, 8.8, 8.8, 11.2])
+    html = match_report_html(match, {}, [], None)
+    assert "Befejező-lencse" in html
+    assert "Hetes-oldal" in html and "vetődhet" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Befejező-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_vedo_lencse_a_jelentesben():
+    """A védő-oldali poszt-ítéletek (pl. a hetes-okozó sáv) külön
+    Védő-lencse táblába kerülnek — a Befejező-lencse a támadó-oldali
+    "kire fut ki" ítéleteké marad."""
+    from tests.test_rules import _svr_match
+
+    match = _svr_match([21] * 3 + [23])
+    html = match_report_html(match, {}, [], None)
+    assert "Védő-lencse" in html
+    assert "Hetes-okozó poszt" in html and "betörést" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Védő-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_hozam_lencse_a_jelentesben():
+    """A hozam-rétegek (mennyit ér nekik egy játékelem) külön
+    Hozam-lencse táblába kerülnek a meccs-jelentésben."""
+    from tests.test_rules import _svy_match
+
+    html = match_report_html(_svy_match(), {}, [], None)
+    assert "Hozam-lencse" in html
+    assert "Hetes-hozam" in html and "legrosszabb üzlet" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Hozam-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_ember_lencse_a_jelentesben():
+    """A néven nevező rétegek egy Ember-lencse táblába kerülnek — a
+    lista a Kulcs-ember nyilvántartásából (KPL_LAYERS) épül, tehát új
+    ember-réteggel magától bővül."""
+    from tests.test_priorities import _kp_match
+
+    html = match_report_html(_kp_match(), {}, [], None)
+    assert "Ember-lencse" in html
+    assert "<th>Játékos</th>" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Ember-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_kulcs_poszt_indoklassal_a_jelentesben():
+    """A kulcs-poszt szekció felsorolja, mely rétegek mutatnak rá —
+    a magyarázható lánc a jelentésben is látszik."""
+    from tests.test_priorities import _kp_match
+
+    html = match_report_html(_kp_match(), {}, [], None)
+    assert "Kulcs-poszt" in html
+    assert "rétegek:" in html and "Blokk-poszt" in html
+
+
+def test_meccsjelentes_elejen_all_a_megbizhatosag_figyelmeztetes():
+    """Gyenge feldolgozásnál a jelentés TETEJÉN szól, ne csak a végén.
+
+    A részletes megbízhatóság-szakasz a lap alján van — egy nyomtatott
+    jelentést viszont fentről lefelé olvasnak: aki a végén tudja meg,
+    hogy az adat gyenge, addig már döntött.
+    """
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.quality import compute_quality_report
+    from handball.pipeline.report_html import match_report_html
+
+    # 27 "játékos" kockánként: a pályán legfeljebb 14 lehet.
+    frames = []
+    for t in range(300):
+        pl = [PlayerPosition(track_id=i,
+                             team=Team.HOME if i % 2 == 0 else Team.AWAY,
+                             x=5.0 + (i % 10) * 3.0, y=3.0 + (i % 5) * 3.0,
+                             source=PositionSource.MEASURED, confidence=1.0)
+              for i in range(27)]
+        frames.append(Frame(t=t, players=pl,
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="rossz", home_team="H", away_team="A",
+                        fps=25.0, calibrated=True), frames)
+
+    html = match_report_html(m, {}, [], compute_quality_report(m))
+    assert '<div class="warnbox">' in html
+    # A figyelmeztetés az ELSŐ tartalmi szakasz előtt álljon (a
+    # tartalomjegyzék után, de a jelentés állításai előtt).
+    assert (html.index('<div class="warnbox">')
+            < html.index('<h2 id="sz1">'))
+
+
+def test_jo_feldolgozasnal_nincs_figyelmeztetes_a_jelentes_tetejen():
+    """Rendben lévő feldolgozásnál a lap teteje maradjon tiszta."""
+    from handball.pipeline.quality import compute_quality_report
+    from handball.pipeline.report_html import match_report_html
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=90, fps=10.0, seed=5)
+    m.meta.calibrated = True
+    html = match_report_html(m, {}, [], compute_quality_report(m))
+    # A stíluslap mindig tartalmazza az osztályt; a DOBOZ nem lehet ott.
+    assert '<div class="warnbox">' not in html
+
+
+def test_a_jelentes_kimondja_a_feldolgozott_szakaszt():
+    """Egy nyomtatott jelentést napokkal később olvasnak vissza.
+
+    Akkor már semmi nem árulja el, hogy a lap a TELJES meccsről szól-e
+    vagy csak az első félidőről — ezért a megbízhatóság-szakaszban ott
+    a feldolgozott szakasz a videó órája szerint.
+    """
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+    q["processed_from_s"] = 60.0
+    q["processed_to_s"] = 2054.0
+    html = match_report_html(m, team_style_profile(m), detect_events(m), q)
+    assert "Feldolgozott szakasz" in html
+    assert "1:00" in html and "34:14" in html
+
+
+def test_szakasz_nelkul_nem_talalunk_ki_semmit():
+    """Régi mentésnél (nincs adat) a sor egyszerűen kimarad — nem
+    írunk oda kitalált vagy "?" értéket."""
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+    q["processed_from_s"] = None
+    q["processed_to_s"] = None
+    html = match_report_html(m, team_style_profile(m), detect_events(m), q)
+    assert "Feldolgozott szakasz" not in html
+
+
+def test_a_lenyeg_kiemelt_dobozt_kap_a_nyomtatott_lapon():
+    """Nyomtatott lapon "A lényeg" a vezetői összefoglaló.
+
+    Ha ugyanolyan felsorolás, mint a többi tizennégy szakasz, akkor
+    elvész bennük — pedig pont attól hasznos, hogy az olvasó ott
+    megállhat. A motor megjelöli (show_all), a lap pedig kiemelt
+    dobozba teszi.
+    """
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    assert '<div class="leadbox">' in html
+    # A doboz a lényeg-szakaszt tartalmazza, nem valami mást.
+    i = html.index('<div class="leadbox">')
+    assert "A lényeg" in html[i:i + 400]
+
+
+def test_report_contains_player_training_focus():
+    """Az EGYÉNI edzés-fókusz a nyomtatott jelentésben is ott van.
+
+    A nyomtatott lap az, amit az edző a kezébe vesz a hét első
+    edzésén — az egyéni beszélgetés ebből indul, nem a
+    csapat-listából. Ha a réteg csak a képernyőn él, a papíron
+    hiányzik.
+    """
+    import math
+
+    from handball.models.tracking import (
+        Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    # Egy játékos, aki a 2. félidőre láthatóan lelassul — ebből a
+    # kondíció-szabály tételt ad.
+    fps = 25.0
+    n = int(4 * 60 * fps)
+    frames = []
+    for t_ in range(n):
+        gyors = t_ < n // 2
+        x = 15.0 + (5.0 if gyors else 0.4) * math.sin(t_ / 20.0)
+        frames.append(Frame(t=t_, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=x, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=9),
+        ], ball=None))
+    m = Match(MatchMeta(match_id="r", home_team="A", away_team="B",
+                        fps=fps), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Egyéni edzés-fókusz" in html, "a papíron nincs egyéni fókusz"
+    assert "#9" in html, "a játékost nem lehet azonosítani a lapon"
+
+
+def test_report_kimondja_a_kezi_javitast():
+    """Ha az edző javította a felismerést, a lap mondja ki.
+
+    A jelentés így is a mérésről szól — de az olvasó (másik edző,
+    vezetőség) lássa, hogy egy része emberi döntés.
+    """
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+
+    sima = match_report_html(m, {}, [], q)
+    assert "Kézi javítás" not in sima
+
+    m.meta.event_overrides = [{"op": "set_type", "t": 10, "type": "goal"},
+                              {"op": "add", "t": 40, "type": "goal",
+                               "team": "home"}]
+    javitott = match_report_html(m, {}, [], q)
+    assert "Kézi javítás" in javitott
+    assert "2 db" in javitott
+
+
+def test_a_jelentes_rajzolja_a_figurakat_ha_vannak():
+    """A meccsjelentés "Figuráik (alakkal)" szakasza: a figurák mini-pályán,
+    edzői névvel — ha van legalább egy három támadásos minta; a rövid
+    szimulált meccsen (nincs ilyen) a szakasz elmarad, a jelentés teljes."""
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))
+    from test_setplays import _spl_match
+
+    html = match_report_html(_spl_match(["bal"] * 4 + ["jobb"] * 3, "mr"),
+                             {}, [], None)
+    assert "Figuráik (alakkal)" in html
+    assert "bal oldal" in html and "4 támadás" in html
+    # Elnevezett figura a jelentésben: a névadó a csapatnevet és az alakot kapja.
+    nevvel = match_report_html(
+        _spl_match(["bal"] * 4 + ["jobb"] * 3, "mr"), {}, [], None,
+        figure_namer=lambda team, shape: "Kereszt" if team == "A" and shape[0 + 4] > 0 else None)
+    assert "<b>Kereszt</b> (bal oldal" in nevvel or "<b>Kereszt</b> (jobb oldal" in nevvel
+    assert html.count("<svg") >= 3     # jelkép + két alak
+    rovid = match_report_html(simulate_ground_truth(duration_s=5, fps=25.0,
+                                                    seed=1), {}, [], None)
+    assert "Figuráik (alakkal)" not in rovid
+
+
+def test_a_videozando_jelenetek_a_3d_jelenet_listabol():
+    """A "Videózandó jelenetek" szakasz a 3D jelenet-lista (court3d.
+    scene_rows) soraiból: a gólba került labdavesztés időbélyeggel és
+    UGYANAZZAL a felirattal; a csapatnév egyszer escape-elve."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    m = _eladasos_meccs()
+    m.meta.home_team = "<b>Injekt</b>"
+    html = match_report_html(m, {}, [], None)
+    assert ">Videózandó jelenetek</h2>" in html  # (a címsor horgonyt kap)
+    assert ("<li><b>0:00</b> — &lt;b&gt;Injekt&lt;/b&gt; — labdavesztés #7 "
+            "(középső harmad) · gól lett belőle</li>") in html
+    szakasz = html.split(">Videózandó jelenetek</h2>", 1)[1].split("<h2", 1)[0]
+    assert "&amp;lt;" not in szakasz  # nincs kettős escape
+
+
+def test_a_videozando_jelenetek_alatt_a_felvetel_kockaja(tmp_path):
+    """Ha a forrás-videó elérhető, minden videózandó sor alatt a jelenet
+    kockája (beágyazott JPEG, a sor idejének kockája); videó nélkül a sor
+    változatlan (kép nélkül)."""
+    import base64
+    import os
+    import sys
+
+    import cv2
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    from handball.pipeline import report_html as rh
+    from handball.pipeline.court3d import key_scene_rows
+
+    m = _eladasos_meccs()
+    ures = rh._scenes_section(m)
+    assert "data:image/jpeg" not in ures
+    assert "A képek a felvétel kockái" not in ures
+    ut = tmp_path / "v.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (640, 360))
+    for i in range(len(m.frames) + 5):
+        w.write(np.full((360, 640, 3), (i * 3) % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    html = rh._scenes_section(m)
+    sorok = key_scene_rows(m, decision_top=rh.REPORT_DECISION_TOP,
+                           max_rows=rh.REPORT_SCENES_MAX)["rows"]
+    assert html.count("data:image/jpeg;base64,") == len(sorok) > 0
+    assert html.count('<li style="break-inside:avoid">') == len(sorok)
+    assert "A képek a felvétel kockái" in html
+    # Az első kép a sor idejének kockája (szürkeség = 3 × sorszám).
+    b64 = html.split("data:image/jpeg;base64,", 1)[1].split('"', 1)[0]
+    img = cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8),
+                       cv2.IMREAD_COLOR)
+    t = round(float(sorok[0]["s"]) * m.meta.fps)
+    assert img.shape[1] == 320
+    assert abs(float(img.mean()) - (t * 3) % 250) < 6
+
+
+def test_a_kocka_olvaso_szakaszt_es_ritkitast_kovet(tmp_path):
+    """video_frames: a feldolgozott t. kocka a forrás start_frame + (t −
+    a szakasz eleje) × stride. kockája — összefűzött meccsnél a szakasz
+    saját videójából; elérhetetlen videónál (és a videó vége után) a kocka
+    kimarad, nem hiba."""
+    import cv2
+    import numpy as np
+
+    from handball.models.tracking import Frame, Match, MatchMeta
+    from handball.pipeline.video_frames import frames_jpeg, source_frame
+
+    def video(nev, alap):
+        ut = tmp_path / nev
+        w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                            (320, 160))
+        for i in range(60):
+            w.write(np.full((160, 320, 3), alap + i * 2, np.uint8))
+        w.release()
+        return str(ut)
+
+    a, b = video("a.mp4", 0), video("b.mp4", 120)
+    m = Match(MatchMeta(match_id="sz", home_team="A", away_team="B",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(40)])
+    m.meta.source_segments = [
+        {"t_from": 0, "t_to": 20, "video_path": a, "start_frame": 4,
+         "stride": 2},
+        {"t_from": 20, "t_to": None, "video_path": b, "start_frame": 0,
+         "stride": 1},
+        ]
+    assert source_frame(m, 5) == (a, 14)
+    assert source_frame(m, 25) == (b, 5)
+    kepek = frames_jpeg(m, [25, 5, 5, 200])
+    assert sorted(kepek) == [5, 25]  # a 200. a b videó vége után
+    def szurke(bajt):
+        return float(cv2.imdecode(np.frombuffer(bajt, np.uint8),
+                                  cv2.IMREAD_COLOR).mean())
+    assert abs(szurke(kepek[5]) - 28) < 6     # a: 14. kocka → 28
+    assert abs(szurke(kepek[25]) - 130) < 6   # b: 5. kocka → 120 + 10
+    m.meta.source_segments[1]["video_path"] = str(tmp_path / "nincs.mp4")
+    assert source_frame(m, 25) is None
+    assert sorted(frames_jpeg(m, [5, 25])) == [5]
+
+
+def test_a_kapott_lerohanas_kockaja_a_gol(tmp_path, monkeypatch):
+    """A videózandó sorok közt a kapott lerohanás ("k") kockája a
+    BEFEJEZÉS (a gól) kockája — mint a klipé és a vetítésé —, nem az
+    indulásé; a jelentés a videót egyszer nyitja meg."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline import report_html as rh
+    from handball.pipeline import video_frames
+    from handball.pipeline.court3d import (fast_break_moments,
+                                           key_scene_rows, scene_anchor_t)
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 500)
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=7,
+                              shots_per_min=8)
+    sorok = key_scene_rows(m, decision_top=rh.REPORT_DECISION_TOP,
+                           max_rows=500)["rows"]
+    k = next(r for r in sorok if r["tipus"] == "k")
+    fb = next(x for x in fast_break_moments(m)["moments"]
+              if abs(x["s"] - k["s"]) < 0.01)
+    assert scene_anchor_t(m, k) == fb["t"] != round(k["s"] * 25.0)
+    ut = tmp_path / "k.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (320, 160))
+    for i in range(m.frames[-1].t + 5):
+        w.write(np.full((160, 320, 3), (i // 25) * 4 % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    megnyitas = []
+    eredeti = video_frames.frames_jpeg
+
+    def szamolo(match, ts, *a, **kw):
+        megnyitas.append(len(list(ts)))
+        return eredeti(match, ts, *a, **kw)
+
+    monkeypatch.setattr(video_frames, "frames_jpeg", szamolo)
+    jegyzetek = [{"id": "a", "frame": m.frames[30].t, "text": "Zárás"}]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    assert len(megnyitas) == 1  # egy olvasás a jelenetekhez ÉS a jegyzetekhez
+    szakasz = html.split(">Videózandó jelenetek</h2>", 1)[1].split("<h2", 1)[0]
+    import base64
+    import re
+    li = [x for x in re.findall(r"<li[^>]*>(.*?)</li>", szakasz)
+          if "kapott lerohanás" in x][0]
+    b64 = li.split("data:image/jpeg;base64,", 1)[1].split('"', 1)[0]
+    img = cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8),
+                       cv2.IMREAD_COLOR)
+    assert abs(float(img.mean()) - (fb["t"] // 25) * 4 % 250) < 6
+
+
+def test_a_kocka_olvaso_kozeli_kockara_nem_teker(tmp_path):
+    """A lejátszás egymás utáni kockáihoz a kocka-olvasó továbbolvas (nem
+    teker — a tekerés a kulcskockától dekódol); ugrásnál és visszafelé
+    teker. A kép mindkét úton a kért kocka."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline.video_frames import SEQ_READ_MAX_S, read_jpeg
+
+    ut = tmp_path / "s.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (320, 160))
+    for i in range(120):
+        w.write(np.full((160, 320, 3), i * 2, np.uint8))
+    w.release()
+
+    class Szamlalo:
+        def __init__(self, cap):
+            self.cap, self.tekeres = cap, 0
+
+        def set(self, *a):
+            self.tekeres += 1
+            return self.cap.set(*a)
+
+        def __getattr__(self, nev):
+            return getattr(self.cap, nev)
+
+    cap = Szamlalo(cv2.VideoCapture(str(ut)))
+
+    def szurke(k):
+        b = read_jpeg(cap, k, 320)
+        return float(cv2.imdecode(np.frombuffer(b, np.uint8),
+                                  cv2.IMREAD_COLOR).mean())
+
+    # A friss olvasó a 0. kockán áll: a 10. is továbbolvasással jön.
+    assert abs(szurke(10) - 20) < 6 and cap.tekeres == 0
+    assert abs(szurke(11) - 22) < 6 and cap.tekeres == 0   # a következő
+    assert abs(szurke(14) - 28) < 6 and cap.tekeres == 0   # pár kockával előre
+    tavol = 15 + int(SEQ_READ_MAX_S * 25) + 5
+    assert abs(szurke(tavol) - tavol * 2) < 6 and cap.tekeres == 1  # ugrás
+    assert abs(szurke(5) - 10) < 6 and cap.tekeres == 2     # visszafelé
+    assert read_jpeg(cap, 500, 320) is None                  # a vége után
+    cap.release()
+
+
+def test_a_jegyzetek_egymas_utan_link():
+    """Ismert motor-címmel a jegyzet-szakasz elején "▶ A jegyzetek egymás
+    után" link: a 3D pálya a Jegyzeteim szűrővel, vetítéssel, TV-kamerával;
+    cím nélkül nincs link."""
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=5)
+    jegyzetek = [{"id": "a", "frame": m.frames[10].t, "text": "Zárás"}]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek,
+                             base_url="http://motor:8123/")
+    assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0'
+            '&lista=1&jegyzetek=1&vetit=1&tv=1"') in html
+    assert "▶ A jegyzetek egymás után a 3D pályán" in html
+    assert "jegyzetek=1" not in match_report_html(m, {}, [], None,
+                                                  notes=jegyzetek)
+
+
+def test_a_jegyzetek_alatt_a_felvetel_kockaja(tmp_path, monkeypatch):
+    """Ha a forrás-videó elérhető, a jegyzet alatt a pillanatának kockája
+    (rajzos jegyzetnél az ábra mellett, egy sorban); a plafon fölötti
+    jegyzetek kép nélkül; videó nélkül nincs kép."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline import report_html as rh
+
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5,
+                              shots_per_min=8)
+    jegyzetek = [
+        {"id": "a", "frame": m.frames[10].t, "text": "Zárás",
+         "rajz": "20,13.1,28.4,16.8,0"},
+        {"id": "b", "frame": m.frames[20].t, "text": "Csak szöveg"},
+    ]
+    ures = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = ures.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert "data:image/jpeg" not in jsz
+    ut = tmp_path / "j.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (640, 360))
+    for i in range(m.frames[-1].t + 5):
+        w.write(np.full((360, 640, 3), (i * 3) % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = html.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert jsz.count("data:image/jpeg;base64,") == 2
+    assert jsz.count('<li style="break-inside:avoid">') == 2
+    # A rajzos jegyzet kockája és ábrája egy sorban.
+    zaras = jsz[jsz.index("Zárás"):jsz.index("Csak szöveg")]
+    assert "display:flex" in zaras and 'class="jegyzet-abra"' in zaras
+    assert zaras.index("data:image/jpeg") < zaras.index('class="jegyzet-abra"')
+    monkeypatch.setattr(rh, "REPORT_NOTE_FRAMES_MAX", 1)
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = html.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert jsz.count("data:image/jpeg;base64,") == 1
+
+
+def test_jelenet_nelkul_nincs_videozando_szakasz():
+    """Jelenet nélküli (játékos- és labda-mentes) meccsen a szakasz
+    elmarad — nem üres címsor."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+
+    m = Match(MatchMeta(match_id="u", home_team="A", away_team="B",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(50)])
+    html = match_report_html(m, {}, [], None)
+    assert "Videózandó jelenetek" not in html
+
+
+def test_a_plafon_a_golos_jeleneteket_tartja_meg(monkeypatch):
+    """Sok jelenetnél a plafon (REPORT_SCENES_MAX) előbb a gólosakat
+    tartja meg, a sorrend időrendi marad."""
+    from handball.pipeline import report_html as rh
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 3)
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.decision_moments",
+        lambda m: {"moments": [{"s": float(i), "team": "home",
+                                "best_kind": "shoot", "gap": 0.2}
+                               for i in range(1, 5)]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.free_shot_moments",
+        lambda m: {"moments": [{"s": 50.0, "defending": "away",
+                                "dist": 4.0, "goal": True}]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.turnover_moments",
+        lambda m: {"moments": [{"s": 20.0, "team": "away", "jersey": 9,
+                                "zone": "támadó", "punished": True,
+                                "goal_after_s": 5.0}]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.fast_break_moments",
+        lambda m: {"moments": [{"s": 30.0, "team": "home",
+                                "defending": "away", "outcome": "goal",
+                                "shooter_jersey": 13},
+                               {"s": 40.0, "team": "home",
+                                "defending": "away", "outcome": "shot",
+                                "shooter_jersey": 4}]})
+    m = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    html = rh._scenes_section(m)
+    import re
+    idok = re.findall(r"<li><b>(\d+:\d\d)</b>", html)
+    assert idok == ["0:20", "0:30", "0:50"]
+
+
+def test_a_videozando_jelenetek_kozt_a_kapott_lerohanas(monkeypatch):
+    """A gólba került kapott lerohanás a videózandó jelenetek közt, a
+    VÉDEKEZŐ csapat soraként (a 3D jelenet-lista feliratával); a lövés
+    nélküli vagy védett kontra nem. (A plafon itt felengedve — a lövéses
+    szimuláció sok gólos szabad lövése különben kiszorítaná őket.)"""
+    from handball.pipeline import report_html as rh
+    from handball.pipeline.court3d import fast_break_moments
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 500)
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    kontrak = fast_break_moments(m)["moments"]
+    golos = [k for k in kontrak if k["outcome"] == "goal"]
+    assert golos, "a szimuláción van gólba került lerohanás"
+    html = rh._scenes_section(m)
+    assert html.count("kapott lerohanás: ") == len(golos)
+    k = golos[0]
+    assert (f"{m.meta.away_team} védekezése — kapott lerohanás: "
+            f"{m.meta.home_team} #{k['shooter_jersey']} · GÓL") in html
+    assert '"Videózandó jelenetek" csomagjában' in html
+
+
+def test_a_csapatnev_a_teljes_jelentesben_pontosan_egyszer_escape_elve():
+    """'&', '<', '>' és idézőjel a csapatnévben: a jelentés MINDEN
+    szakaszában egyszer escape-elve. Korábban 25 szakasz (a fejlécet is
+    beleértve) a már escape-elt nevet még egyszer escape-elte — egy "&"
+    "&amp;"-ként látszott a nyomtatott lapon. Nyersen (escape nélkül)
+    sehol sem kerülhet a HTML-be."""
+    from html import escape
+
+    H, V = "H<&>'\"", "V<&>"
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8, halftime_break_s=30)
+    for f in m.frames:
+        for p in f.players:
+            p.jersey_number = (p.track_id % 14) + 1
+    m.meta.home_team, m.meta.away_team = H, V
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    for nev in (H, V):
+        assert escape(nev) in html
+        assert escape(escape(nev)) not in html, "kettős escape"
+        assert nev not in html, "nyers (escape nélküli) csapatnév"
+
+
+def test_a_videozando_jelenetek_3d_linkje_a_motor_cimevel():
+    """A jelentés jelenet-sorai "3D ↗" linket kapnak, ha ismert a motor
+    címe: a böngészős 3D pálya a jelenet előtt 1,5 mp-cel, a HIBÁZÓ
+    csapatra szűrve, nyitott listával; cím nélkül nincs link."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    from handball.pipeline import report_html as rh
+
+    m = _eladasos_meccs()
+    nincs = rh._scenes_section(m)
+    assert "view3d?" not in nincs and "3D ↗" not in nincs
+    van = rh._scenes_section(m, "http://127.0.0.1:8000/")
+    # A gólba került labdavesztés a hazaié, a 0. másodpercben: a lejátszó
+    # 0,0-nál indul (nem negatív), a hazai hibáira szűrve.
+    assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
+            '?t=0.0&lista=1&kulcs=1&jelenet=hazai"') in van
+    assert van.count("3D ↗") == van.count("<li>")
+    # A szakasz elején: mind egymás után (vetítés), csapat-szűrő nélkül.
+    assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
+            '?t=0&lista=1&kulcs=1&vetit=1&tv=1"') in van
+    assert van.index("vetit=1") < van.index("<ul>")
+    assert "vetit=1" not in nincs
+    # A Klipek videózandó csomagjára utal (ugyanezek a sorok).
+    assert '"Videózandó jelenetek" csomagjában' in van
+    html = match_report_html(m, {}, [], None, base_url="http://127.0.0.1:8000")
+    assert "/view3d?t=0.0&lista=1&kulcs=1&jelenet=hazai" in html
+
+
+def test_a_jelentes_export_a_keres_cimevel_linkel(tmp_path, monkeypatch):
+    """A /report/export válasza a kérés címével készült 3D-linkeket visz."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from fastapi.testclient import TestClient
+    from test_court3d import _eladasos_meccs
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _eladasos_meccs()
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app, base_url="http://motor:8123").get(
+        f"/matches/{m.meta.match_id}/report/export")
+    assert r.status_code == 200
+    assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0.0'
+            '&lista=1&kulcs=1&jelenet=hazai"') in r.text
+
+
+
+def test_a_rajzos_jegyzet_abrat_kap_a_jelentesben():
+    """A rajzos jegyzet (a 3D pályán a nyilakkal mentett) felülnézeti
+    ábrát kap a jelentésben — a nyilak hegyével és a pillanat
+    játékosaival; a rajz nélküli jegyzet szöveges marad; a plafon fölötti
+    rajzos jegyzetek ábra nélkül."""
+    from handball.pipeline import report_html as rh
+
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5,
+                              shots_per_min=8)
+    jegyzetek = [
+        {"id": "a", "frame": m.frames[10].t, "text": "Zárás",
+         "rajz": "20,13.1,28.4,16.8,0;15.9,9.5,17.9,16.8,2"},
+        {"id": "b", "frame": m.frames[20].t, "text": "Csak szöveg"},
+    ]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    assert html.count('class="jegyzet-abra"') == 1
+    assert html.count('class="nyil"') == 2
+    assert "Zárás ✎" in html and "Csak szöveg" in html
+    # A pillanat játékosai a körök (a nyilak, a labda mellett).
+    abra = html[html.index('class="jegyzet-abra"'):]
+    abra = abra[:abra.index("</svg>")]
+    assert abra.count('r="6"') == len(m.frames[10].players)
+    sok = [{"id": str(i), "frame": m.frames[i].t, "text": f"j{i}",
+            "rajz": "20,13.1,28.4,16.8,1"}
+           for i in range(rh.REPORT_NOTE_DIAGRAMS_MAX + 3)]
+    html2 = match_report_html(m, {}, [], None, notes=sok)
+    assert html2.count('class="jegyzet-abra"') == rh.REPORT_NOTE_DIAGRAMS_MAX

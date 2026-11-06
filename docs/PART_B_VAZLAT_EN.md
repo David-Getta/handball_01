@@ -30,13 +30,41 @@ extra hardware and fully on-premise processing.
 - **Explainable AI chain**: every verdict is tied to explicit,
   inspectable thresholds; with insufficient samples the system stays
   silent instead of guessing (AI Act / GDPR-friendly by design).
-- 313 analysis layers over a shared tracking data model; outputs
+- **Self-checking player models**: the learned shooter, goalkeeper and
+  decision models are back-tested on the club's own match library —
+  each match is predicted from the earlier ones and compared with the
+  raw expected-goal value and a team-level baseline — so the product
+  states how far each model can be trusted, and says so when an
+  apparent individual effect is really a team-wide one. The defender
+  model and the opponent's recurring set plays are checked the same way.
+- **Forecasts that grade themselves, before, during and after the
+  match**: a pre-match result forecast, expected scorers, the
+  opponent's expected defensive system and a keeper choice, all
+  learned from the club's earlier matches and each back-tested against
+  a naive baseline (team form, league average). Live, the in-play win
+  probability is checked against a score-only baseline, and every live
+  alert carries the trust level of the model behind it. After the
+  match, an expectation-versus-reality review shows where the opponent
+  surprised the staff. Together these feed an AI training plan for the
+  week before the next match.
+- **Match decisions that grade themselves**: the recurring bench
+  decisions — which keeper starts against these shooters, who takes the
+  seven-metre throw, whether a timeout breaks the opponent's scoring run,
+  whether a keeper's hot or cold half carries into the second — are
+  each learned from the club's own library and back-tested on it,
+  always from earlier matches only and against a naive baseline (the
+  usual keeper or thrower, no timeout, the league's generic scouting
+  keys). The scouting report checks itself the same way: how many of its
+  coaching keys reappear in the next match. The dashboard sums it up in
+  one line ("8 of 11 checks proven"), and every live alert carries the
+  verdict of the check behind it.
+- 521 analysis layers over a shared tracking data model; outputs
   phrased automatically in coach language.
 
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 1,312 automated tests,
+- Evidence infrastructure already in place: 2,963 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement

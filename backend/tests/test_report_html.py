@@ -100,6 +100,96 @@ def test_playbook_section_rendering():
     assert "Ismert figuráik" not in scouting_report_html(_rep())
 
 
+def test_figura_ajanlo_szakasz():
+    """A saját figuráink rangsora a tanult faluk ellen: az ajánló mondat
+    és legfeljebb FIGURA_AJANLO_SOROK sor, escape-elve; üres rangsornál
+    nincs szakasz."""
+    from handball.pipeline.report_html import FIGURA_AJANLO_SOROK
+
+    sorok = [{"id": str(i), "name": f"<F{i}>", "pont_pct": 60.0 - i,
+              "alap_pct": 50.0} for i in range(FIGURA_AJANLO_SOROK + 2)]
+    html = scouting_report_html(_rep(), figura_ajanlo={
+        "figurak": sorok, "ajanlas": "Ellenük a(z) „<F0>” figura …"})
+    assert "Figuráink ellenük" in html
+    assert "Ellenük a(z) „&lt;F0&gt;” figura" in html
+    assert "60% lövőhelyzet (alap fal: 50%)" in html
+    assert f"&lt;F{FIGURA_AJANLO_SOROK - 1}&gt;" in html
+    assert f"&lt;F{FIGURA_AJANLO_SOROK}&gt;" not in html
+    assert "Figuráink ellenük" not in scouting_report_html(
+        _rep(), figura_ajanlo={"figurak": [], "ajanlas": None})
+
+
+def test_a_visszatero_figurak_szakasza_rajzzal():
+    """A meccsről meccsre visszatérő figurák alakkal (inline SVG) és
+    edzői névvel; visszatérő figura nélkül a szakasz nincs."""
+    shape = [0.0] * 18
+    shape[5] = 0.6
+    shape[4] = 0.4
+    lib = {"figures": [], "recurring": [
+        {"zone": "bal oldal, a kapuelőtér előtt", "matches": 3,
+         "attacks": 11, "shots": 8, "goals": 4, "goal_pct": 36.4,
+         "shape": shape}], "verdict": "x"}
+    html = scouting_report_html(_rep(setplay_library=lib))
+    assert "Visszatérő figuráik" in html
+    assert "bal oldal, a kapuelőtér előtt" in html
+    # Elnevezett figura: a név elöl, a zóna zárójelben.
+    lib["recurring"][0]["name"] = "Beúszós <kereszt>"
+    nevvel = scouting_report_html(_rep(setplay_library=lib))
+    assert "<b>Beúszós &lt;kereszt&gt;</b> (bal oldal, a kapuelőtér előtt)" in nevvel
+    assert "3 meccsen 11 támadás, 4 gól (36%)" in html
+    assert html.count("<svg") >= 2 and "<img" not in html   # jelkép + alak
+    ures = scouting_report_html(_rep(setplay_library={"recurring": []}))
+    assert "Visszatérő figuráik" not in ures
+
+
+def test_a_szezon_riport_a_sajat_visszatero_figurakat_is_rajzolja():
+    """A szezon-riportban a SAJÁT csapat meccsről meccsre visszatérő
+    figurái is ott vannak (rajzzal, hozammal); könyvtár nélkül a
+    szakasz elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    shape = [0.0] * 18
+    shape[4] = 1.0
+    lib = {"figures": [], "recurring": [
+        {"zone": "közép, a 9-es körül", "matches": 4, "attacks": 15,
+         "shots": 10, "goals": 6, "goal_pct": 40.0, "shape": shape}],
+        "verdict": "x"}
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    html = season_report_html("Szeged", tr, [], 4, figure_library=lib)
+    assert "Saját visszatérő figuráink" in html
+    assert "4 meccsen 15 támadás, 6 gól (40%)" in html
+    assert "Saját visszatérő figuráink" not in season_report_html(
+        "Szeged", tr, [], 4)
+
+
+def test_a_szezon_riport_a_jatekos_modellt_is_hozza():
+    """A szezon-riportban a tanult játékos-modell szakasza: a lövők és a
+    kapus sora (a motor mondatai), a meccsszám a jegyzetben; ha csak az
+    egyik sor van, a másik "nincs eltérő sáv"; mindkettő üresen (vagy
+    modell nélkül) a szakasz elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    jm = {"lovok": "a lövők: a 7-es távolról 1,3× annyit lő be, mint "
+                   "amennyit a helyzetei érnek",
+          "kapus": "a kapus távolról 1,2× annyi gólt kap, mint az átlag",
+          "meccsek": 4}
+    html = season_report_html("Szeged", tr, [], 4, jatekos_modell=jm)
+    assert "<h2>A szezon játékos-modellje</h2>" in html
+    assert f"<p><b>Lövők:</b> {jm['lovok']}</p>" in html
+    assert f"<p><b>Kapus:</b> {jm['kapus']}</p>" in html
+    assert "a szezon 4 meccséből" in html
+    csak = season_report_html("Szeged", tr, [], 4,
+                              jatekos_modell={"lovok": jm["lovok"],
+                                              "kapus": "", "meccsek": 4})
+    assert "<p><b>Kapus:</b> nincs az átlagtól érdemben eltérő tanult sáv</p>" in csak
+    for ures in (None, {}, {"lovok": "", "kapus": "", "meccsek": 4}):
+        assert "A szezon játékos-modellje" not in season_report_html(
+            "Szeged", tr, [], 4, jatekos_modell=ures)
+
+
 def test_playbook_section_empty_states():
     """Üres egyezésnél tájékoztató szöveg (nem üres blokk)."""
     html = scouting_report_html(_rep(), playbook_match={"total_attacks": 4, "matched": {}, "unmatched": 4})
@@ -251,6 +341,60 @@ def test_player_season_html_goalkeeper_columns():
     assert "Védés összesen" not in html2 and "GSAx" not in html2
 
 
+def test_a_szezon_riport_a_jatekos_modell_fejlodeset_is_hozza():
+    """A szezon-riport fejlődés-szakasza a lövő- és a kapus-sorokkal;
+    üres sorokkal (vagy nélküle) elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    fj = {"lovo_sorok": ["a 7-es távolról 0,9× → 1,2× (javul)"],
+          "kapus_sorok": ["a kapus távolról 1,2× → 0,9× annyi gólt kap, "
+                          "mint az átlag (javul)"]}
+    html = season_report_html("Szeged", tr, [], 4, fejlodes=fj)
+    assert "A játékos-modell fejlődése (első fél → második fél)" in html
+    assert "<li>a 7-es távolról 0,9× → 1,2× (javul)</li>" in html
+    assert "<li>a kapus távolról 1,2× → 0,9× annyi gólt kap" in html
+    for ures in (None, {}, {"lovo_sorok": [], "kapus_sorok": []}):
+        assert "A játékos-modell fejlődése" not in season_report_html(
+            "Szeged", tr, [], 4, fejlodes=ures)
+
+
+def test_h2h_report_html_jatekos_modell_szakasz():
+    """Az egymás-elleni riport játékos-modell szakasza: csapatonként csak
+    a nem üres sorok (lövőik, kapusuk, utolsó labdájuk ellenük, kit
+    kinek, engedett lövő), a meccsszám a jegyzetben; üres / hiányzó
+    modellel a szakasz elmarad."""
+    from handball.pipeline.report_html import h2h_report_html
+
+    stats = {"matches": 2, "wins_a": 1, "wins_b": 1, "draws": 0,
+             "goals_a": 50, "goals_b": 48}
+    timeline = [{"date": "2026-01-01", "score": "25 – 24", "headline": "x"}]
+    jm = {"meccsek": 2,
+          "Mi": {"lovok": "a lövők: a 7-es távolról 1,3× annyit lő be, mint "
+                          "amennyit a helyzetei érnek",
+                 "kapus": "", "utolso": "a 7-esé távolról (10 m): 0,33 "
+                                        "várható gól",
+                 "kit_kinek": None, "engedett": None},
+          "Ok": {"lovok": "", "kapus": "a kapus távolról 1,2× annyi gólt "
+                                       "kap, mint az átlag",
+                 "utolso": None,
+                 "kit_kinek": "a 9-es (távolról 1,3× …) a szélső sávból lő",
+                 "engedett": "a 4-es ellen nem kell kilépni"}}
+    html = h2h_report_html("Mi", "Ok", stats, timeline, jatekos_modell=jm)
+    assert "Játékos-modell egymás ellen (a közös meccsekből)" in html
+    assert "<h3>Mi</h3><ul><li><b>Lövőik:</b> a lövők: a 7-es" in html
+    assert "<li><b>Utolsó labdájuk ellenük:</b> a 7-esé távolról" in html
+    assert "<h3>Ok</h3><ul><li><b>Kapusuk:</b> a kapus távolról" in html
+    assert "<li><b>Kit kinek a falukban:</b> a 9-es" in html
+    assert "<li><b>Engedett lövő a falukban:</b> a 4-es ellen" in html
+    assert html.count("<li><b>") == 5
+    assert "a közös 2 meccsből tanulva" in html
+    for ures in (None, {}, {"meccsek": 2, "Mi": {}, "Ok": {"lovok": ""}}):
+        assert "Játékos-modell egymás ellen" not in h2h_report_html(
+            "Mi", "Ok", stats, timeline, jatekos_modell=ures)
+
+
 def test_h2h_report_html_matchup_section():
     """Az egymás elleni riportban a meccsterv-szakasz csak akkor jelenik
     meg, ha van kereszt-szabályból jött javaslat; ilyenkor a listát is
@@ -350,3 +494,245 @@ def test_scouting_report_break_lanes_table():
                                                    {"entries": 3,
                                                     "goals": 1}}))
     assert "Betörés-sávjaik" not in html2
+
+
+def test_kapus_felkeszites_tabla():
+    """A poszt-lencse három lövés-rétege EGY táblában.
+
+    Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+    posztot; együtt egy pillantás: milyen messziről, milyen keményen,
+    merre lő.
+    """
+    import re
+
+    html = scouting_report_html(_rep(
+        rsd_shots_by_role={"irányító": 6, "beálló": 5},
+        rsd_dist_sum_by_role={"irányító": 72.0, "beálló": 32.5},
+        rsp_shots_by_role={"irányító": 6},
+        rsp_kmh_sum_by_role={"irányító": 780.0},
+        rgp_goals_by_role_side={"irányító|bal": 4, "irányító|jobb": 1}))
+    m = re.search(r"<h2[^>]*>Kapus-felkészítés posztonként</h2>(.*?)</table>",
+                  html, re.S)
+    assert m, "hiányzik a kapus-tábla"
+    body = m.group(1)
+    assert "12.0 m" in body and "130 km/h" in body and "bal (80%)" in body
+    # A beállónál nincs erő- és oldal-adat: ott KIMONDOTT hiány-jel áll,
+    # nem nulla vagy üres cella.
+    assert "6.5 m" in body and "—" in body
+
+
+def test_kapus_tabla_elmarad_ha_nincs_adat():
+    """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
+    assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())
+
+
+
+def test_a_felderito_lap_elol_szol_a_gyenge_alapanyagrol():
+    """Egy nyomtatott meccstervet fentről lefelé olvasnak: aki a végén
+    tudja meg, hogy az adat gyenge, addig már eldöntötte, kit állít a
+    beállóra. A figyelmeztetés ezért a narratíva ELŐTT áll."""
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    rep.q_matches = 1
+    rep.q_score_sum = 28.0
+    rep.q_weak_matches = 1
+    html = scouting_report_html(rep)
+    assert '<div class="warnbox">' in html
+    assert "28/100" in html
+    # A doboz az első TARTALMI szakasz előtt áll (a tartalomjegyzék
+    # után — ugyanott, ahol a meccsjelentésben).
+    assert html.index('<div class="warnbox">') < html.index(
+        '<h2 id="sz1">')
+
+
+def test_jo_alapanyagnal_nincs_doboz_a_felderito_lapon():
+    """Jó feldolgozásnál (és régi, adat nélküli jelentésnél) a lap
+    tiszta marad — nem riogatunk ok nélkül."""
+    jo = ScoutingReport(team="home", team_name="Alfa")
+    jo.q_matches = 2
+    jo.q_score_sum = 2 * 90.0
+    jo.q_weak_matches = 0
+    assert '<div class="warnbox">' not in scouting_report_html(jo)
+    assert '<div class="warnbox">' not in scouting_report_html(
+        ScoutingReport(team="home", team_name="Alfa"))
+
+
+def test_a_meccsterv_megelozi_az_altalanos_kulcsokat():
+    """A PÁROSÍTOTT meccsterv menjen elöl.
+
+    Az "ő gyengéjük × a ti erősségetek" szabályok kifejezetten ERRE a
+    párosításra szólnak, míg a "Hogyan játssz ellenük" kulcsok
+    általános, SZÁZ FÖLÖTTI listát adnak (mérve: 123 kulcs, közel
+    húszezer karakter). Aki két percet szán a felkészülésre, a
+    konkrétat kell hogy elsőként lássa — ezért a nyomtatott lapon is
+    a meccsterv áll előbb.
+    """
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    html = scouting_report_html(
+        rep, matchup=["Az ő lassuló visszaállásuk × a ti kontrátok."])
+    assert "Meccsterv (a kettőnk párosítása)" in html
+    assert (html.index("Meccsterv (a kettőnk párosítása)")
+            < html.index("Hogyan játssz ellenük</h2>"))
+
+
+def test_a_nyomtathato_jelentes_viszi_a_vedekezes_feltoreset():
+    """A "Hol törhető fel a védekezésük" blokk a nyomtatható jelentésben
+    is ott van, ha van tétel — és nincs, ha a jelentés üres."""
+    from handball.pipeline.scouting import ScoutingReport
+
+    ures = ScoutingReport(team="away", team_name="Üres", matches=1)
+    assert "Hol törhető fel a védekezésük" not in scouting_report_html(ures)
+    rep2 = ScoutingReport(team="away", team_name="Ellenfél", matches=1)
+    rep2.def_shots_against = 20
+    rep2.def_free_shots = 12
+    html = scouting_report_html(rep2)
+    assert "Hol törhető fel a védekezésük" in html
+    assert "<b>Hol:</b> 9 m-en" in html and "Mivel:" in html and "Miért:" in html
+
+
+def test_a_szezon_jatekos_lap_a_lovo_es_a_kapus_modellt_is_hozza():
+    """A szezon játékos-lap "Honnan lősz be" és "Hol kapsz gólt"
+    táblái a szezon sávonkénti mintájából: a lövés, a gól, a várható és a
+    szorzó (kevés mintánál "kevés minta"); modell nélkül a szakasz
+    elmarad."""
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": "m1", "goals": 3, "shots": 8}]
+    lm = {"lovo": [{"sav": "close", "sav_nev": "közelről", "lovesek": 5,
+                    "gol": 4, "xg": 2.6, "szorzo": 1.2},
+                   {"sav": "far", "sav_nev": "távolról", "lovesek": 2,
+                    "gol": 0, "xg": 0.5, "szorzo": None}],
+          "kapus": [{"sav": "far", "sav_nev": "távolról", "kaputra": 9,
+                     "vedes": 2, "szorzo": 1.3}],
+          "meccsek": 4}
+    html = player_season_html("A", 7, pontok, lovo_modell=lm)
+    assert "Honnan lősz be — a szezon lövő-modellje" in html
+    assert ('<tr><td>közelről</td><td class="num">5</td><td class="num">4</td>'
+            '<td class="num">2.6</td><td class="num">1,2×</td></tr>') in html
+    assert '<td class="num">kevés minta</td>' in html
+    assert "Hol kapsz gólt — a szezon kapus-modellje" in html
+    assert ('<tr><td>távolról</td><td class="num">9</td><td class="num">2</td>'
+            '<td class="num">1,3×</td></tr>') in html
+    assert "A szezon 4 meccséből" in html
+    for ures in (None, {}, {"lovo": [], "kapus": [], "meccsek": 2}):
+        assert "a szezon lövő-modellje" not in player_season_html(
+            "A", 7, pontok, lovo_modell=ures)
+
+
+def test_a_sav_kep_a_nyers_mintabol():
+    """A sávonkénti kép a nyers mintából: a lövőnél a tanult szorzó
+    LOVO_MIN_LOVES lövéstől, a kapusnál KAPUS_MIN_LOVES lövéstől (ugyanaz,
+    mint a modell); sorrend: közelről, közepes, távolról."""
+    from handball.pipeline.play_simulation import (_kapus_szorzo,
+                                                   _lovo_szorzo,
+                                                   keeper_bands_from,
+                                                   shooter_bands_from)
+
+    lm = {"far": [2, 0, 0.6], "close": [3, 3, 1.5]}
+    assert shooter_bands_from(lm) == [
+        {"sav": "close", "sav_nev": "közelről", "lovesek": 3, "gol": 3,
+         "xg": 1.5, "szorzo": _lovo_szorzo({7: lm})[7]["close"]},
+        {"sav": "far", "sav_nev": "távolról", "lovesek": 2, "gol": 0,
+         "xg": 0.6, "szorzo": None}]
+    km = {"far": [9, 2], "mid": [2, 1]}
+    assert keeper_bands_from(km) == [
+        {"sav": "mid", "sav_nev": "közepes távolságból", "kaputra": 2,
+         "vedes": 1, "szorzo": None},
+        {"sav": "far", "sav_nev": "távolról", "kaputra": 9, "vedes": 2,
+         "szorzo": _kapus_szorzo(km)["far"]}]
+    assert shooter_bands_from({}) == [] and keeper_bands_from({}) == []
+
+
+def test_a_szezon_riport_a_lovo_modell_probajat_is_hozza():
+    """A szezon-riport "A modellek próbája" szakasza a motor
+    mondatával; ítélet nélkül elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    v = ("a korábbi meccsekből tanult lövő-modell a következő meccs góljait "
+         "48%-kal pontosabban becsülte, mint a nyers várható gól")
+    k = ("a korábbi meccsekből tanult kapus-modell a következő meccs kapott "
+         "góljait 51%-kal pontosabban becsülte, mint az átlagos kapus")
+    html = season_report_html("Szeged", tr, [], 4,
+                              modell_proba={"verdict": v, "kapus_verdict": k})
+    assert "A modellek próbája" in html
+    assert f"<p><b>Lövők:</b> {v}.</p>" in html
+    assert f"<p><b>Kapus:</b> {k}.</p>" in html
+    dv = ("a modell legjobb opcióját választó 40 döntés után 8 mp-en belül "
+          "30%-ban jött gól")
+    d_html = season_report_html("Szeged", tr, [], 4, modell_proba={
+        "dontes_verdict": dv, "dontes": {"helyzetek": [
+            {"verdict": "ha szabad a 6 m-es társuk: a legjobb opció után 40% "
+                        "(15 döntés), máskor 10% (20) — itt igazolja a pálya"}]}})
+    assert f"<p><b>Döntések:</b> {dv}.</p>" in d_html
+    assert "<li>ha szabad a 6 m-es társuk: a legjobb opció után 40%" in d_html
+    csak = season_report_html("Szeged", tr, [], 4,
+                              modell_proba={"verdict": None, "kapus_verdict": k})
+    assert "<b>Lövők:</b>" not in csak and f"<p><b>Kapus:</b> {k}.</p>" in csak
+    for ures in (None, {}, {"verdict": ""}, {"verdict": None,
+                                              "kapus_verdict": None}):
+        assert "A modellek próbája" not in season_report_html(
+            "Szeged", tr, [], 4, modell_proba=ures)
+
+
+def test_az_elorejelzes_blokk_a_dontes_probakkal():
+    """_elorejelzes_blokk: a "Hetes-dobónk" sor a címkék közt, és a próba-
+    jegyzetek (előrejelzés, gólszerző, kapus-választás, felderítés,
+    hetes-dobó) ebben a sorrendben; az üres mezők kimaradnak."""
+    from handball.pipeline.report_html import (ELOREJELZES_CIMKEK,
+                                               ELOREJELZES_PROBAK,
+                                               _elorejelzes_blokk)
+
+    assert ("hetes_mi", "Hetes-dobónk") in ELOREJELZES_CIMKEK
+    assert ("hetes_irany_ok", "Az ő hetes-dobóik irányai") in ELOREJELZES_CIMKEK
+    assert ("het_a_hat_mi", "A 7 a 6 mérlegünk") in ELOREJELZES_CIMKEK
+    assert ("emberhatrany_mi", "Emberhátrány-falunk") in ELOREJELZES_CIMKEK
+    assert ELOREJELZES_PROBAK == ("proba", "golszerzo_proba", "kapus_proba",
+                                  "felderites_proba", "hetes_proba",
+                                  "hetes_irany_proba")
+    ej = {"text": "Hazai 27–25 Vendég", "kapus_mi": "az 1-es álljon a kapuban",
+          "hetes_mi": "a hetest a 9-es dobja (11/13 a könyvtárban, 85%)",
+          "proba": None, "golszerzo_proba": "A gólszerző-becslés próbája: x",
+          "kapus_proba": "A kapus-választás próbája: y",
+          "felderites_proba": None,
+          "hetes_proba": "A hetes-dobó választás próbája: z",
+          "hetes_irany_ok": "hetes-irányaik (a dobó felől nézve): a 9-es "
+                            "70% jobbra (7/10)",
+          "hetes_irany_proba": "A hetes-irány próbája: w"}
+    h = _elorejelzes_blokk(ej, "Előrejelzés")
+    assert ("<li>Kapus ellenük: az 1-es álljon a kapuban.</li>"
+            "<li>Hetes-dobónk: a hetest a 9-es dobja (11/13 a könyvtárban, "
+            "85%).</li><li>Az ő hetes-dobóik irányai: hetes-irányaik (a dobó "
+            "felől nézve): a 9-es 70% jobbra (7/10).</li></ul>") in h
+    assert h.endswith('<p class="note">A gólszerző-becslés próbája: x.</p>'
+                      '<p class="note">A kapus-választás próbája: y.</p>'
+                      '<p class="note">A hetes-dobó választás próbája: z.</p>'
+                      '<p class="note">A hetes-irány próbája: w.</p>')
+    assert _elorejelzes_blokk({"hetes_proba": None}, "x") == ""
+
+
+def test_a_meccs_jelentes_a_pad_donteseivel():
+    """match_report_html `dontesek`: "A pad döntései a könyvtár tükrében"
+    szakasz csapatonként a nevekkel; üres soroknál a szakasz elmarad."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.report_html import match_report_html
+
+    m = Match(MatchMeta(match_id="r", home_team="Hazai", away_team="Vendég",
+                        fps=25.0), [])
+    tactics = {"home": {}, "away": {}}
+    d = {"nevek": {"home": "Hazai", "away": "Vendég"},
+         "home": {"sorok": ["Heteseik: a 9-es 3/3 — a könyvtár dobója (a "
+                            "9-es) dobta", "A kapuban az 1-es kezdett (3/10 "
+                            "az első félidőben)"]},
+         "away": {"sorok": []}}
+    h = match_report_html(m, tactics, [], None, dontesek=d)
+    # A címsor azonosítót kap (a tartalomjegyzékhez): <h2 id="szN">.
+    assert (">A pad döntései a könyvtár tükrében</h2><p><b>Hazai</b></p>"
+            "<ul><li>Heteseik: a 9-es 3/3 — a könyvtár dobója (a 9-es) "
+            "dobta.</li><li>A kapuban az 1-es kezdett (3/10 az első "
+            "félidőben).</li></ul>") in h
+    assert "<p><b>Vendég</b></p>" not in h
+    assert "A pad döntései" not in match_report_html(m, tactics, [], None)
+    assert "A pad döntései" not in match_report_html(
+        m, tactics, [], None, dontesek={"nevek": d["nevek"],
+                                        "home": {"sorok": []}, "away": {}})

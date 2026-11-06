@@ -1042,3 +1042,490 @@ def test_finisher_rotation_flags_good_rotation_and_few_shots():
     frt2 = finisher_rotation(Match(meta, frames2))
     assert frt2["home"]["repeat_pct"] is None
     assert frt2["home"]["verdict"] is None
+
+
+# ---- Pazarló-poszt (melyik posztjuk lövi mellé) ----------------------------
+
+
+def _wsr_match(shooters, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + mellé lövések a megadott
+    hazai lövőktől — a mellé lövés a kapufa mellett (y=5) hagyja el
+    a pályát."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in shooters:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.0 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_wasteful_shooter_roles_names_the_wasteful_post():
+    """Négy mellé lövésből három a beállótól → a poszt pazarló."""
+    from handball.pipeline.xg import (WSR_MIN_OFF,
+                                      wasteful_shooter_roles)
+
+    rec = wasteful_shooter_roles(_wsr_match([7, 7, 7, 9]))["home"]
+    assert rec["off_target"] >= WSR_MIN_OFF, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "rá lehet engedni" in rec["verdict"], rec
+
+
+def test_wasteful_shooter_roles_silent_with_few_misses():
+    """Néhány mellé lövésből nincs ítélet."""
+    from handball.pipeline.xg import wasteful_shooter_roles
+
+    rec = wasteful_shooter_roles(_wsr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccer-poszt (melyik posztjuknál alakul ki a nagy helyzet) ------------
+
+
+def _bcr_match(shooters, fps=25.0):
+    """Poszt-minta (7: beálló a hatoson, 9: szélső) + lövések a
+    megadott hazai lövőktől — a beálló lövése a hatosról nagy
+    helyzet (xG >= BIG_CHANCE_XG), a szélsőé éles szögből nem az."""
+    spos = {7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=35.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in shooters:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # gól a +x kapura
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 0.8 * (i + 1),
+                                                40.0),
+                                          y=10.0 if tid == 7 else sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_big_chance_roles_names_the_chance_post():
+    """Három ziccer a beállónál → a nagy helyzeteik nála alakulnak."""
+    from handball.pipeline.xg import BCR_MIN_CHANCES, big_chance_roles
+
+    rec = big_chance_roles(_bcr_match([7, 7, 7, 9]))["home"]
+    assert rec["chances"] >= BCR_MIN_CHANCES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kialakulása előtt" in rec["verdict"], rec
+
+
+def test_big_chance_roles_silent_with_few_chances():
+    """Néhány ziccerből nincs ítélet."""
+    from handball.pipeline.xg import big_chance_roles
+
+    rec = big_chance_roles(_bcr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccerhagyó-poszt (melyik posztjuk hagyja ki a ziccereket) ------------
+
+
+def _mcr_match(missers, fps=25.0):
+    """Poszt-minta (7: beálló a hatoson, 9: szélső) + kihagyott
+    ziccerek: a beálló nagy helyzetből (xG >= BIG_CHANCE_XG) a kapu
+    mellé lő (y=5 mentén hagyja el a pályát)."""
+    spos = {7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=35.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in missers:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 0.8 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_missed_chance_roles_names_the_wasting_post():
+    """Három kihagyott ziccer a beállónál → az ő helyzetbe engedése a
+    kisebbik rossz."""
+    from handball.pipeline.xg import (MCR_MIN_MISSES,
+                                      missed_chance_roles)
+
+    rec = missed_chance_roles(_mcr_match([7, 7, 7]))["home"]
+    assert rec["misses"] >= MCR_MIN_MISSES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kisebbik rossz" in rec["verdict"], rec
+
+
+def test_tired_shooters_names_the_fading_man():
+    """Ha a második félidőre egy embernél ugrik meg a pontatlanság,
+    őt nevezzük meg — rá lehet engedni a szünet után."""
+    from handball.pipeline.xg import FSP_MIN_SH, tired_shooters
+
+    rec = tired_shooters(_fsa_match([7, 9], [7, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["sh"] >= FSP_MIN_SH, rec
+
+
+def test_tired_shooters_silent_without_jump():
+    """Egyenletes pontatlanságnál nincs megnevezett lövő."""
+    from handball.pipeline.xg import tired_shooters
+
+    rec = tired_shooters(_fsa_match([7, 7], [7, 7]))["home"]
+    assert rec["top"] is None, rec
+
+
+def test_missed_chance_players_names_the_waster():
+    """Ha a kihagyott ziccerek egy emberhez kötődnek, őt nevezzük meg
+    — nála a helyzetbe engedés a kisebbik rossz."""
+    from handball.pipeline.xg import (MCP_MIN_MISSES,
+                                      missed_chance_players)
+
+    rec = missed_chance_players(_mcr_match([7, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["misses"] >= MCP_MIN_MISSES, rec
+
+
+def test_missed_chance_players_silent_with_one_miss():
+    """Egyetlen kihagyásból nem nevezünk meg embert."""
+    from handball.pipeline.xg import missed_chance_players
+
+    rec = missed_chance_players(_mcr_match([7]))["home"]
+    assert rec["top"] is None, rec
+
+
+def test_missed_chance_roles_silent_with_few_misses():
+    """Néhány kihagyásból nincs ítélet."""
+    from handball.pipeline.xg import missed_chance_roles
+
+    rec = missed_chance_roles(_mcr_match([7, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fáradt-lövő poszt (kinek megy szét a lövése a 2. félidőben) -----------
+
+
+def _fsa_match(fh_missers, sh_missers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + mellé lövések
+    félidőnként; a félidőket 90 mp-es üres szakasz választja el."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    def miss(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(3):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.0 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_missers:
+        t = miss(frames, t, tid)
+    for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for tid in sh_missers:
+        t = miss(frames, t, tid)
+    return Match(_meta(fps), frames)
+
+
+def test_tired_shooter_roles_names_the_fading_shooter_post():
+    """A beálló mellé lövései 1-ről 3-ra ugranak → fáradtan rá lehet
+    engedni."""
+    from handball.pipeline.xg import tired_shooter_roles
+
+    rec = tired_shooter_roles(_fsa_match([7, 9], [7, 7, 7]))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 1 and rec["sh"] == 3, rec
+    assert rec["verdict"] and "rá lehet" in rec["verdict"], rec
+
+
+def test_tired_shooter_roles_silent_without_jump():
+    """Egyenletes mellé-eloszlásnál nincs ítélet."""
+    from handball.pipeline.xg import tired_shooter_roles
+
+    rec = tired_shooter_roles(_fsa_match([7, 7], [7, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccer-előkészítő poszt (ki adja a passzt a nagy helyzethez) ----------
+
+
+def _bcfeed_match(feeders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló a hatoson, 9: szélső) +
+    ziccerek: a `feeders` szerinti társ passza után a 7-es lő nagy
+    helyzetből (xG >= BIG_CHANCE_XG)."""
+    spos = {5: (29.0, 10.0), 7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for fid in feeders:
+        fx, fy = spos[fid]
+        for _ in range(10):          # a labda az előkészítőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel a hatoson (7-es)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=35.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 35.0
+        while x < 40.5:              # ziccer a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):          # vissza középre: debounce
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_big_chance_feeder_roles_names_the_creator():
+    """Négy ziccerből hármat az irányító teremt → az ő bejátszó-
+    sávját kell elvágni."""
+    from handball.pipeline.xg import (BCF_FEED_MIN,
+                                      big_chance_feeder_roles)
+
+    rec = big_chance_feeder_roles(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= BCF_FEED_MIN, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "ki sem alakul" in rec["verdict"], rec
+
+
+def test_big_chance_feeder_roles_silent_with_few_chances():
+    """Néhány ziccer-előkészítésből nincs ítélet."""
+    from handball.pipeline.xg import big_chance_feeder_roles
+
+    rec = big_chance_feeder_roles(_bcfeed_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccerpáros-poszt -------------------------------------------------------
+
+def test_big_chance_pair_roles_names_the_duo():
+    """Négy ziccerből hármat ugyanaz a kettős csinál (irányító
+    bejátszás → beálló befejezés) → a köztük lévő sávot kell vágni."""
+    from handball.pipeline.xg import (BCP_PAIR_MIN,
+                                      big_chance_pair_roles)
+
+    rec = big_chance_pair_roles(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= BCP_PAIR_MIN, rec
+    assert rec["main_role"] == "irányító→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 55.0, rec
+    assert rec["verdict"] and "passzsávot" in rec["verdict"], rec
+
+
+def test_big_chance_pair_roles_silent_with_few_chances():
+    """Két ziccer-párosból még nincs ítélet."""
+    from handball.pipeline.xg import big_chance_pair_roles
+
+    rec = big_chance_pair_roles(_bcfeed_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+    assert big_chance_pair_roles(
+        _bcfeed_match([5, 9]))["away"]["chances"] == 0
+
+
+def test_big_chance_feeders_names_the_creator():
+    """Négy ziccerből hármat ugyanaz az ember teremt → az ő
+    bejátszó-sávját kell elvágni."""
+    from handball.pipeline.xg import (BCFP_MIN_FEEDS,
+                                      big_chance_feeders)
+
+    rec = big_chance_feeders(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= 3, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 5, rec
+    assert rec["top"]["chances"] >= BCFP_MIN_FEEDS, rec
+
+
+def test_big_chance_feeders_silent_after_one():
+    """Egyetlen ziccer-előkészítés még nem minta."""
+    from handball.pipeline.xg import big_chance_feeders
+
+    rec = big_chance_feeders(_bcfeed_match([5]))["home"]
+    assert rec["top"] is None, rec
+
+
+def _many_shots(n, x, y, goal, step=40):
+    """`n` hazai lövés ugyanarról a helyről, mind gól vagy mind mellé."""
+    frames = []
+    for k in range(n):
+        t0 = 10 + k * step
+        frames += _shot_frames(t0, x, y, goal=goal)
+        frames.append(Frame(t=t0 + 9, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_finishing_balance_flags_the_overperformer():
+    """Sok TÁVOLI lövés, mind gól → a gólszám a helyzetek felett van
+    (nem fenntartható)."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(14, 25.0, 10.0, goal=True))
+    rec = finishing_balance(m)["home"]
+    assert rec["shots"] >= 12, rec
+    assert rec["diff"] >= 2.5, rec
+    assert rec["verdict"] == "a helyzetei FELETT teljesít (nem fenntartható)"
+
+
+def test_finishing_balance_flags_the_underperformer():
+    """Sok KÖZELI helyzet gól nélkül → a helyzetei alatt teljesít."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(14, 34.0, 10.0, goal=False))
+    rec = finishing_balance(m)["home"]
+    assert rec["goals"] == 0 and rec["diff"] <= -2.5, rec
+    assert rec["verdict"] == ("a helyzetei ALATT teljesít "
+                              "(a befejezés a gond, nem a játék)")
+
+
+def test_finishing_balance_silent_on_few_shots():
+    """Kevés lövésnél nincs ítélet (sose hallgatólagos mérleg)."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(5, 34.0, 10.0, goal=False))
+    rec = finishing_balance(m)["home"]
+    assert rec["shots"] == 5 and rec["verdict"] is None, rec
+
+
+def test_xg_meri_az_elengedes_helyet_nem_a_kapu_kozeliteset():
+    """ŐR a ritkított felvétel torzítására: az esemény t-jén a labda már
+    úton van (ritkítva métereket ugrik), és ha a lövő a lövés után
+    besétál a kapu elé, a kapu-megközelítés kockáján mérve az xG
+    felfelé torzulna. A lövés helye az ELENGEDÉS kockája (release_t):
+    a 12 m-es átlövés akkor is 12 m-es marad."""
+    frames = []
+    t = 0
+    # A lövő a 28-as x-en (12 m-re a kaputól) tartja a labdát.
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)],
+                            ball=Ball(x=28.2, y=10.0, confidence=1.0)))
+        t += 1
+    # Elengedés: a labda kockánként 2,4 m-t lép (ritkított felvétel), a
+    # lövő pedig a lövése után előre sétál a hatosig.
+    ball_xs = [30.4, 32.8, 35.2, 37.6, 40.0]
+    shooter_xs = [29.5, 31.0, 32.5, 33.5, 34.0]
+    for bx, sx in zip(ball_xs, shooter_xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, sx, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(fps=8.33), frames)
+    shots = match_xg(m)["shots"]
+    assert len(shots) == 1, shots
+    sh = shots[0]
+    # Az elengedés helyéről (28 m) mérünk, nem a besétált hatosról.
+    assert sh["x"] <= 28.5, sh
+    assert sh["xg"] == xg_of_position(28.0, 10.0, 40.0), sh

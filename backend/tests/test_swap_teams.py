@@ -71,3 +71,66 @@ def test_majority_team_without_centers_defaults_home():
     from handball.pipeline.teams import majority_team_by_track
     teams = majority_team_by_track({1: [(1, 2, 3)], 2: []}, None)
     assert teams == {1: Team.HOME, 2: Team.HOME}
+
+
+def test_a_csapatcsere_utan_a_felderites_es_a_kivonat_is_frissul(tmp_path, monkeypatch):
+    """Csapatcsere után a felderítő jelentés és a könyvtár-kivonat a FRISS
+    adatból számol — nem a memória-tárból.
+
+    A felderítés memória-tárának kulcsa (meccs, oldal, kockaszám,
+    csapatnevek, felülírások) a csapatcserétől NEM változik, a
+    kivonat-tár kulcsa (kockaszám, csapatnevek, dátum) sem: a csere után
+    a hazai oldal felderítése a régi (a cserélt vendég-) jelentést adta,
+    pedig a végpont azt ígérte, hogy "a statisztika/felderítés a friss
+    adatból számol". Mostantól minden tár-írás eldobja a származtatott
+    kivonatokat.
+    """
+    import json
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    # A hazaiak négyszer lőnek a +x kapura (a vendég védő távol).
+    frames = []
+    t = 0
+    for _ in range(4):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, Team.HOME, 33.0, 10.0),
+                                              pl(20, Team.AWAY, 33.0, 16.0)],
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="cs", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "cs.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+
+    # A lövés CSAPATÁT a kapu oldala adja (a hazai a +x kapura támad), a
+    # LÖVŐT viszont a támadó csapat címkéjű játékosok közül keressük —
+    # a csere után a volt hazai lövő már vendég-címkés, ezért a
+    # gólszerző-lista és a fedezetlen befejezések száma változik.
+    elotte = client.get("/matches/cs/scouting?team=home").json()
+    assert elotte["scorer_goals"] and elotte["scorer_goals"][0]["player_id"] == 1
+    assert elotte["fin_free_shots"] == 4
+
+    assert client.post("/matches/cs/swap-teams").status_code == 200
+
+    utana = client.get("/matches/cs/scouting?team=home").json()
+    assert utana["scorer_goals"] == [], "csere után a régi jelentés jött vissza"
+    assert utana["fin_free_shots"] == 0

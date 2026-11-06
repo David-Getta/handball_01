@@ -181,18 +181,23 @@ def test_finish_report_mindkettot_elvegzi():
 
 
 def test_minden_jelentesben_van_nyomtatasi_stilus():
-    """Mind a hét generátor átmegy a `finish_report`-on.
+    """Mind a NYOLC generátor átmegy a `finish_report`-on.
 
     Hét jelentésből ötben eredetileg EGYÁLTALÁN nem volt `@media print`
     blokk — azok a képernyős margókkal kerültek papírra. Ez a teszt a
     forrásban rögzíti, hogy egyik se maradjon ki.
+
+    A darabszám szándékosan pontos: új jelentés-generátornál a teszt
+    elhasal, és a szám átírása az a pillanat, amikor eldől, hogy az új
+    lap is a közös nyomtatási stíluson megy-e át. (A nyolcadik az
+    edzésterv-lap.)
     """
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent
            / "handball" / "pipeline" / "report_html.py").read_text("utf-8")
     docs = src.count('f"""<!DOCTYPE html>')
     finished = src.count('return finish_report(f"""<!DOCTYPE html>')
-    assert docs == finished == 7, (docs, finished)
+    assert docs == finished == 8, (docs, finished)
 
 
 # --- Készítés-bélyeg ---------------------------------------------------

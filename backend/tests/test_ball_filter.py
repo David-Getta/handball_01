@@ -107,3 +107,44 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_a_hezagpotlas_korlatja_valos_masodpercben_ertendo():
+    """Ugyanaz a KOCKASZÁM a profiltól függően mást jelentene.
+
+    A feldolgozás ritkít (a termék alapja minden 3. kocka), tehát a
+    tracking képrátája profilonként más. Ha a korlát kockában lenne
+    rögzítve, a termék alapbeállításán másfél másodpercnyi hézagot
+    töltenénk ki egyenes vonallal — annyi idő alatt kétszer is
+    passzolhatnak, vagyis nem létező birtoklást és passzokat
+    gyártanánk. A korlát ezért VALÓS másodpercben értendő.
+    """
+    from handball.pipeline.ball_filter import MAX_GAP_S, gap_limit_frames
+
+    # stride=1: a tracking 25 fps → fél másodperc ~12 kocka.
+    m25 = Match(MatchMeta(match_id="g", home_team="A", away_team="B",
+                          fps=25.0), [])
+    assert gap_limit_frames(m25) == round(MAX_GAP_S * 25.0)
+
+    # stride=3 (a termék alapja): a tracking ~8,3 fps → fél másodperc
+    # már csak 4 kocka. UGYANANNYI valós idő, kevesebb kocka.
+    m8 = Match(MatchMeta(match_id="g", home_team="A", away_team="B",
+                         fps=25.0 / 3.0), [])
+    assert gap_limit_frames(m8) == round(MAX_GAP_S * 25.0 / 3.0)
+    assert gap_limit_frames(m8) < gap_limit_frames(m25)
+
+
+def test_a_ritkitott_meccsen_a_hosszu_hezag_nem_potlodik():
+    """A ritkított feldolgozáson egy 8 kockás hézag (közel egy valós
+    másodperc) NEM pótlódik — korábban igen, mert a 12 kockás korlát
+    ott másfél másodpercet jelentett."""
+    from handball.pipeline.ball_filter import interpolate_ball_gaps
+
+    meta = MatchMeta(match_id="g", home_team="A", away_team="B",
+                     fps=25.0 / 3.0, stride=3)
+    frames = [Frame(t=0, players=[], ball=Ball(x=5.0, y=10.0))]
+    frames += [Frame(t=i, players=[], ball=None) for i in range(1, 9)]
+    frames.append(Frame(t=9, players=[], ball=Ball(x=25.0, y=10.0)))
+    m = Match(meta, frames)
+    assert interpolate_ball_gaps(m) == 0
+    assert all(f.ball is None for f in m.frames[1:9])

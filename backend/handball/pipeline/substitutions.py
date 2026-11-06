@@ -20,6 +20,7 @@ from typing import Optional
 
 from ..models.tracking import Match, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+from .primitive_cache import copy_rows, memoize_primitive
 from .tactics import TacticsConfig
 
 # A cserezóna: a felezővonal ±4,5 m-e, az oldalvonalak melletti sáv.
@@ -40,6 +41,9 @@ def _in_sub_zone(x: float, y: float) -> bool:
     return near_mid and near_side
 
 
+# A csere-felismerés a TELJES felvételt végigjárja, és egy összeállítás
+# alatt a csere-rétegek tucatja kéri. Hatókörön belül egyszer fut.
+@memoize_primitive("detect_substitutions", copy=copy_rows)
 def detect_substitutions(match: Match,
                          config: Optional[TacticsConfig] = None) -> list[dict]:
     """Cserehullámok: [{"team", "t", "out_ids", "in_ids"}] időrendben.
@@ -127,6 +131,64 @@ def substitution_impact(match: Match,
         rec["goals_for_after"] += gf
         rec["goals_against_after"] += ga
     return {"events": events, "teams": teams}
+
+
+# Csere-hozam: ennyi mért csere kell az ítélethez, és ekkora
+# gólkülönbség számít érdeminek a csere utáni ablakban.
+SBY_MIN_ROTATIONS = 4
+SBY_GAP_GOALS = 2
+
+
+def substitution_yield(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-hozam: NYERNEK VAGY VESZTENEK a cseréik után.
+
+    A csere-büntetés (gap_punishment) a lyukas cserét árazza — ez a
+    FRISS EMBEREK hatását: a cserék utáni IMPACT_S másodpercben
+    összeveti a dobott és a kapott gólokat.
+
+    Edzőileg ez a csere-pillanat menetrendje. Ha a cseréik után
+    rendre több gólt kapnak, mint dobnak, a csere-pillanat célzottan
+    támadható: gyors középkezdés, azonnali befejezés, mielőtt a friss
+    emberek a helyükre állnának. Ha a cseréik után ők jönnek fel, a
+    saját időkérés vagy a lassítás töri meg a lendületet — és saját
+    csapatra a csere-ütem (ki, mikor, kivel együtt) mérhető
+    kérdéssé válik.
+
+    Visszatérés csapatonként: {"rotations", "goals_for",
+    "goals_against", "diff", "verdict"} — a verdict None, ha kevés
+    (SBY_MIN_ROTATIONS alatti) a mért csere, vagy a különbség nem
+    éri el az SBY_GAP_GOALS-t.
+    """
+    config = config or TacticsConfig()
+    imp = substitution_impact(match, config)["teams"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = imp.get(side, {})
+        rec = {"rotations": src.get("rotations", 0),
+               "goals_for": src.get("goals_for_after", 0),
+               "goals_against": src.get("goals_against_after", 0),
+               "diff": 0, "verdict": None}
+        rec["diff"] = rec["goals_for"] - rec["goals_against"]
+        if rec["rotations"] >= SBY_MIN_ROTATIONS:
+            if rec["diff"] <= -SBY_GAP_GOALS:
+                rec["verdict"] = (
+                    f"a cseréik után vesztenek ({rec['goals_for']}-"
+                    f"{rec['goals_against']} a csere utáni percben, "
+                    f"{rec['rotations']} cseréből) — a csere-pillanat "
+                    "célzottan támadható: gyors középkezdés és "
+                    "azonnali befejezés, mielőtt a friss emberek a "
+                    "helyükre állnának")
+            elif rec["diff"] >= SBY_GAP_GOALS:
+                rec["verdict"] = (
+                    f"a cseréik után jönnek fel ({rec['goals_for']}-"
+                    f"{rec['goals_against']} a csere utáni percben, "
+                    f"{rec['rotations']} cseréből) — a friss emberek "
+                    "lendületét meg kell törni: saját időkérés vagy "
+                    "lassított felállás a cserehullámuk után")
+        out[side] = rec
+    return out
 
 
 # Késő csere: ekkora 2. félidei tempó-esés fölött már cserét várnánk.
@@ -266,6 +328,79 @@ def substitution_triggers(match: Match,
                 rec["verdict"] = "kapott gólra cserélnek"
             elif share <= SUBTRIG_LOW_PCT:
                 rec["verdict"] = "tervezett csere-rend"
+    return out
+
+
+# Csere-fázis: ennyi cserehullám kell az ítélethez; e feletti "ellenfél
+# birtokolt" arány kockázatos csere-rend, e alatti fegyelmezett.
+SUBPH_MIN_SUBS = 4
+SUBPH_RISKY_PCT = 40.0
+SUBPH_SAFE_PCT = 15.0
+
+
+def substitution_phase(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-fázis: TÁMADÁSBAN vagy VÉDEKEZÉSBEN cserélnek.
+
+    A csere-kiváltók (substitution_triggers) azt mondják meg, MIRE
+    cserélnek (kapott gólra vagy terv szerint), a csere-lyukak
+    (sub_gaps) azt, MEDDIG vannak öten — ez azt, MIKOR indul a csere: a
+    cserehullám pillanatában KINÉL volt a labda. Saját birtokláskor
+    cserélni olcsó (a védekezés még nem hiányzik); az ELLENFÉL
+    birtoklása közben cserélni viszont drága — a fal egy emberrel
+    kevesebbel áll fel, és pont ott nyílik a rés, ahonnan a csere jön.
+
+    Edzőileg: aki az ellenfél birtoklása közben is forgat, azt a
+    csere-pillanatban kell megtámadni — gyors indítás a csere-oldalra,
+    és a rövid ideig nyitva lévő szélre kell fejezni; saját oldalon a
+    szabály egyszerű: cserélni birtoklásban vagy megszakításban lehet,
+    az ellenfél támadása alatt nem.
+
+    Visszatérés csapatonként: {"subs", "own_ball", "opp_ball",
+    "dead_ball", "risky_pct", "verdict"} — a risky_pct/verdict None
+    SUBPH_MIN_SUBS alatt; a verdict "védekezés közben is cserélnek
+    (kockázatos)" / "fegyelmezett csere-rend (birtokláskor váltanak)"
+    vagy None.
+    """
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    subs = detect_substitutions(match, config)
+    out: dict = {side: {"subs": 0, "own_ball": 0, "opp_ball": 0,
+                        "dead_ball": 0, "risky_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not subs:
+        return out
+
+    # A cserék időpontjainál KINÉL volt a labda — egyetlen kocka-menetben.
+    want = {ev["t"] for ev in subs}
+    holder_at: dict = {}
+    for f in match.frames:
+        if f.t in want:
+            holder = ball_holder(f, config)
+            holder_at[f.t] = holder.team.value if holder is not None else None
+
+    for ev in subs:
+        rec = out[ev["team"]]
+        rec["subs"] += 1
+        who = holder_at.get(ev["t"])
+        if who is None:
+            rec["dead_ball"] += 1
+        elif who == ev["team"]:
+            rec["own_ball"] += 1
+        else:
+            rec["opp_ball"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["subs"] >= SUBPH_MIN_SUBS:
+            share = 100.0 * rec["opp_ball"] / rec["subs"]
+            rec["risky_pct"] = round(share, 1)
+            if share >= SUBPH_RISKY_PCT:
+                rec["verdict"] = "védekezés közben is cserélnek (kockázatos)"
+            elif share <= SUBPH_SAFE_PCT:
+                rec["verdict"] = ("fegyelmezett csere-rend "
+                                  "(birtokláskor váltanak)")
     return out
 
 
@@ -549,4 +684,200 @@ def gap_punishment(match: Match,
             rec["verdict"] = "a csere-lyukaik gólba kerülnek"
         elif rec["gap_s"] >= GPN_ESCAPE_MIN_S and rec["conceded"] == 0:
             rec["verdict"] = "a csere-lyukakat büntetlenül megússzák"
+    return out
+
+
+# Forgatott-poszt: ennyi poszthoz kötött lecserélés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# forgatásuk egy posztra jár.
+SBR_MIN_OUTS = 3
+SBR_SHARE_PCT = 60.0
+
+
+def substituted_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Forgatott-poszt: MELYIK POSZTJUKAT cserélik.
+
+    A cserehullám-rétegek a hullámot nézik — ez a posztot: a
+    lecserélt játékosokat a posztjukhoz írja. Így látszik, melyik
+    posztjukon forognak (ott mindig friss ember áll), és melyiken
+    nem (ott a fáradás felhalmozódik).
+
+    Edzőileg ez a fárasztás-terv iránya: a sokat forgatott posztra
+    fárasztásra építeni hiba — oda mindig friss ember jön; a
+    terhelés-csapdát a NEM forgatott posztokra kell tenni. Saját
+    csapatra: a forgatás-térkép a terhelés-elosztás tükre.
+
+    Visszatérés csapatonként: {"outs" (poszthoz kötött lecserélés),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az SBR_MIN_OUTS, vagy egyik poszt
+    sem éri el az SBR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"outs": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for ev in detect_substitutions(match, config):
+        side = ev["team"]
+        for tid in ev["out_ids"]:
+            rec_role = roles[side].get(tid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["outs"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["outs"] >= SBR_MIN_OUTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["outs"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SBR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a forgatásuk a(z) {poszt} posztra jár "
+                    f"({share:.0f}%, {rec['outs']} lecserélésből) — "
+                    "ott mindig friss ember áll: a fárasztást a NEM"
+                    " forgatott posztjaikra kell tervezni")
+    return out
+
+
+# Beérkező-poszt: ennyi poszthoz kötött beállás kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a padjuk egy posztra
+# hoz frissítést.
+IBR_MIN_INS = 3
+IBR_SHARE_PCT = 60.0
+
+
+def sub_in_roles(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Beérkező-poszt: MELYIK POSZTRA hoz frissítést a padjuk.
+
+    A forgatott-poszt a lecserélteket nézi — ez a beállókat: a
+    cserehullámokkal érkező játékosokat a (beállás utáni játékukból
+    becsült) posztjukhoz írja. Így látszik, hova tartanak kész
+    második sort.
+
+    Edzőileg ez a cserehullám utáni figyelem-irány: ha a padjuk
+    rendre ugyanarra a posztra hoz friss embert, a hullám után arra
+    a sávra kell váltani — friss láb, új lendület, az addigi
+    párosítás-terv ott elavul. Saját csapatra: a második sor
+    poszt-mélysége a keret-építés tükre.
+
+    Visszatérés csapatonként: {"ins" (poszthoz kötött beállás),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az IBR_MIN_INS, vagy egyik poszt
+    sem éri el az IBR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"ins": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for ev in detect_substitutions(match, config):
+        side = ev["team"]
+        for tid in ev["in_ids"]:
+            rec_role = roles[side].get(tid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["ins"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["ins"] >= IBR_MIN_INS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["ins"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= IBR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a padjuk a(z) {poszt} posztra hoz frissítést "
+                    f"({share:.0f}%, {rec['ins']} beállásból) — a "
+                    "cserehullámuk után arra a sávra kell váltani: "
+                    "friss láb, új lendület, az addigi párosítás "
+                    "ott elavul")
+    return out
+
+
+# Csere-stílus: ennyi poszthoz köthető ki-be páros kell az ítélethez;
+# e feletti azonos-poszt arány a posztot tartó, ez alatti az átszabó
+# pad jele.
+SWS_MIN_PAIRS = 3
+SWS_SAME_PCT = 70.0
+SWS_CROSS_PCT = 40.0
+
+
+def swap_style(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-stílus: POSZTOT TART vagy ÁTSZAB a padjuk.
+
+    A cserehullám-rétegek a posztokat nézik külön — ez a ki-be
+    párokat: minden hullámban a lecserélt és a beálló játékost
+    párba állítja, és megnézi, azonos posztra érkezik-e a váltás.
+    A posztot tartó pad specialistát cserél specialistára; az
+    átszabó pad a felállást is átrendezi.
+
+    Edzőileg: posztot tartó pad ellen a párosítás a csere után is
+    érvényes — csak a nevet kell frissíteni; átszabó pad ellen a
+    cserehullám utáni ELSŐ támadásnál újra kell osztani a fogásokat
+    (hangos jelzés vagy időkérés), különben szabad ember marad.
+
+    Visszatérés csapatonként: {"pairs", "same", "cross",
+    "same_pct", "verdict"} — a same_pct/verdict None, ha nincs meg
+    az SWS_MIN_PAIRS; a verdict "posztot tartó a padjuk" /
+    "átszabó a padjuk" / None.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"pairs": 0, "same": 0, "cross": 0,
+                        "same_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for wave in detect_substitutions(match, config):
+        side = wave["team"]
+        for out_id, in_id in zip(wave["out_ids"], wave["in_ids"]):
+            r_out = roles[side].get(out_id)
+            r_in = roles[side].get(in_id)
+            if r_out is None or r_in is None:
+                continue
+            rec = out[side]
+            rec["pairs"] += 1
+            if r_out["poszt"] == r_in["poszt"]:
+                rec["same"] += 1
+            else:
+                rec["cross"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["pairs"] >= SWS_MIN_PAIRS:
+            pct = 100.0 * rec["same"] / rec["pairs"]
+            rec["same_pct"] = round(pct, 1)
+            if pct >= SWS_SAME_PCT:
+                rec["verdict"] = (
+                    "posztot tartó a padjuk — a párosítás a csere "
+                    "után is érvényes, csak a nevet kell "
+                    "frissíteni")
+            elif pct <= SWS_CROSS_PCT:
+                rec["verdict"] = (
+                    "átszabó a padjuk — a cserehullám utáni első "
+                    "támadásnál újra kell osztani a fogásokat, "
+                    "különben szabad emberük marad")
     return out
