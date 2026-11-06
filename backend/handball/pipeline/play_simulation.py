@@ -3098,13 +3098,15 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
                            hetes_irany: dict | None = None,
                            idokeres: dict | None = None,
                            kapus_forma: dict | None = None,
-                           het_a_hat: dict | None = None) -> str | None:
+                           het_a_hat: dict | None = None,
+                           falvaltas: dict | None = None) -> str | None:
     """A pad döntés-próbái egy sorban — az élő képernyő meccs eleji
     harmadik AI-sorához: a kapus-választás (keeper_choice_backtest), a
     hetes-dobó (seven_taker_backtest), a hetes-irány
     (seven_direction_backtest), az időkérés a sorozat ellen
     (timeout_run_backtest), a kapus napi formája (keeper_hot_hand_backtest)
-    és a 7 a 6 mérlege (seven_six_backtest) — az ítéletük rövid alakja.
+    a 7 a 6 mérlege (seven_six_backtest) és a fal-váltás
+    (defense_switch_backtest) — az ítéletük rövid alakja.
     Mit jelent edzőileg: a meccs elején látszik, a pad melyik döntésénél
     lehet a könyvtár szabályára építeni. None, ha egyik próba sem ítélt."""
     reszek = []
@@ -3134,6 +3136,9 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
                        "egyenlo": "7 a 6: annyit hoz, mint a 6 a 6",
                        "nem": "7 a 6: nem éri meg"}.get(
             het_a_hat.get("itelet"), "7 a 6: nincs ítélet"))
+    if falvaltas:
+        reszek.append("fal-váltás: megéri" if falvaltas.get("itelet")
+                      == "megeri" else "fal-váltás: nem hoz kevesebb gólt")
     return "; ".join(reszek) if reszek else None
 
 
@@ -5953,6 +5958,196 @@ def live_seven_six_alerts(match: Match, proba: dict | None = None,
                                     + (f" ({proba['verdict']})"
                                        if proba and proba.get("verdict")
                                        else ""))})
+    return {"alerts": alerts}
+
+
+# ---- Fal-váltás rossz szakasz után: megéri-e -------------------------------
+# A védekezés klasszikus meccs közbeni döntése: ha a fal sorban kapja a
+# gólokat, váltsunk-e rendszert (6-0 → 5-1 …), vagy maradjunk. A könyvtár
+# védekezett támadásain (a fal uralkodó címkéje és a kapott gól
+# támadásonként): valahányszor a csapat az utolsó FV_ABLAK védekezéséből
+# legalább FV_ROSSZ gólt kapott, a következő FV_UTANA védekezésben váltott-e
+# falat (a szakasz fő rendszeréről), és mennyi gólt kapott. Ha váltás után
+# legalább FV_ITELET_GOL góllal kevesebb jön támadásonként, a váltás
+# megéri. Élőben a rossz szakasz pillanatában szól a védekező kispadnak.
+FV_ABLAK = 5             # ennyi védekezett támadás a szakasz
+FV_ROSSZ = 3             # ennyi kapott gól a szakaszban = rossz szakasz
+FV_UTANA = 5             # ennyi védekezést nézünk utána
+FV_MIN_ESET = 5          # csoportonként (váltott / maradt) legalább ennyi
+FV_ITELET_GOL = 0.1      # támadásonkénti kapott gól-különbség az ítélethez
+FV_GOL_TURES_S = 3.0     # a támadás vége után ennyi mp-ig esett gól is számít
+FV_ELO_SZUNET_S = 300.0  # élőben egy jelzés után ennyi ideig nincs újabb
+
+
+def defense_switch_sample(match: Match, team: Team,
+                          config: TacticsConfig | None = None) -> list:
+    """A fal-váltás próbájának NYERS, JSON-barát meccs-mintája: a `team`
+    VÉDEKEZETT támadásai időrendben — [[a fal uralkodó címkéje, kapott-e
+    gólt (0/1), a támadás végének perce], …] (tactics.detect_formation; a
+    kevés látott
+    védős kockák kimaradnak, mint a formation_switching-ben; a gól a
+    támadás alatt vagy FV_GOL_TURES_S-en belül utána)."""
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+    from .tactics import FSW_MIN_FRAMES, detect_formation
+    config = config or TacticsConfig()
+    if not match.frames:
+        return []
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    tures = int(round(FV_GOL_TURES_S * fps))
+    golok = [(e.t, e.team) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    ki: list = []
+    for seq in segment_attacks(match, config):
+        if seq.team == team:
+            continue                       # a csapat védekezései kellenek
+        tally: dict = {}
+        for fr in seq.frames:
+            form = detect_formation(fr, team, config)
+            if not form.label or form.label == "?" or form.defenders < 4:
+                continue
+            tally[form.label] = tally.get(form.label, 0) + 1
+        if not tally or sum(tally.values()) < FSW_MIN_FRAMES:
+            continue
+        cimke = max(sorted(tally.items()), key=lambda kv: kv[1])[0]
+        gol = int(any(tm == seq.team and seq.start_t <= t <= seq.end_t + tures
+                      for t, tm in golok))
+        ki.append([cimke, gol, round((seq.end_t - t0) / fps / 60.0, 2)])
+    return ki
+
+
+def _rossz_szakaszok(vedekezesek: list) -> list:
+    """A rossz szakaszok egy meccs védekezéseiből (defense_switch_sample):
+    valahányszor az utolsó FV_ABLAK védekezésből legalább FV_ROSSZ gól
+    jött (átfedés nélkül — a szakasz után FV_UTANA védekezés kimarad) —
+    [(index, a szakasz fő rendszere, váltott-e utána, kapott gól az utána
+    jövő FV_UTANA védekezésben, utána-védekezések száma)]."""
+    ki: list = []
+    i = FV_ABLAK
+    v = vedekezesek or []
+    while i <= len(v):
+        ablak = v[i - FV_ABLAK:i]
+        if sum(int(x[1]) for x in ablak) >= FV_ROSSZ:
+            cimkek: dict = {}
+            for x in ablak:
+                cimkek[x[0]] = cimkek.get(x[0], 0) + 1
+            fo = max(sorted(cimkek.items()), key=lambda kv: kv[1])[0]
+            utana = v[i:i + FV_UTANA]
+            if utana:
+                valtott = 2 * sum(1 for x in utana if x[0] != fo) > len(utana)
+                ki.append((i, fo, valtott, sum(int(x[1]) for x in utana),
+                           len(utana)))
+            i += FV_UTANA
+        else:
+            i += 1
+    return ki
+
+
+def defense_switch_backtest(meccsek: list,
+                            csapat: str | None = None) -> dict | None:
+    """A fal-váltás próbája: `meccsek` = [{"home", "away", "minta":
+    {"home", "away"} (defense_switch_sample — a csapat védekezései)}]. A
+    rossz szakaszok (_rossz_szakaszok) után a váltott és a maradt fal
+    támadásonként kapott gólja; a `csapat` megadásával csak az ő fala.
+    Mit jelent edzőileg: a "váltsunk falat" ösztön a klub meccsein
+    megérte-e, vagy a maradás ugyanannyit hozott. Visszatérés:
+    {"valtott", "valtott_gol", "valtott_tam", "maradt", "maradt_gol",
+    "maradt_tam", "valtott_hozam", "maradt_hozam", "kulonbseg",
+    "itelet" ("megeri" / "nem"), "verdict"} — None, ha valamelyik
+    csoportban FV_MIN_ESET-nél kevesebb a szakasz."""
+    cs = {True: [0, 0, 0], False: [0, 0, 0]}     # szakasz, gól, támadás
+    for m in meccsek or []:
+        for side in ("home", "away"):
+            if csapat is not None and m.get(side) != csapat:
+                continue
+            for _i, _fo, valtott, gol, n in _rossz_szakaszok(
+                    (m.get("minta") or {}).get(side) or []):
+                r = cs[bool(valtott)]
+                r[0] += 1
+                r[1] += gol
+                r[2] += n
+    if cs[True][0] < FV_MIN_ESET or cs[False][0] < FV_MIN_ESET:
+        return None
+    vh = cs[True][1] / cs[True][2]
+    mh = cs[False][1] / cs[False][2]
+    d = mh - vh
+    megeri = d >= FV_ITELET_GOL
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    return {"valtott": cs[True][0], "valtott_gol": cs[True][1],
+            "valtott_tam": cs[True][2], "maradt": cs[False][0],
+            "maradt_gol": cs[False][1], "maradt_tam": cs[False][2],
+            "valtott_hozam": round(vh, 3), "maradt_hozam": round(mh, 3),
+            "kulonbseg": round(d, 3), "itelet": "megeri" if megeri else "nem",
+            "verdict": (f"rossz szakasz után a fal-váltással {cs[True][0]} "
+                        f"esetben támadásonként {sz(vh)} gólt kaptak, "
+                        f"maradva {cs[False][0]} esetben {sz(mh)} gólt — "
+                        + ("a fal-váltás megéri: váltsatok rendszert"
+                           if megeri else
+                           "a fal-váltás nem hozott kevesebb gólt: a "
+                           "rendszeren belül javítsatok (kilépés, "
+                           "kettőzés), ne a falon"))}
+
+
+def live_defense_switch_alerts(match: Match, proba: dict | None = None,
+                               alternativa: dict | None = None,
+                               config: TacticsConfig | None = None) -> dict:
+    """Élő fal-váltás tanács: amikor egy csapat az utolsó FV_ABLAK
+    védekezéséből FV_ROSSZ gólt kapott (a szakasz utolsó támadásának
+    pillanatában, CSAK az addigi védekezésekből — okszerű), a VÉDEKEZŐ
+    kispadnak a fal-váltás próbája (`proba`, defense_switch_backtest)
+    szerint; `alternativa` oldalanként a csapat második fala a könyvtárból
+    (defense_system_forecast "eloszlas"), ha van. Csapatonként egy jelzés
+    után FV_ELO_SZUNET_S-ig nincs újabb. Visszatérés: {"alerts":
+    [{"t", "t_s", "perc", "team", "team_name", "fal", "kapott",
+    "text"}]}."""
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    itelet = (proba or {}).get("itelet")
+    for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+        v = defense_switch_sample(match, team, config)
+        utolso = None
+        for i, fo, _valtott, _gol, _n in _rossz_szakaszok(v):
+            perc_f = float(v[i - 1][2])
+            if utolso is not None and (perc_f - utolso) * 60.0 < FV_ELO_SZUNET_S:
+                continue
+            utolso = perc_f
+            perc = int(perc_f) + 1
+            t = t0 + int(round(perc_f * 60 * fps))
+            kapott = sum(int(x[1]) for x in v[i - FV_ABLAK:i])
+            masik = None
+            el = ((alternativa or {}).get(side) or {}).get("eloszlas") or {}
+            for rendszer, _a in sorted(el.items(), key=lambda kv: (-kv[1], kv[0])):
+                if rendszer != fo:
+                    masik = rendszer
+                    break
+            if itelet == "megeri":
+                tanacs = ("a könyvtár szerint a fal-váltás megéri: váltsatok"
+                          + (f" — a második falatok {_rendszer_nevelovel(masik)}"
+                             if masik else ""))
+            elif itelet == "nem":
+                tanacs = ("a könyvtár szerint a fal-váltás nem hozott kevesebb "
+                          "gólt: a rendszeren belül javítsatok (kilépés, "
+                          "kettőzés)")
+            else:
+                tanacs = ("a könyvtár még nem dönti el, megéri-e a fal-váltás")
+            alerts.append({"t": t, "t_s": round(t / fps, 1), "perc": perc,
+                           "team": side, "team_name": nevek[side], "fal": fo,
+                           "kapott": kapott,
+                           "text": (f"Rossz szakasz a falnak ({perc}. perc): "
+                                    f"{nevek[side]} — az utolsó {FV_ABLAK} "
+                                    f"védekezésből {kapott} gól "
+                                    f"{_rendszer_nevelovel(fo)} fallal — "
+                                    f"{tanacs}")})
+    alerts.sort(key=lambda a: (a["t"], a["team"]))
     return {"alerts": alerts}
 
 # ---- A pad döntései a könyvtár tükrében ------------------------------------

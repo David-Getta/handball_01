@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Fal-váltás rossz szakasz után: megéri-e** (motor + élő végpont + élő
+  képernyő + szezon-riport + szezon-képernyő + AI-döntések sora +
+  edzésterv): a védekezés klasszikus meccs közbeni döntése a klub
+  könyvtárából — valahányszor a fal az utolsó öt védekezéséből három gólt
+  kapott, a következő öt védekezésben váltottak-e rendszert, és mennyi gólt
+  kaptak: "rossz szakasz után a fal-váltással 7 esetben támadásonként 0,29
+  gólt kaptak, maradva 9 esetben 0,51 gólt — a fal-váltás megéri:
+  váltsatok rendszert"; ha nem hoz kevesebbet: "a rendszeren belül
+  javítsatok (kilépés, kettőzés), ne a falon". Élőben a rossz szakasz
+  pillanatában szól a védekező kispadnak, a könyvtár szerinti második
+  falukkal ("… — a második falatok az 5-1"), csapatonként legfeljebb öt
+  percenként. A /matches/{id}/live-falvaltas, a /library/player-model-check
+  "falvaltas_proba" mezője, a szezon-képernyő és a szezon-riport
+  "Fal-váltás" sora, a meccs eleji AI-döntések sor és az AI-edzésterv
+  szabálya ("Fal-váltás rossz szakasz után" / "Rossz szakaszban a falon
+  belül javítunk"; play_simulation.defense_switch_sample,
+  defense_switch_backtest, live_defense_switch_alerts).
+
 - **A 7 a 6 mérleg a meccstervben** (végpont + meccsterv + nyomtatható
   meccsterv): a meccs előtti ELŐREJELZÉS kártya új sora, "A 7 a 6
   mérlegünk a hajrára" — a csapat saját 7 a 6 mérlege a könyvtárból

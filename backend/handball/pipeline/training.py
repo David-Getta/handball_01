@@ -261,7 +261,8 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                     hetes_irany_proba: dict | None = None,
                     idokeres_proba: dict | None = None,
                     kapus_forma_proba: dict | None = None,
-                    het_a_hat_proba: dict | None = None) -> list:
+                    het_a_hat_proba: dict | None = None,
+                    falvaltas_proba: dict | None = None) -> list:
     """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
     modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
     az ő várható faluk ellen (`vedekezes`, play_simulation.
@@ -280,7 +281,8 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
     sorozat ellen (`idokeres_proba`: timeout_run_backtest), a
     kapus-csere szabálya (`kapus_forma_proba`: keeper_hot_hand_backtest)
     és a hajrá szabálya (`het_a_hat_proba`: seven_six_backtest — a 7 a 6
-    mérlege; "egyenlo" ítéletnél nincs tétel).
+    mérlege; "egyenlo" ítéletnél nincs tétel) és a fal-váltás szabálya
+    rossz szakasz után (`falvaltas_proba`: defense_switch_backtest).
     Mit jelent edzőileg: a meccs előtti hét edzéseinek váza és a pad
     szabályai, minden tétel mögött a modell indoka. Visszatérés:
     [{"title", "area", "why", "drill"}] — legfeljebb KOV_MECCS_MAX."""
@@ -399,6 +401,18 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                       "a hátrányos hajrá 6 a 6-tal: gyors középkezdés, "
                       "biztos lövőhelyzet, a kapus marad — a 7 a 6 csak "
                       "kivételesen, kész figurával")})
+    if falvaltas_proba:
+        megeri = falvaltas_proba.get("itelet") == "megeri"
+        ki.append({
+            "title": ("Fal-váltás rossz szakasz után" if megeri else
+                      "Rossz szakaszban a falon belül javítunk"),
+            "area": "védekezés", "why": falvaltas_proba["verdict"],
+            "drill": ("a második fal begyakorlása és a váltás jele a padról: "
+                      "három kapott gól öt védekezésből — váltás, a "
+                      "kihozatalnál hangosan" if megeri else
+                      "rossz szakaszban marad a fal: a kilépés időzítése és "
+                      "a kettőzés a súlypontnál — videóval a kapott gólokról"
+                      )})
     return ki[:KOV_MECCS_MAX]
 
 

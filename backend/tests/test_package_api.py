@@ -396,6 +396,13 @@ def test_season_report_elorejelzes_sora(monkeypatch):
                 (matches_dir / f"{x['match_id']}.json").read_text(
                     encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
             for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            defense_switch_backtest, defense_switch_sample)
+        fvp = defense_switch_backtest([{**x, "minta": {
+            s_: defense_switch_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
         from handball.pipeline.scouting import scouting_backtest, scout_team
         fdp = scouting_backtest([{**x, "reports": {
             s_: scout_team(Match.from_dict(json.loads(
@@ -463,6 +470,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert f"<p><b>7 a 6:</b> {hhp['verdict']}.</p>" in r.text
     else:
         assert "<b>7 a 6:</b>" not in r.text
+    # A fal-váltásuk próbája (a motorral egyezik; a hazai nem védekezik a
+    # szimulációban — a sor elmarad).
+    if fvp:
+        assert f"<p><b>Fal-váltás:</b> {fvp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Fal-váltás:</b>" not in r.text
     # A felderítésük próbája (a motorral egyezik; hét meccsen öt mérhető).
     if fdp:
         assert f"<p><b>Felderítés:</b> {fdp['verdict']}.</p>" in r.text

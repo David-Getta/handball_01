@@ -2523,6 +2523,79 @@ def test_a_dontes_probak_egy_sorban():
         "kapus-választás: a szokásos kapus is jó; hetes-dobó: a könyvtár "
         "dobója jobb; időkérés: megtöri a sorozatot; kapus napi formája: "
         "kitart; 7 a 6: nem éri meg")
+    assert decision_trust_summary(falvaltas={"itelet": "megeri"}) == \
+        "fal-váltás: megéri"
+    assert decision_trust_summary(falvaltas={"itelet": "nem"}) == \
+        "fal-váltás: nem hoz kevesebb gólt"
+
+
+def test_a_fal_valtas_probaja_rossz_szakasz_utan():
+    """_rossz_szakaszok: öt védekezésből három gól = rossz szakasz, utána
+    öt védekezés (váltott, ha a többség más fallal); defense_switch_backtest:
+    megéri / nem, kevés szakasznál None, csapat-szűrő;
+    live_defense_switch_alerts: a szimulált meccsen a vendég fala kapja a
+    gólokat — a jelzés a próba szerint, a második fallal, öt percenként
+    legfeljebb egyszer; defense_switch_sample: a támadó csapatnak nincs
+    védekezése."""
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (FV_MIN_ESET,
+                                                   _rossz_szakaszok,
+                                                   defense_switch_backtest,
+                                                   defense_switch_sample,
+                                                   live_defense_switch_alerts)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    rossz = [["6-0", 1, 1.0], ["6-0", 0, 2.0], ["6-0", 1, 3.0],
+             ["6-0", 1, 4.0], ["6-0", 0, 5.0]]
+    valt = [["5-1", 0, 6.0], ["5-1", 0, 7.0], ["5-1", 1, 8.0],
+            ["6-0", 0, 9.0], ["5-1", 0, 10.0]]
+    marad = [["6-0", 1, 6.0], ["6-0", 1, 7.0], ["6-0", 0, 8.0],
+             ["5-1", 0, 9.0], ["6-0", 1, 10.0]]
+    assert _rossz_szakaszok(rossz + valt) == [(5, "6-0", True, 1, 5)]
+    assert _rossz_szakaszok(rossz + marad) == [(5, "6-0", False, 3, 5)]
+    assert _rossz_szakaszok(rossz) == []          # nincs utána védekezés
+    assert _rossz_szakaszok(valt + valt) == []    # nincs rossz szakasz
+
+    def meccsek(minta, n):
+        return [{"home": "A", "away": "B", "minta": {"home": minta,
+                                                      "away": []}}] * n
+
+    jo = meccsek(rossz + valt, FV_MIN_ESET) + meccsek(rossz + marad,
+                                                      FV_MIN_ESET)
+    p = defense_switch_backtest(jo)
+    assert (p["valtott"], p["maradt"], p["valtott_hozam"], p["maradt_hozam"],
+            p["itelet"]) == (5, 5, 0.2, 0.6, "megeri")
+    assert p["verdict"] == (
+        "rossz szakasz után a fal-váltással 5 esetben támadásonként 0,20 "
+        "gólt kaptak, maradva 5 esetben 0,60 gólt — a fal-váltás megéri: "
+        "váltsatok rendszert")
+    q = defense_switch_backtest(meccsek(rossz + marad, FV_MIN_ESET)
+                                + meccsek(rossz + marad, FV_MIN_ESET)[:0]
+                                + [{"home": "A", "away": "B", "minta": {
+                                    "home": rossz + [[x[0].replace("6-0", "3-2-1"),
+                                                      x[1], x[2]] for x in marad]
+                                }}] * FV_MIN_ESET)
+    assert q["itelet"] == "nem" and q["verdict"].endswith(
+        "a rendszeren belül javítsatok (kilépés, kettőzés), ne a falon")
+    assert defense_switch_backtest(jo[:FV_MIN_ESET]) is None
+    assert defense_switch_backtest(jo, "A") == p
+    assert defense_switch_backtest(jo, "B") is None
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=2,
+                              shots_per_min=8)
+    assert defense_switch_sample(m, Team.HOME) == []
+    v = defense_switch_sample(m, Team.AWAY)
+    assert v and all(x[1] in (0, 1) for x in v)
+    alt = {"away": {"eloszlas": {"6-0": 0.6, "5-1": 0.4}}}
+    ki = live_defense_switch_alerts(m, p, alt)["alerts"]
+    assert ki and all(a["team"] == "away" for a in ki)
+    assert ki[0]["text"].endswith(
+        "a könyvtár szerint a fal-váltás megéri: váltsatok — a második "
+        "falatok az 5-1")
+    percek = [a["t_s"] for a in ki]
+    assert all(b - a >= 300.0 - 1 for a, b in zip(percek, percek[1:]))
+    assert live_defense_switch_alerts(m)["alerts"][0]["text"].endswith(
+        "a könyvtár még nem dönti el, megéri-e a fal-váltás")
 
 
 def test_megeri_e_a_7_a_6(monkeypatch):

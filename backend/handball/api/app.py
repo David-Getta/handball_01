@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # A fal-váltásuk próbája — hibatűrően.
+        try:
+            fv_ = _falvaltas_proba(csapat=team)
+            if fv_:
+                modell_proba = {**(modell_proba or {}), "falvaltas": fv_,
+                                "falvaltas_verdict": fv_["verdict"]}
+        except Exception:
+            pass
         # A 7 a 6 mérlegük — hibatűrően.
         try:
             hh_ = _het_a_hat_proba(csapat=team)
@@ -8939,6 +8947,28 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _falvaltas_minta_of(m_, side: str) -> list:
+        """EGY meccs fal-váltás mintája az adott (védekező) oldalra
+        (play_simulation.defense_switch_sample) — a lemezes
+        eredmény-tárból."""
+        from ..pipeline.play_simulation import defense_switch_sample
+        return _cached_result(m_.meta.match_id, f"falvaltas-minta-v1-{side}",
+                              lambda: defense_switch_sample(m_, Team(side)))
+
+    def _falvaltas_proba(csapat: str | None = None,
+                         kiveve: str | None = None):
+        """A fal-váltás próbája a könyvtáron (play_simulation.
+        defense_switch_backtest; a `kiveve` meccs nélkül, a `csapat`
+        megadásával csak az ő fala)."""
+        from ..pipeline.play_simulation import defense_switch_backtest
+        return defense_switch_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _falvaltas_minta_of(m_, "home"),
+                       "away": _falvaltas_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _felderites_proba(csapat: str | None = None,
                           kiveve: str | None = None):
         """A felderítés próbája a könyvtár időrendjében (scouting.
@@ -9259,7 +9289,8 @@ def create_app():
         None, "hetes_proba": a hetes-dobó választás próbája
         (seven_taker_backtest) vagy None, "hetes_irany_proba": a hetes-irány
         próbája (seven_direction_backtest) vagy None, "het_a_hat_proba": a 7 a 6
-        mérlege (seven_six_backtest) vagy None,
+        mérlege (seven_six_backtest) vagy None, "falvaltas_proba": a fal-váltás
+        próbája (defense_switch_backtest) vagy None,
         "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
@@ -9323,6 +9354,7 @@ def create_app():
                 "hetes_proba": _hetes_proba(),
                 "hetes_irany_proba": _hetes_irany_proba(),
                 "het_a_hat_proba": _het_a_hat_proba(),
+                "falvaltas_proba": _falvaltas_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -14719,7 +14751,8 @@ def create_app():
             hetes_irany_proba=biztos(lambda: _hetes_irany_proba(csapat=ok)),
             idokeres_proba=biztos(lambda: _idokeres_proba(csapat=mi)),
             kapus_forma_proba=biztos(lambda: _kapusforma_proba(csapat=mi)),
-            het_a_hat_proba=biztos(lambda: _het_a_hat_proba(csapat=mi)))
+            het_a_hat_proba=biztos(lambda: _het_a_hat_proba(csapat=mi)),
+            falvaltas_proba=biztos(lambda: _falvaltas_proba(csapat=mi)))
 
     def _items_csapat(items) -> str | None:
         """A felderítés `items` listájának csapata ({"match_id", "team"}
@@ -15130,6 +15163,23 @@ def create_app():
                 "proba": _hetes_proba(kiveve=match_id), "iranyok": ir,
                 "irany_proba": _hetes_irany_proba(kiveve=match_id)}
 
+    @app.get("/matches/{match_id}/live-falvaltas")
+    def get_live_defense_switch(match_id: str):
+        """ÉLŐ fal-váltás tanács: amikor egy csapat az utolsó öt
+        védekezéséből három gólt kapott, a védekező kispadnak a fal-váltás
+        könyvtári próbája szerint (a meccs nélkül), a második falukkal a
+        csapat TÖBBI meccséből (play_simulation.live_defense_switch_alerts).
+        Válasz: {"alerts": [...], "proba"}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import live_defense_switch_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        proba = _falvaltas_proba(kiveve=match_id)
+        alt = {"home": _vedekezes_varhato(match.meta.home_team, match_id),
+               "away": _vedekezes_varhato(match.meta.away_team, match_id)}
+        return {**live_defense_switch_alerts(match, proba, alt),
+                "proba": proba}
+
     @app.get("/matches/{match_id}/live-7a6")
     def get_live_seven_six(match_id: str):
         """ÉLŐ 7 a 6 tanács: a hajrá perceiben (HN_ELO_PERCEK) a legfeljebb
@@ -15332,7 +15382,8 @@ def create_app():
                     hetes_irany=_hetes_irany_proba(nev, match_id),
                     idokeres=_idokeres_proba(match_id, nev),
                     kapus_forma=_kapusforma_proba(match_id, nev),
-                    het_a_hat=_het_a_hat_proba(nev, match_id))
+                    het_a_hat=_het_a_hat_proba(nev, match_id),
+                    falvaltas=_falvaltas_proba(nev, match_id))
             except Exception:
                 sor3 = None
             if sor3:

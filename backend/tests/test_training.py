@@ -1518,3 +1518,21 @@ def test_ai_edzesterv_a_hajra_7_a_6_szabalyaval():
     assert next_match_plan("Vendég", het_a_hat_proba={
         "itelet": "egyenlo", "verdict": "X"}) == []
     assert next_match_plan("Vendég") == []
+
+
+
+def test_ai_edzesterv_a_fal_valtas_szabalyaval():
+    """training.next_match_plan `falvaltas_proba`: "megeri" → a második
+    fal begyakorlása, "nem" → a falon belül javítunk."""
+    from handball.pipeline.training import next_match_plan
+
+    t = next_match_plan("Vendég", falvaltas_proba={"itelet": "megeri",
+                                                   "verdict": "V"})
+    assert [(x["title"], x["area"], x["why"]) for x in t] == [
+        ("Fal-váltás rossz szakasz után", "védekezés", "V")]
+    assert t[0]["drill"].startswith("a második fal begyakorlása")
+    u = next_match_plan("Vendég", falvaltas_proba={"itelet": "nem",
+                                                   "verdict": "W"})
+    assert [x["title"] for x in u] == ["Rossz szakaszban a falon belül "
+                                       "javítunk"]
+    assert "kettőzés a súlypontnál" in u[0]["drill"]
