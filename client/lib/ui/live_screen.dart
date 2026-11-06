@@ -214,6 +214,14 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "ai", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Emberhátrány-fal: a kiállítás kezdetén a hátrányban lévő kispadnak.
+    try {
+      for (final a in await _api.fetchLiveShorthanded(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Fal-váltás: rossz szakasz után a védekező kispadnak.
     try {
       for (final a in await _api.fetchLiveDefenseSwitch(matchId)) {

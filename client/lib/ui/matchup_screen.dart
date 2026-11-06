@@ -318,6 +318,10 @@ class _MatchupScreenState extends State<MatchupScreen> {
     // A saját 7 a 6 mérlegünk ("home" = MI) — a hajrá döntéséhez.
     final hetAHat = ((_forecast?["het_a_hat_proba"] as Map?)?["home"]
         as Map?)?["verdict"];
+    // Az emberhátrány-falunk ("home" = MI) a próbájával.
+    final ehFal = ((_forecast?["emberhatrany_fal"] as Map?)?["home"]
+        as Map?)?["verdict"];
+    final ehProba = (_forecast?["emberhatrany_proba"] as Map?)?["verdict"];
     return ListView(children: [
       // ELŐREJELZÉS: a két csapat könyvtári meccseiből tanult csapat-modell
       // várakozása (lövés-mennyiség és -minőség sávonként, befejezés,
@@ -424,6 +428,17 @@ class _MatchupScreenState extends State<MatchupScreen> {
                   Text("A 7 a 6 mérlegünk a hajrára: $hetAHat.",
                       style: AppText.label.copyWith(
                           fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (ehFal is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("Emberhátrány-falunk: $ehFal.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (ehFal is String && ehProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("Az emberhátrány-fal próbája: $ehProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
                 // A figura-felderítés súlya: visszatérnek-e a figurák.
                 if (figProba is String) ...[

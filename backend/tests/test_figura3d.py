@@ -2722,6 +2722,56 @@ def test_az_elo_fal_valtas_vegpont(tmp_path, monkeypatch):
         defense_switch_backtest(lista(meccsek))
 
 
+def test_az_elo_emberhatrany_vegpont(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-emberhatrany: a javaslat a csapat TÖBBI
+    meccséből, a próba a többi meccs mintáiból — a valódi láncon ugyanaz,
+    mint a motor (a szimulált meccseken nincs kiállítás: None); a
+    /library/player-model-check és a /library/forecast mezői; 404."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (
+        live_shorthanded_alerts, shorthanded_defense_backtest,
+        shorthanded_defense_choice, shorthanded_defense_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=180, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    h, a = meccsek[0].meta.home_team, meccsek[0].meta.away_team
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: json.loads(json.dumps(
+                     shorthanded_defense_sample(m, Team(s_))))
+                           for s_ in ("home", "away")}} for m in ms]
+
+    tobbi = lista(meccsek[:2])
+    jav = {s_: shorthanded_defense_choice([x["minta"][s_] for x in tobbi])
+           for s_ in ("home", "away")}
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-emberhatrany").json()
+    assert j["javaslat"] == jav
+    assert j["alerts"] == live_shorthanded_alerts(meccsek[2], jav)["alerts"]
+    assert j["proba"] == shorthanded_defense_backtest(tobbi)
+    assert c.get("/matches/nincs/live-emberhatrany").status_code == 404
+    mind = lista(meccsek)
+    assert c.get("/library/player-model-check").json()[
+        "emberhatrany_proba"] == shorthanded_defense_backtest(mind)
+    f = c.get("/library/forecast", params={"home": h, "away": a}).json()
+    assert f["emberhatrany_fal"] == {
+        s_: shorthanded_defense_choice([x["minta"][s_] for x in mind])
+        for s_ in ("home", "away")}
+    assert f["emberhatrany_proba"] == shorthanded_defense_backtest(mind)
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

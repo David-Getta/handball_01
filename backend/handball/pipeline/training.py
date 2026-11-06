@@ -262,7 +262,9 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                     idokeres_proba: dict | None = None,
                     kapus_forma_proba: dict | None = None,
                     het_a_hat_proba: dict | None = None,
-                    falvaltas_proba: dict | None = None) -> list:
+                    falvaltas_proba: dict | None = None,
+                    emberhatrany: dict | None = None,
+                    emberhatrany_proba: dict | None = None) -> list:
     """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
     modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
     az ő várható faluk ellen (`vedekezes`, play_simulation.
@@ -282,7 +284,9 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
     kapus-csere szabálya (`kapus_forma_proba`: keeper_hot_hand_backtest)
     és a hajrá szabálya (`het_a_hat_proba`: seven_six_backtest — a 7 a 6
     mérlege; "egyenlo" ítéletnél nincs tétel) és a fal-váltás szabálya
-    rossz szakasz után (`falvaltas_proba`: defense_switch_backtest).
+    rossz szakasz után (`falvaltas_proba`: defense_switch_backtest), és
+    az emberhátrány-fal (`emberhatrany`: shorthanded_defense_choice —
+    csak ha a próbája, `emberhatrany_proba`, nem mond ellent).
     Mit jelent edzőileg: a meccs előtti hét edzéseinek váza és a pad
     szabályai, minden tétel mögött a modell indoka. Visszatérés:
     [{"title", "area", "why", "drill"}] — legfeljebb KOV_MECCS_MAX."""
@@ -413,6 +417,18 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                       "rossz szakaszban marad a fal: a kilépés időzítése és "
                       "a kettőzés a súlypontnál — videóval a kapott gólokról"
                       )})
+    if emberhatrany and (emberhatrany_proba is None
+                         or emberhatrany_proba.get("itelet") == "igazolt"):
+        ki.append({
+            "title": (f"Emberhátrány: {_rendszer_nevelovel(emberhatrany['fal'])} "
+                      "fal"),
+            "area": "védekezés",
+            "why": emberhatrany["verdict"]
+            + (f"; {emberhatrany_proba['verdict']}" if emberhatrany_proba
+               else ""),
+            "drill": (f"5 a 6 elleni védekezés {_rendszer_nevelovel(emberhatrany['fal'])} "
+                      "fallal: a csúszás és a kettőzés a lövőnél, a szélső "
+                      "visszazárása — két perces blokkokban, mint a meccsen")})
     return ki[:KOV_MECCS_MAX]
 
 

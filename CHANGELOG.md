@@ -5,6 +5,28 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Emberhátrány-fal: melyik fallal kapnak kevesebbet öt emberrel**
+  (motor + élő végpont + élő képernyő + meccsterv + nyomtatható meccsterv
+  + szezon-riport + szezon-képernyő + AI-döntések sora + edzésterv): a
+  kiállítás alatti védekezés döntése a klub könyvtárából — a hátrányban
+  védett támadások fal-címkével (5-0, 4-1, 3-2) és a kapott góllal:
+  "emberhátrányban az 5-0 fallal 0,35 gólt kaptak támadásonként (20
+  támadás), a 4-1 fallal 0,55 (11) — emberhátrányban az 5-0". A próba a
+  könyvtár időrendjében: a KORÁBBI meccsekből javasolt fal a meccs
+  emberhátrányában kevesebbet kapott-e a többinél ("… — az emberhátrány-fal
+  választásra lehet építeni" / "a könyvtár fala nem kap kevesebbet:
+  emberhátrányban a lövőkhöz igazodjatok, ne a sablonhoz"). Élőben a
+  kiállítás kezdetén szól a hátrányban lévő kispadnak. A
+  /matches/{id}/live-emberhatrany, a /library/forecast "emberhatrany_fal"
+  és "emberhatrany_proba", a /library/player-model-check
+  "emberhatrany_proba" mezője, a meccsterv ELŐREJELZÉS kártyájának
+  "Emberhátrány-falunk" sora a próbával, a nyomtatható meccsterv sora, a
+  szezon-képernyő és a szezon-riport "Emberhátrány-fal" sora, a meccs
+  eleji AI-döntések sor, az AI-edzésterv tétele és az AI-próbák
+  összképének új sora (a 13.)
+  (play_simulation.shorthanded_defense_sample, shorthanded_defense_choice,
+  shorthanded_defense_backtest, live_shorthanded_alerts).
+
 - **Fal-váltás rossz szakasz után: megéri-e** (motor + élő végpont + élő
   képernyő + szezon-riport + szezon-képernyő + AI-döntések sora +
   edzésterv): a védekezés klasszikus meccs közbeni döntése a klub

@@ -3099,14 +3099,16 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
                            idokeres: dict | None = None,
                            kapus_forma: dict | None = None,
                            het_a_hat: dict | None = None,
-                           falvaltas: dict | None = None) -> str | None:
+                           falvaltas: dict | None = None,
+                           emberhatrany: dict | None = None) -> str | None:
     """A pad döntés-próbái egy sorban — az élő képernyő meccs eleji
     harmadik AI-sorához: a kapus-választás (keeper_choice_backtest), a
     hetes-dobó (seven_taker_backtest), a hetes-irány
     (seven_direction_backtest), az időkérés a sorozat ellen
     (timeout_run_backtest), a kapus napi formája (keeper_hot_hand_backtest)
-    a 7 a 6 mérlege (seven_six_backtest) és a fal-váltás
-    (defense_switch_backtest) — az ítéletük rövid alakja.
+    a 7 a 6 mérlege (seven_six_backtest), a fal-váltás
+    (defense_switch_backtest) és az emberhátrány-fal
+    (shorthanded_defense_backtest) — az ítéletük rövid alakja.
     Mit jelent edzőileg: a meccs elején látszik, a pad melyik döntésénél
     lehet a könyvtár szabályára építeni. None, ha egyik próba sem ítélt."""
     reszek = []
@@ -3139,6 +3141,10 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
     if falvaltas:
         reszek.append("fal-váltás: megéri" if falvaltas.get("itelet")
                       == "megeri" else "fal-váltás: nem hoz kevesebb gólt")
+    if emberhatrany:
+        reszek.append("emberhátrány-fal: igazolt"
+                      if emberhatrany.get("itelet") == "igazolt" else
+                      "emberhátrány-fal: a lövőkhöz igazodjatok")
     return "; ".join(reszek) if reszek else None
 
 
@@ -3154,8 +3160,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     visszatérő figurákra érdemes készülni, a felderítés, ha a kulcsai
     átvihetők a következő meccsre (scouting_backtest), a hetes-dobó, ha
     a könyvtár dobója a többieknél jobb (seven_taker_backtest), a
-    hetes-irány, ha a dobók fő iránya jósolható (seven_direction_backtest).
-    Mit
+    hetes-irány, ha a dobók fő iránya jósolható (seven_direction_backtest),
+    az emberhátrány-fal, ha a könyvtár fala a következő meccsen is
+    kevesebbet kap (shorthanded_defense_backtest). Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3202,6 +3209,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     hi = mc.get("hetes_irany_proba")
     if hi:
         add("hetes-irány", hi.get("itelet") == "josolhato")
+    eh = mc.get("emberhatrany_proba")
+    if eh:
+        add("emberhátrány-fal", eh.get("itelet") == "igazolt")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -6148,6 +6158,187 @@ def live_defense_switch_alerts(match: Match, proba: dict | None = None,
                                     f"{_rendszer_nevelovel(fo)} fallal — "
                                     f"{tanacs}")})
     alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}
+
+
+# ---- Emberhátrány-fal: melyik fallal kapnak kevesebbet öt emberrel --------
+# A kiállítás alatti védekezés döntése: 5-0 (mind hátul) vagy 4-1
+# (előretolt védő) — a klub könyvtárából. A kiállítás-ablakokban
+# (rules.detect_powerplay) a hátrányban lévő csapat védekezett támadásai
+# fal-címkével (hátsó-előretolt bontás, mint a shorthanded_shape) és a
+# kapott góllal. A javaslat a legkevesebb gólt kapó fal (legalább
+# SH_MIN_TAM támadás falonként); a próba a könyvtár időrendjében: a
+# KORÁBBI meccsekből javasolt fal a meccs emberhátrányában kevesebbet
+# kapott-e a másiknál. Élőben a kiállítás kezdetén szól a hátrányban lévő
+# kispadnak.
+SH_MIN_TAM = 8           # legalább ennyi emberhátrányos támadás falonként
+SH_PROBA_MIN = 10        # a próbához ennyi támadás a javasolt és a másik fallal
+SH_ITELET_GOL = 0.08     # támadásonkénti kapott gól-különbség az ítélethez
+SH_GOL_TURES_S = 3.0     # a támadás vége után ennyi mp-ig esett gól is számít
+
+
+def shorthanded_defense_sample(match: Match, team: Team,
+                               config: TacticsConfig | None = None) -> list:
+    """Az emberhátrány-fal NYERS, JSON-barát meccs-mintája: a `team`
+    emberhátrányban VÉDEKEZETT támadásai — [[fal (hátsó-előretolt, pl.
+    "5-0"), kapott-e gólt (0/1)], …] (rules.detect_powerplay ablakai,
+    setplays.segment_attacks, tactics.detect_formation 3–5 látott
+    védővel). Meccsek közt összeadható."""
+    from .event_detection import EventType, detect_shots
+    from .rules import detect_powerplay
+    from .setplays import segment_attacks
+    from .tactics import FSW_MIN_FRAMES, detect_formation
+    config = config or TacticsConfig()
+    if not match.frames:
+        return []
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    tures = int(round(SH_GOL_TURES_S * fps))
+    ablakok = [w for w in detect_powerplay(match) if w.get("team_down") == team.value]
+    if not ablakok:
+        return []
+    golok = [(e.t, e.team) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    ki: list = []
+    for seq in segment_attacks(match, config):
+        if seq.team == team:
+            continue
+        if not any(w["start_frame"] <= seq.start_t and seq.end_t <= w["end_frame"]
+                   for w in ablakok):
+            continue
+        tally: dict = {}
+        for fr in seq.frames:
+            form = detect_formation(fr, team, config)
+            if form.defenders < 3 or form.defenders > 5:
+                continue
+            cimke = f"{form.back}-{form.mid + form.high}"
+            tally[cimke] = tally.get(cimke, 0) + 1
+        if not tally or sum(tally.values()) < FSW_MIN_FRAMES:
+            continue
+        cimke = max(sorted(tally.items()), key=lambda kv: kv[1])[0]
+        gol = int(any(tm == seq.team and seq.start_t <= t <= seq.end_t + tures
+                      for t, tm in golok))
+        ki.append([cimke, gol])
+    return ki
+
+
+def _emberhatrany_merleg(mintak: list) -> dict:
+    """Több meccs emberhátrány-mintájának összege — {fal: [támadás,
+    kapott gól]}."""
+    ossz: dict = {}
+    for m in mintak or []:
+        for cimke, gol in m or []:
+            r = ossz.setdefault(str(cimke), [0, 0])
+            r[0] += 1
+            r[1] += int(gol)
+    return ossz
+
+
+def shorthanded_defense_choice(mintak: list) -> dict | None:
+    """Emberhátrány-fal a kész mintákból (shorthanded_defense_sample
+    meccsenként): a legalább SH_MIN_TAM támadással védett falak kapott
+    gólja támadásonként — a legkevesebbet kapó a javaslat. Visszaad:
+    {"fal", "hozam", "tamadas", "masik" ({"fal", "hozam", "tamadas"} vagy
+    None), "falak": [{"fal", "tamadas", "gol", "hozam"}] hozam szerint,
+    "verdict"} — None, ha nincs két elég támadással védett fal."""
+    ossz = _emberhatrany_merleg(mintak)
+    falak = [{"fal": f, "tamadas": n, "gol": g, "hozam": round(g / n, 3)}
+             for f, (n, g) in ossz.items() if n >= SH_MIN_TAM]
+    if len(falak) < 2:
+        return None
+    falak.sort(key=lambda r: (r["hozam"], -r["tamadas"], r["fal"]))
+    b, m = falak[0], falak[1]
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    return {"fal": b["fal"], "hozam": b["hozam"], "tamadas": b["tamadas"],
+            "masik": {"fal": m["fal"], "hozam": m["hozam"],
+                      "tamadas": m["tamadas"]},
+            "falak": falak,
+            "verdict": (f"emberhátrányban {_rendszer_nevelovel(b['fal'])} "
+                        f"fallal {sz(b['hozam'])} gólt kaptak támadásonként "
+                        f"({b['tamadas']} támadás), "
+                        f"{_rendszer_nevelovel(m['fal'])} fallal {sz(m['hozam'])} "
+                        f"({m['tamadas']}) — emberhátrányban "
+                        f"{_rendszer_nevelovel(b['fal'])}")}
+
+
+def shorthanded_defense_backtest(meccsek: list,
+                                 csapat: str | None = None) -> dict | None:
+    """Az emberhátrány-fal próbája: `meccsek` = [{"home", "away", "minta":
+    {"home", "away"} (shorthanded_defense_sample)}] időrendben. Minden
+    meccsre és oldalra a KORÁBBI meccsekből javasolt fal
+    (shorthanded_defense_choice); a meccs emberhátrányos támadásaiból a
+    javasolt fallal és a többivel kapott gól. A `csapat` megadásával csak
+    az ő fala. Mit jelent edzőileg: a könyvtár emberhátrány-fala a
+    következő meccsen is kevesebbet kap-e. Visszatérés: {"javasolt_tam",
+    "javasolt_gol", "tobbi_tam", "tobbi_gol", "javasolt_hozam",
+    "tobbi_hozam", "kulonbseg", "itelet" ("igazolt" / "nem"), "verdict"}
+    — None, ha a javasolt vagy a többi fallal SH_PROBA_MIN-nél kevesebb a
+    támadás."""
+    jav, tobbi = [0, 0], [0, 0]
+    for i, m in enumerate(meccsek or []):
+        for side in ("home", "away"):
+            nev = m.get(side)
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            korabbi = [(x.get("minta") or {}).get(s) or [] for x in meccsek[:i]
+                       for s in ("home", "away") if x.get(s) == nev]
+            kc = shorthanded_defense_choice(korabbi)
+            if not kc:
+                continue
+            for cimke, gol in (m.get("minta") or {}).get(side) or []:
+                r = jav if str(cimke) == kc["fal"] else tobbi
+                r[0] += 1
+                r[1] += int(gol)
+    if jav[0] < SH_PROBA_MIN or tobbi[0] < SH_PROBA_MIN:
+        return None
+    jh, th = jav[1] / jav[0], tobbi[1] / tobbi[0]
+    d = th - jh
+    igazolt = d >= SH_ITELET_GOL
+
+    def sz(x):
+        return f"{x:.2f}".replace(".", ",")
+
+    return {"javasolt_tam": jav[0], "javasolt_gol": jav[1],
+            "tobbi_tam": tobbi[0], "tobbi_gol": tobbi[1],
+            "javasolt_hozam": round(jh, 3), "tobbi_hozam": round(th, 3),
+            "kulonbseg": round(d, 3), "itelet": "igazolt" if igazolt else "nem",
+            "verdict": (f"a könyvtár emberhátrány-fala {jav[0]} támadásból "
+                        f"{jav[1]} gólt kapott ({sz(jh)} támadásonként), a "
+                        f"többi fal {tobbi[0]} támadásból {tobbi[1]} gólt "
+                        f"({sz(th)}) — "
+                        + ("az emberhátrány-fal választásra lehet építeni"
+                           if igazolt else
+                           "a könyvtár fala nem kap kevesebbet: emberhátrányban "
+                           "a lövőkhöz igazodjatok, ne a sablonhoz"))}
+
+
+def live_shorthanded_alerts(match: Match, javaslatok: dict | None = None,
+                            config: TacticsConfig | None = None) -> dict:
+    """Élő emberhátrány-fal: a kiállítás-ablak kezdetén
+    (rules.detect_powerplay) a hátrányban lévő kispadnak a könyvtár
+    szerinti emberhátrány-fal (`javaslatok`: {"home" / "away":
+    shorthanded_defense_choice}). Visszatérés: {"alerts": [{"t", "t_s",
+    "perc", "team", "team_name", "fal", "text"}]}."""
+    from .rules import detect_powerplay
+    alerts: list = []
+    if not match.frames or not javaslatok:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    for w in detect_powerplay(match):
+        side = w.get("team_down")
+        j = (javaslatok or {}).get(side)
+        if side not in nevek or not j:
+            continue
+        perc = int((w["start_frame"] - t0) / fps // 60) + 1
+        alerts.append({"t": w["start_frame"],
+                       "t_s": round(w["start_frame"] / fps, 1), "perc": perc,
+                       "team": side, "team_name": nevek[side], "fal": j["fal"],
+                       "text": f"Emberhátrány ({perc}. perc): {nevek[side]} — "
+                               f"a könyvtár szerint {j['verdict']}"})
     return {"alerts": alerts}
 
 # ---- A pad döntései a könyvtár tükrében ------------------------------------

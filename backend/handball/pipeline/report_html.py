@@ -533,6 +533,7 @@ ELOREJELZES_CIMKEK = (
     ("hetes_mi", "Hetes-dobónk"),
     ("hetes_irany_ok", "Az ő hetes-dobóik irányai"),
     ("het_a_hat_mi", "A 7 a 6 mérlegünk"),
+    ("emberhatrany_mi", "Emberhátrány-falunk"),
 )
 # Az előrejelzés-szakasz próba-jegyzetei (a sorok alatt, ebben a sorrendben).
 ELOREJELZES_PROBAK = ("proba", "golszerzo_proba", "kapus_proba",
@@ -5349,6 +5350,9 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + (f"<p><b>Fal-váltás:</b> "
                f"{escape(str(mp['falvaltas_verdict']))}.</p>"
                if mp.get("falvaltas_verdict") else "")
+            + (f"<p><b>Emberhátrány-fal:</b> "
+               f"{escape(str(mp['emberhatrany_verdict']))}.</p>"
+               if mp.get("emberhatrany_verdict") else "")
             + (f"<p><b>Kapus napi formája:</b> "
                f"{escape(str(mp['kapus_forma_verdict']))}.</p>"
                if mp.get("kapus_forma_verdict") else "")

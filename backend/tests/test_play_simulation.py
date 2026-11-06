@@ -1420,22 +1420,24 @@ def test_az_ai_probak_osszkepe():
                                       "készülni"},
           "felderites_proba": {"itelet": "atviheto"},
           "hetes_proba": {"itelet": "igazolt"},
-          "hetes_irany_proba": {"itelet": "josolhato"}}
+          "hetes_irany_proba": {"itelet": "josolhato"},
+          "emberhatrany_proba": {"itelet": "igazolt"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (12, 9)
+    assert (o["itelt"], o["bizonyitott"]) == (13, 10)
     assert o["verdict"] == (
-        "12 próbából 9 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "13 próbából 10 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
-        "figura-felderítés, felderítés, hetes-dobó, hetes-irány; még nem: "
-        "kapus-sávok, védő-modell, gólszerzők")
-    # A kapus-választás és a hetes-dobó csak az "igazolt", a felderítés
-    # csak az "atviheto", a hetes-irány csak a "josolhato" ítélettel
-    # bizonyított.
+        "figura-felderítés, felderítés, hetes-dobó, hetes-irány, "
+        "emberhátrány-fal; még nem: kapus-sávok, védő-modell, gólszerzők")
+    # A kapus-választás, a hetes-dobó és az emberhátrány-fal csak az
+    # "igazolt", a felderítés csak az "atviheto", a hetes-irány csak a
+    # "josolhato" ítélettel bizonyított.
     o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
         "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"},
         "hetes_proba": {"itelet": "nem"},
-        "hetes_irany_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (12, 5)
+        "hetes_irany_proba": {"itelet": "nem"},
+        "emberhatrany_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (13, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2527,6 +2529,10 @@ def test_a_dontes_probak_egy_sorban():
         "fal-váltás: megéri"
     assert decision_trust_summary(falvaltas={"itelet": "nem"}) == \
         "fal-váltás: nem hoz kevesebb gólt"
+    assert decision_trust_summary(emberhatrany={"itelet": "igazolt"}) == \
+        "emberhátrány-fal: igazolt"
+    assert decision_trust_summary(emberhatrany={"itelet": "nem"}) == \
+        "emberhátrány-fal: a lövőkhöz igazodjatok"
 
 
 def test_a_fal_valtas_probaja_rossz_szakasz_utan():
@@ -2596,6 +2602,81 @@ def test_a_fal_valtas_probaja_rossz_szakasz_utan():
     assert all(b - a >= 300.0 - 1 for a, b in zip(percek, percek[1:]))
     assert live_defense_switch_alerts(m)["alerts"][0]["text"].endswith(
         "a könyvtár még nem dönti el, megéri-e a fal-váltás")
+
+
+def test_az_emberhatrany_fal_valasztasa_es_probaja(monkeypatch):
+    """shorthanded_defense_choice: a legkevesebbet kapó fal (két elég
+    támadással védett fal kell); shorthanded_defense_backtest: igazolt /
+    nem / None, csapat-szűrő; shorthanded_defense_sample és
+    live_shorthanded_alerts a szimulált meccsen beadott
+    kiállítás-ablakkal (a szimulátorban nincs kiállítás)."""
+    import handball.pipeline.rules as rules
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (
+        SH_MIN_TAM, live_shorthanded_alerts, shorthanded_defense_backtest,
+        shorthanded_defense_choice, shorthanded_defense_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    jo = [["5-0", 0], ["5-0", 1], ["4-1", 1], ["4-1", 1]] * 4
+    kc = shorthanded_defense_choice([jo])
+    assert (kc["fal"], kc["hozam"], kc["tamadas"], kc["masik"]["fal"]) == \
+        ("5-0", 0.5, 8, "4-1")
+    assert kc["verdict"] == ("emberhátrányban az 5-0 fallal 0,50 gólt kaptak "
+                             "támadásonként (8 támadás), a 4-1 fallal 1,00 (8) "
+                             "— emberhátrányban az 5-0")
+    assert shorthanded_defense_choice([[["5-0", 0]] * SH_MIN_TAM]) is None
+    assert shorthanded_defense_choice([]) is None
+
+    def meccs(minta, home="A"):
+        return {"home": home, "away": "B", "minta": {"home": minta, "away": []}}
+
+    # Az első meccs után már van javaslat (8 támadás falonként): öt
+    # meccs × 3 támadás a javasolt és a másik fallal.
+    ms = [meccs(jo)] + [meccs([["5-0", 0], ["4-1", 1]] * 3)] * 5
+    p = shorthanded_defense_backtest(ms)
+    assert (p["javasolt_tam"], p["javasolt_gol"], p["tobbi_tam"],
+            p["tobbi_gol"], p["itelet"]) == (15, 0, 15, 15, "igazolt")
+    assert p["verdict"] == (
+        "a könyvtár emberhátrány-fala 15 támadásból 0 gólt kapott (0,00 "
+        "támadásonként), a többi fal 15 támadásból 15 gólt (1,00) — az "
+        "emberhátrány-fal választásra lehet építeni")
+    # Erős múlt (az 5-0 sosem kapott, a 4-1 mindig), de a meccseken az
+    # 5-0 kap és a 4-1 nem: a könyvtár fala nem igazolódik.
+    q = shorthanded_defense_backtest(
+        [meccs([["5-0", 0]] * 20 + [["4-1", 1]] * 20)]
+        + [meccs([["5-0", 1], ["4-1", 0]] * 3)] * 5)
+    assert (q["javasolt_tam"], q["javasolt_gol"], q["tobbi_gol"],
+            q["itelet"]) == (15, 15, 0, "nem")
+    assert q["verdict"].endswith("a lövőkhöz igazodjatok, ne a sablonhoz")
+    assert shorthanded_defense_backtest(ms[:3]) is None
+    assert shorthanded_defense_backtest(ms, "A") == p
+    assert shorthanded_defense_backtest(ms, "B") is None
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=2,
+                              shots_per_min=8)
+    assert shorthanded_defense_sample(m, Team.AWAY) == []   # nincs kiállítás
+    t0 = m.frames[0].t
+    monkeypatch.setattr(rules, "detect_powerplay", lambda match: [
+        {"team_down": "away", "start_frame": t0 + 25 * 30,
+         "end_frame": t0 + 25 * 150, "duration_s": 120.0}])
+    # A szimulált vendégnek hat védője van: az emberhátrány-fal címkéhez
+    # a fal-felismerést öt hátsó védősre állítjuk.
+    import dataclasses
+
+    import handball.pipeline.tactics as tactics
+    eredeti = tactics.detect_formation
+    monkeypatch.setattr(tactics, "detect_formation", lambda fr, team, cfg:
+                        dataclasses.replace(eredeti(fr, team, cfg), back=5,
+                                            mid=0, high=0, defenders=5))
+    v = shorthanded_defense_sample(m, Team.AWAY)
+    assert v and all(x[0] == "5-0" and x[1] in (0, 1) for x in v)
+    assert shorthanded_defense_sample(m, Team.HOME) == []
+    ki = live_shorthanded_alerts(m, {"away": kc, "home": kc})["alerts"]
+    assert [(a["perc"], a["team"], a["fal"]) for a in ki] == [(1, "away", "5-0")]
+    assert ki[0]["text"] == (f"Emberhátrány (1. perc): {m.meta.away_team} — a "
+                             f"könyvtár szerint {kc['verdict']}")
+    assert live_shorthanded_alerts(m, {"home": kc})["alerts"] == []
+    assert live_shorthanded_alerts(m, None) == {"alerts": []}
 
 
 def test_megeri_e_a_7_a_6(monkeypatch):

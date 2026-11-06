@@ -1536,3 +1536,22 @@ def test_ai_edzesterv_a_fal_valtas_szabalyaval():
     assert [x["title"] for x in u] == ["Rossz szakaszban a falon belül "
                                        "javítunk"]
     assert "kettőzés a súlypontnál" in u[0]["drill"]
+
+
+def test_ai_edzesterv_az_emberhatrany_fallal():
+    """training.next_match_plan `emberhatrany`: a könyvtár fala tételt ad
+    (a próba mondatával, ha van); ellentmondó próbánál nincs tétel."""
+    from handball.pipeline.training import next_match_plan
+
+    eh = {"fal": "5-0", "verdict": "emberhátrányban az 5-0 fallal …"}
+    t = next_match_plan("Vendég", emberhatrany=eh)
+    assert [(x["title"], x["area"], x["why"]) for x in t] == [
+        ("Emberhátrány: az 5-0 fal", "védekezés", eh["verdict"])]
+    assert t[0]["drill"].startswith("5 a 6 elleni védekezés az 5-0 fallal")
+    u = next_match_plan("Vendég", emberhatrany={**eh, "fal": "4-1"},
+                        emberhatrany_proba={"itelet": "igazolt",
+                                            "verdict": "P"})
+    assert u[0]["title"] == "Emberhátrány: a 4-1 fal"
+    assert u[0]["why"].endswith("; P")
+    assert next_match_plan("Vendég", emberhatrany=eh, emberhatrany_proba={
+        "itelet": "nem", "verdict": "Q"}) == []

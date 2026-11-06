@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # Az emberhátrány-faluk próbája — hibatűrően.
+        try:
+            eh_ = _emberhatrany_proba(csapat=team)
+            if eh_:
+                modell_proba = {**(modell_proba or {}), "emberhatrany": eh_,
+                                "emberhatrany_verdict": eh_["verdict"]}
+        except Exception:
+            pass
         # A fal-váltásuk próbája — hibatűrően.
         try:
             fv_ = _falvaltas_proba(csapat=team)
@@ -8969,6 +8977,43 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _emberhatrany_minta_of(m_, side: str) -> list:
+        """EGY meccs emberhátrány-fal mintája az adott oldalra
+        (play_simulation.shorthanded_defense_sample) — a lemezes
+        eredmény-tárból."""
+        from ..pipeline.play_simulation import shorthanded_defense_sample
+        return _cached_result(m_.meta.match_id,
+                              f"emberhatrany-minta-v1-{side}",
+                              lambda: shorthanded_defense_sample(m_, Team(side)))
+
+    def _emberhatrany_javaslat(nev: str, kiveve: str | None = None):
+        """A `nev` csapat emberhátrány-fala a könyvtári meccseiből (a
+        `kiveve` meccs nélkül — play_simulation.shorthanded_defense_choice).
+        None: nincs a csapat a könyvtárban, vagy nincs két elég támadással
+        védett fal."""
+        from ..pipeline.play_simulation import shorthanded_defense_choice
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != kiveve]
+        except HTTPException:
+            return None
+        return shorthanded_defense_choice([_emberhatrany_minta_of(m_, t_.value)
+                                           for m_, t_ in par])
+
+    def _emberhatrany_proba(csapat: str | None = None,
+                            kiveve: str | None = None):
+        """Az emberhátrány-fal próbája a könyvtár időrendjében
+        (play_simulation.shorthanded_defense_backtest; a `kiveve` meccs
+        nélkül, a `csapat` megadásával csak az ő fala)."""
+        from ..pipeline.play_simulation import shorthanded_defense_backtest
+        return shorthanded_defense_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _emberhatrany_minta_of(m_, "home"),
+                       "away": _emberhatrany_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _felderites_proba(csapat: str | None = None,
                           kiveve: str | None = None):
         """A felderítés próbája a könyvtár időrendjében (scouting.
@@ -9290,7 +9335,8 @@ def create_app():
         (seven_taker_backtest) vagy None, "hetes_irany_proba": a hetes-irány
         próbája (seven_direction_backtest) vagy None, "het_a_hat_proba": a 7 a 6
         mérlege (seven_six_backtest) vagy None, "falvaltas_proba": a fal-váltás
-        próbája (defense_switch_backtest) vagy None,
+        próbája (defense_switch_backtest) vagy None, "emberhatrany_proba": az
+        emberhátrány-fal próbája (shorthanded_defense_backtest) vagy None,
         "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
@@ -9355,6 +9401,7 @@ def create_app():
                 "hetes_irany_proba": _hetes_irany_proba(),
                 "het_a_hat_proba": _het_a_hat_proba(),
                 "falvaltas_proba": _falvaltas_proba(),
+                "emberhatrany_proba": _emberhatrany_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -9392,6 +9439,10 @@ def create_app():
         seven_direction_backtest — None: kevés jósolt hetes),
         "het_a_hat_proba": {"home", "away"} (a csapat saját 7 a 6
         mérlege, seven_six_backtest — None: kevés 7 a 6 szakasz),
+        "emberhatrany_fal": {"home", "away"} (a csapat emberhátrány-fala,
+        shorthanded_defense_choice — None: nincs két elég támadással
+        védett fal), "emberhatrany_proba" (a próbája,
+        shorthanded_defense_backtest — None: kevés támadás),
         "kulcs_hiany": {"home", "away"} (mi lenne a kulcsember nélkül:
         key_player_absence — None, ha nincs kulcsember vagy
         előrejelzés)}. 400:
@@ -9434,6 +9485,9 @@ def create_app():
                                 "away": _hetes_irany_profil(away)},
                 "het_a_hat_proba": {"home": _het_a_hat_proba(home),
                                     "away": _het_a_hat_proba(away)},
+                "emberhatrany_fal": {"home": _emberhatrany_javaslat(home),
+                                     "away": _emberhatrany_javaslat(away)},
+                "emberhatrany_proba": _emberhatrany_proba(),
                 "kapus_valasztas_proba": _kapus_valasztas_proba(),
                 "felderites_proba": _felderites_proba(),
                 "hetes_proba": _hetes_proba(),
@@ -14752,7 +14806,9 @@ def create_app():
             idokeres_proba=biztos(lambda: _idokeres_proba(csapat=mi)),
             kapus_forma_proba=biztos(lambda: _kapusforma_proba(csapat=mi)),
             het_a_hat_proba=biztos(lambda: _het_a_hat_proba(csapat=mi)),
-            falvaltas_proba=biztos(lambda: _falvaltas_proba(csapat=mi)))
+            falvaltas_proba=biztos(lambda: _falvaltas_proba(csapat=mi)),
+            emberhatrany=biztos(lambda: _emberhatrany_javaslat(mi)),
+            emberhatrany_proba=biztos(lambda: _emberhatrany_proba(csapat=mi)))
 
     def _items_csapat(items) -> str | None:
         """A felderítés `items` listájának csapata ({"match_id", "team"}
@@ -14813,6 +14869,8 @@ def create_app():
                 "hetes_irany_proba": (f"A hetes-irány próbája: {hi['verdict']}"
                                       if hi else None),
                 "het_a_hat_mi": (_het_a_hat_proba(csapat=mi) or {}).get(
+                    "verdict"),
+                "emberhatrany_mi": (_emberhatrany_javaslat(mi) or {}).get(
                     "verdict")}
 
     @app.get("/matches/{match_id}/coaching")
@@ -15163,6 +15221,23 @@ def create_app():
                 "proba": _hetes_proba(kiveve=match_id), "iranyok": ir,
                 "irany_proba": _hetes_irany_proba(kiveve=match_id)}
 
+    @app.get("/matches/{match_id}/live-emberhatrany")
+    def get_live_shorthanded(match_id: str):
+        """ÉLŐ emberhátrány-fal: a kiállítás kezdetén a hátrányban lévő
+        kispadnak a könyvtár szerinti emberhátrány-fal (a csapat TÖBBI
+        meccséből, shorthanded_defense_choice; play_simulation.
+        live_shorthanded_alerts), a próbával (a meccs nélkül). Válasz:
+        {"alerts": [...], "javaslat": {"home", "away"}, "proba"}. 404:
+        nincs ilyen meccs."""
+        from ..pipeline.play_simulation import live_shorthanded_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        jav = {"home": _emberhatrany_javaslat(match.meta.home_team, match_id),
+               "away": _emberhatrany_javaslat(match.meta.away_team, match_id)}
+        return {**live_shorthanded_alerts(match, jav), "javaslat": jav,
+                "proba": _emberhatrany_proba(kiveve=match_id)}
+
     @app.get("/matches/{match_id}/live-falvaltas")
     def get_live_defense_switch(match_id: str):
         """ÉLŐ fal-váltás tanács: amikor egy csapat az utolsó öt
@@ -15383,7 +15458,8 @@ def create_app():
                     idokeres=_idokeres_proba(match_id, nev),
                     kapus_forma=_kapusforma_proba(match_id, nev),
                     het_a_hat=_het_a_hat_proba(nev, match_id),
-                    falvaltas=_falvaltas_proba(nev, match_id))
+                    falvaltas=_falvaltas_proba(nev, match_id),
+                    emberhatrany=_emberhatrany_proba(nev, match_id))
             except Exception:
                 sor3 = None
             if sor3:
