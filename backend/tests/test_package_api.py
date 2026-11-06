@@ -410,6 +410,13 @@ def test_season_report_elorejelzes_sora(monkeypatch):
                 (matches_dir / f"{x['match_id']}.json").read_text(
                     encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
             for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (last_shot_backtest,
+                                                       last_shot_sample)
+        ulp = last_shot_backtest([{**x, "minta": y["minta"], "hajra": {
+            s_: last_shot_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x, y in zip(lista, jm)], "Szimu Hazai")
         from handball.pipeline.scouting import scouting_backtest, scout_team
         fdp = scouting_backtest([{**x, "reports": {
             s_: scout_team(Match.from_dict(json.loads(
@@ -489,6 +496,12 @@ def test_season_report_elorejelzes_sora(monkeypatch):
         assert f"<p><b>Emberhátrány-fal:</b> {ehp['verdict']}.</p>" in r.text
     else:
         assert "<b>Emberhátrány-fal:</b>" not in r.text
+    # Az utolsó labdájuk próbája (a motorral egyezik; az egyoldalú hajrá
+    # nem szoros — a sor elmarad).
+    if ulp:
+        assert f"<p><b>Utolsó labda:</b> {ulp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Utolsó labda:</b>" not in r.text
     # A felderítésük próbája (a motorral egyezik; hét meccsen öt mérhető).
     if fdp:
         assert f"<p><b>Felderítés:</b> {fdp['verdict']}.</p>" in r.text

@@ -8102,6 +8102,14 @@ def create_app():
                                 "forma_verdict": fp_["verdict"]}
         except Exception:
             pass
+        # Az utolsó labdájuk próbája — hibatűrően.
+        try:
+            ul_ = _utolso_labda_proba(csapat=team)
+            if ul_:
+                modell_proba = {**(modell_proba or {}), "utolso_labda": ul_,
+                                "utolso_labda_verdict": ul_["verdict"]}
+        except Exception:
+            pass
         # Az emberhátrány-faluk próbája — hibatűrően.
         try:
             eh_ = _emberhatrany_proba(csapat=team)
@@ -9014,6 +9022,30 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _hajra_minta_of(m_, side: str) -> list:
+        """EGY meccs hajrá-lövés mintája az adott oldalra (play_simulation.
+        last_shot_sample — szoros állásnál) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import last_shot_sample
+        return _cached_result(m_.meta.match_id, f"hajra-minta-v1-{side}",
+                              lambda: last_shot_sample(m_, Team(side)))
+
+    def _utolso_labda_proba(csapat: str | None = None,
+                            kiveve: str | None = None):
+        """Az utolsó labda tanácsának próbája a könyvtár időrendjében
+        (play_simulation.last_shot_backtest — a játékos-minták és a
+        hajrá-minták a lemezes eredmény-tárból; a `kiveve` meccs nélkül,
+        a `csapat` megadásával csak az ő utolsó labdája)."""
+        from ..pipeline.play_simulation import last_shot_backtest
+        return last_shot_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _jatekos_minta_of(m_, "home"),
+                       "away": _jatekos_minta_of(m_, "away")},
+             "hajra": {"home": _hajra_minta_of(m_, "home"),
+                       "away": _hajra_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _felderites_proba(csapat: str | None = None,
                           kiveve: str | None = None):
         """A felderítés próbája a könyvtár időrendjében (scouting.
@@ -9336,7 +9368,8 @@ def create_app():
         próbája (seven_direction_backtest) vagy None, "het_a_hat_proba": a 7 a 6
         mérlege (seven_six_backtest) vagy None, "falvaltas_proba": a fal-váltás
         próbája (defense_switch_backtest) vagy None, "emberhatrany_proba": az
-        emberhátrány-fal próbája (shorthanded_defense_backtest) vagy None,
+        emberhátrány-fal próbája (shorthanded_defense_backtest) vagy None, "utolso_labda_proba": az utolsó labda tanácsának próbája
+        (last_shot_backtest) vagy None,
         "figura_proba": a figuráik
         próbája (setplays.figure_recurrence_backtest) vagy None, "vedok":
         csapatonként a védő-modell próbája (defender_model_backtest)}."""
@@ -9402,6 +9435,7 @@ def create_app():
                 "het_a_hat_proba": _het_a_hat_proba(),
                 "falvaltas_proba": _falvaltas_proba(),
                 "emberhatrany_proba": _emberhatrany_proba(),
+                "utolso_labda_proba": _utolso_labda_proba(),
                 "figura_proba": _figura_proba(),
                 "vedok": sorted(vedo_sorok,
                                 key=lambda r: (-r["javulas_pct"], r["team"]))}
@@ -15020,8 +15054,10 @@ def create_app():
         lövők a csapat, a kapus az ellenfél meccseiből); ahol nincs
         ilyen, az addig látott kockákból. Válasz: {"alerts": [{"t",
         "t_s", "perc", "team", "team_name", "allas", "kulonbseg", "mez",
-        "sav", "ertek", "text"}], "szezon_meccsek": {"home", "away"}}.
-        404: nincs ilyen meccs."""
+        "sav", "ertek", "text"}], "szezon_meccsek": {"home", "away"},
+        "proba" (a tanács könyvtári próbája a meccs nélkül,
+        last_shot_backtest — None: kevés hajrá-lövés)}. 404: nincs ilyen
+        meccs."""
         from ..pipeline.play_simulation import live_last_shot_alerts
         match = _store.get(match_id)
         if match is None:
@@ -15039,7 +15075,8 @@ def create_app():
             if n_e:
                 kapus[side] = ellen["kapus"]
         return {**live_last_shot_alerts(match, tamadas=tamadas, kapus=kapus),
-                "szezon_meccsek": db}
+                "szezon_meccsek": db,
+                "proba": _utolso_labda_proba(kiveve=match_id)}
 
     def _elo_varakozas(match):
         """A meccs előtti várakozás élőben: a két csapat könyvtári TÖBBI
@@ -15459,7 +15496,8 @@ def create_app():
                     kapus_forma=_kapusforma_proba(match_id, nev),
                     het_a_hat=_het_a_hat_proba(nev, match_id),
                     falvaltas=_falvaltas_proba(nev, match_id),
-                    emberhatrany=_emberhatrany_proba(nev, match_id))
+                    emberhatrany=_emberhatrany_proba(nev, match_id),
+                    utolso_labda=_utolso_labda_proba(nev, match_id))
             except Exception:
                 sor3 = None
             if sor3:

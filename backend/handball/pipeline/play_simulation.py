@@ -3100,15 +3100,17 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
                            kapus_forma: dict | None = None,
                            het_a_hat: dict | None = None,
                            falvaltas: dict | None = None,
-                           emberhatrany: dict | None = None) -> str | None:
+                           emberhatrany: dict | None = None,
+                           utolso_labda: dict | None = None) -> str | None:
     """A pad döntés-próbái egy sorban — az élő képernyő meccs eleji
     harmadik AI-sorához: a kapus-választás (keeper_choice_backtest), a
     hetes-dobó (seven_taker_backtest), a hetes-irány
     (seven_direction_backtest), az időkérés a sorozat ellen
     (timeout_run_backtest), a kapus napi formája (keeper_hot_hand_backtest)
     a 7 a 6 mérlege (seven_six_backtest), a fal-váltás
-    (defense_switch_backtest) és az emberhátrány-fal
-    (shorthanded_defense_backtest) — az ítéletük rövid alakja.
+    (defense_switch_backtest), az emberhátrány-fal
+    (shorthanded_defense_backtest) és az utolsó labda (last_shot_backtest)
+    — az ítéletük rövid alakja.
     Mit jelent edzőileg: a meccs elején látszik, a pad melyik döntésénél
     lehet a könyvtár szabályára építeni. None, ha egyik próba sem ítélt."""
     reszek = []
@@ -3145,6 +3147,10 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
         reszek.append("emberhátrány-fal: igazolt"
                       if emberhatrany.get("itelet") == "igazolt" else
                       "emberhátrány-fal: a lövőkhöz igazodjatok")
+    if utolso_labda:
+        reszek.append("utolsó labda: igazolt"
+                      if utolso_labda.get("itelet") == "igazolt" else
+                      "utolsó labda: a napi forma döntsön")
     return "; ".join(reszek) if reszek else None
 
 
@@ -3162,7 +3168,8 @@ def model_checks_overview(mc: dict) -> dict | None:
     a könyvtár dobója a többieknél jobb (seven_taker_backtest), a
     hetes-irány, ha a dobók fő iránya jósolható (seven_direction_backtest),
     az emberhátrány-fal, ha a könyvtár fala a következő meccsen is
-    kevesebbet kap (shorthanded_defense_backtest). Mit
+    kevesebbet kap (shorthanded_defense_backtest), az utolsó labda, ha az
+    ajánlott lövő a hajrában jobban fejez be (last_shot_backtest). Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3212,6 +3219,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     eh = mc.get("emberhatrany_proba")
     if eh:
         add("emberhátrány-fal", eh.get("itelet") == "igazolt")
+    ul = mc.get("utolso_labda_proba")
+    if ul:
+        add("utolsó labda", ul.get("itelet") == "igazolt")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -6340,6 +6350,126 @@ def live_shorthanded_alerts(match: Match, javaslatok: dict | None = None,
                        "text": f"Emberhátrány ({perc}. perc): {nevek[side]} — "
                                f"a könyvtár szerint {j['verdict']}"})
     return {"alerts": alerts}
+
+
+# ---- Az utolsó labda próbája -----------------------------------------------
+# Az élő "utolsó labda" tanács (live_last_shot_alerts: a hajrában, szoros
+# állásnál kinek a kezében ér a legtöbbet a lövés) a könyvtáron
+# ellenőrizve: a KORÁBBI meccsekből ajánlott lövő a meccs hajrájában
+# (a felvétel utolsó LIVE_UTOLSO_ELOTTE_S másodperce, legfeljebb
+# LIVE_UTOLSO_KULONBSEG gól különbségnél) a helyzeteihez képest jobban
+# fejezett-e be, mint a többiek — (gól − xG) lövésenként.
+UL_PROBA_MIN = 8         # legalább ennyi hajrá-lövés az ajánlottól és a többiektől
+UL_ITELET_GOL = 0.1      # lövésenkénti (gól − xG) különbség az ítélethez
+
+
+def last_shot_sample(match: Match, team: Team,
+                     config: TacticsConfig | None = None) -> list:
+    """Az utolsó labda próbájának NYERS, JSON-barát meccs-mintája: a
+    `team` hajrá-lövései szoros állásnál — [[mez, sáv, gól (0/1), xG], …]
+    (xg.match_xg; a felvétel utolsó LIVE_UTOLSO_ELOTTE_S másodperce, ha a
+    hajrá elején az állás legfeljebb LIVE_UTOLSO_KULONBSEG gól — mint az
+    élő utolsó labda; mezszám nélküli lövő kimarad). Üres, ha a hajrá nem
+    szoros."""
+    from .event_detection import EventType, detect_shots
+    from .xg import match_xg
+    config = config or TacticsConfig()
+    frames = match.frames
+    if not frames:
+        return []
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t_h = frames[-1].t - int(round(LIVE_UTOLSO_ELOTTE_S * fps))
+    if t_h <= frames[0].t:
+        return []
+    sc = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.t < t_h and e.team.value in sc:
+            sc[e.team.value] += 1
+    if abs(sc["home"] - sc["away"]) > LIVE_UTOLSO_KULONBSEG:
+        return []
+    jersey: dict = {}
+    for f in frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+    goal_x = config.attacks_toward_x(team)
+    ki: list = []
+    for sh in match_xg(match, config)["shots"]:
+        if sh["team"] != team.value or sh["t"] < t_h:
+            continue
+        mez = jersey.get(sh.get("player_id"))
+        if mez is None:
+            continue
+        ki.append([int(mez), kapus_sav(sh["x"], sh["y"], goal_x),
+                   int(sh["outcome"] == "goal"), round(float(sh["xg"]), 3)])
+    return ki
+
+
+def last_shot_backtest(meccsek: list, csapat: str | None = None) -> dict | None:
+    """Az utolsó labda próbája: `meccsek` = [{"home", "away", "minta":
+    {"home", "away"} (player_model_sample), "hajra": {"home", "away"}
+    (last_shot_sample)}] időrendben. Minden meccsre és oldalra a KORÁBBI
+    meccsekből (player_models_from_samples: a csapat lövői, az ellenfél
+    kapusa) a last_shot_choice ajánlott lövője; a meccs hajrá-lövéseiből
+    az ajánlott lövő (gól − xG) lövésenként a többiekéhez mérve. A
+    `csapat` megadásával csak az ő utolsó labdája. Mit jelent edzőileg:
+    az időkérésen kimondott "ő kapja az utolsó labdát" a klub meccsein
+    igazolt-e. Visszatérés: {"ajanlott_loves", "ajanlott_gol",
+    "ajanlott_xg", "tobbi_loves", "tobbi_gol", "tobbi_xg", "ajanlott_diff",
+    "tobbi_diff", "kulonbseg", "itelet" ("igazolt" / "nem"), "verdict"} —
+    None, ha az ajánlott lövőtől vagy a többiektől UL_PROBA_MIN-nél
+    kevesebb a hajrá-lövés."""
+    aj, tb = [0, 0, 0.0], [0, 0, 0.0]
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            ok = nevek["away" if side == "home" else "home"]
+            if not nev or not ok or (csapat is not None and nev != csapat):
+                continue
+            hajra = (m.get("hajra") or {}).get(side) or []
+            if not hajra:
+                continue
+            sajat = [(x.get("minta") or {}).get(s) for x in meccsek[:i]
+                     for s in ("home", "away") if x.get(s) == nev]
+            ellen = [(x.get("minta") or {}).get(s) for x in meccsek[:i]
+                     for s in ("home", "away") if x.get(s) == ok]
+            sajat = [x for x in sajat if x]
+            ellen = [x for x in ellen if x]
+            if not sajat or not ellen:
+                continue
+            p = last_shot_choice(player_models_from_samples(sajat)["tamadas"],
+                                 player_models_from_samples(ellen)["kapus"])
+            if not p:
+                continue
+            for mez, _sav, gol, xg in hajra:
+                r = aj if int(mez) == int(p["mez"]) else tb
+                r[0] += 1
+                r[1] += int(gol)
+                r[2] += float(xg)
+    if aj[0] < UL_PROBA_MIN or tb[0] < UL_PROBA_MIN:
+        return None
+    ad = (aj[1] - aj[2]) / aj[0]
+    td = (tb[1] - tb[2]) / tb[0]
+    d = ad - td
+    igazolt = d >= UL_ITELET_GOL
+
+    def sz(x):
+        return f"{x:+.2f}".replace(".", ",")
+
+    return {"ajanlott_loves": aj[0], "ajanlott_gol": aj[1],
+            "ajanlott_xg": round(aj[2], 2), "tobbi_loves": tb[0],
+            "tobbi_gol": tb[1], "tobbi_xg": round(tb[2], 2),
+            "ajanlott_diff": round(ad, 3), "tobbi_diff": round(td, 3),
+            "kulonbseg": round(d, 3), "itelet": "igazolt" if igazolt else "nem",
+            "verdict": (f"a hajrában az ajánlott lövő {aj[0]} lövésből {aj[1]} "
+                        f"gólt lőtt ({sz(ad)} gól lövésenként a helyzeteihez "
+                        f"képest), a többiek {tb[0]} lövésből {tb[1]} gólt "
+                        f"({sz(td)}) — "
+                        + ("az utolsó labda tanácsára lehet építeni" if igazolt
+                           else "az ajánlott lövő a hajrában nem fejez be "
+                           "jobban a többieknél: az utolsó labdánál a napi "
+                           "forma döntsön"))}
 
 # ---- A pad döntései a könyvtár tükrében ------------------------------------
 # A meccs UTÁN: hogyan döntött a pad a könyvtár szabályaihoz képest —

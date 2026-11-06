@@ -2772,6 +2772,45 @@ def test_az_elo_emberhatrany_vegpont(tmp_path, monkeypatch):
     assert f["emberhatrany_proba"] == shorthanded_defense_backtest(mind)
 
 
+def test_az_utolso_labda_probaja_a_vegpontokon(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-utolso-labda "proba": a tanács próbája a
+    könyvtár TÖBBI meccséből — a valódi láncon ugyanaz, mint a motor (a
+    szimulált hajrá nem szoros: None); a /library/player-model-check
+    "utolso_labda_proba" mezője."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (last_shot_backtest,
+                                                   last_shot_sample,
+                                                   player_model_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=240, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: json.loads(json.dumps(
+                     player_model_sample(m, Team(s_)))) for s_ in ("home", "away")},
+                 "hajra": {s_: json.loads(json.dumps(
+                     last_shot_sample(m, Team(s_)))) for s_ in ("home", "away")}}
+                for m in ms]
+
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-utolso-labda").json()
+    assert "alerts" in j and j["proba"] == last_shot_backtest(lista(meccsek[:2]))
+    assert c.get("/library/player-model-check").json()[
+        "utolso_labda_proba"] == last_shot_backtest(lista(meccsek))
+
+
 def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
         tmp_path, monkeypatch):
     """POST /figura-finomitas a "mez" sorral: a válasz "mez" sora és a

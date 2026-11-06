@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Az utolsó labda próbája** (motor + végpontok + szezon-riport +
+  szezon-képernyő + AI-döntések sora + összkép): az élő "utolsó labda"
+  tanács (a hajrában, szoros állásnál kinek a kezében ér a legtöbbet a
+  lövés) a klub könyvtárán ellenőrizve — a KORÁBBI meccsekből ajánlott
+  lövő a meccs hajrájában (az utolsó három perc, legfeljebb egy gól
+  különbségnél) a helyzeteihez képest jobban fejezett-e be a többieknél:
+  "a hajrában az ajánlott lövő 11 lövésből 8 gólt lőtt (+0,31 gól
+  lövésenként a helyzeteihez képest), a többiek 14 lövésből 6 gólt
+  (−0,05) — az utolsó labda tanácsára lehet építeni"; ha nem: "az utolsó
+  labdánál a napi forma döntsön". A /matches/{id}/live-utolso-labda
+  "proba" mezője (a meccs nélkül), a /library/player-model-check
+  "utolso_labda_proba" mezője, a szezon-képernyő és a szezon-riport
+  "Utolsó labda" sora, a meccs eleji AI-döntések sor és az AI-próbák
+  összképének új sora (a 14.) (play_simulation.last_shot_sample,
+  last_shot_backtest).
 - **Emberhátrány-fal: melyik fallal kapnak kevesebbet öt emberrel**
   (motor + élő végpont + élő képernyő + meccsterv + nyomtatható meccsterv
   + szezon-riport + szezon-képernyő + AI-döntések sora + edzésterv): a

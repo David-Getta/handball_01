@@ -1421,23 +1421,26 @@ def test_az_ai_probak_osszkepe():
           "felderites_proba": {"itelet": "atviheto"},
           "hetes_proba": {"itelet": "igazolt"},
           "hetes_irany_proba": {"itelet": "josolhato"},
-          "emberhatrany_proba": {"itelet": "igazolt"}}
+          "emberhatrany_proba": {"itelet": "igazolt"},
+          "utolso_labda_proba": {"itelet": "igazolt"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (13, 10)
+    assert (o["itelt"], o["bizonyitott"]) == (14, 11)
     assert o["verdict"] == (
-        "13 próbából 10 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "14 próbából 11 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
         "figura-felderítés, felderítés, hetes-dobó, hetes-irány, "
-        "emberhátrány-fal; még nem: kapus-sávok, védő-modell, gólszerzők")
-    # A kapus-választás, a hetes-dobó és az emberhátrány-fal csak az
-    # "igazolt", a felderítés csak az "atviheto", a hetes-irány csak a
-    # "josolhato" ítélettel bizonyított.
+        "emberhátrány-fal, utolsó labda; még nem: kapus-sávok, védő-modell, "
+        "gólszerzők")
+    # A kapus-választás, a hetes-dobó, az emberhátrány-fal és az utolsó
+    # labda csak az "igazolt", a felderítés csak az "atviheto", a
+    # hetes-irány csak a "josolhato" ítélettel bizonyított.
     o2 = model_checks_overview({**mc, "kapus_valasztas_proba": {
         "itelet": "egyenlo"}, "felderites_proba": {"itelet": "nem"},
         "hetes_proba": {"itelet": "nem"},
         "hetes_irany_proba": {"itelet": "nem"},
-        "emberhatrany_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (13, 5)
+        "emberhatrany_proba": {"itelet": "nem"},
+        "utolso_labda_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (14, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2533,6 +2536,10 @@ def test_a_dontes_probak_egy_sorban():
         "emberhátrány-fal: igazolt"
     assert decision_trust_summary(emberhatrany={"itelet": "nem"}) == \
         "emberhátrány-fal: a lövőkhöz igazodjatok"
+    assert decision_trust_summary(utolso_labda={"itelet": "igazolt"}) == \
+        "utolsó labda: igazolt"
+    assert decision_trust_summary(utolso_labda={"itelet": "nem"}) == \
+        "utolsó labda: a napi forma döntsön"
 
 
 def test_a_fal_valtas_probaja_rossz_szakasz_utan():
@@ -2677,6 +2684,58 @@ def test_az_emberhatrany_fal_valasztasa_es_probaja(monkeypatch):
                              f"könyvtár szerint {kc['verdict']}")
     assert live_shorthanded_alerts(m, {"home": kc})["alerts"] == []
     assert live_shorthanded_alerts(m, None) == {"alerts": []}
+
+
+def test_az_utolso_labda_probaja():
+    """last_shot_sample: a szimulált (egyoldalú) meccs hajrája nem szoros
+    — üres; last_shot_backtest: a KORÁBBI meccsek modelljéből ajánlott
+    lövő a hajrá-lövésekben jobban / rosszabbul fejez be a többieknél
+    (igazolt / nem), kevés lövésnél None, csapat-szűrő."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (UL_PROBA_MIN,
+                                                   last_shot_backtest,
+                                                   last_shot_choice,
+                                                   last_shot_sample,
+                                                   player_model_sample,
+                                                   player_models_from_samples)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    ms = [simulate_ground_truth(duration_s=300, fps=25.0, seed=s_,
+                                shots_per_min=8) for s_ in (1, 2)]
+    assert last_shot_sample(ms[0], Team.HOME) == []
+    jm = [{s_: json.loads(json.dumps(player_model_sample(m, Team(s_))))
+           for s_ in ("home", "away")} for m in ms]
+    p = last_shot_choice(
+        player_models_from_samples([x["home"] for x in jm])["tamadas"],
+        player_models_from_samples([x["away"] for x in jm])["kapus"])
+    mez = int(p["mez"])
+    masik = next(int(m) for m in player_models_from_samples(
+        [x["home"] for x in jm])["tamadas"].lovok if int(m) != mez)
+    jo = [[mez, "far", 1, 0.3]] * 4 + [[masik, "far", 0, 0.3]] * 4
+
+    def meccs(hajra, minta):
+        return {"home": "A", "away": "B", "minta": minta,
+                "hajra": {"home": hajra, "away": []}}
+
+    # Az első meccs tanít (nincs korábbi), a következő kettő mér: 8 + 8.
+    mk = [meccs([], jm[0])] + [meccs(jo, jm[1])] * 2
+    r = last_shot_backtest(mk)
+    assert (r["ajanlott_loves"], r["ajanlott_gol"], r["tobbi_loves"],
+            r["tobbi_gol"], r["itelet"]) == (8, 8, 8, 0, "igazolt")
+    assert r["verdict"] == (
+        "a hajrában az ajánlott lövő 8 lövésből 8 gólt lőtt (+0,70 gól "
+        "lövésenként a helyzeteihez képest), a többiek 8 lövésből 0 gólt "
+        "(-0,30) — az utolsó labda tanácsára lehet építeni")
+    rossz = [[mez, "far", 0, 0.3]] * 4 + [[masik, "far", 1, 0.3]] * 4
+    q = last_shot_backtest([meccs([], jm[0])] + [meccs(rossz, jm[1])] * 2)
+    assert q["itelet"] == "nem" and q["verdict"].endswith(
+        "az utolsó labdánál a napi forma döntsön")
+    assert last_shot_backtest(mk[:2]) is None          # 4 < UL_PROBA_MIN
+    assert UL_PROBA_MIN == 8
+    assert last_shot_backtest(mk, "A") == r
+    assert last_shot_backtest(mk, "B") is None
 
 
 def test_megeri_e_a_7_a_6(monkeypatch):
