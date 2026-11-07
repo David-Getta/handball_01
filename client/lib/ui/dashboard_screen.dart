@@ -67,6 +67,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Az AI-próbák összképe (GET /library/player-model-check "ai_osszkep").
   Map<String, dynamic>? _aiOsszkep;
 
+  /// A még nem ítélő próbák név szerint (kevés adat) — a csempe
+  /// tooltipjébe; üres, ha mind ítél.
+  static String _kevesAdat(Map<String, dynamic> o) {
+    final nevek = (o["nem_itelt_nevek"] as List?)?.cast<String>() ?? const [];
+    if (nevek.isEmpty) return "";
+    return " Még nem ítél (kevés adat — több meccs és felismert gólok "
+        "kellenek): ${nevek.join(", ")}.";
+  }
+
   // Könyvtár-kereső: csapatnévre / meccs-azonosítóra szűr.
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = "";
@@ -3072,13 +3081,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // AI-PRÓBÁK: hány modell bizonyított a klub saját könyvtárán.
       if (_aiOsszkep != null)
         Tooltip(
-          message: "${_aiOsszkep!["verdict"] ?? ""}. A részletek a "
+          message: "${_aiOsszkep!["verdict"] ?? ""}."
+              "${_kevesAdat(_aiOsszkep!)} A részletek a "
               "Szezon képernyő \"A modellek próbája\" szakaszában.",
           child: _statCard(
               "AI-PRÓBÁK",
               "${_aiOsszkep!["bizonyitott"] ?? 0} / ${_aiOsszkep!["itelt"] ?? 0}",
               // bizonyított / ítélő — és hány próbához kevés még az adat
-              // (10+ meccs, felismert gólokkal kell a gól-alapú próbákhoz).
+              // (több meccs, a gól-alapú próbákhoz felismert gólok kellenek).
               "bizonyított a saját meccseken"
               "${(((_aiOsszkep!["nem_itelt"] as num?) ?? 0) > 0) ? " · ${_aiOsszkep!["nem_itelt"]} próbához még kevés az adat" : ""}",
               icon: Icons.auto_awesome),

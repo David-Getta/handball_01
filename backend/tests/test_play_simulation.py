@@ -1427,10 +1427,17 @@ def test_az_ai_probak_osszkepe():
     o = model_checks_overview(mc)
     assert (o["itelt"], o["bizonyitott"]) == (15, 12)
     # Az "élő esély" None → 15 ítél a 16-ból; mindennel 16 (MC_PROBAK).
-    from handball.pipeline.play_simulation import MC_PROBAK
-    assert (o["osszes"], o["nem_itelt"]) == (MC_PROBAK, 1)
+    from handball.pipeline.play_simulation import MC_PROBA_NEVEK, MC_PROBAK
+    assert (o["osszes"], o["nem_itelt"], o["nem_itelt_nevek"]) == \
+        (MC_PROBAK, 1, ["élő esély"])
     mind = model_checks_overview({**mc, "elo_esely_proba": {"javulas_pct": 10.0}})
-    assert (mind["itelt"], mind["nem_itelt"]) == (MC_PROBAK, 0)
+    assert (mind["itelt"], mind["nem_itelt"], mind["nem_itelt_nevek"]) == \
+        (MC_PROBAK, 0, [])
+    # ŐR: a sorok nevei a névsorból jönnek, a névsor sorrendjében — új
+    # próbánál a névsort is bővíteni kell.
+    assert [r["nev"] for r in mind["sorok"]] == list(MC_PROBA_NEVEK)
+    # Üres könyvtár: egyik sem ítél → None (a csempe nem mutat semmit).
+    assert model_checks_overview({}) is None
     assert o["verdict"] == (
         "15 próbából 12 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "

@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
+  összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
+  próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
+  adat — több meccs és felismert gólok kellenek): hetes-dobó, utolsó
+  labda, …"); a próbák névsora egy helyen (play_simulation.
+  MC_PROBA_NEVEK), őr-teszttel, hogy új próbánál ne maradjon le.
 - **A pad döntései: a szuper-csere is; az AI-próbák csempéje a hiányzó
   adattal** (meccs utáni döntés-áttekintés + kezdőlap): a meccs utáni
   "A pad döntései a könyvtár tükrében" szakasz új sora — a könyvtár

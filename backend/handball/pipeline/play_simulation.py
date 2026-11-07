@@ -3163,9 +3163,16 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
     return "; ".join(reszek) if reszek else None
 
 
-# Az AI-próbák száma — ennyi próba ítélhet, ha mindhez van adat; a
-# kezdőlap csempéje ebből mondja ki, hány próbához kevés még az adat.
-MC_PROBAK = 16
+# Az AI-próbák nevei a sorok sorrendjében — ennyi próba ítélhet, ha
+# mindhez van adat; a kezdőlap csempéje ebből mondja ki, hány (és
+# melyik) próbához kevés még az adat.
+MC_PROBA_NEVEK = ("lövő-szorzók", "kapus-sávok", "döntés-tanácsok",
+                  "védő-modell", "eredmény-előrejelzés", "gólszerzők",
+                  "élő esély", "fal-becslés", "kapus-választás",
+                  "figura-felderítés", "felderítés", "hetes-dobó",
+                  "hetes-irány", "emberhátrány-fal", "utolsó labda",
+                  "szuper-csere")
+MC_PROBAK = len(MC_PROBA_NEVEK)
 
 
 def model_checks_overview(mc: dict) -> dict | None:
@@ -3189,7 +3196,8 @@ def model_checks_overview(mc: dict) -> dict | None:
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
     sem ítélt; "osszes" a próbák száma (MC_PROBAK), "nem_itelt" ebből
-    az adat híján nem ítélők."""
+    az adat híján nem ítélők száma, "nem_itelt_nevek" a nevük
+    (MC_PROBA_NEVEK sorrendjében)."""
     mc = mc or {}
     sz = trust_levels(mc.get("osszes"), mc.get("kapus_osszes"),
                       mc.get("dontes_osszes"))
@@ -3251,9 +3259,11 @@ def model_checks_overview(mc: dict) -> dict | None:
         verdict += ": " + ", ".join(igen)
     if nem:
         verdict += "; még nem: " + ", ".join(nem)
+    itelt_nevek = {r["nev"] for r in sorok}
+    nem_itelt_nevek = [n for n in MC_PROBA_NEVEK if n not in itelt_nevek]
     return {"itelt": len(sorok), "bizonyitott": k, "sorok": sorok,
-            "osszes": MC_PROBAK, "nem_itelt": max(MC_PROBAK - len(sorok), 0),
-            "verdict": verdict}
+            "osszes": MC_PROBAK, "nem_itelt": len(nem_itelt_nevek),
+            "nem_itelt_nevek": nem_itelt_nevek, "verdict": verdict}
 
 
 # ---- Az élő jelzések önkalibrálása ------------------------------------------
