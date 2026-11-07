@@ -3077,7 +3077,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: _statCard(
               "AI-PRÓBÁK",
               "${_aiOsszkep!["bizonyitott"] ?? 0} / ${_aiOsszkep!["itelt"] ?? 0}",
-              "bizonyított a saját meccseken",
+              // bizonyított / ítélő — és hány próbához kevés még az adat
+              // (10+ meccs, felismert gólokkal kell a gól-alapú próbákhoz).
+              "bizonyított a saját meccseken"
+              "${(((_aiOsszkep!["nem_itelt"] as num?) ?? 0) > 0) ? " · ${_aiOsszkep!["nem_itelt"]} próbához még kevés az adat" : ""}",
               icon: Icons.auto_awesome),
         ),
     ];

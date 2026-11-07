@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **A pad döntései: a szuper-csere is; az AI-próbák csempéje a hiányzó
+  adattal** (meccs utáni döntés-áttekintés + kezdőlap): a meccs utáni
+  "A pad döntései a könyvtár tükrében" szakasz új sora — a könyvtár
+  beállója a padról jött-e, és termelt-e: "Szuper-csere: a könyvtár
+  beállója (a 14-es) a padról 2 gólt szerzett, a többi beálló fejenként
+  0,5 — a próba szerint a könyvtár beállójára lehet építeni", vagy "nem a
+  padról jött (kezdett, vagy nem játszott)". A kezdőlap AI-próbák
+  csempéje a "bizonyított / ítélő" mellé kiírja, hány próbához kevés még
+  az adat ("· 14 próbához még kevés az adat") — a 0 / 2 így nem rossz
+  jegy, hanem a könyvtár mérete (a /library/player-model-check
+  "ai_osszkep" "osszes" és "nem_itelt" mezője;
+  play_simulation.MC_PROBAK).
 - **A szuper-csere próbája** (motor + élő végpont + élő képernyő +
   könyvtári próba + előrejelzés + meccsterv + AI-edzésterv +
   szezon-riport + szezon-képernyő + AI-döntések sora + összkép): a pad

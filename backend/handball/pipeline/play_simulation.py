@@ -3163,6 +3163,11 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
     return "; ".join(reszek) if reszek else None
 
 
+# Az AI-próbák száma — ennyi próba ítélhet, ha mindhez van adat; a
+# kezdőlap csempéje ebből mondja ki, hány próbához kevés még az adat.
+MC_PROBAK = 16
+
+
 def model_checks_overview(mc: dict) -> dict | None:
     """Az AI-próbák összképe: a /library/player-model-check válaszából
     (`mc`) próbánként, hogy ítélt-e, és bizonyított-e — a lövő-szorzók,
@@ -3183,7 +3188,8 @@ def model_checks_overview(mc: dict) -> dict | None:
     (super_sub_backtest). Mit jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
-    sem ítélt."""
+    sem ítélt; "osszes" a próbák száma (MC_PROBAK), "nem_itelt" ebből
+    az adat híján nem ítélők."""
     mc = mc or {}
     sz = trust_levels(mc.get("osszes"), mc.get("kapus_osszes"),
                       mc.get("dontes_osszes"))
@@ -3246,6 +3252,7 @@ def model_checks_overview(mc: dict) -> dict | None:
     if nem:
         verdict += "; még nem: " + ", ".join(nem)
     return {"itelt": len(sorok), "bizonyitott": k, "sorok": sorok,
+            "osszes": MC_PROBAK, "nem_itelt": max(MC_PROBAK - len(sorok), 0),
             "verdict": verdict}
 
 
@@ -6501,7 +6508,10 @@ def decision_review(nevek: dict, idokeres_minta: dict | None,
                     kapus_javaslat: dict | None = None,
                     kapusforma_proba: dict | None = None,
                     het_a_hat_mintak: dict | None = None,
-                    het_a_hat_proba: dict | None = None) -> dict:
+                    het_a_hat_proba: dict | None = None,
+                    szuper_csere_mintak: dict | None = None,
+                    szuper_csere_javaslat: dict | None = None,
+                    szuper_csere_proba: dict | None = None) -> dict:
     """A pad döntései a könyvtár tükrében: `idokeres_minta` a meccs
     run_timeout_sample-je, `hetes_mintak` és `kapusforma_mintak`
     oldalanként a seven_taker_sample / keeper_form_sample; `idokeres_proba`
@@ -6510,13 +6520,17 @@ def decision_review(nevek: dict, idokeres_minta: dict | None,
     `kapus_javaslat` oldalanként (keeper_choice_from a többi meccsből),
     `kapusforma_proba` oldalanként (keeper_hot_hand_backtest),
     `het_a_hat_mintak` oldalanként (seven_six_sample) és
-    `het_a_hat_proba` oldalanként (seven_six_backtest). Mit jelent
-    edzőileg: a meccs utáni értekezlet pad-oldali tényei — mi volt a
+    `het_a_hat_proba` oldalanként (seven_six_backtest),
+    `szuper_csere_mintak` oldalanként (super_sub_sample), a
+    `szuper_csere_javaslat` oldalanként (super_sub_choice a többi
+    meccsből) és a `szuper_csere_proba` oldalanként (super_sub_backtest).
+    Mit jelent edzőileg: a meccs utáni értekezlet pad-oldali tényei — mi volt a
     döntés, és mit mond rá a klub könyvtára. Visszatérés oldalanként:
     {"sorok": [mondatok], "idokeres": {"sorozat", "kert", "tores_kert",
     "tores_nem"} vagy None, "hetes": {"dobok": [[mez, dobás, gól]],
     "konyvtar_dobo"} vagy None, "kapus": {"kezdo", "masodik", "hideg",
     "csere"} vagy None, "het_a_hat": {"ablak", "lott", "kapott"} vagy
+    None, "szuper_csere": {"mez", "padrol", "gol", "tobbi_atlag"} vagy
     None}."""
     ki: dict = {}
     helyzetek = _sorozat_helyzetek(idokeres_minta or {})
@@ -6637,8 +6651,43 @@ def decision_review(nevek: dict, idokeres_minta: dict | None,
                 sor += (" — a könyvtár szerint annyit hoz, mint a 6 a 6: a "
                         "figurán múlik")
             sorok.append(sor)
+        # Szuper-csere: a könyvtár beállója a padról jött-e, és termelt-e.
+        szc = None
+        scj = (szuper_csere_javaslat or {}).get(side)
+        scm = (szuper_csere_mintak or {}).get(side)
+        if scj and scm is not None:
+            mez = int(scj["mez"])
+            pad = [int(x) for x in (scm.get("pad") or [])]
+            gol = {int(k): int(v) for k, v in (scm.get("gol") or {}).items()}
+            if mez in pad:
+                tobbi = [x for x in pad if x != mez]
+                atlag = ((sum(gol.get(x, 0) for x in tobbi) / len(tobbi))
+                         if tobbi else None)
+                szc = {"mez": mez, "padrol": True, "gol": gol.get(mez, 0),
+                       "tobbi_atlag": (None if atlag is None
+                                       else round(atlag, 2))}
+                sor = (f"Szuper-csere: a könyvtár beállója "
+                       f"({mezszam_nevelovel(mez)}) a padról {szc['gol']} "
+                       "gólt szerzett")
+                if atlag is not None:
+                    atl = f"{atlag:.1f}".replace(".", ",")
+                    sor += f", a többi beálló fejenként {atl}"
+            else:
+                szc = {"mez": mez, "padrol": False, "gol": gol.get(mez, 0),
+                       "tobbi_atlag": None}
+                sor = (f"Szuper-csere: a könyvtár beállója "
+                       f"({mezszam_nevelovel(mez)}) nem a padról jött "
+                       "(kezdett, vagy nem játszott)")
+            pr = (szuper_csere_proba or {}).get(side)
+            it = pr.get("itelet") if pr else None
+            if it == "igazolt":
+                sor += (" — a próba szerint a könyvtár beállójára lehet "
+                        "építeni")
+            elif it == "nem":
+                sor += " — a próba szerint a cserét a napi forma döntse el"
+            sorok.append(sor)
         ki[side] = {"sorok": sorok, "idokeres": ido, "hetes": hetes,
-                    "kapus": kapus, "het_a_hat": het}
+                    "kapus": kapus, "het_a_hat": het, "szuper_csere": szc}
     return ki
 
 # ---- Élő kapus-választás ----------------------------------------------------

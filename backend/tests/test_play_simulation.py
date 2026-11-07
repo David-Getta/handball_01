@@ -1426,6 +1426,11 @@ def test_az_ai_probak_osszkepe():
           "szuper_csere_proba": {"itelet": "igazolt"}}
     o = model_checks_overview(mc)
     assert (o["itelt"], o["bizonyitott"]) == (15, 12)
+    # Az "élő esély" None → 15 ítél a 16-ból; mindennel 16 (MC_PROBAK).
+    from handball.pipeline.play_simulation import MC_PROBAK
+    assert (o["osszes"], o["nem_itelt"]) == (MC_PROBAK, 1)
+    mind = model_checks_overview({**mc, "elo_esely_proba": {"javulas_pct": 10.0}})
+    assert (mind["itelt"], mind["nem_itelt"]) == (MC_PROBAK, 0)
     assert o["verdict"] == (
         "15 próbából 12 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
@@ -2489,7 +2494,34 @@ def test_a_pad_dontesei_a_konyvtar_tukreben():
         "gyenge félidő miatt nem kell cserélni")
     ures = decision_review(nevek, None, None, None)
     assert ures["home"] == {"sorok": [], "idokeres": None, "hetes": None,
-                            "kapus": None, "het_a_hat": None}
+                            "kapus": None, "het_a_hat": None,
+                            "szuper_csere": None}
+    # Szuper-csere: a könyvtár beállója a padról jött-e, és termelt-e — a
+    # többi beálló fejenkénti átlagához és a próbához mérve; ha nem a
+    # padról jött, csak ez; javaslat nélkül nincs sor.
+    r4 = decision_review(
+        nevek, None, None, None,
+        szuper_csere_mintak={"home": {"gol": {"14": 2, "9": 1},
+                                      "pad": ["14", "9", "21"]},
+                             "away": {"gol": {"4": 1}, "pad": ["4"]}},
+        szuper_csere_javaslat={"home": {"mez": 14, "gol": 6},
+                               "away": {"mez": 7, "gol": 4}},
+        szuper_csere_proba={"home": {"itelet": "igazolt"},
+                            "away": {"itelet": "nem"}})
+    assert r4["home"]["szuper_csere"] == {"mez": 14, "padrol": True,
+                                          "gol": 2, "tobbi_atlag": 0.5}
+    assert r4["home"]["sorok"] == [
+        "Szuper-csere: a könyvtár beállója (a 14-es) a padról 2 gólt "
+        "szerzett, a többi beálló fejenként 0,5 — a próba szerint a könyvtár "
+        "beállójára lehet építeni"]
+    assert r4["away"]["szuper_csere"] == {"mez": 7, "padrol": False,
+                                          "gol": 0, "tobbi_atlag": None}
+    assert r4["away"]["sorok"] == [
+        "Szuper-csere: a könyvtár beállója (a 7-es) nem a padról jött "
+        "(kezdett, vagy nem játszott) — a próba szerint a cserét a napi "
+        "forma döntse el"]
+    assert decision_review(nevek, None, None, None, szuper_csere_mintak={
+        "home": {"gol": {}, "pad": []}})["home"]["sorok"] == []
     # 7 a 6: a szakaszok mérlege a könyvtár ítéletével; 7 a 6 nélkül
     # nincs sor.
     r3 = decision_review(

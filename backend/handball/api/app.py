@@ -15253,6 +15253,12 @@ def create_app():
             het_a_hat_mintak={s_: biztos(lambda s_=s_: _hetahat_minta_of(
                 match, s_)) for s_ in ("home", "away")},
             het_a_hat_proba={s_: biztos(lambda s_=s_: _het_a_hat_proba(
+                nevek[s_], match_id)) for s_ in ("home", "away")},
+            szuper_csere_mintak={s_: biztos(lambda s_=s_: _szupercsere_minta_of(
+                match, s_)) for s_ in ("home", "away")},
+            szuper_csere_javaslat={s_: biztos(lambda s_=s_: _szupercsere_javaslat(
+                nevek[s_], match_id)) for s_ in ("home", "away")},
+            szuper_csere_proba={s_: biztos(lambda s_=s_: _szupercsere_proba(
                 nevek[s_], match_id)) for s_ in ("home", "away")})
         return {**r, "nevek": nevek}
 
