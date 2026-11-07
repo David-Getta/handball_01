@@ -8166,6 +8166,14 @@ def create_app():
                                 "hetes_verdict": hp_["verdict"]}
         except Exception:
             pass
+        # A szuper-cseréjük próbája — hibatűrően.
+        try:
+            sc_ = _szupercsere_proba(csapat=team)
+            if sc_:
+                modell_proba = {**(modell_proba or {}), "szuper_csere": sc_,
+                                "szuper_csere_verdict": sc_["verdict"]}
+        except Exception:
+            pass
         # A felderítésük próbája — hibatűrően.
         try:
             fd_ = _felderites_proba(csapat=team)
@@ -8923,6 +8931,40 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _szupercsere_minta_of(m_, side: str) -> dict:
+        """EGY meccs szuper-csere mintája az adott oldalra (play_simulation.
+        super_sub_sample) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import super_sub_sample
+        return _cached_result(m_.meta.match_id, f"szupercsere-minta-v1-{side}",
+                              lambda: super_sub_sample(m_, Team(side)))
+
+    def _szupercsere_javaslat(nev: str, kiveve: str | None = None):
+        """A `nev` csapat szuper-cseréje a könyvtári meccseiből (a `kiveve`
+        meccs nélkül — play_simulation.super_sub_choice). None: nincs a
+        csapat a könyvtárban, vagy senkinek nincs elég pad-gólja."""
+        from ..pipeline.play_simulation import super_sub_choice
+        try:
+            par = [(m_, t_) for m_, t_ in _csapat_meccsei(nev)
+                   if m_.meta.match_id != kiveve]
+        except HTTPException:
+            return None
+        return super_sub_choice([_szupercsere_minta_of(m_, t_.value)
+                                 for m_, t_ in par])
+
+    def _szupercsere_proba(csapat: str | None = None,
+                           kiveve: str | None = None):
+        """A szuper-csere választás próbája a könyvtár időrendjében
+        (play_simulation.super_sub_backtest; a `kiveve` meccs nélkül, a
+        `csapat` megadásával csak az ő meccsei)."""
+        from ..pipeline.play_simulation import super_sub_backtest
+        return super_sub_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _szupercsere_minta_of(m_, "home"),
+                       "away": _szupercsere_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _hetesirany_minta_of(m_, side: str) -> dict:
         """EGY meccs hetes-irány mintája az adott oldalra (play_simulation.
         seven_direction_sample) — a lemezes eredmény-tárból."""
@@ -9448,6 +9490,7 @@ def create_app():
                 "felderites_proba": _felderites_proba(),
                 "hetes_proba": _hetes_proba(),
                 "hetes_irany_proba": _hetes_irany_proba(),
+                "szuper_csere_proba": _szupercsere_proba(),
                 "het_a_hat_proba": _het_a_hat_proba(),
                 "falvaltas_proba": _falvaltas_proba(),
                 "emberhatrany_proba": _emberhatrany_proba(),
@@ -9542,6 +9585,9 @@ def create_app():
                 "felderites_proba": _felderites_proba(),
                 "hetes_proba": _hetes_proba(),
                 "hetes_irany_proba": _hetes_irany_proba(),
+                "szuper_csere": {"home": _szupercsere_javaslat(home),
+                                 "away": _szupercsere_javaslat(away)},
+                "szuper_csere_proba": _szupercsere_proba(),
                 "kulcs_hiany": {
                     k: key_player_absence(gsz[k], (f or {}).get(
                         "home_goals" if k == "home" else "away_goals"))
@@ -14851,6 +14897,8 @@ def create_app():
                 mod["tamadas"], mod["lovo"], len(par))) if mod else None,
             hetes=biztos(lambda: _hetes_javaslat(mi)),
             hetes_proba=biztos(lambda: _hetes_proba(csapat=mi)),
+            szuper_csere=biztos(lambda: _szupercsere_javaslat(mi)),
+            szuper_csere_proba=biztos(lambda: _szupercsere_proba(csapat=mi)),
             hetes_irany=biztos(lambda: _hetes_irany_profil(ok)),
             hetes_irany_proba=biztos(lambda: _hetes_irany_proba(csapat=ok)),
             idokeres_proba=biztos(lambda: _idokeres_proba(csapat=mi)),
@@ -14894,6 +14942,7 @@ def create_app():
         gp = _golszerzo_proba()
         kv, fd, hp, hi = (_kapus_valasztas_proba(), _felderites_proba(),
                           _hetes_proba(), _hetes_irany_proba())
+        sc = _szupercsere_proba()
         from ..pipeline.play_simulation import (defense_system_text,
                                                 key_player_text)
         g_ok, g_mi = _golszerzok(ok, mi), _golszerzok(mi, ok)
@@ -14921,7 +14970,11 @@ def create_app():
                 "het_a_hat_mi": (_het_a_hat_proba(csapat=mi) or {}).get(
                     "verdict"),
                 "emberhatrany_mi": (_emberhatrany_javaslat(mi) or {}).get(
-                    "verdict")}
+                    "verdict"),
+                "szuper_csere_mi": (_szupercsere_javaslat(mi) or {}).get(
+                    "verdict"),
+                "szuper_csere_proba": (f"A szuper-csere próbája: "
+                                       f"{sc['verdict']}" if sc else None)}
 
     @app.get("/matches/{match_id}/coaching")
     def get_coaching(match_id: str, t: int = -1):
@@ -15274,6 +15327,22 @@ def create_app():
                 "proba": _hetes_proba(kiveve=match_id), "iranyok": ir,
                 "irany_proba": _hetes_irany_proba(kiveve=match_id)}
 
+    @app.get("/matches/{match_id}/live-szupercsere")
+    def get_live_super_sub(match_id: str):
+        """ÉLŐ szuper-csere: a saját csapat gól nélküli sorozatánál a
+        kispadnak a könyvtár szerinti szuper-csere (a csapat TÖBBI
+        meccséből, super_sub_choice; play_simulation.live_super_sub_alerts),
+        a próbával (a meccs nélkül). Válasz: {"alerts": [...], "javaslat":
+        {"home", "away"}, "proba"}. 404: nincs ilyen meccs."""
+        from ..pipeline.play_simulation import live_super_sub_alerts
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        jav = {"home": _szupercsere_javaslat(match.meta.home_team, match_id),
+               "away": _szupercsere_javaslat(match.meta.away_team, match_id)}
+        return {"alerts": live_super_sub_alerts(match, jav)["alerts"],
+                "javaslat": jav, "proba": _szupercsere_proba(kiveve=match_id)}
+
     @app.get("/matches/{match_id}/live-emberhatrany")
     def get_live_shorthanded(match_id: str):
         """ÉLŐ emberhátrány-fal: a kiállítás kezdetén a hátrányban lévő
@@ -15513,7 +15582,8 @@ def create_app():
                     het_a_hat=_het_a_hat_proba(nev, match_id),
                     falvaltas=_falvaltas_proba(nev, match_id),
                     emberhatrany=_emberhatrany_proba(nev, match_id),
-                    utolso_labda=_utolso_labda_proba(nev, match_id))
+                    utolso_labda=_utolso_labda_proba(nev, match_id),
+                    szuper_csere=_szupercsere_proba(nev, match_id))
             except Exception:
                 sor3 = None
             if sor3:

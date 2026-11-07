@@ -3,6 +3,30 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.194 óta)
+
+- **A szuper-csere próbája** (motor + élő végpont + élő képernyő +
+  könyvtári próba + előrejelzés + meccsterv + AI-edzésterv +
+  szezon-riport + szezon-képernyő + AI-döntések sora + összkép): a pad
+  döntése meccs közben — kit hozzunk be, ha elakad a támadás. A könyvtár
+  szerinti szuper-csere a kezdő maghoz nem tartozó gólszerzők közül az,
+  aki a legtöbb pad-gólt szerezte ("a padról a 14-es termel (6 pad-gól 4
+  meccsen a könyvtárban); a második a 9-es (3 pad-gól)"); élőben a saját
+  csapat harmadik gól nélküli támadása után szól a kispadnak ("hozd be a
+  14-est"), sorozatonként egyszer. A próba a könyvtár időrendjében: a
+  KORÁBBI meccsekből javasolt beálló a meccsen a padról hány gólt szerzett
+  a többi beálló fejenkénti átlagához mérve — "a könyvtár szerinti
+  szuper-csere 7 meccsen a padról 14 gólt szerzett (2,0 meccsenként), a
+  többi beálló fejenként 0,2 — a szuper-csere tanácsra lehet építeni";
+  ha nem: "a cserét a napi forma döntse el". A /matches/{id}/live-
+  szupercsere végpont, a /library/player-model-check "szuper_csere_proba"
+  és a /library/forecast "szuper_csere" mezője, a meccsterv és az
+  AI-edzésterv tétele ("Szuper-csere: a 14-es" — a beállás begyakorolva),
+  a szezon-riport és a szezon-képernyő "Szuper-csere" sora, a meccs eleji
+  AI-döntések sor és az AI-próbák összképének új sora (a 16.)
+  (play_simulation.super_sub_sample, super_sub_choice,
+  super_sub_backtest, live_super_sub_alerts).
+
 ## v0.1.194 — kiadva (2026-11-07)
 
 > Kiadás-jegyzet: GYORSABB MOTOR, ÉS A PAD HAJRÁ-DÖNTÉSEI IS PRÓBÁZVA.

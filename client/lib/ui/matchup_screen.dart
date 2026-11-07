@@ -311,6 +311,10 @@ class _MatchupScreenState extends State<MatchupScreen> {
     final hetes = ((_forecast?["hetes_dobo"] as Map?)?["home"]
         as Map?)?["verdict"];
     final hetesProba = (_forecast?["hetes_proba"] as Map?)?["verdict"];
+    // A szuper-cserénk ("home" = MI) — kit hozzunk be, ha elakad a támadás.
+    final szuperCsere = ((_forecast?["szuper_csere"] as Map?)?["home"]
+        as Map?)?["verdict"];
+    final scProba = (_forecast?["szuper_csere_proba"] as Map?)?["verdict"];
     // Az ő dobóik hetes-irányai ("away" = ŐK) — a kapusunknak.
     final hetesIrany = ((_forecast?["hetes_irany"] as Map?)?["away"]
         as Map?)?["verdict"];
@@ -410,6 +414,17 @@ class _MatchupScreenState extends State<MatchupScreen> {
                 if (hetes is String && hetesProba is String) ...[
                   const SizedBox(height: 4),
                   Text("A hetes-dobó választás próbája: $hetesProba.",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                if (szuperCsere is String) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text("Szuper-cserénk: $szuperCsere.",
+                      style: AppText.label.copyWith(
+                          fontSize: 12.5, color: AppColors.textPrimary)),
+                ],
+                if (szuperCsere is String && scProba is String) ...[
+                  const SizedBox(height: 4),
+                  Text("A szuper-csere próbája: $scProba.",
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ],
                 if (hetesIrany is String) ...[

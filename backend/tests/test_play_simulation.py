@@ -1422,15 +1422,16 @@ def test_az_ai_probak_osszkepe():
           "hetes_proba": {"itelet": "igazolt"},
           "hetes_irany_proba": {"itelet": "josolhato"},
           "emberhatrany_proba": {"itelet": "igazolt"},
-          "utolso_labda_proba": {"itelet": "igazolt"}}
+          "utolso_labda_proba": {"itelet": "igazolt"},
+          "szuper_csere_proba": {"itelet": "igazolt"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (14, 11)
+    assert (o["itelt"], o["bizonyitott"]) == (15, 12)
     assert o["verdict"] == (
-        "14 próbából 11 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "15 próbából 12 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
         "figura-felderítés, felderítés, hetes-dobó, hetes-irány, "
-        "emberhátrány-fal, utolsó labda; még nem: kapus-sávok, védő-modell, "
-        "gólszerzők")
+        "emberhátrány-fal, utolsó labda, szuper-csere; még nem: kapus-sávok, "
+        "védő-modell, gólszerzők")
     # A kapus-választás, a hetes-dobó, az emberhátrány-fal és az utolsó
     # labda csak az "igazolt", a felderítés csak az "atviheto", a
     # hetes-irány csak a "josolhato" ítélettel bizonyított.
@@ -1439,8 +1440,9 @@ def test_az_ai_probak_osszkepe():
         "hetes_proba": {"itelet": "nem"},
         "hetes_irany_proba": {"itelet": "nem"},
         "emberhatrany_proba": {"itelet": "nem"},
-        "utolso_labda_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (14, 5)
+        "utolso_labda_proba": {"itelet": "nem"},
+        "szuper_csere_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (15, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -2540,6 +2542,10 @@ def test_a_dontes_probak_egy_sorban():
         "utolsó labda: igazolt"
     assert decision_trust_summary(utolso_labda={"itelet": "nem"}) == \
         "utolsó labda: a napi forma döntsön"
+    assert decision_trust_summary(szuper_csere={"itelet": "igazolt"}) == \
+        "szuper-csere: igazolt"
+    assert decision_trust_summary(szuper_csere={"itelet": "nem"}) == \
+        "szuper-csere: a napi forma döntsön"
 
 
 def test_a_fal_valtas_probaja_rossz_szakasz_utan():
@@ -3643,3 +3649,107 @@ def test_az_elo_utolso_labda_okszeru_es_az_allast_nezi(monkeypatch):
             if f.t > t_h]
     assert live_last_shot_alerts(Match(m.meta, eddig.frames + ures)
                                  )["alerts"] == r
+
+
+def test_a_szuper_csere_valasztas_es_probaja(monkeypatch):
+    """super_sub_sample: a padról beállók pad-góljai mezszámmal + a pad
+    névsora (a kezdő magon kívüliek, a valódi láncon a momentum
+    rétegeivel egyezően); super_sub_choice: a legtöbb pad-gól, kevés
+    gólnál None; super_sub_backtest: a javasolt a többi beálló fejenkénti
+    átlagához mérve, igazolt / nem / None, csapat-szűrő, a padon nem lévő
+    javasolt kimarad; live_super_sub_alerts: a harmadik gól nélküli
+    támadás után, sorozatonként egyszer, a gól nulláz."""
+    from types import SimpleNamespace
+
+    import handball.pipeline.event_detection as ed
+    import handball.pipeline.setplays as sp
+    from handball.models.tracking import Team
+    from handball.pipeline.event_detection import EventType
+    from handball.pipeline.momentum import opening_lineup, super_sub
+    from handball.pipeline.play_simulation import (SSC_MIN_GOL,
+                                                   live_super_sub_alerts,
+                                                   super_sub_backtest,
+                                                   super_sub_choice,
+                                                   super_sub_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=1,
+                              shots_per_min=8)
+    s = super_sub_sample(m, Team.HOME)
+    core = {r["player_id"] for r in opening_lineup(m)["home"]["core"]}
+    mez = {p.track_id: p.jersey_number for f in m.frames for p in f.players
+           if p.team == Team.HOME and p.jersey_number is not None}
+    assert s["pad"] == sorted({str(int(j)) for pid, j in mez.items()
+                               if pid not in core}, key=int)
+    vart: dict = {}
+    for r in super_sub(m)["home"]["players"]:
+        if r["jersey"] is not None:
+            k = str(int(r["jersey"]))
+            vart[k] = vart.get(k, 0) + r["goals"]
+    assert s["gol"] == vart
+
+    mintak = [{"gol": {"14": 3, "9": 1}, "pad": ["14", "9", "21"]},
+              {"gol": {"14": 2, "9": 2}, "pad": ["14", "9"]}]
+    kc = super_sub_choice(mintak)
+    assert (kc["mez"], kc["gol"], kc["meccsek"], kc["atlag"],
+            kc["masik"]["mez"]) == (14, 5, 2, 2.5, 9)
+    assert kc["verdict"] == ("a padról a 14-es termel (5 pad-gól 2 meccsen a "
+                             "könyvtárban); a második a 9-es (3 pad-gól)")
+    assert [r["mez"] for r in kc["beallok"]] == [14, 9]     # a 21-es: 0 gól
+    assert super_sub_choice([{"gol": {"14": SSC_MIN_GOL - 1},
+                              "pad": ["14"]}]) is None
+    assert super_sub_choice([]) is None
+
+    def meccs(i, most, home="A"):
+        return {"match_id": f"m{i}", "home": home, "away": "B",
+                "minta": {"home": most, "away": {}}}
+
+    jo = [meccs(0, mintak[0]), meccs(1, mintak[1])] + [
+        meccs(i, {"gol": {"14": 2}, "pad": ["14", "9", "21"]})
+        for i in range(2, 8)]
+    p = super_sub_backtest(jo)
+    assert (p["meccsek"], p["javasolt_gol"], p["tobbi_gol"], p["tobbi_fo"],
+            p["javasolt_atlag"], p["tobbi_atlag"], p["itelet"]) == \
+        (7, 14, 2, 13, 2.0, 0.15, "igazolt")
+    assert p["sorok"][0] == {"match_id": "m1", "team": "A", "javasolt": 14,
+                             "javasolt_gol": 2, "tobbi_gol": 2, "tobbi_fo": 1}
+    assert p["verdict"] == (
+        "a könyvtár szerinti szuper-csere 7 meccsen a padról 14 gólt "
+        "szerzett (2,0 meccsenként), a többi beálló fejenként 0,2 — a "
+        "szuper-csere tanácsra lehet építeni")
+    # Ahol a javasolt nem a padról jött (kezdő volt), az a meccs kimarad.
+    assert super_sub_backtest(jo + [meccs(8, {"gol": {"14": 1},
+                                              "pad": ["9"]})]) == p
+    # Nagy múlttal a 14-es marad a javaslat, de a padról nem termel, a
+    # 9-es igen: a választás nem igazolódik.
+    rossz = [meccs(0, {"gol": {"14": 20, "9": 5}, "pad": ["14", "9"]})] + [
+        meccs(i, {"gol": {"9": 1}, "pad": ["14", "9"]}) for i in range(1, 7)]
+    q = super_sub_backtest(rossz)
+    assert (q["meccsek"], q["javasolt_gol"], q["tobbi_gol"], q["itelet"]) == \
+        (6, 0, 6, "nem")
+    assert q["verdict"].endswith("a cserét a napi forma döntse el")
+    assert super_sub_backtest(jo[:5]) is None          # 4 meccs < 5
+    assert super_sub_backtest(jo, "A") == p
+    assert super_sub_backtest(jo, "B") is None
+
+    t0 = m.frames[0].t
+
+    def seg(team, a, b):
+        return SimpleNamespace(team=team, start_t=t0 + a, end_t=t0 + b,
+                               frames=[])
+
+    monkeypatch.setattr(sp, "segment_attacks", lambda match, config=None: [
+        seg(Team.HOME, 0, 500), seg(Team.AWAY, 510, 900),
+        seg(Team.HOME, 910, 1300), seg(Team.HOME, 1310, 1700),
+        seg(Team.HOME, 1710, 2100), seg(Team.HOME, 2110, 2500),
+        seg(Team.HOME, 2510, 2900), seg(Team.HOME, 2910, 2990)])
+    monkeypatch.setattr(ed, "detect_shots", lambda match, config=None: [
+        SimpleNamespace(t=t0 + 1690, team=Team.HOME, type=EventType.GOAL)])
+    ki = live_super_sub_alerts(m, {"home": kc})["alerts"]
+    assert len(ki) == 1 and (ki[0]["perc"], ki[0]["team"], ki[0]["mez"],
+                             ki[0]["szaraz"], ki[0]["t"]) == \
+        (2, "home", 14, 3, t0 + 2900)
+    assert ki[0]["text"] == (f"Szuper-csere (2. perc): {m.meta.home_team} 3 "
+                             "támadása gól nélkül — hozd be a 14-est: "
+                             + kc["verdict"])
+    assert live_super_sub_alerts(m, None) == {"alerts": []}

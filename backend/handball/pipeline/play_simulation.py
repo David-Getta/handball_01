@@ -3105,7 +3105,8 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
                            het_a_hat: dict | None = None,
                            falvaltas: dict | None = None,
                            emberhatrany: dict | None = None,
-                           utolso_labda: dict | None = None) -> str | None:
+                           utolso_labda: dict | None = None,
+                           szuper_csere: dict | None = None) -> str | None:
     """A pad döntés-próbái egy sorban — az élő képernyő meccs eleji
     harmadik AI-sorához: a kapus-választás (keeper_choice_backtest), a
     hetes-dobó (seven_taker_backtest), a hetes-irány
@@ -3113,8 +3114,8 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
     (timeout_run_backtest), a kapus napi formája (keeper_hot_hand_backtest)
     a 7 a 6 mérlege (seven_six_backtest), a fal-váltás
     (defense_switch_backtest), az emberhátrány-fal
-    (shorthanded_defense_backtest) és az utolsó labda (last_shot_backtest)
-    — az ítéletük rövid alakja.
+    (shorthanded_defense_backtest), az utolsó labda (last_shot_backtest)
+    és a szuper-csere (super_sub_backtest) — az ítéletük rövid alakja.
     Mit jelent edzőileg: a meccs elején látszik, a pad melyik döntésénél
     lehet a könyvtár szabályára építeni. None, ha egyik próba sem ítélt."""
     reszek = []
@@ -3155,6 +3156,10 @@ def decision_trust_summary(kapus_valasztas: dict | None = None,
         reszek.append("utolsó labda: igazolt"
                       if utolso_labda.get("itelet") == "igazolt" else
                       "utolsó labda: a napi forma döntsön")
+    if szuper_csere:
+        reszek.append("szuper-csere: igazolt"
+                      if szuper_csere.get("itelet") == "igazolt" else
+                      "szuper-csere: a napi forma döntsön")
     return "; ".join(reszek) if reszek else None
 
 
@@ -3173,8 +3178,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     hetes-irány, ha a dobók fő iránya jósolható (seven_direction_backtest),
     az emberhátrány-fal, ha a könyvtár fala a következő meccsen is
     kevesebbet kap (shorthanded_defense_backtest), az utolsó labda, ha az
-    ajánlott lövő a hajrában jobban fejez be (last_shot_backtest). Mit
-    jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
+    ajánlott lövő a hajrában jobban fejez be (last_shot_backtest), a
+    szuper-csere, ha a könyvtár beállója a padról többet termel a többinél
+    (super_sub_backtest). Mit jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
     sem ítélt."""
@@ -3226,6 +3232,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     ul = mc.get("utolso_labda_proba")
     if ul:
         add("utolsó labda", ul.get("itelet") == "igazolt")
+    sc = mc.get("szuper_csere_proba")
+    if sc:
+        add("szuper-csere", sc.get("itelet") == "igazolt")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -6898,4 +6907,198 @@ def live_last_shot_alerts(match: Match, config: TacticsConfig | None = None,
                      f"{helyzet}): {nevek[side]} utolsó labdája "
                      f"{p['verdict']}")})
     alerts.sort(key=lambda a: (a["t"], a["team"]))
+    return {"alerts": alerts}
+
+
+# ---- Szuper-csere: kit hozzunk be a padról ---------------------------------
+# A pad döntése meccs közben: ha a támadás elakad, kit hozzunk be. A
+# könyvtár szerinti szuper-csere a kezdő maghoz (momentum.opening_lineup
+# "core") nem tartozó gólszerzők közül az, aki a legtöbb pad-gólt szerezte
+# (momentum.super_sub mintája meccsenként, meccsek közt összeadva); a
+# javaslathoz legalább SSC_MIN_GOL pad-gól kell. A próba a könyvtár
+# időrendjében: a KORÁBBI meccsekből javasolt szuper-csere a meccsen a
+# padról hány gólt szerzett a többi padról beálló fejenkénti átlagához
+# mérve — csak azokon a meccseken, ahol ő is a padról jött. Élőben a saját
+# csapat gól nélküli sorozatánál (SSC_SZARAZ támadás egymás után gól
+# nélkül) a kispadnak szól, sorozatonként egyszer.
+SSC_MIN_GOL = 3            # ennyi pad-gól kell a javaslathoz
+SSC_PROBA_MIN = 5          # ennyi meccs kell az ítélethez (a javasolt a padon)
+SSC_ITELET_GOL = 0.5       # ennyivel több gól/meccs a többi beálló átlagánál
+SSC_SZARAZ = 3             # ennyi gól nélküli támadás után szól az élő tanács
+
+
+def super_sub_sample(match: Match, team: Team,
+                     config: TacticsConfig | None = None) -> dict:
+    """A szuper-csere választás NYERS, JSON-barát meccs-mintája: a `team`
+    padról beállói — {"gol": {mez (str): pad-gól}, "pad": [mez (str), …]}
+    (a kezdő maghoz nem tartozó, mezszámmal látott játékosok;
+    momentum.super_sub és opening_lineup). Meccsek közt összeadható."""
+    from .momentum import opening_lineup, super_sub
+    config = config or TacticsConfig()
+    side = team.value
+    core = {r["player_id"]
+            for r in opening_lineup(match, config)[side]["core"]}
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.team == team and p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+    pad = sorted({str(int(mez)) for pid, mez in jersey.items()
+                  if pid not in core}, key=int)
+    gol: dict = {}
+    for r in super_sub(match, config)[side]["players"]:
+        if r.get("jersey") is None:
+            continue
+        mez = str(int(r["jersey"]))
+        gol[mez] = gol.get(mez, 0) + int(r["goals"])
+    return {"gol": gol, "pad": pad}
+
+
+def _ssc_osszeg(mintak: list) -> tuple:
+    """Több meccs szuper-csere mintájának összege — ({mez (int): pad-gól},
+    {mez (int): hány meccsen jött a padról})."""
+    gol: dict = {}
+    meccs: dict = {}
+    for m in mintak or []:
+        for mez, g in ((m or {}).get("gol") or {}).items():
+            gol[int(mez)] = gol.get(int(mez), 0) + int(g)
+        for mez in (m or {}).get("pad") or []:
+            meccs[int(mez)] = meccs.get(int(mez), 0) + 1
+    return gol, meccs
+
+
+def super_sub_choice(mintak: list) -> dict | None:
+    """Szuper-csere választás a kész mintákból (`mintak`: super_sub_sample
+    meccsenként): a legtöbb pad-gólt szerző beálló (legalább SSC_MIN_GOL
+    pad-gól; holtversenyben a kevesebb meccsből termelő, aztán a kisebb
+    mezszám). Visszaad: {"mez", "gol", "meccsek" (hány meccsen jött a
+    padról), "atlag" (gól/meccs vagy None), "masik" (a második vagy None),
+    "beallok" ([{"mez", "gol", "meccsek", "atlag"}] gól szerint),
+    "verdict"} — None, ha senkinek nincs elég pad-gólja."""
+    gol, meccs = _ssc_osszeg(mintak)
+    beallok = [{"mez": mez, "gol": g, "meccsek": meccs.get(mez, 0),
+                "atlag": (round(g / meccs[mez], 2) if meccs.get(mez)
+                          else None)}
+               for mez, g in gol.items() if g >= SSC_MIN_GOL]
+    if not beallok:
+        return None
+    beallok.sort(key=lambda r: (-r["gol"], r["meccsek"], r["mez"]))
+    b = beallok[0]
+    m = beallok[1] if len(beallok) > 1 else None
+    verdict = (f"a padról {mezszam_nevelovel(b['mez'])} termel ({b['gol']} "
+               "pad-gól"
+               + (f" {b['meccsek']} meccsen" if b["meccsek"] else "")
+               + " a könyvtárban)"
+               + (f"; a második {mezszam_nevelovel(m['mez'])} ({m['gol']} "
+                  "pad-gól)" if m else ""))
+    return {"mez": b["mez"], "gol": b["gol"], "meccsek": b["meccsek"],
+            "atlag": b["atlag"], "masik": m, "beallok": beallok,
+            "verdict": verdict}
+
+
+def super_sub_backtest(meccsek: list,
+                       csapat: str | None = None) -> dict | None:
+    """A szuper-csere választás próbája: `meccsek` = [{"match_id", "home",
+    "away", "minta": {"home", "away"} (super_sub_sample)}] időrendben.
+    Minden meccsre és oldalra a KORÁBBI meccsekből javasolt szuper-csere
+    (super_sub_choice) — ha a meccsen ő is a padról jött — pad-góljai a
+    többi padról beálló fejenkénti átlagához mérve. A `csapat`
+    megadásával csak az ő meccsei. Mit jelent edzőileg: a "hozd be"
+    tanácsra a könyvtár beállójánál lehet-e építeni, vagy a napi forma
+    döntsön — ha a javasolt meccsenként SSC_ITELET_GOL góllal többet
+    szerez a többi beálló fejenkénti átlagánál, a választás igazolt.
+    Visszatérés: {"meccsek", "javasolt_gol", "tobbi_gol", "tobbi_fo",
+    "javasolt_atlag", "tobbi_atlag", "kulonbseg", "sorok", "itelet"
+    ("igazolt" / "nem"), "verdict"} — None, ha a javasolt SSC_PROBA_MIN-nél
+    kevesebb meccsen jött a padról."""
+    jg = tg = tf = 0
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            korabbi = [(x.get("minta") or {}).get(s) or {} for x in meccsek[:i]
+                       for s in ("home", "away") if x.get(s) == nev]
+            kc = super_sub_choice(korabbi)
+            most = (m.get("minta") or {}).get(side) or {}
+            pad = [int(x) for x in (most.get("pad") or [])]
+            if not kc or kc["mez"] not in pad:
+                continue
+            gol = {int(k): int(v) for k, v in (most.get("gol") or {}).items()}
+            j = gol.get(kc["mez"], 0)
+            tobbi = [x for x in pad if x != kc["mez"]]
+            t = sum(gol.get(x, 0) for x in tobbi)
+            jg += j
+            tg += t
+            tf += len(tobbi)
+            sorok.append({"match_id": m.get("match_id"), "team": nev,
+                          "javasolt": kc["mez"], "javasolt_gol": j,
+                          "tobbi_gol": t, "tobbi_fo": len(tobbi)})
+    if len(sorok) < SSC_PROBA_MIN:
+        return None
+    ja = jg / len(sorok)
+    ta = tg / tf if tf else 0.0
+    d = ja - ta
+    igazolt = d >= SSC_ITELET_GOL
+    sz = lambda x: f"{x:.1f}".replace(".", ",")  # noqa: E731
+    return {"meccsek": len(sorok), "javasolt_gol": jg, "tobbi_gol": tg,
+            "tobbi_fo": tf, "javasolt_atlag": round(ja, 2),
+            "tobbi_atlag": round(ta, 2), "kulonbseg": round(d, 2),
+            "sorok": sorok, "itelet": "igazolt" if igazolt else "nem",
+            "verdict": (f"a könyvtár szerinti szuper-csere {len(sorok)} "
+                        f"meccsen a padról {jg} gólt szerzett ({sz(ja)} "
+                        f"meccsenként), a többi beálló fejenként {sz(ta)} — "
+                        + ("a szuper-csere tanácsra lehet építeni" if igazolt
+                           else "a könyvtár beállója nem termel többet a "
+                           "többinél: a cserét a napi forma döntse el"))}
+
+
+def live_super_sub_alerts(match: Match, javaslatok: dict | None = None,
+                          config: TacticsConfig | None = None) -> dict:
+    """Élő szuper-csere: a saját csapat gól nélküli sorozatánál (SSC_SZARAZ
+    támadás egymás után gól nélkül — setplays.segment_attacks; a gól a
+    támadás alatt vagy FV_GOL_TURES_S-en belül utána) a kispadnak a
+    könyvtár szerinti szuper-csere (`javaslatok`: {"home" / "away":
+    super_sub_choice}); sorozatonként egyszer, a gól nullázza.
+    Visszatérés: {"alerts": [{"t", "t_s", "perc", "team", "team_name",
+    "mez", "szaraz", "text"}]}."""
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+    config = config or TacticsConfig()
+    alerts: list = []
+    if not match.frames or not javaslatok:
+        return {"alerts": alerts}
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t
+    tures = int(round(FV_GOL_TURES_S * fps))
+    golok = [(e.t, e.team) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    nevek = {"home": match.meta.home_team, "away": match.meta.away_team}
+    szaraz = {"home": 0, "away": 0}
+    szolt = {"home": False, "away": False}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if side not in nevek:
+            continue
+        gol = any(tm == seq.team and seq.start_t <= t <= seq.end_t + tures
+                  for t, tm in golok)
+        if gol:
+            szaraz[side] = 0
+            szolt[side] = False
+            continue
+        szaraz[side] += 1
+        j = (javaslatok or {}).get(side)
+        if not j or szolt[side] or szaraz[side] < SSC_SZARAZ:
+            continue
+        szolt[side] = True
+        perc = int((seq.end_t - t0) / fps // 60) + 1
+        alerts.append({"t": seq.end_t, "t_s": round(seq.end_t / fps, 1),
+                       "perc": perc, "team": side, "team_name": nevek[side],
+                       "mez": int(j["mez"]), "szaraz": szaraz[side],
+                       "text": (f"Szuper-csere ({perc}. perc): {nevek[side]} "
+                                f"{szaraz[side]} támadása gól nélkül — hozd "
+                                f"be {mezszam_nevelovel(j['mez'])}t: "
+                                f"{j['verdict']}")})
     return {"alerts": alerts}

@@ -264,7 +264,9 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                     het_a_hat_proba: dict | None = None,
                     falvaltas_proba: dict | None = None,
                     emberhatrany: dict | None = None,
-                    emberhatrany_proba: dict | None = None) -> list:
+                    emberhatrany_proba: dict | None = None,
+                    szuper_csere: dict | None = None,
+                    szuper_csere_proba: dict | None = None) -> list:
     """AI-edzésterv a következő meccsre az `ok` nevű ellenfél ellen — a
     modellek meccs előtti képéből egy rövid, indokolt lista: a támadás
     az ő várható faluk ellen (`vedekezes`, play_simulation.
@@ -359,6 +361,20 @@ def next_match_plan(ok: str, *, vedekezes: dict | None = None,
                       + (f"; a második dobó "
                          f"{mezszam_nevelovel(hetes['masik']['mez'])} is "
                          "dob tízet" if hetes.get("masik") else ""))})
+    # A szuper-cserénk: kit hozzunk be, ha a támadás elakad — csak ha a
+    # próba nem mond ellent (próba nélkül is szól — a tanács a könyvtáré).
+    if szuper_csere and (szuper_csere_proba is None
+                         or szuper_csere_proba.get("itelet") == "igazolt"):
+        ki.append({
+            "title": f"Szuper-csere: {mezszam_nevelovel(szuper_csere['mez'])}",
+            "area": "támadás",
+            "why": szuper_csere["verdict"]
+            + (f"; {szuper_csere_proba['verdict']}" if szuper_csere_proba
+               else ""),
+            "drill": (f"a beállása begyakorolva: {mezszam_nevelovel(szuper_csere['mez'])} "
+                      "a második csapat ellen a padról áll be a gól nélküli "
+                      "sorozat után, az első két támadás az ő lövőhelyére "
+                      "fut — a meccsen a jel a harmadik üres támadás")})
     # A kapus felkészítése az ő dobóik fő irányára — csak ha jósolható.
     if hetes_irany and (hetes_irany_proba is None
                         or hetes_irany_proba.get("itelet") == "josolhato"):

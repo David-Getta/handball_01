@@ -2861,3 +2861,52 @@ def test_a_finomito_es_a_szimulacio_a_mezszamokkal_es_a_lovokkel(
     assert c.post("/matches/gt/simulate-setplay", params={"defending": "away"},
                   json={"attackers": [[[26, 10], [30, 10]]],
                         "ball_carrier": [0, 0]}).json()["lovo_felirat"] == ""
+
+
+def test_a_szuper_csere_probaja_a_vegpontokon(tmp_path, monkeypatch):
+    """GET /matches/{id}/live-szupercsere: a tanács a könyvtár TÖBBI
+    meccséből és a próba — a valódi láncon ugyanaz, mint a motor; a
+    /library/player-model-check "szuper_csere_proba" és a /library/forecast
+    "szuper_csere" mezője."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (super_sub_backtest,
+                                                   super_sub_choice,
+                                                   super_sub_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    meccsek = []
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=240, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        meccsek.append(m)
+        app.state.put_match(m)
+    h = meccsek[0].meta.home_team
+
+    def minta(m, s_):
+        return json.loads(json.dumps(super_sub_sample(m, Team(s_))))
+
+    def lista(ms):
+        return [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+                 "away": m.meta.away_team,
+                 "minta": {s_: minta(m, s_) for s_ in ("home", "away")}}
+                for m in sorted(ms, key=lambda m: ((m.meta.date or ""),
+                                                   m.meta.match_id))]
+
+    mind = list(app.state.store.values())      # az "fm" meccs is benne
+    c = TestClient(app)
+    j = c.get("/matches/gt3/live-szupercsere").json()
+    assert "alerts" in j
+    assert j["proba"] == super_sub_backtest(
+        lista([m for m in mind if m.meta.match_id != "gt3"]))
+    assert j["javaslat"]["home"] == super_sub_choice(
+        [minta(m, "home") for m in meccsek[:2] if m.meta.home_team == h])
+    assert c.get("/library/player-model-check").json()[
+        "szuper_csere_proba"] == super_sub_backtest(lista(mind))
+    assert c.get("/library/forecast?home=" + h + "&away="
+                 + meccsek[0].meta.away_team).json()["szuper_csere"][
+        "home"] == super_sub_choice([minta(m, "home") for m in meccsek])

@@ -687,9 +687,10 @@ def test_az_elorejelzes_blokk_a_dontes_probakkal():
     assert ("hetes_irany_ok", "Az ő hetes-dobóik irányai") in ELOREJELZES_CIMKEK
     assert ("het_a_hat_mi", "A 7 a 6 mérlegünk") in ELOREJELZES_CIMKEK
     assert ("emberhatrany_mi", "Emberhátrány-falunk") in ELOREJELZES_CIMKEK
+    assert ("szuper_csere_mi", "Szuper-cserénk") in ELOREJELZES_CIMKEK
     assert ELOREJELZES_PROBAK == ("proba", "golszerzo_proba", "kapus_proba",
                                   "felderites_proba", "hetes_proba",
-                                  "hetes_irany_proba")
+                                  "hetes_irany_proba", "szuper_csere_proba")
     ej = {"text": "Hazai 27–25 Vendég", "kapus_mi": "az 1-es álljon a kapuban",
           "hetes_mi": "a hetest a 9-es dobja (11/13 a könyvtárban, 85%)",
           "proba": None, "golszerzo_proba": "A gólszerző-becslés próbája: x",

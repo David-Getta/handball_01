@@ -246,6 +246,14 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(4, "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
+    // Szuper-csere: a gól nélküli sorozatnál a könyvtár szerinti beálló.
+    try {
+      for (final a in await _api.fetchLiveSuperSub(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
     // Időkérés a sorozat ellen: a 3-0-s sorozat pillanatában — a tanács
     // az időkérés könyvtári próbájától függ (megtöri-e a sorozatot).
     try {
