@@ -42,3 +42,4 @@ percre vetítve (MEGFELEL/GYENGE — `scripts/speed_profile.py`,
 | 2026-11-06 | v0.1.193+46c856d3 | szimulált, 60 perc, 30000 kocka | 521 | 2 perc 4 mp | 1 perc 20 mp | x86_64, 4 mag, Python 3.11.17 | MEGFELEL |
 | 2026-11-07 | v0.1.193+855e17e4 | szimulált, 60 perc, 30000 kocka | 521 | 1 perc 36 mp | 1 perc 3 mp | x86_64, 4 mag, Python 3.11.17 | MEGFELEL |
 | 2026-11-07 | v0.1.193+3a9da7c5 | szimulált, 60 perc, 30000 kocka | 521 | 1 perc 16 mp | 1 perc 4 mp | x86_64, 4 mag, Python 3.11.17 | MEGFELEL |
+| 2026-11-07 | v0.1.193+8aa0932e | szimulált, 60 perc, 30000 kocka | 521 | 1 perc 9 mp | 59,0 mp | x86_64, 4 mag, Python 3.11.17 | MEGFELEL |

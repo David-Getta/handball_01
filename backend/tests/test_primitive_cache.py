@@ -350,3 +350,61 @@ def test_a_melyen_masolt_reteg_egyszer_fut_es_nem_szivarog():
         finally:
             del stats.sprint_threats.__wrapped__
     assert masodik == tiszta
+
+
+def test_a_tobbszor_hivott_retegek_a_hatokorben_egyszer_szamolnak():
+    """A sebesség-profil (docs/SEBESSEG.md) szerint egy csomagban a
+    kapus-idővonal 23-szor, a védekezés-tanulás mintája 14-szer, a
+    kettőzőpárosok és a visszatérő figurák 10-szer, a rotáció-mélység
+    és a szorításbeli döntés 5-ször, a falválasztás 4-szer, a kit-kinek
+    3-szor, a sorozat-okok 2-szer számolódtak újra — mind tiszta
+    réteg (meccs → adat). Mostantól memoizáltak: a hatókörben egyszer
+    futnak, minden hívó SAJÁT másolatot kap, hatókör nélkül a nyers
+    függvény fut."""
+    from handball.models.tracking import Team
+    from handball.pipeline import (decisions, defense, goalkeeper, momentum,
+                                   play_simulation, stats)
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.tactics import TacticsConfig
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0 / 3, seed=1,
+                              shots_per_min=6.0)
+    hivasok = [
+        (play_simulation._tanulas_minta, (Team.HOME, TacticsConfig())),
+        (play_simulation.defense_system_choice, ()),
+        (play_simulation.shooter_defender_matchup, ()),
+        (goalkeeper.goalkeeper_timeline, ()),
+        (defense.doubling_pair_roles, ()),
+        (stats.rotation_depth, ()),
+        (decisions.pressure_decision_quality, ()),
+        (momentum.annotate_runs, ()),
+    ]
+    for fn, args in hivasok:
+        assert hasattr(fn, "uncached"), fn.__name__
+        nyers = fn.uncached(m, *args)
+        with primitive_cache(m):
+            elso = fn(m, *args)
+            masodik = fn(m, *args)
+        assert elso == masodik == nyers, fn.__name__
+        assert elso is not masodik, fn.__name__           # védő-másolat
+
+
+def test_az_esemeny_masolat_fuggetlen_es_egyenlo():
+    """A `copy_events` gyors sekély másolata (copy.copy) ugyanazt adja,
+    mint a korábbi dataclasses.replace: mezőnként egyenlő, de független
+    példány — a hívó jelölése nem szivárog a gyorsítótárba."""
+    from dataclasses import replace
+
+    from handball.pipeline.event_detection import detect_events
+    from handball.pipeline.primitive_cache import copy_events
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=30, fps=25.0 / 3, seed=2,
+                              shots_per_min=6.0)
+    events = detect_events(m)
+    assert events, "a próba-meccsen nincs esemény"
+    masolat = copy_events(events)
+    assert masolat == [replace(e) for e in events]
+    assert all(a is not b for a, b in zip(events, masolat))
+    assert all(type(a) is type(b) for a, b in zip(events, masolat))

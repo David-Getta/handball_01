@@ -33,6 +33,7 @@ Miért biztonságos:
 from __future__ import annotations
 
 import contextvars
+import copy
 import functools
 from contextlib import contextmanager
 from dataclasses import is_dataclass, replace
@@ -83,8 +84,15 @@ def _arg_key(value):
 # hívók ténylegesen jelölhetnek (lásd a modul-docstringet).
 
 def copy_events(events: list) -> list:
-    """Esemény-lista másolata (a hívók jelölik, pl. gólpasszal)."""
-    return [replace(e) for e in events]
+    """Esemény-lista másolata (a hívók jelölik, pl. gólpasszal).
+
+    Sekély másolat eseményenként — `copy.copy`, nem `dataclasses.replace`:
+    a replace minden mezőt újra átad az __init__-nek (egy 60 perces
+    meccs csomagjában ~2000 lekérés × több száz esemény, a profil
+    szerint az összefoglaló idejének 5%-a), a copy.copy ugyanazt a
+    független példányt adja a mezők újraépítése nélkül.
+    """
+    return [copy.copy(e) for e in events]
 
 
 def copy_rows(rows: list) -> list:

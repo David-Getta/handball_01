@@ -10,31 +10,31 @@ Ez a lap a RÉTEG-részt méri (kész követésből a 500+ elemző réteg),
 amelyre a keret ≤ 5 perc CPU-n — a többi a
 felismerésé, azt a pilot valódi felvételen méri.
 
-Mérés: 3600 mp-es szimulált meccs, 8.33 fps (a termék ritkítása), 30000 kocka; verzió v0.1.193+3a9da7c5; gép: x86_64, 4 mag, Python 3.11.17.
+Mérés: 3600 mp-es szimulált meccs, 8.33 fps (a termék ritkítása), 30000 kocka; verzió v0.1.193+8aa0932e; gép: x86_64, 4 mag, Python 3.11.17.
 
-- **Rétegek összesen: 1 perc 16 mp** (521 réteg, átlag 146 ms) — ítélet: **MEGFELEL**
-- Gyors kép (coach_summary, xg, defense, training_focus): 1 perc 4 mp
-- Szimuláció (nem a termék része): 937 ms
+- **Rétegek összesen: 1 perc 9 mp** (521 réteg, átlag 133 ms) — ítélet: **MEGFELEL**
+- Gyors kép (coach_summary, xg, defense, training_focus): 59,0 mp
+- Szimuláció (nem a termék része): 1,1 mp
 
 ## A 15 leglassabb réteg
 
 | Réteg | Idő | A csomag %-a |
 |---|---|---|
-| `coach_summary` | 1 perc 4 mp | 83.8% |
-| `intensity_trend` | 880 ms | 1.2% |
-| `defense_system_choice` | 681 ms | 0.9% |
-| `shooter_defender_matchup` | 348 ms | 0.5% |
-| `advanced_defender_roles` | 308 ms | 0.4% |
-| `keeper_choice` | 263 ms | 0.3% |
-| `key_moments` | 203 ms | 0.3% |
-| `pressure_decision_quality` | 197 ms | 0.3% |
-| `defensive_gaps` | 197 ms | 0.3% |
-| `advanced_defender` | 190 ms | 0.3% |
-| `wall_gaps` | 165 ms | 0.2% |
-| `clutch_defense_shape` | 159 ms | 0.2% |
-| `attack_duration_efficiency` | 154 ms | 0.2% |
-| `line_height_by_score` | 153 ms | 0.2% |
-| `press_after_goal` | 148 ms | 0.2% |
+| `coach_summary` | 59,0 mp | 85.0% |
+| `intensity_trend` | 655 ms | 0.9% |
+| `advanced_defender_roles` | 310 ms | 0.4% |
+| `clutch_setplay` | 201 ms | 0.3% |
+| `clutch_defense_shape` | 200 ms | 0.3% |
+| `advanced_defender` | 182 ms | 0.3% |
+| `pass_direction` | 175 ms | 0.3% |
+| `line_height_by_score` | 163 ms | 0.2% |
+| `attack_duration_efficiency` | 156 ms | 0.2% |
+| `wall_gaps` | 155 ms | 0.2% |
+| `big_chance_feeder_roles` | 154 ms | 0.2% |
+| `press_after_goal` | 144 ms | 0.2% |
+| `figure_vs_formation` | 144 ms | 0.2% |
+| `side_switching` | 143 ms | 0.2% |
+| `setplay_by_score` | 140 ms | 0.2% |
 
 ## Olvasat
 

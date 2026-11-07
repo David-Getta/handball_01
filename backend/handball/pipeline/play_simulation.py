@@ -22,6 +22,7 @@ import math
 import statistics
 from dataclasses import dataclass, field, replace
 
+from .primitive_cache import copy_deep, memoize_primitive
 from ..models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
 )
@@ -415,6 +416,7 @@ def mezszam_nevelovel(mez: int) -> str:
     return f"{nevelo} {n}-{rag}"
 
 
+@memoize_primitive("tanulas_minta", copy=copy_deep)
 def _tanulas_minta(match: Match, defending_team: Team,
                    config: TacticsConfig) -> dict:
     """A védekezés-tanulás NYERS mintája egy meccsről (lásd
@@ -1670,6 +1672,7 @@ def rendszer_nevelovel(r: str) -> str:
     return ("az " if str(r).startswith("5") else "a ") + str(r)
 
 
+@memoize_primitive("defense_system_choice", copy=copy_deep)
 def defense_system_choice(match: Match,
                           config: TacticsConfig | None = None) -> dict:
     """Falválasztás — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az
@@ -2304,6 +2307,7 @@ def shooter_defender_pairs(tamadas, savok: dict, vedok: list) -> list:
     return parok
 
 
+@memoize_primitive("shooter_defender_matchup", copy=copy_deep)
 def shooter_defender_matchup(match: Match,
                              config: TacticsConfig | None = None) -> dict:
     """Kit kinek — csapatonként, a VÉDEKEZŐ oldal szemszögéből: az

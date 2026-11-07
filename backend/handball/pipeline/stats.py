@@ -587,6 +587,7 @@ ROTATION_REGULAR_SHARE = 0.5
 ROTATION_USED_SHARE = 0.1
 
 
+@memoize_primitive("rotation_depth", copy=copy_deep)
 def rotation_depth(match, config=None) -> dict:
     """Rotáció-mélység: hány emberrel játssza a csapat a meccset.
 

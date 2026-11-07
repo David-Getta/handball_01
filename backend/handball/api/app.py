@@ -2740,6 +2740,22 @@ def create_app():
             return
 
         def _run():
+            from ..pipeline.primitive_cache import primitive_cache
+            m0 = _store.get(match_id)
+            if m0 is None:
+                return
+            # EGY hatókör az egész előszámolásra. A végpontok ugyanazokat a
+            # rétegeket kérik — az összefoglaló taktikai kulcsai, a 3D oldal
+            # kulcsai és a felderítés ugyanazt a felderítő jelentést, a
+            # csapat-statisztika, a védekezés és az edzés-fókusz ugyanazokat
+            # az alap-méréseket —, és külön-külön hatókörben (a `_scoped`
+            # végpontonként nyitott egyet) mind újraépült. A beágyazott
+            # `_scoped` újra-belépő: a külső tárat használja, az eredmény
+            # ugyanaz, csak egyszer számolunk (sebesség-profil, 3. kör).
+            with primitive_cache(m0):
+                _run_lepesek()
+
+        def _run_lepesek():
             for name, fn in (("team-stats", _get_team_stats_raw),
                              ("training", _get_training_raw),
                              ("coach-summary", _get_coach_summary_raw),

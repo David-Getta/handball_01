@@ -41,7 +41,7 @@ to objective match analysis.
 - **On-premise processing**: no video upload, no cloud dependency —
   critical for clubs working with minors.
 - **521 analysis layers** across attack, defence, goalkeeping, rules,
-  momentum and physical load; **2,971 automated tests** and a
+  momentum and physical load; **2,974 automated tests** and a
   reproducible benchmark guard the quality of every release. (Live
   figures, generated from the codebase: `docs/SZAMOK.md`; per-layer
   catalogue: `docs/RETEG_KATALOGUS.md`.)
@@ -71,7 +71,7 @@ deployment (TRL 6), and prepares the company for the EIC Accelerator.
 Speed is a product requirement, not an afterthought: the pilot target
 is a full 60-minute match analysed in ≤ 15 minutes on the pilot GPU
 server (quick picture ≤ 3 minutes); the analysis layers themselves
-already run in ~1.3 minutes on a laptop CPU (`docs/SEBESSEG.md`).
+already run in just over a minute on a laptop CPU (`docs/SEBESSEG.md`).
 
 ## Why EU / widening support
 

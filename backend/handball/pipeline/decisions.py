@@ -28,7 +28,10 @@ from .tactics import TacticsConfig
 # A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a
 # birtoklás-mérés kockánként, egy összeállítás alatt milliószor): a
 # függvényen belüli import ennyi hívásnál már mérhető költség.
-from .primitive_cache import cached_frame, copy_events, memoize_primitive
+from .primitive_cache import (cached_frame,
+    copy_deep,
+    copy_events,
+    memoize_primitive)
 
 GOAL_Y = COURT_WIDTH_M / 2.0  # a kapu közepe y-ban (10 m)
 
@@ -1002,6 +1005,7 @@ PDQ_GOOD_PCT = 50.0
 PDQ_PLAYER_MIN = 5
 
 
+@memoize_primitive("pressure_decision_quality", copy=copy_deep)
 def pressure_decision_quality(match: Match,
                               config: Optional[TacticsConfig] = None
                               ) -> dict:

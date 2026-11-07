@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Nyolc többször hívott réteg a hatókörben egyszer, gyors
+  esemény-másolat** (a sebesség-profil 3. köre): az összefoglaló
+  profilja szerint egy csomagban a kapus-idővonal 23-szor, a
+  védekezés-tanulás nyers mintája 14-szer, a kettőzőpáros-poszt 10-szer,
+  a rotáció-mélység és a szorításbeli döntés 5-ször, a falválasztás
+  4-szer, a kit-kinek 3-szor, a sorozat-okok 2-szer épültek újra — mind
+  tiszta réteg, csak nem volt memoizálva; mostantól a hatókörben egyszer
+  futnak, védő-másolattal. Az esemény-lista védő-másolata
+  `dataclasses.replace` helyett `copy.copy` (ugyanaz a független
+  példány, a mezők újraépítése nélkül). Mind az 521 réteg kimenete
+  bitre azonos (dump-összevetés a 60 perces szimulált meccsen); a
+  csomag 1 perc 16 mp-ről 1 perc 9 mp, a gyors kép 1 perc 4 mp-ről 59 mp
+  (a jegyzőkönyv Sebesség táblájának 4. sora). A feldolgozás végi
+  háttér-előszámolás (a nehéz végpontok, hogy az első megnyitás
+  azonnali legyen) mostantól EGY hatókörben fut: a felderítő jelentés
+  csapatonként egyszer épül, pedig az összefoglaló taktikai kulcsai, a
+  felderítés-gyorsítótár és a 3D oldal kulcsai is kérik — eddig
+  végpontonként külön hatókörben háromszor épült fel.
 - **Felderítés a hatókörben egyszer** (`scouting.scout_team`): a
   felderítő jelentés eddig minden hívónak újra felépült — az edzői
   összefoglaló taktikai kulcsai, az angol felderítő kártyák és a csomag

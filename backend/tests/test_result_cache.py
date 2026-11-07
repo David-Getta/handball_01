@@ -324,3 +324,38 @@ def test_a_tarba_lepo_meccs_kapusai_jelolve(tmp_path, monkeypatch):
     i = forras.index("    def _tactical_keys(match_id: str, match):")
     blokk = forras[i:i + 1500]
     assert "kesz[side] = _scout_cached(match, team)" in blokk
+
+
+def test_az_eloszamolas_egy_hatokorben_fut_a_felderites_egyszer_epul(
+        konyvtar, monkeypatch):
+    """Az előszámolás EGY primitive_cache hatókörben fut: a felderítő
+    jelentés csapatonként egyszer épül fel, pedig az összefoglaló
+    taktikai kulcsai, a felderítés-gyorsítótár és a 3D oldal kulcsai is
+    kérik — végpontonként külön hatókörben háromszor épült (a
+    sebesség-profil szerint csapatonként ~25 mp egy teljes meccsen)."""
+    import copy
+    import threading
+
+    from handball.api.app import create_app
+    from handball.pipeline import scouting
+    from handball.pipeline.primitive_cache import memoize_primitive
+
+    monkeypatch.setenv("HANDBALL_WARM_RESULTS", "1")
+    nyers = scouting._scout_team_cached.uncached
+    n = {"db": 0}
+
+    def szamolt(match, team, config=None):
+        n["db"] += 1
+        return nyers(match, team, config)
+
+    monkeypatch.setattr(
+        scouting, "_scout_team_cached",
+        memoize_primitive("scout_team", copy=copy.deepcopy)(szamolt))
+    app = create_app()
+    app.state.warm_results("rc1")
+    szal = next((t for t in threading.enumerate() if t.name == "warm-rc1"),
+                None)
+    assert szal is not None, "az előszámoló szál elindult"
+    szal.join(180)
+    assert not szal.is_alive(), "az előszámolás végigért"
+    assert n["db"] == 2, f"a felderítés {n['db']}-szer épült fel (2 a jó)"

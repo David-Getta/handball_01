@@ -4,6 +4,9 @@ from __future__ import annotations
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# A forrás-olvasó őrök a backend mappából indulnak, nem a munkakönyvtárból
+# (xdist-munkásban az nem biztos, hogy a backend/ — lásd conftest).
+_BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
                                       PlayerPosition, Team)
@@ -279,7 +282,7 @@ def test_kulcs_poszt_lefedi_a_poszt_iteletes_retegeket():
                | {fn for _, _, fn in KP_PAIRS})
     # A hetes-oldal (irány-ítélet) és a poszt-nyomás kivétel: nem
     # posztot neveznek meg, vagy más a szerkezetük.
-    pipeline_dir = pathlib.Path("handball/pipeline")
+    pipeline_dir = pathlib.Path(_BACKEND, "handball", "pipeline")
     missing = []
     for mod in pipeline_dir.glob("*.py"):
         if mod.name in ("scouting.py", "report_html.py",
@@ -308,7 +311,7 @@ def test_minden_kp_reteg_a_riport_lencsekben_is():
 
     from handball.pipeline.priorities import KP_LAYERS
 
-    src = open("handball/pipeline/report_html.py",
+    src = open(os.path.join(_BACKEND, "handball", "pipeline", "report_html.py"),
                encoding="utf-8").read()
     i = src.index("fin_rows = _lens_rows")
     k = src.index("if def_rows:")
@@ -434,7 +437,7 @@ def test_kulcs_ember_lefedi_az_ember_iteletes_retegeket():
                "outlet_target_roles",   # poszt-lencse
                "seven_earner_roles",    # poszt-lencse
                "susp_earner_roles"}     # poszt-lencse
-    pipeline_dir = pathlib.Path("handball/pipeline")
+    pipeline_dir = pathlib.Path(_BACKEND, "handball", "pipeline")
     missing = []
     for mod in pipeline_dir.glob("*.py"):
         if mod.name in ("priorities.py", "scouting.py",

@@ -18,7 +18,7 @@ import math
 from typing import Optional
 
 from ..models.tracking import Match, Team
-from .primitive_cache import memoize_primitive
+from .primitive_cache import copy_deep, memoize_primitive
 
 # Ennyi válasz nélküli gól már említésre méltó sorozat.
 RUN_MIN = 3
@@ -84,6 +84,7 @@ CONTEXT_LEAD_S = 20.0
 TEMPO_DROP_RATIO = 0.9
 
 
+@memoize_primitive("annotate_runs", copy=copy_deep)
 def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
                   config=None) -> list[dict]:
     """A gól-sorozatok LEHETSÉGES OKAI — az edzői "miért" réteg.

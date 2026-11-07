@@ -23,8 +23,10 @@ import math
 
 from ..models.tracking import Match, PositionSource
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
-from .primitive_cache import (copy_rows, mark_roles_changed,
-                              memoize_primitive)
+from .primitive_cache import (copy_deep,
+    copy_rows,
+    mark_roles_changed,
+    memoize_primitive)
 
 # A kapuelőtér sugara + ráhagyás (a 6 m-es vonalon kicsit kívülre is kilép).
 GOAL_AREA_RADIUS_M = 6.8
@@ -216,6 +218,7 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
 GK_STINT_MIN_S = 10.0
 
 
+@memoize_primitive("goalkeeper_timeline", copy=copy_deep)
 def goalkeeper_timeline(match: Match, config=None) -> dict:
     """Ki védett mikor — kapus-szolgálatok és cserék csapatonként.
 

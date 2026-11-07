@@ -35,6 +35,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _tmp = tempfile.mkdtemp(prefix="handball_layer_registry_test_")
 os.environ["HANDBALL_DATA_DIR"] = _tmp
@@ -538,7 +539,7 @@ def test_nincs_ketszer_definialt_modul_konstans():
     import re
     from collections import Counter
 
-    pipeline_dir = pathlib.Path("handball/pipeline")
+    pipeline_dir = pathlib.Path(_BACKEND, "handball", "pipeline")
     hibak = []
     for mod in sorted(pipeline_dir.glob("*.py")):
         src = mod.read_text(encoding="utf-8")
@@ -567,9 +568,9 @@ def test_nincs_ketszer_definialt_fuggveny():
     from collections import Counter
 
     hibak = []
-    for d, minta in ((pathlib.Path("handball/pipeline"), "*.py"),
-                     (pathlib.Path("handball/api"), "*.py"),
-                     (pathlib.Path("tests"), "test_*.py")):
+    for d, minta in ((pathlib.Path(_BACKEND, "handball", "pipeline"), "*.py"),
+                     (pathlib.Path(_BACKEND, "handball", "api"), "*.py"),
+                     (pathlib.Path(_BACKEND, "tests"), "test_*.py")):
         for mod in sorted(d.glob(minta)):
             src = mod.read_text(encoding="utf-8")
             nevek = re.findall(r"^def (\w+)\(", src, flags=re.M)

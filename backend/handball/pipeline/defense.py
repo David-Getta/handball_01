@@ -5939,6 +5939,7 @@ DPP_MIN_FRAMES = 100
 DPP_SHARE_PCT = 60.0
 
 
+@memoize_primitive("doubling_pair_roles", copy=copy_deep)
 def doubling_pair_roles(match, config=None) -> dict:
     """Kettőzőpáros-poszt: MELYIK VÉDŐ-KETTŐSÜK kettőz együtt.
 
