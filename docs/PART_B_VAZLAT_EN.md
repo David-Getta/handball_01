@@ -64,7 +64,7 @@ extra hardware and fully on-premise processing.
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 2,963 automated tests,
+- Evidence infrastructure already in place: 2,970 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement
@@ -118,7 +118,7 @@ pilot/customer-success operator.
 | WP | Months | Content | Key KPI |
 |---|---|---|---|
 | WP1 Real-data validation | 1–6 | annotated real-match dataset (≥10 matches), accuracy targets, measurement ledger | goal recall ≥ target on real footage; ledger public per release |
-| WP2 Pilot (TRL 5) | 4–14 | 3–5 clubs use the product across a half-season; robustness in real halls (lighting, occlusion, crowd) | ≥3 active pilot clubs; ≥40 matches analysed |
+| WP2 Pilot (TRL 5) | 4–14 | 3–5 clubs use the product across a half-season; robustness in real halls (lighting, occlusion, crowd) | ≥3 active pilot clubs; ≥40 matches analysed; a full 60-min match analysed in ≤ 15 min on the pilot GPU server (quick picture ≤ 3 min) |
 | WP3 Demonstration (TRL 6) | 12–24 | season-long multi-club deployment, productisation (installer, licensing, support) | ≥8 clubs; first paying licences |
 | WP4 IPR + investment readiness | 6–24 | FTO analysis, IP strategy, pitch materials, LOIs, EIC Accelerator application | FTO report; ≥5 LOIs; Accelerator Step 1 submitted |
 

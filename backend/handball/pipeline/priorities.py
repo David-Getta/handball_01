@@ -29,6 +29,7 @@ try/except-tel, hogy egy réteg hibája ne vigye el a rangsort.
 
 from __future__ import annotations
 
+import copy
 from typing import Optional
 
 from ..models.tracking import Match
@@ -651,6 +652,7 @@ def key_pair(match: Match, config=None) -> dict:
     return out
 
 
+@memoize_primitive("key_post", copy=copy.deepcopy)
 def key_post(match: Match, config=None) -> dict:
     """Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra.
 
@@ -803,6 +805,7 @@ KPL_LAYERS: tuple = (
 )
 
 
+@memoize_primitive("key_player", copy=copy.deepcopy)
 def key_player(match: Match, config=None) -> dict:
     """Kulcs-ember: HÁNY RÉTEG mutat ugyanarra a JÁTÉKOSRA.
 
@@ -907,6 +910,7 @@ def _cpl_words(text: str) -> set:
     return out
 
 
+@memoize_primitive("counter_plan", copy=copy.deepcopy)
 def counter_plan(match: Match, config=None) -> dict:
     """Ellenszer-lap: a teendő-rangsor mellé a HOZZÁ TARTOZÓ gyakorlat.
 

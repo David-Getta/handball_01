@@ -41,7 +41,7 @@ to objective match analysis.
 - **On-premise processing**: no video upload, no cloud dependency —
   critical for clubs working with minors.
 - **521 analysis layers** across attack, defence, goalkeeping, rules,
-  momentum and physical load; **2,963 automated tests** and a
+  momentum and physical load; **2,970 automated tests** and a
   reproducible benchmark guard the quality of every release. (Live
   figures, generated from the codebase: `docs/SZAMOK.md`; per-layer
   catalogue: `docs/RETEG_KATALOGUS.md`.)
@@ -68,6 +68,10 @@ Working end-to-end prototype validated on simulated and real footage
 70% funding rate) closes TRL 4 on annotated real-match datasets,
 runs a 3–5 club pilot to TRL 5, demonstrates a season-long multi-club
 deployment (TRL 6), and prepares the company for the EIC Accelerator.
+Speed is a product requirement, not an afterthought: the pilot target
+is a full 60-minute match analysed in ≤ 15 minutes on the pilot GPU
+server (quick picture ≤ 3 minutes); the analysis layers themselves
+already run in ~1.5 minutes on a laptop CPU (`docs/SEBESSEG.md`).
 
 ## Why EU / widening support
 

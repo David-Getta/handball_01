@@ -241,6 +241,33 @@ def test_validate_match_cli_appends_to_ledger(tmp_path):
     assert rows[-1].count("|") >= 7, rows[-1]   # dátum..ítélet oszlopok
 
 
+def test_a_pontossag_sor_a_pontossag_tabla_vegere_kerul(tmp_path):
+    """A jegyzőkönyvben a pontosság-tábla UTÁN a Sebesség szakasz áll:
+    az új pontosság-sor a SAJÁT táblája végére kerül, nem a fájl végére
+    (ott a sebesség-táblába keveredne)."""
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    csv = tmp_path / "truth.csv"
+    csv.write_text("ido,tipus,csapat\n0:00, gól, hazai\n", encoding="utf-8")
+    log = tmp_path / "naplo.md"
+    log.write_text("# Napló\n\n| Dátum | Verzió | Meccs |\n|---|---|---|\n"
+                   "| 2026-01-01 | v0 | régi |\n\n## Sebesség\n\n"
+                   "| Dátum | Verzió | Felvétel |\n|---|---|---|\n"
+                   "| 2026-02-02 | v0 | szimulált |\n", encoding="utf-8")
+
+    assert main([str(mj), str(csv), "--jegyzokonyv", str(log)]) == 0
+    sorok = log.read_text(encoding="utf-8").split("\n")
+    regi = sorok.index("| 2026-01-01 | v0 | régi |")
+    assert sorok[regi + 1].startswith("| 20") and "match" in sorok[regi + 1]
+    assert sorok[regi + 2] == ""                       # a szakasz-határ megmaradt
+    assert sorok[-2] == "| 2026-02-02 | v0 | szimulált |"  # a sebesség-tábla érintetlen
+
+
 def test_validation_ledger_row_formats_markdown():
     """A jegyzőkönyv-sor dátumot, verziót, meccset és P/R értékeket
     tartalmaz Markdown-táblázatsorként."""

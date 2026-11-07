@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Sebesség-cél és sebesség-profil** (`scripts.speed_profile`,
+  `docs/SEBESSEG.md`, a mérési jegyzőkönyv új Sebesség táblája, roadmap
+  és pályázati KPI): az edző nem vár órákat — a kész termék célja, hogy
+  egy 60 perces meccs teljes elemzése a pilot GPU-s szerverén 15 percen
+  belül, a gyors kép (eredmény, lövés-térkép, edzői összefoglaló) 3
+  percen belül kész legyen. A profil a réteg-részt méri a termék
+  ritkításával és gyorsítótár-hatókörében, teljes hosszú szimulált
+  meccsen, rétegenként: az első mérésen 521 réteg 2 perc 4 mp
+  laptop-CPU-n (MEGFELEL a ≤ 5 perces keretnek), a leglassabb rétegek
+  rangsorával. A rangsor rögtön hozott egy gyorsítást: a kulcs-poszt,
+  a kulcs-ember és az ellenszer-lap mostantól memoizált a hatókörben
+  (az összefoglaló és az edzés-fókusz háromszor-ötször számoltatta
+  őket, bitre azonos eredménnyel) — a csomag 1 perc 36 mp, a gyors kép
+  1 perc 20 mp-ről 1 perc 3 mp; a maradék 87%-ot két aggregátor viszi
+  (`coach_summary`, `scouting_cards_en`), ez a következő jelölt. A pontosság-
+  jegyzőkönyv sora mostantól a pontosság-tábla végére kerül, nem a fájl
+  végére (a Sebesség szakasz utána áll).
 - **Az utolsó labda próbája** (motor + végpontok + szezon-riport +
   szezon-képernyő + AI-döntések sora + összkép): az élő "utolsó labda"
   tanács (a hajrában, szoros állásnál kinek a kezében ér a legtöbbet a

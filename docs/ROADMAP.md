@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2963 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2970 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -120,6 +120,35 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 ## 8. fázis — Élő meccskövetés
 - Valós idejű pipeline (streaming inferencia).
 - Élő dashboard + javaslatok (mit játssz, kit cserélj).
+
+## Sebesség-cél — a kész termék nem lassíthatja az edzőt
+
+Az edző azért használja, hogy könnyítse a munkáját: ha az elemzés
+órákat fut, inkább maga csinálja meg hamarabb. A sebesség ezért
+termék-követelmény, nem utólagos finomítás — és a KÉSZ termékre szól,
+nem a mai fejlesztői gépre:
+
+- **Teljes elemzés** (felismerés + minden réteg): egy 60 perces meccs
+  ≤ 15 perc a pilot GPU-s szerverén (WP2 KPI, `docs/PART_B_VAZLAT_EN.md`).
+- **Gyors kép** (eredmény, lövés-térkép, edzői összefoglaló): ≤ 3 perc —
+  az edző ezt nézi először, a többi réteg a háttérben készül tovább.
+- **Két tempó**: a gyors kép azonnal, a teljes csomag értesítéssel;
+  éjszakai sor a feltöltött meccsekre; a központi szerveres futtatás
+  ugyanazzal a motorral (videó be, számok ki — a felvétel törlésével).
+
+Hol tartunk: a RÉTEG-rész (a kész követésből a 500+ réteg) egy 60
+perces szimulált meccsen ~1,5 perc laptop-CPU-n (`docs/SEBESSEG.md`,
+`python -m scripts.speed_profile`; a mérési jegyzőkönyv Sebesség
+táblája) — a ≤ 5 perces keretén belül, a 15 percből tehát 13 marad a
+felismerésnek. A felismerés idejét a pilot valódi felvételen méri, a
+jegyzőkönyv külön sorában. Az első profil rögtön hozott egy lépést: a
+kulcs-poszt, a kulcs-ember és az ellenszer-lap memoizálása a
+hatókörben (az összefoglaló és az edzés-fókusz háromszor-ötször
+számoltatta őket) 2 perc 4 mp-ről 1 perc 36 mp-re vitte le a csomagot.
+A maradék 87%-át két aggregátor viszi (`coach_summary`,
+`scouting_cards_en`): a következő jelölt a réteg-eredmények további
+megosztása a hatókörben (ma az alap-mérések és néhány rangsor
+osztozik).
 
 ---
 

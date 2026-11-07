@@ -547,6 +547,29 @@ def test_edzes_fokusz_hatokoron_belul_egyszer_szamolodik():
             assert training_focus(m)["home"][0]["title"] != "MÓDOSÍTVA"
 
 
+def test_a_kulcs_retegek_hatokoron_belul_egyszer_szamolodnak():
+    """A kulcs-poszt, a kulcs-ember és az ellenszer-lap is memoizált a
+    hatókörben: az edzői összefoglaló és az edzés-fókusz eddig háromszor-
+    ötször számoltatta őket egy csomagban (a sebesség-profil szerint a
+    réteg-idő negyede). Minden hívó SAJÁT másolatot kap, a módosítás
+    nem szivárog vissza; hatókör nélkül a nyers függvény fut."""
+    from handball.pipeline import priorities
+    from handball.pipeline.primitive_cache import primitive_cache
+
+    m = _kp_match()
+    for fn in (priorities.key_post, priorities.key_player,
+               priorities.counter_plan):
+        assert hasattr(fn, "uncached"), fn.__name__   # memoizált
+        with primitive_cache(m):
+            elso = fn(m)
+            masodik = fn(m)
+            assert elso == masodik, fn.__name__
+            assert elso is not masodik, fn.__name__   # védő-másolat
+            elso["home"]["verdict"] = "MÓDOSÍTVA"
+            assert fn(m)["home"].get("verdict") != "MÓDOSÍTVA", fn.__name__
+        assert fn.uncached(m)["home"].get("verdict") != "MÓDOSÍTVA"
+
+
 def test_kulcs_ember_kuszob_a_lencse_meretevel_no(monkeypatch):
     """A küszöb a padló és a lista tizede közül a nagyobbik: kis
     lencsénél 4 egyezés elég, nagy lencsénél már nem."""

@@ -261,6 +261,21 @@ effektív fps = fps/3) másképp ítél-e. Az eltérés nem feltétlenül hiba
 (kevesebb minta → óvatosabb ítélet), de kocka-küszöbű új rétegnél
 tudd: a küszöböd valós időben HÁROMSZOROSÁT követeli a termékben.
 
+A sebesség-profil (`docs/SEBESSEG.md`) szintén jelentés-szintű (~2,5 perc):
+
+```bash
+cd backend && python3 -m scripts.speed_profile                # docs/SEBESSEG.md
+cd backend && python3 -m scripts.speed_profile --jegyzokonyv  # + sor a jegyzőkönyvbe
+```
+
+Amit néz: a 500+ réteg ideje egy 60 perces szimulált meccsen, a termék
+ritkításával és hatókörében, rétegenként. A kész termék célja
+(`docs/ROADMAP.md`, "Sebesség-cél"): teljes elemzés ≤ 15 perc a pilot
+GPU-s szerverén, gyors kép ≤ 3 perc; a réteg-rész kerete ≤ 5 perc CPU-n
+(`SEBESSEG_CEL_RETEGEK_S`). A szám gépfüggő, ezért NINCS őr-tesztje —
+kiadás előtt futtasd. Ha egy réteg a csomag 10%-a fölé megy, az a
+gyorsítás jelöltje; új, kockánként dolgozó rétegnél nézd meg, hova került.
+
 Az elnyelt-kivétel jelentése (`docs/ELNYELT_KIVETELEK.md`) szintén
 jelentés-szintű (~10 perc):
 
