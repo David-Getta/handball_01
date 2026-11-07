@@ -2732,3 +2732,32 @@ def test_a_felderites_probaja():
     assert q is not None and q["itelet"] == "nem"
     assert q["verdict"].endswith(
         "a meccstervet a friss meccsekre és a közös mintákra súlyozd")
+
+
+def test_a_felderites_hatokoron_belul_csapatonkent_egyszer_epul():
+    """A felderítő jelentés memoizált a primitive_cache hatókörben: az
+    edzői összefoglaló (taktikai kulcsok), az angol kártyák és a csomag
+    felderítés-rétege ugyanazt kéri — a sebesség-profil szerint ez volt
+    a csomag idejének ötöde. Minden hívó SAJÁT másolatot kap, a
+    módosítás nem szivárog vissza; az alapértelmezett beállítás és a
+    None ugyanazt a bejegyzést olvassa; hatókör nélkül a nyers
+    felépítés fut."""
+    from dataclasses import asdict
+
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.scouting import _scout_team_cached, scout_team
+    from handball.pipeline.tactics import TacticsConfig
+
+    assert hasattr(_scout_team_cached, "uncached")
+    m = _shots_match()
+    nyers = asdict(_scout_team_cached.uncached(m, Team.HOME))
+    with primitive_cache(m):
+        elso = scout_team(m, Team.HOME)
+        masodik = scout_team(m, Team.HOME)
+        alap = scout_team(m, Team.HOME, TacticsConfig())
+        assert asdict(elso) == asdict(masodik) == asdict(alap) == nyers
+        assert elso is not masodik and masodik is not alap   # védő-másolat
+        elso.matches = 99
+        assert scout_team(m, Team.HOME).matches == 1
+        # A másik csapat külön bejegyzés — nem keveredik.
+        assert scout_team(m, Team.AWAY).team != elso.team

@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.193 óta)
 
+- **Felderítés a hatókörben egyszer** (`scouting.scout_team`): a
+  felderítő jelentés eddig minden hívónak újra felépült — az edzői
+  összefoglaló taktikai kulcsai, az angol felderítő kártyák és a csomag
+  felderítés-rétege csapatonként külön-külön számolták ugyanazt a több
+  száz réteget (a sebesség-profil szerint a csomag ötöde). Mostantól a
+  jelentés memoizált a gyorsítótár-hatókörben, védő-másolattal, bitre
+  azonos eredménnyel: a 60 perces szimulált meccs csomagja 1 perc 36
+  mp-ről 1 perc 16 mp; a gyors kép változatlan (1 perc 4 mp — a
+  felderítés első felépítése az összefoglalóban marad; a jegyzőkönyv
+  Sebesség táblájának 3. sora).
 - **Sebesség-cél és sebesség-profil** (`scripts.speed_profile`,
   `docs/SEBESSEG.md`, a mérési jegyzőkönyv új Sebesség táblája, roadmap
   és pályázati KPI): az edző nem vár órákat — a kész termék célja, hogy

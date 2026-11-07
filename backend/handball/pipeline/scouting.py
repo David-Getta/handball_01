@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import re
 
+import copy
 import math
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 from ..models.tracking import Match, Frame, Team
+from .primitive_cache import memoize_primitive
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import (
     TacticsConfig, Phase, possession_team, classify_phase, detect_formation,
@@ -10839,9 +10841,17 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         return _scout_team_cached(match, team, config)
 
 
+@memoize_primitive("scout_team", copy=copy.deepcopy)
 def _scout_team_cached(match: Match, team: Team,
                        config: Optional[TacticsConfig] = None) -> ScoutingReport:
-    """A felderítő jelentés tényleges felépítése (lásd `scout_team`)."""
+    """A felderítő jelentés tényleges felépítése (lásd `scout_team`).
+
+    A hatókörben csapatonként EGYSZER épül fel: az edzői összefoglaló
+    (taktikai kulcsok), az angol felderítő kártyák és a csomag
+    felderítés-rétege ugyanazt a jelentést kéri — a sebesség-profil
+    szerint ez volt a csomag idejének ötöde. Minden hívó saját másolatot
+    kap (deepcopy), az eredmény bitre azonos a nyers felépítéssel.
+    """
     config = config or TacticsConfig()
     team_name = match.meta.home_team if team == Team.HOME else match.meta.away_team
 

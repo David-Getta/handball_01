@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2970 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2971 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -137,18 +137,18 @@ nem a mai fejlesztői gépre:
   ugyanazzal a motorral (videó be, számok ki — a felvétel törlésével).
 
 Hol tartunk: a RÉTEG-rész (a kész követésből a 500+ réteg) egy 60
-perces szimulált meccsen ~1,5 perc laptop-CPU-n (`docs/SEBESSEG.md`,
+perces szimulált meccsen ~1,3 perc laptop-CPU-n (`docs/SEBESSEG.md`,
 `python -m scripts.speed_profile`; a mérési jegyzőkönyv Sebesség
-táblája) — a ≤ 5 perces keretén belül, a 15 percből tehát 13 marad a
+táblája) — a ≤ 5 perces keretén belül, a 15 percből tehát ~14 marad a
 felismerésnek. A felismerés idejét a pilot valódi felvételen méri, a
-jegyzőkönyv külön sorában. Az első profil rögtön hozott egy lépést: a
+jegyzőkönyv külön sorában. A profil eddig két lépést hozott: a
 kulcs-poszt, a kulcs-ember és az ellenszer-lap memoizálása a
-hatókörben (az összefoglaló és az edzés-fókusz háromszor-ötször
-számoltatta őket) 2 perc 4 mp-ről 1 perc 36 mp-re vitte le a csomagot.
-A maradék 87%-át két aggregátor viszi (`coach_summary`,
-`scouting_cards_en`): a következő jelölt a réteg-eredmények további
-megosztása a hatókörben (ma az alap-mérések és néhány rangsor
-osztozik).
+hatókörben (2 perc 4 mp → 1 perc 36 mp), majd a felderítő jelentésé —
+az összefoglaló, az angol kártyák és a csomag felderítés-rétege
+csapatonként külön építette fel ugyanazt (1 perc 36 mp → 1 perc 16 mp).
+A maradék nagyját az összefoglaló viszi (84%), benne a
+felderítés első felépítése: a következő jelölt a felderítés belső
+rétegeinek megosztása.
 
 ---
 
