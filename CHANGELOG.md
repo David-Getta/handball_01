@@ -3,7 +3,26 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.193 óta)
+## v0.1.194 — kiadva (2026-11-07)
+
+> Kiadás-jegyzet: GYORSABB MOTOR, ÉS A PAD HAJRÁ-DÖNTÉSEI IS PRÓBÁZVA.
+> A sebesség mostantól termék-követelmény: a kész termék célja, hogy
+> egy 60 perces meccs teljes elemzése a pilot GPU-s szerverén 15
+> percen belül, a gyors kép 3 percen belül kész legyen (roadmap,
+> pályázati KPI). Ehhez sebesség-profil (`scripts.speed_profile`,
+> `docs/SEBESSEG.md`) és a mérési jegyzőkönyv Sebesség táblája; a
+> profil három gyorsítási kört hozott — a kulcs-rétegek, a felderítő
+> jelentés és nyolc többször hívott réteg memoizálása a hatókörben, a
+> gyors esemény-másolat, az előszámolás egy hatókörben —, mindegyik
+> bitre azonos kimenettel: az 521 réteg csomagja laptop-CPU-n 2 perc
+> 4 mp-ről 1 perc 9 mp-re, a gyors kép 1 perc 20 mp-ről 59 mp-re. A
+> pad hajrá-döntéseihez négy új önellenőrző réteg: megéri-e a 7 a 6
+> (hátrányban, a hajrában), a fal-váltás rossz szakasz után, az
+> emberhátrány-fal, és az utolsó labda próbája (az ajánlott lövő a
+> hajrában jobban fejez-e be) — mind a könyvtár időrendjében, csak a
+> korábbi meccsekből; az AI-próbák összképe már tizenöt próbát számol,
+> a meccsterv és az AI-edzésterv a hajrá szabályával bővült, a pad
+> döntései a 7 a 6-tal.
 
 - **Nyolc többször hívott réteg a hatókörben egyszer, gyors
   esemény-másolat** (a sebesség-profil 3. köre): az összefoglaló
