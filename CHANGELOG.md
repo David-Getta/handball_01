@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Kliens: tiszta `flutter analyze`** (Flutter 3.47.9 stable, macOS):
+  a fordító-szintű ellenőrzés 0 error, 0 warning mellett 8 info-t
+  jelzett — mind javítva, a `flutter analyze` most "No issues found!",
+  a `flutter test` 136 tesztje zöld. Elavult API-k a mai SDK
+  utódjaira: a kalibráló képernyő forgatás-kapcsolója
+  `activeThumbColor`, a tervező meccs-választója `RadioGroup` alatt
+  (a `groupValue`/`onChanged` a csoporté), a nagyítható nézet mátrixa
+  `translateByDouble`/`scaleByDouble` (ugyanaz a mátrix); három
+  felesleges import (`dart:typed_data`, `dart:ui`) törölve.
+
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés

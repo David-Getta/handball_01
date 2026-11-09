@@ -223,8 +223,8 @@ class _ZoomPanViewState extends State<ZoomPanView> {
               child: Stack(children: [
                 Transform(
                   transform: Matrix4.identity()
-                    ..translate(_offset.dx, _offset.dy)
-                    ..scale(_scale),
+                    ..translateByDouble(_offset.dx, _offset.dy, 0, 1)
+                    ..scaleByDouble(_scale, _scale, _scale, 1),
                   child: SizedBox(
                     width: size.width,
                     height: size.height,

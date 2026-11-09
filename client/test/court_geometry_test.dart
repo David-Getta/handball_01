@@ -1,7 +1,6 @@
 // A 3D pálya közös geometriája — a Dart-tükör ugyanazt adja, mint a
 // backend `court3d` (a várt értékek a Python-függvényből számolva).
 import "dart:math" as math;
-import "dart:ui";
 
 import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/services/backend_launcher.dart";

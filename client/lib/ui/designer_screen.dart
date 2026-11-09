@@ -395,21 +395,23 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 const SizedBox(height: AppSpacing.md),
                 Flexible(
                   child: SingleChildScrollView(
-                    child: Column(children: [
-                      for (final m in matches)
-                        RadioListTile<String>(
-                          dense: true,
-                          activeColor: AppColors.gold,
-                          title: Text(
-                            "${m["home_team"]} vs ${m["away_team"]}",
-                            style: AppText.value.copyWith(fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
+                    child: RadioGroup<String>(
+                      groupValue: matchId,
+                      onChanged: (v) => setDlg(() => matchId = v),
+                      child: Column(children: [
+                        for (final m in matches)
+                          RadioListTile<String>(
+                            dense: true,
+                            activeColor: AppColors.gold,
+                            title: Text(
+                              "${m["home_team"]} vs ${m["away_team"]}",
+                              style: AppText.value.copyWith(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            value: m["match_id"] as String,
                           ),
-                          value: m["match_id"] as String,
-                          groupValue: matchId,
-                          onChanged: (v) => setDlg(() => matchId = v),
-                        ),
-                    ]),
+                      ]),
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
