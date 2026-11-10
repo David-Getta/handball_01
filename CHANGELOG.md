@@ -71,6 +71,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `benchmark`: `_project_court_to_image`.
   - `validation`: `_parse_time`, `_prf` (minta nélkül None), `_verdict`,
     `_mmss`, `_mismatch_html`.
+  - `figura_video`: `_pont_felirat` (ékezet nélkül), kodek-választás
+    (működő író, megjegyezve; végső tartalék az mp4v).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
