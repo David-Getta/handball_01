@@ -34,6 +34,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     indulási mérföldkő, a main (tartalék port, végzetes hiba naplója).
   - `scripts/run_pipeline`: a minta-meccs (a szerződés minden eleme,
     JSON-körbejárás) és a main két kimeneti módja.
+  - `scripts/release_notes`: `unreleased_section` (üres / hiányzó
+    szakasznál None), a kimenetre írás, hiányzó CHANGELOG.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
