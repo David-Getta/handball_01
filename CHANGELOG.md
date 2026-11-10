@@ -63,6 +63,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `decisions`: `sit_article` (a/az a réteg minden választására).
   - `dataset`: `write_dataset_yaml` (abszolút út, osztály-nevek; hiányzó
     mappába nem ír).
+  - `court_coords`: `player_to_court` / `ball_to_court` (a talaj-pont
+    megy át a homográfián; kalibráció nélkül változatlan koordináta) —
+    eddig sosem futott.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
