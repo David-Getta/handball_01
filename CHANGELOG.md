@@ -55,6 +55,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `event_detection`: `goal_crossing_y` (a három gól-jel külön),
     `annotate_assists` (az ablak másodpercben él), `_shooter_before`
     (None, ha nincs támadó birtokos az ablakban).
+  - `detection`: `Detection.foot_point` (a doboz aljának közepe) és a
+    `Detector` váza (lusta töltés, modell nélkül üres lista) — eddig
+    sosem futott.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
