@@ -11,6 +11,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   mellé a "kevés minta → None / üres" esettel. Modulonként:
   - `video_meta`: `_mvhd_creation` (mindkét doboz-verzió, csonka doboz,
     véletlen bájt-egyezés) és a fájl-olvasás szélei.
+  - `track_stitch`: `_mean_colors` (minta nélküli track kimarad) és a
+    szín-kapu a valódi összefűzésben.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
