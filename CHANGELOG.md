@@ -61,6 +61,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `defense`: `wall_line`, `defense_shape_summary` és
     `clutch_wall_summary` (két meccs együtt ítél; kevés mintánál None).
   - `decisions`: `sit_article` (a/az a réteg minden választására).
+  - `dataset`: `write_dataset_yaml` (abszolút út, osztály-nevek; hiányzó
+    mappába nem ír).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
