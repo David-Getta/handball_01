@@ -61,6 +61,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_from_area_m`, `_jatekos_szorzo` (modell nélkül 1), `_modell_felirat`.
   - `court3d`: `_jersey_map`, `_nearest_keeper`, `_post_segment_distance`,
     `_third`, `_szam1_js` (a böngésző kerekítése).
+  - `coaching`: `_field_players`, `_side_label`, `_formation_suggestion`,
+    `_ball_speed_toward_attack`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
