@@ -36,6 +36,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `play_simulation`: `_hatoson_kivulre`, a csapat- és kapus-szorzók
     (lövés nélkül 1 / None), az előrejelzés profilja és várható gólja,
     a több meccses összegzők, `_review_until`.
+  - `merge`: `_centroid_x_window`, `_mirror_frames`,
+    `_normalize_segment_sides` (három darab; az ablak másodpercben él).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

@@ -322,3 +322,159 @@ def test_az_eldontetlen_hatar_a_minoseg_jelentesben_is_ott_van():
     # detektálás a gyökér-ok —, ezért a teendőt önmagában nézzük.)
     teendo = next_action(talalat)
     assert teendo and "EREDMÉNYT" in teendo, teendo
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_centroid_x_window_a_mert_poziciok_atlaga_az_ablakban():
+    """A csapat MÉRT pozícióinak átlagos x-e és darabszáma a [t_from,
+    t_to) ablakban: a becsült pozíció, a másik csapat és az ablakon
+    kívüli kocka nem számít; a felső határ nyitott."""
+    from handball.models.tracking import PositionSource
+    from handball.pipeline.merge import _centroid_x_window
+
+    frames = []
+    for t in range(10):
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=float(t), y=5.0),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=5.0),
+            PlayerPosition(track_id=3, team=Team.HOME, x=100.0, y=5.0,
+                           source=PositionSource.ESTIMATED),
+        ], ball=None))
+    # A 2..5 kockák (a 6. már nem): x = 2, 3, 4, 5 → átlag 3,5.
+    assert _centroid_x_window(frames, Team.HOME, 2, 6) == (3.5, 4)
+    assert _centroid_x_window(frames, Team.AWAY, 0, 10) == (30.0, 10)
+    assert _centroid_x_window(frames, Team.HOME, 0, 100) == (4.5, 10)
+
+
+def test_centroid_x_window_minta_nelkul_none_es_nulla():
+    """Ha az ablakban nincs mért pozíció (üres ablak, üres meccs, csak
+    becsült játékos), az átlag None és a darabszám 0 — nem 0,0 m (ami a
+    bal alapvonalat jelentené)."""
+    from handball.models.tracking import PositionSource
+    from handball.pipeline.merge import _centroid_x_window
+
+    assert _centroid_x_window([], Team.HOME, 0, 10) == (None, 0)
+    frames = [Frame(t=t, players=[PlayerPosition(
+        track_id=1, team=Team.HOME, x=5.0, y=5.0,
+        source=PositionSource.ESTIMATED)], ball=None) for t in range(5)]
+    assert _centroid_x_window(frames, Team.HOME, 0, 5) == (None, 0)
+    assert _centroid_x_window(frames, Team.AWAY, 0, 5) == (None, 0)
+    mert = [Frame(t=t, players=[PlayerPosition(
+        track_id=1, team=Team.HOME, x=5.0, y=5.0)], ball=None)
+        for t in range(5)]
+    assert _centroid_x_window(mert, Team.HOME, 5, 9) == (None, 0)
+    assert _centroid_x_window(mert, Team.HOME, 3, 3) == (None, 0)
+
+
+def _kis_meccs(n=6):
+    meta = MatchMeta(match_id="mf", home_team="A", away_team="B", fps=10.0)
+    return Match(meta, [Frame(t=t, players=[
+        PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=8.0),
+        PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=12.0),
+    ], ball=Ball(x=12.0, y=9.0) if t != 4 else None) for t in range(n)])
+
+
+def test_mirror_frames_csak_az_ablak_kockait_tukrozi():
+    """A [t_from, t_to) kockák játékosai és a labda a pálya közepére
+    tükröződnek (x→40−x, y→20−y); az ablakon kívüli kockák és a labda
+    nélküli kocka érintetlen marad (nem hiba)."""
+    from handball.pipeline.merge import _mirror_frames
+
+    m = _kis_meccs()
+    _mirror_frames(m, 2, 5)
+    for f in m.frames:
+        hazai, vendeg = f.players
+        if 2 <= f.t < 5:
+            assert (hazai.x, hazai.y) == (30.0, 12.0)
+            assert (vendeg.x, vendeg.y) == (10.0, 8.0)
+            if f.ball is not None:
+                assert (f.ball.x, f.ball.y) == (28.0, 11.0)
+        else:
+            assert (hazai.x, hazai.y) == (10.0, 8.0)
+            assert (vendeg.x, vendeg.y) == (30.0, 12.0)
+            assert (f.ball.x, f.ball.y) == (12.0, 9.0)
+    assert m.frames[4].ball is None
+
+
+def test_mirror_frames_nyitott_veggel_es_ketszer_tukrozve():
+    """Záró határ nélkül (None) a tükrözés a meccs végéig tart; kétszer
+    tükrözve az eredeti kép áll vissza; üres ablak semmit sem mozdít."""
+    from handball.pipeline.merge import _mirror_frames
+
+    m = _kis_meccs()
+    _mirror_frames(m, 3, None)
+    assert [f.players[0].x for f in m.frames] == [10.0] * 3 + [30.0] * 3
+    _mirror_frames(m, 3, None)
+    assert [f.players[0].x for f in m.frames] == [10.0] * 6
+    assert [f.players[0].y for f in m.frames] == [8.0] * 6
+    _mirror_frames(m, 4, 4)
+    _mirror_frames(m, 100, None)
+    assert [f.players[0].x for f in m.frames] == [10.0] * 6
+
+
+def test_normalize_segment_sides_harom_darab_a_masodik_felido_ket_reszben():
+    """Három darab: 1. félidő, majd a 2. félidő KÉT darabban. Mindkét
+    2. félidős darab tükröződik — a harmadik nem "fordul vissza" attól,
+    hogy az előtte álló (már tükrözött) darabhoz képest a nyers képe
+    megint fordítottnak látszik (ez volt a billegtetés-hiba)."""
+    a = _terfeles_resz("n1", 800, 10.0, video="/v/a.mp4")
+    b = _terfeles_resz("n2", 800, 30.0, video="/v/b.mp4")
+    c = _terfeles_resz("n3", 800, 30.0, video="/v/c.mp4")
+    m = merge_matches([a, b, c], "teljes")
+    sz = m.meta.source_segments
+    assert [s["mirrored"] for s in sz] == [False, True, True]
+    assert all(s["mirror_decided"] for s in sz)
+    hazai_x = [p.x for f in m.frames for p in f.players
+               if p.team == Team.HOME]
+    assert max(hazai_x) < 15.0                   # végig a bal térfélen
+    # Ha a harmadik darab VISSZAFORDUL (pl. hosszabbítás, újabb csere),
+    # az nem tükröződik.
+    d = _terfeles_resz("n4", 800, 10.0, video="/v/d.mp4")
+    m2 = merge_matches([a, b, d], "teljes")
+    assert [s["mirrored"] for s in m2.meta.source_segments] == [
+        False, True, False]
+
+
+def test_normalize_segment_sides_egy_szakasznal_es_ures_meccsen_nem_nyul():
+    """Egyetlen szakasznál (nincs belső határ), szakasz-lista nélkül és
+    kocka nélküli meccsen a normalizálás semmit sem csinál — nem tükröz,
+    nem ír döntést, nem hibázik."""
+    from handball.pipeline.merge import _normalize_segment_sides
+
+    m = _kis_meccs()
+    elotte = [(p.x, p.y) for f in m.frames for p in f.players]
+    _normalize_segment_sides(m)                           # nincs szakasz
+    m.meta.source_segments = [{"t_from": 0, "t_to": 6}]
+    _normalize_segment_sides(m)                           # egy szakasz
+    assert m.meta.source_segments == [{"t_from": 0, "t_to": 6}]
+    assert [(p.x, p.y) for f in m.frames for p in f.players] == elotte
+    ures = Match(MatchMeta(match_id="u", home_team="A", away_team="B",
+                           fps=10.0), [])
+    ures.meta.source_segments = [{"t_from": 0, "t_to": 5},
+                                 {"t_from": 5, "t_to": 10}]
+    _normalize_segment_sides(ures)
+    assert "mirrored" not in ures.meta.source_segments[1]
+
+
+def test_normalize_segment_sides_az_ablak_masodpercben_el():
+    """Az ellenőrző ablak 120 MÁSODPERC a határ két oldalán: a kockaszám
+    a meccs fps-éből jön — 5 fps-en 600 kocka. A határtól 120 mp-nél
+    távolabb eső kockák (itt: a darab eleje, ahol a csapat még a másik
+    térfélen állt fel) nem számítanak a döntésbe."""
+    from handball.pipeline.calibration import COURT_LENGTH_M
+    from handball.pipeline.merge import SEG_SWAP_WINDOW_S
+
+    assert SEG_SWAP_WINDOW_S == 120.0
+    fps = 5.0
+    # 1. darab: 400 mp; az első 250 mp-ben a hazai JOBBRA (x≈30) áll, az
+    # utolsó 150 mp-ben BALRA (x≈10) — a határ előtti 120 mp tehát bal.
+    a = _terfeles_resz("w1", 2000, 10.0, video="/v/a.mp4", fps=fps)
+    for f in a.frames[:1250]:
+        for p in f.players:
+            p.x = COURT_LENGTH_M - p.x
+    b = _terfeles_resz("w2", 1000, 30.0, video="/v/b.mp4", fps=fps)
+    m = merge_matches([a, b], "teljes")
+    sz = m.meta.source_segments
+    assert sz[1]["mirror_decided"] is True
+    assert sz[1]["mirrored"] is True
