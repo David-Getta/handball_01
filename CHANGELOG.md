@@ -12,6 +12,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   forrással is. Modulonként:
   - `tactics`: `_possession_team`, `_classify_phase` (a gyorsítótár
     mögötti számítás; őr: a burkoló kockánként ugyanazt adja).
+  - `scouting`: a mintákból származtatott képek (`_lsp_pick_of`,
+    `_kk_lovok_of`, `_el_lovok_of`, `_le_kep_of`, `_kc_kapusok_of`,
+    `_kk_parok_of` — őr: a valódi jelentés képei a tárolt mintákból
+    újraszámolhatók), `_sit_habit`, `_figure_dossier_of`,
+    `_setplay_library_of`.
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
