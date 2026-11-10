@@ -50,6 +50,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     megírt és VALÓDI háromfolyamatos méréssel), a main három módja.
   - `scripts/finetune`: `install_weights` (a régi súly mentésével) és a
     main útjai kamu YOLO-val.
+  - `scripts/compare_models`: egy- és kétmodelles eredménylap, a
+    labda-lefedettség változása előjellel.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
