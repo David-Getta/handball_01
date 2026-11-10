@@ -46,6 +46,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     hibásan tükröződő), a jelentés, a main kilépőkódja.
   - `scripts/layer_catalog`: a regisztráció kiolvasása, a réteg
     megkeresése, a katalógus építése, a main író / ellenőrző módja.
+  - `scripts/hash_sensitivity`: a munkás-folyamat, az összevetés (előre
+    megírt és VALÓDI háromfolyamatos méréssel), a main három módja.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
