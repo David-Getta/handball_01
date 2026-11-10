@@ -63,6 +63,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_third`, `_szam1_js` (a böngésző kerekítése).
   - `coaching`: `_field_players`, `_side_label`, `_formation_suggestion`,
     `_ball_speed_toward_attack`.
+  - `clips`: `_clock`, `_segment_of`, `_jersey_of_track`,
+    `_draw_arrows_on_frame` (kalibráció nélkül nem rajzol).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
