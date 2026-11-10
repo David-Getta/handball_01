@@ -54,6 +54,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     labda-lefedettség változása előjellel.
   - `scripts/collect_dataset`: `_make_detect_fn` (külön játékos- és
     labda-küszöb) és a main kis próba-videókon.
+  - `scripts/benchmark`: verzió-felismerés, valódi rövid futás
+    (Markdown + JSON), bukó metrikánál 1-es kilépőkód.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
