@@ -5120,3 +5120,238 @@ def test_a_hajra_fal_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
     assert "A hajrában másik falat hozunk" in cimek
     szoveg = str(coach_summary(meccs))
     assert "másik falat hoznak" in szoveg
+
+
+# ---- A védőfal egy kockán (wall_line) ---------------------------------------
+
+def test_wall_line_a_mert_mezonyvedok_y_szerint():
+    """A fal: a csapat MÉRT, kapus nélküli játékosai a saját kaputól
+    12 m-en belül, y szerint rendezve — (y, x) párok."""
+    from handball.pipeline.defense import WALL_GAP_DEPTH_M, wall_line
+
+    players = [
+        _pl(24, Team.AWAY, 34.0, 14.0), _pl(21, Team.AWAY, 34.5, 3.0),
+        _pl(23, Team.AWAY, 33.0, 11.0), _pl(22, Team.AWAY, 34.0, 7.0),
+        _pl(20, Team.AWAY, 39.0, 10.0, role="kapus"),        # kapus: kimarad
+        _pl(25, Team.AWAY, 40.0 - WALL_GAP_DEPTH_M, 17.0),   # pont 12 m: bent
+        _pl(26, Team.AWAY, 27.5, 9.0),                       # 12,5 m: kint
+        _pl(1, Team.HOME, 33.5, 10.0),                       # támadó: kimarad
+        PlayerPosition(track_id=27, team=Team.AWAY, x=34.0, y=9.0,
+                       source=PositionSource.ESTIMATED, confidence=0.4),
+    ]
+    assert wall_line(players, Team.AWAY, 40.0) == [
+        (3.0, 34.5), (7.0, 34.0), (11.0, 33.0), (14.0, 34.0), (17.0, 28.0)]
+    # A másik kapunál (x=0) a hazai fal ugyanígy, a saját kapujától mérve.
+    hazai = [_pl(2, Team.HOME, 6.0, 12.0), _pl(3, Team.HOME, 5.5, 8.0),
+             _pl(4, Team.HOME, 12.5, 10.0)]
+    assert wall_line(hazai, Team.HOME, 0.0) == [(8.0, 5.5), (12.0, 6.0)]
+
+
+def test_wall_line_ures_ha_nincs_merheto_vedo():
+    """Üres kockán, csak kapussal, csak becsült vagy csak az ellenfél
+    játékosaival nincs fal: üres lista (nem None, nem kivétel)."""
+    from handball.pipeline.defense import wall_line
+
+    assert wall_line([], Team.AWAY, 40.0) == []
+    assert wall_line([_pl(20, Team.AWAY, 39.0, 10.0, role="kapus")],
+                     Team.AWAY, 40.0) == []
+    assert wall_line([_pl(1, Team.HOME, 34.0, 10.0)], Team.AWAY, 40.0) == []
+    becsult = PlayerPosition(track_id=27, team=Team.AWAY, x=34.0, y=9.0,
+                             source=PositionSource.ESTIMATED,
+                             confidence=0.4)
+    assert wall_line([becsult], Team.AWAY, 40.0) == []
+    # A felállt fal a MÁSIK kapunál nem fal (a kaputól 34 m-re áll).
+    assert wall_line([_pl(21, Team.AWAY, 34.0, 10.0)], Team.AWAY, 0.0) == []
+
+
+# ---- Meccsek közti fal-összefésülők (felderítés-oldal) ----------------------
+#
+# A ScoutingReport lapos, darabszám-alapú sorait fésülik össze. Az alak
+# 6x3-as rács (18 elem), a védett kapu a +x oldalon. Az egy cellára
+# koncentrált alak súlypontja a cella közepe: a 11-es cella (ix=5, iy=1)
+# "tömören a hatoson (3.3 m), közép", a 10-es "a 9-es vonalon (10.0 m),
+# közép", a 9-es "előrehúzva (16.7 m), közép"; az iy=0 sor a VÉDŐ jobb,
+# az iy=2 a bal oldala (tükrözve).
+
+def _fal_alak(idx, mellek=None, suly=0.05):
+    """Egy cellára koncentrált fal-alak; `mellek` cellára kis súlyt tolva
+    egy közeli (összevonandó) változatot ad."""
+    v = [0.0] * 18
+    v[idx] = 1.0
+    if mellek is not None:
+        v[idx] -= suly
+        v[mellek] += suly
+    return v
+
+
+def test_defense_shape_summary_ket_meccs_egyutt_mar_itel():
+    """Külön-külön kevés (2-3 támadás) a minta, együtt már ítél: a tömör
+    hatos ellen 25%-ot kapnak (1/4), az előrehúzott ellen 80%-ot (4/5)."""
+    from handball.pipeline.defense import (DSH_MIN_ATTACKS,
+                                           defense_shape_summary)
+
+    egy_meccs = [
+        {"shape": _fal_alak(11), "attacks": 2, "goals": 0},
+        {"shape": _fal_alak(9), "attacks": 3, "goals": 3},
+    ]
+    assert max(r["attacks"] for r in egy_meccs) < DSH_MIN_ATTACKS
+    assert defense_shape_summary(egy_meccs)["verdict"] is None
+
+    res = defense_shape_summary(egy_meccs + [
+        {"shape": _fal_alak(11, mellek=5), "attacks": 2, "goals": 1},
+        {"shape": _fal_alak(9), "attacks": 2, "goals": 1},
+    ])
+    assert [s["attacks"] for s in res["shapes"]] == [5, 4]   # mintaszám szerint
+    kilepo, tomor = res["shapes"]
+    assert kilepo["zone"] == "előrehúzva (16.7 m), közép"
+    assert (kilepo["goals"], kilepo["goal_pct"]) == (4, 80.0)
+    assert tomor["zone"].startswith("tömören a hatoson (3.3 m)")
+    assert (tomor["goals"], tomor["goal_pct"]) == (1, 25.0)
+    # Az összevont alak a két változat támadás-számmal SÚLYOZOTT közepe.
+    assert tomor["shape"][11] == 0.975 and tomor["shape"][5] == 0.025
+    assert abs(sum(tomor["shape"]) - 1.0) < 1e-9
+    assert res["verdict"] == (
+        "kétféle falat állítanak: " + tomor["zone"] + " ellen 25%-ot "
+        "kapnak (1/4 támadás), előrehúzva (16.7 m), közép ellen viszont "
+        "80%-ot (4/5) — a gyengébb falukat kell kihozni belőlük: gyors "
+        "indítás, korai befejezés, mielőtt a másik alak felállna")
+
+
+def test_defense_shape_summary_oldalt_a_vedo_szemszogebol_nevez():
+    """A rács a támadó irányához normált, a két csapat szemben áll: az
+    iy=0 sor (a támadó bal oldala) a VÉDŐ jobb oldala, az iy=2 a bal."""
+    from handball.pipeline.defense import defense_shape_summary
+
+    res = defense_shape_summary([
+        {"shape": _fal_alak(5), "attacks": 3, "goals": 0},
+        {"shape": _fal_alak(17), "attacks": 2, "goals": 0},
+        {"shape": _fal_alak(10), "attacks": 1, "goals": 0},
+    ])
+    assert [s["zone"] for s in res["shapes"]] == [
+        "tömören a hatoson (3.3 m), jobb oldal",
+        "tömören a hatoson (3.3 m), bal oldal",
+        "a 9-es vonalon (10.0 m), közép"]
+
+
+def test_defense_shape_summary_keves_mintanal_vagy_kis_resnel_none():
+    """Nincs ítélet, ha csak EGY alaknak van elég (4) támadása, ha a két
+    alak hozama 20 pp-nál közelebb van, vagy ha nincs sor. Az alak
+    nélküli sor kimarad; None / üres bemenet → üres lista."""
+    from handball.pipeline.defense import defense_shape_summary
+
+    egy_eleg = defense_shape_summary([
+        {"shape": _fal_alak(11), "attacks": 6, "goals": 1},
+        {"shape": _fal_alak(9), "attacks": 3, "goals": 3},
+    ])
+    assert len(egy_eleg["shapes"]) == 2 and egy_eleg["verdict"] is None
+    kis_res = defense_shape_summary([
+        {"shape": _fal_alak(11), "attacks": 10, "goals": 4},     # 40%
+        {"shape": _fal_alak(9), "attacks": 10, "goals": 5},      # 50%
+    ])
+    assert kis_res["verdict"] is None
+    hianyos = defense_shape_summary([
+        {"shape": [], "attacks": 9, "goals": 9},
+        {"attacks": 9, "goals": 9},
+        {"shape": _fal_alak(11), "attacks": 4, "goals": 0},
+    ])
+    assert [s["attacks"] for s in hianyos["shapes"]] == [4]
+    assert hianyos["verdict"] is None
+    assert defense_shape_summary([]) == {"shapes": [], "verdict": None}
+    assert defense_shape_summary(None) == {"shapes": [], "verdict": None}
+
+
+def test_defense_shape_summary_a_kuszob_donti_el_mi_egy_fal():
+    """Az összevonás küszöbe állítható: 0-s küszöbbel a közeli változat
+    külön fal marad (az azonos alak akkor is összeáll), az alappal egy."""
+    from handball.pipeline.defense import defense_shape_summary
+
+    rows = [{"shape": _fal_alak(11), "attacks": 2, "goals": 0},
+            {"shape": _fal_alak(11, mellek=5), "attacks": 2, "goals": 0},
+            {"shape": _fal_alak(11), "attacks": 1, "goals": 0}]
+    assert [s["attacks"] for s in
+            defense_shape_summary(rows)["shapes"]] == [5]
+    assert [s["attacks"] for s in
+            defense_shape_summary(rows, threshold=0.0)["shapes"]] == [3, 2]
+
+
+def test_clutch_wall_summary_a_hajraban_masik_falat_hoznak():
+    """Két meccs hajrája együtt: az előrehúzott fal a hajrá 5/6 támadása
+    (83%), a törzsben csak 2/10 (20%) → ítélet, a kilépő fal elleni
+    tanáccsal; külön-külön a hajrá-minta (3, ill. 3) kevés."""
+    from handball.pipeline.defense import (CDS_MIN_ATTACKS,
+                                           clutch_wall_summary)
+
+    elso = [{"shape": _fal_alak(9), "attacks": 3, "goals": 1,
+             "rest_attacks": 1}]
+    masodik = [{"shape": _fal_alak(9, mellek=3), "attacks": 2, "goals": 1,
+                "rest_attacks": 1},
+               {"shape": _fal_alak(11), "attacks": 1, "goals": 0,
+                "rest_attacks": 8}]
+    assert clutch_wall_summary(elso)["attacks"] < CDS_MIN_ATTACKS
+    assert clutch_wall_summary(elso)["verdict"] is None
+    assert clutch_wall_summary(masodik)["verdict"] is None
+
+    res = clutch_wall_summary(elso + masodik)
+    assert res["attacks"] == 6
+    fo, tomor = res["shapes"]
+    assert fo["zone"] == "előrehúzva (16.7 m), közép"
+    assert (fo["attacks"], fo["goals"], fo["rest_attacks"]) == (5, 2, 2)
+    assert (fo["share_pct"], fo["rest_share_pct"]) == (83.3, 20.0)
+    assert fo["goal_pct"] == 40.0
+    assert (tomor["attacks"], tomor["rest_attacks"]) == (1, 8)
+    assert (tomor["share_pct"], tomor["rest_share_pct"]) == (16.7, 80.0)
+    # A súlyozás a hajrá ÉS a törzs támadásaival megy: 4 tiszta + 3
+    # változat sor → a mellék-cella súlya 0,05 × 3/7.
+    assert fo["shape"][3] == round(0.05 * 3 / 7, 4)
+    assert res["verdict"].startswith(
+        "a hajrában másik falat hoznak: az utolsó öt percben a(z) "
+        "\"előrehúzva (16.7 m), közép\" alak a védekezett támadásaik "
+        "83%-a (5/6, 2 kapott gól), a meccs többi részén csak 20%")
+    assert "a kilépő fal mögé: beálló-bejátszás" in res["verdict"]
+
+
+def test_clutch_wall_summary_a_tanacs_a_fal_melysegehez_igazodik():
+    """A tömör hatos ellen távoli befejezést, a 9-esen álló fal ellen a
+    két rés támadását tanácsolja — ugyanabból a mérlegből."""
+    from handball.pipeline.defense import clutch_wall_summary
+
+    def itelet(cella):
+        return clutch_wall_summary([
+            {"shape": _fal_alak(cella), "attacks": 5, "goals": 1,
+             "rest_attacks": 1},
+            {"shape": _fal_alak(0), "attacks": 1, "goals": 0,
+             "rest_attacks": 9}])["verdict"]
+
+    assert "távoli befejezés: átlövés a 9-esről" in itelet(11)
+    assert "a 9-esen álló fal két résére" in itelet(10)
+
+
+def test_clutch_wall_summary_keves_mintanal_vagy_azonos_falnal_none():
+    """Nincs ítélet, ha a hajrában 4-nél kevesebb a védekezett támadás,
+    ha a fő hajrá-fal 50% alatti, vagy ha a törzsben is ugyanazt a falat
+    hozzák (rés < 25 pp). Üres / None bemenet → nulla támadás, None."""
+    from handball.pipeline.defense import clutch_wall_summary
+
+    keves = clutch_wall_summary([
+        {"shape": _fal_alak(9), "attacks": 3, "goals": 3,
+         "rest_attacks": 0}])
+    assert keves["attacks"] == 3 and keves["verdict"] is None
+    szort = clutch_wall_summary([
+        {"shape": _fal_alak(9), "attacks": 2, "rest_attacks": 0},
+        {"shape": _fal_alak(11), "attacks": 2, "rest_attacks": 0},
+        {"shape": _fal_alak(0), "attacks": 2, "rest_attacks": 9}])
+    assert szort["attacks"] == 6 and szort["verdict"] is None
+    ugyanaz = clutch_wall_summary([
+        {"shape": _fal_alak(11), "attacks": 5, "rest_attacks": 9},
+        {"shape": _fal_alak(9), "attacks": 1, "rest_attacks": 1}])
+    assert ugyanaz["shapes"][0]["rest_share_pct"] == 90.0
+    assert ugyanaz["verdict"] is None
+    # A csak a törzsben hozott fal is bent marad (0 hajrá-támadással).
+    torzs = clutch_wall_summary([
+        {"shape": _fal_alak(11), "attacks": 0, "rest_attacks": 6},
+        {"shape": [], "attacks": 9, "rest_attacks": 9}])
+    assert [s["rest_attacks"] for s in torzs["shapes"]] == [6]
+    assert torzs["attacks"] == 0 and torzs["verdict"] is None
+    ures = {"attacks": 0, "shapes": [], "verdict": None}
+    assert clutch_wall_summary([]) == ures
+    assert clutch_wall_summary(None) == ures
