@@ -75,6 +75,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     (működő író, megjegyezve; végső tartalék az mp4v).
   - `figura_lap`: `_pont_felirat`, `_hely`, `_szam`, a dokumentum-keret,
     a térfélre vágott ábra, a figura törzse (mozgás nélkül várakozás).
+  - `coach_summary`: `_team_names`, `_jersey_of_track`, `_player_label`,
+    `_rotation_sentence` (a valódi `rotation_depth`-szel is),
+    `_quality_caveat` (üres meccsen és jó minőségnél None).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

@@ -483,3 +483,181 @@ def test_ures_meccsen_nincs_gyenge_pont_szakasz():
     meta = MatchMeta(match_id="ures2", home_team="A", away_team="B", fps=25.0)
     cimek = [s["title"] for s in coach_summary(Match(meta, [])).get("sections", [])]
     assert "Gyenge pontok" not in cimek
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_team_names_a_meccs_nevei_vagy_az_alapnevek():
+    """A csapatnevek a meccs fejlécéből jönnek; hiányzó (üres) névnél
+    "Hazai" / "Vendég" áll a mondatokban — nem üres hely."""
+    from handball.pipeline.coach_summary import _team_names
+
+    assert _team_names(Match(MatchMeta(match_id="n", home_team="Veszprém",
+                                       away_team="Szeged", fps=25.0), [])) == (
+        "Veszprém", "Szeged")
+    assert _team_names(Match(MatchMeta(match_id="n", home_team="",
+                                       away_team="", fps=25.0), [])) == (
+        "Hazai", "Vendég")
+    assert _team_names(Match(MatchMeta(match_id="n", home_team="Veszprém",
+                                       away_team="", fps=25.0), [])) == (
+        "Veszprém", "Vendég")
+
+
+def _mezes_meccs():
+    from handball.models.tracking import Frame, PlayerPosition, Team
+
+    def kocka(t, mezek):
+        return Frame(t=t, players=[
+            PlayerPosition(track_id=tid, team=team, x=10.0, y=10.0,
+                           jersey_number=mez)
+            for tid, (team, mez) in mezek.items()], ball=None)
+
+    return Match(MatchMeta(match_id="m", home_team="Veszprém",
+                           away_team="Szeged", fps=25.0), [
+        kocka(0, {1: (Team.HOME, None), 11: (Team.AWAY, 4)}),
+        kocka(1, {1: (Team.HOME, 7), 11: (Team.AWAY, 14)}),
+        kocka(2, {1: (Team.HOME, 17), 2: (Team.HOME, None)})])
+
+
+def test_jersey_of_track_es_player_label():
+    """A mezszám trackenként az ELSŐ ismert érték (a későbbi, eltérő
+    olvasat nem írja felül); a játékos neve a mondatokban "csapat
+    #mezszám", mezszám nélkül "csapat (N. játékos)"."""
+    from handball.models.tracking import Team
+    from handball.pipeline.coach_summary import (_jersey_of_track,
+                                                 _player_label,
+                                                 _team_of_track)
+
+    m = _mezes_meccs()
+    mez = _jersey_of_track(m)
+    assert mez == {11: 4, 1: 7}
+    csapat = _team_of_track(m)
+    assert csapat == {1: Team.HOME, 11: Team.AWAY, 2: Team.HOME}
+    assert _player_label(1, csapat, mez, "Veszprém", "Szeged") == \
+        "Veszprém #7"
+    assert _player_label(11, csapat, mez, "Veszprém", "Szeged") == "Szeged #4"
+    assert _player_label(2, csapat, mez, "Veszprém", "Szeged") == \
+        "Veszprém (2. játékos)"
+    # Üres meccs: üres térképek.
+    ures = Match(MatchMeta(match_id="u", home_team="H", away_team="A",
+                           fps=25.0), [])
+    assert _jersey_of_track(ures) == {} and _team_of_track(ures) == {}
+
+
+def test_rotation_sentence_szuk_vagy_szeles_pad(monkeypatch):
+    """A rotáció-mondat: 6–8 bevetett játékosnál "szűk rotáció" (fáradás
+    jöhet), 11-től "széles pad"; 9–10-nél nincs mit kiemelni; 6 alatt
+    (kevés mért játékos) hallgat."""
+    from handball.pipeline import stats
+    from handball.pipeline.coach_summary import _rotation_sentence
+
+    def rotacio(home, away):
+        monkeypatch.setattr(stats, "rotation_depth", lambda match: {
+            "home": {"used": home[0], "regulars": home[1]},
+            "away": {"used": away[0], "regulars": away[1]}})
+        return _rotation_sentence(Match(MatchMeta(
+            match_id="r", home_team="H", away_team="A", fps=25.0), []), "Veszprém",
+            "Szeged")
+
+    szoveg = rotacio((7, 6), (12, 5))
+    assert szoveg == (
+        " A(z) Veszprém szűk rotációval játszott (7 bevetett játékos, 6 "
+        "alapember) — a hajrában fáradás jöhet. A(z) Szeged széles paddal "
+        "forgatott (12 bevetett játékos).")
+    assert rotacio((9, 6), (10, 6)) == ""
+    assert rotacio((5, 5), (3, 3)) == ""           # kevés mért játékos
+    assert "szűk rotációval" in rotacio((6, 6), (8, 7))
+    assert rotacio((8, 7), (11, 6)).count("A(z)") == 2
+
+
+def test_rotation_sentence_hibara_ures_es_a_valodi_reteggel(monkeypatch):
+    """Ha a rotáció-réteg hibára fut, a mondat üres (nem viszi el az
+    összefoglalót); a VALÓDI réteggel a mezőnevek ("used", "regulars")
+    tényleg azok, amiket a mondat olvas."""
+    from handball.pipeline import stats
+    from handball.pipeline.coach_summary import _rotation_sentence
+
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3)
+    rd = stats.rotation_depth(m)
+    assert {"used", "regulars"} <= set(rd["home"])
+    szoveg = _rotation_sentence(m, "Hazai", "Vendég")
+    assert isinstance(szoveg, str)
+    for side, nev in (("home", "Hazai"), ("away", "Vendég")):
+        used = rd[side]["used"]
+        if 6 <= used <= 8:
+            assert f"A(z) {nev} szűk rotációval" in szoveg
+        elif used >= 11:
+            assert f"A(z) {nev} széles paddal" in szoveg
+        else:
+            assert f"A(z) {nev} " not in szoveg
+
+    def bukik(match):
+        raise RuntimeError("nem megy")
+    monkeypatch.setattr(stats, "rotation_depth", bukik)
+    assert _rotation_sentence(m, "Hazai", "Vendég") == ""
+
+
+def test_quality_caveat_gyenge_feldolgozasnal_figyelmeztet(monkeypatch):
+    """Gyenge feldolgozásnál (a pontszám a küszöb alatt, vagy van első
+    teendő) az összefoglaló maga mondja ki a megbízhatóságot — a
+    bizonytalan labda- / pálya-rétegek nevével és az első teendővel; jó
+    minőségnél és üres meccsen nincs figyelmeztetés."""
+    from handball.pipeline import quality
+    from handball.pipeline.coach_summary import (SUMMARY_QUALITY_WARN,
+                                                 _quality_caveat)
+
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=3)
+
+    def minoseg(pont, teendo=None, sorok=()):
+        monkeypatch.setattr(quality, "compute_quality_report",
+                            lambda match: {"score": pont,
+                                           "next_action": teendo})
+        monkeypatch.setattr(quality, "analysis_confidence",
+                            lambda match: list(sorok))
+        return _quality_caveat(m)
+
+    assert SUMMARY_QUALITY_WARN == 50
+    assert minoseg(80) is None                    # jó minőség, nincs teendő
+    assert minoseg(None) is None                  # nincs pontszám
+    gyenge = minoseg(35)
+    assert gyenge == ("A feldolgozás minősége 35/100 — az alábbi "
+                      "megállapítások ennyire megbízhatóak.")
+    assert minoseg(50) is None                    # pont a küszöb: még jó
+    # Jó pontszám mellett is szól, ha van első teendő.
+    teendos = minoseg(80, teendo="Kalibráld újra a pályát.")
+    assert teendos.endswith(" Első teendő: Kalibráld újra a pályát.")
+    # A bizonytalan labda- és pálya-családok név szerint.
+    sorok = [{"layer": "ball", "label": "labda-alapú rétegek",
+              "available": False},
+             {"layer": "court", "label": "pálya-alapú rétegek",
+              "available": True},
+             {"layer": "egyeb", "label": "mezszámok", "available": False}]
+    nevesitett = minoseg(35, sorok=sorok)
+    assert ("Ezek a réteg-családok kifejezetten bizonytalanok: labda-alapú "
+            "rétegek.") in nevesitett
+    assert "mezszámok" not in nevesitett and "pálya-alapú" not in nevesitett
+
+
+def test_quality_caveat_ures_meccsen_none_es_a_csaladok_hibajat_turi(
+        monkeypatch):
+    """Üres meccsre nincs mit mondani (sem állítás, sem figyelmeztetés) —
+    a minőség-jelentés meg sem hívódik; ha a réteg-családok lekérése
+    hibára fut, a figyelmeztetés a pontszámmal akkor is elkészül."""
+    from handball.pipeline import quality
+    from handball.pipeline.coach_summary import _quality_caveat
+
+    monkeypatch.setattr(quality, "compute_quality_report",
+                        lambda match: (_ for _ in ()).throw(
+                            AssertionError("üres meccsen nem kell mérni")))
+    assert _quality_caveat(Match(MatchMeta(match_id="u", home_team="H",
+                                           away_team="A", fps=25.0), [])) is None
+
+    def bukik(match):
+        raise RuntimeError("nem megy")
+    monkeypatch.setattr(quality, "compute_quality_report",
+                        lambda match: {"score": 20, "next_action": None})
+    monkeypatch.setattr(quality, "analysis_confidence", bukik)
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=3)
+    assert _quality_caveat(m) == ("A feldolgozás minősége 20/100 — az "
+                                  "alábbi megállapítások ennyire "
+                                  "megbízhatóak.")
