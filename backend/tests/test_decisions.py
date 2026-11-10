@@ -1660,3 +1660,39 @@ def test_modell_felirat_a_lovok_es_a_kapusuk_sora():
     felirat = _modell_felirat(None, kapus)
     assert felirat == kapus_sor.replace("a kapus ", "a kapusuk ", 1)
     assert "a kapusuk" in felirat and lovo_felirat(None) == ""
+
+
+# ---- A felderítés darabszám-alapú szokása a motorral egyezik (3. kör) -------
+
+def test_a_felderites_helyzet_szokasa_egyezik_a_motorral():
+    """ŐR a valódi láncon: a felderítés a tárolt darabszámokból
+    (scouting._sit_habit) UGYANAZT a helyzetet, szokást és legjobb
+    opciót nevezi meg, ugyanazokkal a százalékokkal, mint a motor
+    (situational_decisions) ítélete — két meccs összegéből is; ahol a
+    motor hallgat (a legjobbat választják, kevés a döntés, a másik
+    csapat), ott a felderítés is None."""
+    from handball.pipeline.decisions import situational_decisions
+    from handball.pipeline.scouting import (_sit_habit, combine_reports,
+                                            scout_team)
+
+    meccs = _sit_match()
+    motor = situational_decisions(meccs)["home"]
+    rep = scout_team(meccs, Team.HOME)
+    szokas = _sit_habit(rep)
+    assert szokas == ("kilépnek rá", "visszajátszás", "passz a 6 m-re",
+                      100.0, 0.0, 10)
+    assert szokas[:3] == (motor["situation"], motor["habit"],
+                          motor["best_action"])
+    # A motor mondata ugyanezekkel a százalékokkal beszél.
+    assert f"a döntéseik {szokas[3]:.0f}%-a {szokas[1]}" in motor["verdict"]
+    assert f"csak {szokas[4]:.0f}%-ban" in motor["verdict"]
+    # Két meccs: a darabszámok összeadódnak, a szokás ugyanaz.
+    ossz = combine_reports([rep, scout_team(_sit_match(match_id="s2"),
+                                            Team.HOME)])
+    assert _sit_habit(ossz) == szokas[:5] + (20,)
+    # Ahol a motor hallgat, a felderítés is.
+    for csendes, oldal in ((_sit_match(target=2), Team.HOME),
+                           (_sit_match(n=3), Team.HOME),
+                           (meccs, Team.AWAY)):
+        assert situational_decisions(csendes)[oldal.value]["verdict"] is None
+        assert _sit_habit(scout_team(csendes, oldal)) is None

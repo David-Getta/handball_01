@@ -22,6 +22,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_inferred_goal_index` (az idő-ablak másodpercben), `_shooter_hint`,
     `_near_goal_stretch_start`, `_held_at_goal_since`,
     `_upgradable_shot`.
+  - `decisions`: őr — a felderítés darabszám-alapú szokása
+    (`scouting._sit_habit`) a motor ítéletével egyezik.
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
