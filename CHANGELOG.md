@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Két időzítés-függő teszt versenymentes** (teszt): a teljes csomag
+  terhelt gépen két helyen véletlenszerűen bukott. A klip-válogatás
+  tesztjei (`test_clip_players`) a háttérben futó klip-munkát 200
+  várakozás nélküli lekérdezéssel "várták meg" — most határidőig
+  várnak; az előszámolás tesztje (`test_result_cache`) a szálat az
+  indítás után kereste az élők között — most az indításakor jegyzi fel.
 - **Teszt-lefedettség: a pipeline teszt nélküli függvényei** (teszt): a
   `backend/handball/pipeline` azon függvényei, amelyekre eddig egyetlen
   teszt sem hivatkozott (vagy a csomag sosem futtatta le őket),
