@@ -528,3 +528,125 @@ def test_validate_match_cli_ures_csv_nincs_mihez_merni(tmp_path, capsys):
     assert "Kézi események: 0" in ki
     assert "Összesen | TP  0  FP  0  FN  0  | P —  R —  F1 —" in ki
     assert "Mit nézz meg a felvételen" not in ki
+
+
+# ---- A validáció belső segédei közvetlenül (második kör) ---------------------
+
+def test_parse_time_tizedes_masodperc_es_ora_perc_mp():
+    """Az idő másodpercben: tizedes mp ("42.5"), perc:mp ("1:23",
+    "01:23") és óra:perc:mp ("1:02:03") alakból is; a szélein szóközzel."""
+    from handball.pipeline.validation import _parse_time
+
+    assert _parse_time("42.5") == 42.5
+    assert _parse_time(" 7 ") == 7.0
+    assert _parse_time("1:23") == 83.0
+    assert _parse_time("01:23") == 83.0
+    assert _parse_time("0:07.5") == 7.5
+    assert _parse_time("1:02:03") == 3723.0
+    assert _parse_time("90:00") == 5400.0
+
+
+def test_parse_time_hibas_vagy_ures_idore_none():
+    """Üres, csak szóközből álló vagy nem szám idő → None (a hívó a sort
+    fejlécnek / hibásnak veszi és kihagyja) — nem 0 másodperc."""
+    from handball.pipeline.validation import _parse_time
+
+    for rossz in ("", "   ", None, "ido", "1:xx", "1:2:x", "12,5", ":"):
+        assert _parse_time(rossz) is None, repr(rossz)
+    # A fejléc-sor így marad ki a CSV-ből.
+    sorok = parse_truth_csv("ido,tipus,csapat\n1:05, gól, hazai\n")
+    assert [s["t_s"] for s in sorok] == [65.0]
+
+
+def test_prf_precizitas_visszahivas_f1():
+    """A TP / FP / FN hármasból a precizitás, a visszahívás és az F1
+    (három tizedesre); a darabszámok visszajönnek."""
+    from handball.pipeline.validation import _prf
+
+    assert _prf(8, 2, 2) == {"tp": 8, "fp": 2, "fn": 2, "precision": 0.8,
+                             "recall": 0.8, "f1": 0.8}
+    assert _prf(3, 0, 0) == {"tp": 3, "fp": 0, "fn": 0, "precision": 1.0,
+                             "recall": 1.0, "f1": 1.0}
+    r = _prf(1, 2, 0)
+    assert (r["precision"], r["recall"], r["f1"]) == (0.333, 1.0, 0.5)
+
+
+def test_prf_minta_nelkul_none_nem_nulla():
+    """Ha nincs mihez mérni, az arány None (nem 0% és nem 100%): felismert
+    esemény nélkül nincs precizitás, kézi esemény nélkül nincs
+    visszahívás; teljesen üres mintánál az F1 is None. Ha csak tévedés
+    van (TP = 0), az F1 0."""
+    from handball.pipeline.validation import _prf
+
+    assert _prf(0, 0, 0) == {"tp": 0, "fp": 0, "fn": 0, "precision": None,
+                             "recall": None, "f1": None}
+    csak_kimaradt = _prf(0, 0, 3)
+    assert csak_kimaradt["precision"] is None
+    assert csak_kimaradt["recall"] == 0.0 and csak_kimaradt["f1"] == 0.0
+    csak_teves = _prf(0, 2, 0)
+    assert csak_teves["precision"] == 0.0 and csak_teves["recall"] is None
+    assert csak_teves["f1"] == 0.0
+    assert _prf(0, 1, 1)["f1"] == 0.0
+
+
+def test_verdict_megfelel_ha_mindket_cel_megvan():
+    """MEGFELEL, ha a visszahívás ≥ 90% ÉS a precizitás ≥ 85% (a határ
+    még jó); különben GYENGE — a szöveg mindkét számot a céllal együtt
+    mondja."""
+    from handball.pipeline.validation import (VALIDATION_TARGET_PRECISION,
+                                              VALIDATION_TARGET_RECALL,
+                                              _verdict)
+
+    assert (VALIDATION_TARGET_RECALL, VALIDATION_TARGET_PRECISION) == (
+        0.90, 0.85)
+    jo = _verdict({"precision": 0.85, "recall": 0.90})
+    assert jo == {"pass": True, "text": (
+        "MEGFELEL — a felismerés elég a taktikai döntéshez: visszahívás "
+        "90% (cél ≥90%), precizitás 85% (cél ≥85%).")}
+    keves_rec = _verdict({"precision": 0.95, "recall": 0.89})
+    assert keves_rec["pass"] is False
+    assert keves_rec["text"].startswith(
+        "GYENGE — a felismerés még nem elég megbízható: visszahívás 89%")
+    assert _verdict({"precision": 0.84, "recall": 1.0})["pass"] is False
+
+
+def test_verdict_hianyzo_aranynal_nem_megfelelt_ures_mintanal_none():
+    """Ha az egyik arány nem mérhető (None), az ítélet nem lehet
+    "megfelel" — és a szöveg csak a mérhető számot írja; teljesen üres
+    mintánál az ítélet None (nincs elég adat), nem "gyenge"."""
+    from handball.pipeline.validation import _verdict
+
+    csak_rec = _verdict({"precision": None, "recall": 1.0})
+    assert csak_rec["pass"] is False
+    assert "visszahívás 100%" in csak_rec["text"]
+    assert "precizitás" not in csak_rec["text"]
+    csak_prec = _verdict({"precision": 1.0, "recall": None})
+    assert csak_prec["pass"] is False and "visszahívás" not in csak_prec["text"]
+    ures = _verdict({"precision": None, "recall": None})
+    assert ures == {"pass": None,
+                    "text": "Nincs elég adat az ítélethez (üres a minta)."}
+
+
+def test_mmss_es_az_elteres_blokk():
+    """A másodperc perc:mp alakja (kerekítve, negatívra 0:00), és az
+    eltérés-blokk: eltérés nélkül kimondja, hogy nincs; eltérésnél a
+    megnézendő időpontok listája (escape-elve)."""
+    from handball.pipeline.validation import _mismatch_html, _mmss
+
+    assert _mmss(0) == "0:00" and _mmss(65.4) == "1:05"
+    assert _mmss(59.6) == "1:00" and _mmss(3600) == "60:00"
+    assert _mmss(-5) == "0:00"
+
+    tiszta = {"by_type": {"goal": {"missed": [], "spurious": []},
+                          "shot": {"missed": [], "spurious": []}}}
+    assert _mismatch_html(tiszta).startswith("<p><b>Nincs eltérés</b>")
+    assert _mismatch_html({}).startswith("<p><b>Nincs eltérés</b>")
+    elteres = {"by_type": {
+        "goal": {"missed": [{"t_s": 65.0, "type": "goal", "team": "home"}],
+                 "spurious": [{"t_s": 10.0, "type": "goal", "team": "away"}]},
+        "shot": {"missed": [], "spurious": []}}}
+    h = _mismatch_html(elteres)
+    assert h.startswith("<h2>Mit nézz meg a felvételen</h2><ul>")
+    assert h.count("<li>") == 2
+    assert h.index("0:10") < h.index("1:05")            # időrendben
+    assert "kimaradt gól (hazai)" in h and "téves gól (vendég)" in h

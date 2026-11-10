@@ -69,6 +69,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `broadcast_lines`: `_erode`, `_dilate`, `_thin_line_mask`,
     `_auto_color`.
   - `benchmark`: `_project_court_to_image`.
+  - `validation`: `_parse_time`, `_prf` (minta nélkül None), `_verdict`,
+    `_mmss`, `_mismatch_html`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
