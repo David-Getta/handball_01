@@ -29,6 +29,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `report_html`: a jelentés építőelemei — sávok, Hol / Mivel / Miért
     blokkok, figura- és hőtérkép-SVG, lövéstérkép, tempó-vonal,
     passz-párok, trend-tábla (üres adatnál tájékoztató vagy nincs rajz).
+  - `priorities`: `_prf_copy`, `_copy_fatigue` (független másolat) és
+    `_cpl_words` (hat karakteres szótövek).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

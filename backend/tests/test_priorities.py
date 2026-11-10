@@ -851,3 +851,96 @@ def test_a_javulo_blokk_nem_faradas_jel(monkeypatch):
                                     "gap_pp": 25.0}, "away": {}})
     rec = pr.fatigue_profile(Match(_meta(), []))["home"]
     assert [j["layer"] for j in rec["signals"]] == []
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_prf_copy_a_rangsor_fuggetlen_masolata():
+    """A gyorsítótárazott rangsor védő-másolata: a tételek és a
+    család-számláló független (a hívó módosítása nem látszik az
+    eredetin), a darabszám változatlan."""
+    from handball.pipeline.priorities import _prf_copy
+
+    eredeti = {"home": {"top": [{"title": "Fal-rés", "family": "ár"},
+                                {"title": "Hajrá", "family": "fáradás"}],
+                        "total": 7, "families": {"ár": 4, "fáradás": 3}},
+               "away": {"top": [], "total": 0, "families": {}}}
+    masolat = _prf_copy(eredeti)
+    assert masolat == eredeti and masolat is not eredeti
+    assert masolat["home"]["top"][0] is not eredeti["home"]["top"][0]
+    masolat["home"]["top"][0]["title"] = "átírva"
+    masolat["home"]["top"].append({"title": "új"})
+    masolat["home"]["families"]["ár"] = 99
+    assert eredeti["home"]["top"][0]["title"] == "Fal-rés"
+    assert len(eredeti["home"]["top"]) == 2
+    assert eredeti["home"]["families"] == {"ár": 4, "fáradás": 3}
+    assert _prf_copy({}) == {}
+
+
+def test_a_rangsor_a_hatokorben_is_fuggetlen_masolat():
+    """Nyitott hatókörben a rangsor egyszer épül, de minden hívó saját
+    példányt kap — az egyik módosítása nem rontja a másikét."""
+    from handball.pipeline.primitive_cache import primitive_cache
+
+    m = _two_family_match()
+    with primitive_cache(m):
+        elso = priority_findings(m)
+        vart = {side: {"top": [dict(it) for it in rec["top"]],
+                       "total": rec["total"],
+                       "families": dict(rec["families"])}
+                for side, rec in elso.items()}
+        for rec in elso.values():
+            rec["top"].clear()
+            rec["families"]["hamis"] = 1
+            rec["total"] = -1
+        masodik = priority_findings(m)
+    assert masodik == vart
+
+
+def test_cpl_words_hat_karakteres_szotovek():
+    """Az összehasonlítható szótövek: kisbetűsítve, az első hat
+    karakterre csonkolva — a magyar toldalékos alakok így egyeznek; a
+    hat karakternél rövidebb szó (névelő, kötőszó) kimarad."""
+    from handball.pipeline.priorities import CPL_STEM, _cpl_words
+
+    assert CPL_STEM == 6
+    assert _cpl_words("kettőzés") == {"kettőz"}
+    assert _cpl_words("A Kettőzését, a kettőzés-elleni játékot") == {
+        "kettőz", "elleni", "játéko"}
+    assert _cpl_words("a fal és a beálló") == {"beálló"}
+    # Írásjel és szóköz egyaránt szóhatár; a szám a szó része.
+    assert _cpl_words("visszarendeződés!gyorsindítás;6a6os-védekezés") == {
+        "vissza", "gyorsi", "védeke"}
+    assert _cpl_words("emberelőny2 perc") == {"embere"}
+
+
+def test_cpl_words_ures_vagy_rovid_szovegre_ures_halmaz():
+    """Üres szövegből, csupa írásjelből vagy csupa rövid szóból nincs
+    összehasonlítható tő: üres halmaz (nem kivétel)."""
+    from handball.pipeline.priorities import _cpl_words
+
+    assert _cpl_words("") == set()
+    assert _cpl_words("... !!! ---") == set()
+    assert _cpl_words("a fal az őr és a kapu") == set()
+    assert _cpl_words("ötödik") == {"ötödik"}          # pont hat karakter
+
+
+def test_copy_fatigue_a_jel_listat_elemenkent_masolja():
+    """A hajrá-profil másolata: az oldal-szótár és a jel-lista elemei is
+    függetlenek; a hiányzó (None) oldalból üres jel-listás szótár, a
+    None bemenetből üres szótár lesz."""
+    from handball.pipeline.priorities import _copy_fatigue
+
+    eredeti = {"home": {"verdict": "kifogy", "signals": [
+        {"layer": "sprint_fade", "gap": 12.0}]}, "away": None,
+        "x": {"verdict": None}}
+    masolat = _copy_fatigue(eredeti)
+    assert masolat == {"home": eredeti["home"], "away": {"signals": []},
+                       "x": {"verdict": None, "signals": []}}
+    assert masolat["home"]["signals"][0] is not eredeti["home"]["signals"][0]
+    masolat["home"]["signals"][0]["gap"] = 99.0
+    masolat["home"]["signals"].append({"layer": "új"})
+    masolat["home"]["verdict"] = None
+    assert eredeti["home"] == {"verdict": "kifogy", "signals": [
+        {"layer": "sprint_fade", "gap": 12.0}]}
+    assert _copy_fatigue(None) == {} and _copy_fatigue({}) == {}
