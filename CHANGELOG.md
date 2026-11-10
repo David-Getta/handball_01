@@ -38,6 +38,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     a több meccses összegzők, `_review_until`.
   - `merge`: `_centroid_x_window`, `_mirror_frames`,
     `_normalize_segment_sides` (három darab; az ablak másodpercben él).
+  - `jersey_ocr`: `_digit_templates` és a sablon-illesztés mint tartalék
+    (háló nélkül is olvas).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
