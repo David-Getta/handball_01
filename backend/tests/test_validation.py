@@ -376,3 +376,155 @@ def test_validation_report_html_shows_the_mismatches():
                          "shot": {"tp": 0, "fp": 0, "fn": 0,
                                   "missed": [], "spurious": []}}}
     assert "Nincs eltérés" in validation_report_html(clean)
+
+
+# ---- A parancssori eszköz belső lépései és hibaútjai (scripts.validate_match) --
+
+def test_validate_match_cli_load_match_visszaolvassa_a_mentett_meccset(
+        tmp_path):
+    """A `_load_match` a program által mentett JSON-t olvassa vissza:
+    ugyanaz a fejléc, ugyanannyi kocka, ugyanazok a felismert gólok."""
+    import json as _json
+
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from scripts.validate_match import _load_match
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    vissza = _load_match(str(mj))
+    assert vissza.meta.match_id == m.meta.match_id
+    assert vissza.meta.fps == m.meta.fps
+    assert len(vissza.frames) == len(m.frames)
+
+    def golok(match):
+        return [e.t for e in detect_shots(match) if e.type == EventType.GOAL]
+    assert golok(vissza) == golok(m) and len(golok(m)) == 1
+
+
+def test_ledger_append_ures_vagy_tabla_nelkuli_naploba_a_vegere_ir(
+        tmp_path):
+    """Nem létező naplónál létrehozza a fájlt; tábla (`| Dátum |` fejléc)
+    nélküli naplónál a sor a fájl végére kerül — a meglévő szöveg marad."""
+    from scripts.validate_match import _ledger_append
+
+    uj = tmp_path / "uj_naplo.md"
+    _ledger_append(uj, "| 2026-11-10 | v1 | meccs |")
+    assert uj.read_text(encoding="utf-8") == "| 2026-11-10 | v1 | meccs |\n"
+
+    szoveges = tmp_path / "szoveges.md"
+    szoveges.write_text("# Napló\n\nMég nincs mérés.\n", encoding="utf-8")
+    _ledger_append(szoveges, "| 2026-11-10 | v1 | meccs |")
+    assert szoveges.read_text(encoding="utf-8") == (
+        "# Napló\n\nMég nincs mérés.\n| 2026-11-10 | v1 | meccs |\n")
+
+
+def test_ledger_append_az_elso_tabla_vegere_szur(tmp_path):
+    """Táblás naplónál a sor az ELSŐ `| Dátum |` tábla utolsó sora után
+    áll — elválasztó sorral és anélkül is, üres táblánál közvetlenül a
+    fejléc (és az elválasztó) után; a tábla utáni szakasz érintetlen."""
+    from scripts.validate_match import _ledger_append
+
+    naplo = tmp_path / "naplo.md"
+    naplo.write_text(
+        "# Napló\n\n| Dátum | Verzió |\n|---|---|\n| régi-1 | a |\n"
+        "| régi-2 | b |\n\n## Sebesség\n\n| Dátum | Gép |\n|---|---|\n"
+        "| seb-1 | x |\n", encoding="utf-8")
+    _ledger_append(naplo, "| új | c |")
+    assert naplo.read_text(encoding="utf-8") == (
+        "# Napló\n\n| Dátum | Verzió |\n|---|---|\n| régi-1 | a |\n"
+        "| régi-2 | b |\n| új | c |\n\n## Sebesség\n\n| Dátum | Gép |\n"
+        "|---|---|\n| seb-1 | x |\n")
+    # Még egy sor: az előző mögé kerül (időrend), nem elé.
+    _ledger_append(naplo, "| legújabb | d |")
+    sorok = naplo.read_text(encoding="utf-8").split("\n")
+    assert sorok.index("| legújabb | d |") == sorok.index("| új | c |") + 1
+
+    ures_tabla = tmp_path / "ures_tabla.md"
+    ures_tabla.write_text("| Dátum | Verzió |\n|---|---|\n\nlábjegyzet\n",
+                          encoding="utf-8")
+    _ledger_append(ures_tabla, "| első | a |")
+    assert ures_tabla.read_text(encoding="utf-8") == (
+        "| Dátum | Verzió |\n|---|---|\n| első | a |\n\nlábjegyzet\n")
+
+    elvalaszto_nelkul = tmp_path / "elvalaszto_nelkul.md"
+    elvalaszto_nelkul.write_text("| Dátum | Verzió |\n| régi | a |\n",
+                                 encoding="utf-8")
+    _ledger_append(elvalaszto_nelkul, "| új | b |")
+    assert elvalaszto_nelkul.read_text(encoding="utf-8") == (
+        "| Dátum | Verzió |\n| régi | a |\n| új | b |\n")
+
+
+def test_validate_match_cli_hianyzo_bemenetre_2_es_kod(tmp_path, capsys):
+    """Kézi CSV nélkül (és nem sablon-módban), illetve nem létező CSV-vel
+    a kilépőkód 2, a hiba a hibakimenetre megy — riport és ítélet nélkül."""
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+
+    assert main([str(mj)]) == 2
+    ki = capsys.readouterr()
+    assert "HIBA: kell a kézi CSV" in ki.err and ki.out == ""
+    assert main([str(mj), str(tmp_path / "nincs.csv")]) == 2
+    ki = capsys.readouterr()
+    assert "HIBA: nincs ilyen CSV" in ki.err and ki.out == ""
+    # A nem létező meccs-fájl a sablon-módot is megállítja.
+    sablon = tmp_path / "sablon.csv"
+    assert main([str(tmp_path / "nincs.json"), "--sablon", str(sablon)]) == 2
+    assert "HIBA: nincs ilyen meccs-fájl" in capsys.readouterr().err
+    assert not sablon.exists()
+
+
+def test_validate_match_cli_gyenge_felismeresre_1_es_megmondja_mit_nezz(
+        tmp_path, capsys):
+    """Ha a kézi listában olyan gól is van, amit a motor nem látott, a
+    kilépőkód 1 (GYENGE — a go/no-go ezt nézi), és a kimenet tételesen
+    megmondja, hol kell megnézni a felvételt; a saját tűrés (--tol) a
+    fejlécben is megjelenik."""
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    csv = tmp_path / "truth.csv"
+    csv.write_text("0:00, gól, hazai\n1:05, gól, vendég\n2:10, gól, hazai\n",
+                   encoding="utf-8")
+
+    code = main([str(mj), str(csv), "--tol", "1.5"])
+    ki = capsys.readouterr().out
+    assert code == 1
+    assert "Kézi események: 3 | idő-tűrés: 1.5 mp" in ki
+    assert "GYENGE" in ki and "MEGFELEL" not in ki
+    assert "Mit nézz meg a felvételen:" in ki
+    assert "1:05 — kimaradt gól (vendég)" in ki
+    assert "2:10 — kimaradt gól (hazai)" in ki
+    assert "HTML-riport" not in ki and "Jegyzőkönyv-sor" not in ki
+
+
+def test_validate_match_cli_ures_csv_nincs_mihez_merni(tmp_path, capsys):
+    """Üres kézi lista: nincs mihez mérni, a visszahívás "—" (nem 0% és
+    nem 100%), a kilépőkód pedig nem "megfelelt"."""
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = Match(_meta(), [Frame(t=i, players=[],
+                              ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                        for i in range(30)])
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    csv = tmp_path / "ures.csv"
+    csv.write_text("ido,tipus,csapat\n", encoding="utf-8")
+
+    code = main([str(mj), str(csv)])
+    ki = capsys.readouterr().out
+    assert code == 1
+    assert "Kézi események: 0" in ki
+    assert "Összesen | TP  0  FP  0  FN  0  | P —  R —  F1 —" in ki
+    assert "Mit nézz meg a felvételen" not in ki

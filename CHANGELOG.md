@@ -15,6 +15,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     játékos-lap, pontosság-validáció, egyesített felderítés és
     fejlődés-követés (JSON + nyomtatható HTML), demó-meccs,
     figura-törlés.
+  - `scripts/validate_match`: hibakódok (hiányzó CSV / meccs → 2,
+    gyenge felismerés → 1 a megnézendő tételekkel), a jegyzőkönyv-sor
+    beszúrása a pontosság-tábla végére.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
