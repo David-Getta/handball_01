@@ -66,6 +66,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `clips`: `_clock`, `_segment_of`, `_jersey_of_track`,
     `_draw_arrows_on_frame` (kalibráció nélkül nem rajzol).
   - `calib_overlay`: `_sign_normalized`, `_region_center`.
+  - `broadcast_lines`: `_erode`, `_dilate`, `_thin_line_mask`,
+    `_auto_color`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
