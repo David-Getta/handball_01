@@ -46,6 +46,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     küszöbök határai).
   - `fusion`: `_fuse_players` (átlagolás, szerep megőrzése, a
     legközelebbi klaszter).
+  - `event_detection`: a gól-, védés- és középkezdés-felismerés segédei
+    (`_save_by_goalkeeper`, `_throw_off_low_team`, `_throw_off_followed`,
+    `_still_at_center`, `_half_boundaries`, …).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
