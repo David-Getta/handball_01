@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
+  a belső függvények, amelyek neve az első két kör után sem szerepelt
+  egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
+  minta → None / üres" esettel, ahol másik réteget olvasnak, a VALÓDI
+  forrással is. Modulonként:
+  - `tactics`: `_possession_team`, `_classify_phase` (a gyorsítótár
+    mögötti számítás; őr: a burkoló kockánként ugyanazt adja).
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött

@@ -1021,3 +1021,95 @@ def test_avg_ball_speed_keves_labdas_kockanal_nulla():
     assert _avg_ball_speed_ms(meccs([(10.0, 10.0), None, (30.0, 10.0),
                                      None])) == 0.0
     assert _avg_ball_speed_ms(meccs([(20.0, 10.0)] * 10)) == 0.0
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+def test_possession_team_nyers_szamitas_a_legkozelebbi_jatekos_csapata():
+    """A gyorsítótár MÖGÖTTI számítás: a labdához legközelebbi játékos
+    csapata, ha a birtoklás sugarán (3 m) belül van; labda vagy játékos
+    nélkül, illetve távoli labdánál None ("szabad labda")."""
+    from handball.pipeline.tactics import _possession_team
+
+    cfg = TacticsConfig()
+    assert cfg.possession_radius_m == 3.0
+    jatekosok = [_pl(1, Team.HOME, 10.0, 10.0), _pl(11, Team.AWAY, 14.0, 10.0)]
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=11.0, y=10.0)), cfg) == Team.HOME
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=13.5, y=10.0)), cfg) == Team.AWAY
+    # A sugár széle még birtoklás, egy centivel kijjebb már szabad labda.
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=17.0, y=10.0)), cfg) == Team.AWAY
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=17.01, y=10.0)), cfg) is None
+    assert _possession_team(Frame(t=0, players=jatekosok, ball=None),
+                            cfg) is None
+    assert _possession_team(Frame(t=0, players=[],
+                                  ball=Ball(x=11.0, y=10.0)), cfg) is None
+    # A sugár a beállításból jön.
+    szuk = TacticsConfig(possession_radius_m=0.5)
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=11.0, y=10.0)), szuk) is None
+
+
+def test_classify_phase_nyers_szamitas_tamadas_atmenet_ismeretlen():
+    """A gyorsítótár MÖGÖTTI besorolás: szervezett támadás, ha a
+    birtokos csapat a TÁMADÓ térfelén tartja a labdát; saját térfélen
+    vagy szabad labdánál átmenet; labda nélkül ismeretlen. Térfélcsere
+    után (fordított támadási irány) a térfelek szerepe megfordul."""
+    from handball.pipeline.tactics import _classify_phase
+
+    cfg = TacticsConfig()
+
+    def kocka(csapat, x):
+        return Frame(t=0, players=[_pl(1, csapat, x, 10.0)],
+                     ball=Ball(x=x + 0.5, y=10.0))
+
+    assert _classify_phase(kocka(Team.HOME, 30.0), cfg) == Phase.HOME_ATTACK
+    assert _classify_phase(kocka(Team.HOME, 8.0), cfg) == Phase.TRANSITION
+    assert _classify_phase(kocka(Team.AWAY, 8.0), cfg) == Phase.AWAY_ATTACK
+    assert _classify_phase(kocka(Team.AWAY, 30.0), cfg) == Phase.TRANSITION
+    # Szabad labda (senki sincs a sugáron belül) és hiányzó labda.
+    assert _classify_phase(Frame(t=0, players=[_pl(1, Team.HOME, 5.0, 5.0)],
+                                 ball=Ball(x=30.0, y=10.0)),
+                           cfg) == Phase.TRANSITION
+    assert _classify_phase(Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                 ball=None), cfg) == Phase.UNKNOWN
+    # Fordított támadási irány: a hazai a x=0 kapura támad.
+    forditott = TacticsConfig(home_attacks_positive=False)
+    assert _classify_phase(kocka(Team.HOME, 8.0),
+                           forditott) == Phase.HOME_ATTACK
+    assert _classify_phase(kocka(Team.HOME, 30.0),
+                           forditott) == Phase.TRANSITION
+    assert _classify_phase(kocka(Team.AWAY, 30.0),
+                           forditott) == Phase.AWAY_ATTACK
+
+
+def test_a_gyorsitotaras_valtozat_ugyanazt_adja_mint_a_nyers():
+    """ŐR: a `possession_team` / `classify_phase` (kocka-szintű
+    gyorsítótárral) minden kockán ugyanazt adja, mint a nyers számítás —
+    nyitott hatókörben, ismételt hívásra és más beállítással is (a
+    kulcsban benne van a sugár és a támadási irány)."""
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.tactics import _classify_phase, _possession_team
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=4)
+    beallitasok = [TacticsConfig(), TacticsConfig(possession_radius_m=1.0),
+                   TacticsConfig(home_attacks_positive=False)]
+    nyers = [[(_possession_team(f, c), _classify_phase(f, c))
+              for f in m.frames] for c in beallitasok]
+    # A fixture ne legyen egyhangú: többféle birtokos és fázis is van.
+    assert len({p for p, _ in nyers[0]}) >= 2
+    assert len({ph for _, ph in nyers[0]}) >= 2
+    assert nyers[0] != nyers[1] and nyers[0] != nyers[2]
+    with primitive_cache(m):
+        for _ in range(2):                       # másodszor a tárból jön
+            for c, vart in zip(beallitasok, nyers):
+                kapott = [(possession_team(f, c), classify_phase(f, c))
+                          for f in m.frames]
+                assert kapott == vart
+    # Hatókör nélkül is ugyanaz (ott a burkoló egyszerűen számol).
+    assert [(possession_team(f, beallitasok[0]),
+             classify_phase(f, beallitasok[0])) for f in m.frames] == nyers[0]
