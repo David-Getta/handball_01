@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **API-őr: ismeretlen meccsre 404, üres könyvtáron nincs szerver-hiba**
+  (teszt): a `tests/test_api_ismeretlen_meccs.py` az alkalmazás minden
+  útvonalát bejárja (az új végpont magától bekerül): nem létező
+  meccs-azonosítóra minden meccs-szintű végpont beszélő 404-et ad — az
+  író végpont sem hoz létre adatot —, és frissen telepített (üres) gépen
+  egyik lekérdező végpont sem ad 5xx-et. A két indokolt kivételt (a
+  közös nézés állapotának lekérdezése és leállítása) külön teszt őrzi.
 - **Mezőnév-őr: a felületek a rétegek létező mezőit olvassák** (teszt):
   a lefedettség-mérés szerint a közel ötszáz edzés-szabályból mintegy
   kétszáz egyetlen tesztben sem szólal meg — ezek `try/except` mögött
