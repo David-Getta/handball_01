@@ -1774,3 +1774,416 @@ def test_half_boundaries_a_felido_es_a_darab_hatarok():
     m.meta.source_segments = [{"t_from": 0}, {"t_from": "nem szám"},
                               {"t_from": 6}]
     assert _half_boundaries(m) == [6]
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+def test_shooter_release_before_az_elengedes_kockajat_is_adja():
+    """A lövő mellé az ELENGEDÉS kockája is kell (a lövés HELYÉNEK a
+    kulcsa): átlövésnél az utolsó kézben tartott kocka — nem az esemény
+    (kapu-megközelítés) kockája; találat nélkül mindkettő None."""
+    from handball.pipeline.event_detection import _shooter_release_before
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    m = _atlovo_match()
+    # A 7-es a 0–4. kockán tartja a labdát, az 5.-től repül.
+    assert _shooter_release_before(m, 11, Team.HOME, cfg, 25.0) == (7, 4)
+    assert _shooter_release_before(m, 2, Team.HOME, cfg, 25.0) == (7, 2)
+    ellenfel = _atlovo_match(lovo_team=Team.AWAY)
+    assert _shooter_release_before(ellenfel, 11, Team.HOME, cfg,
+                                   25.0) == (None, None)
+
+
+def test_shooter_release_before_kovetes_lyuknal_nevet_ad_helyet_nem():
+    """Követés-lyuknál a lista-szomszédság IDŐBEN messzire mutathat: a
+    lövő nevét megtartjuk, de az elengedés kockáját (a lövés helyét) nem
+    állítjuk — None."""
+    from handball.pipeline.event_detection import _shooter_release_before
+    from handball.pipeline.tactics import TacticsConfig
+
+    surun = _atlovo_match()
+    # Ugyanaz a jelenet, de a repülés kockái 100 kockával később jönnek
+    # (a követés közben kimaradt).
+    lyukas = Match(_meta(), [
+        Frame(t=f.t if i < 5 else f.t + 100, players=f.players, ball=f.ball)
+        for i, f in enumerate(surun.frames)])
+    assert _shooter_release_before(lyukas, 11, Team.HOME, TacticsConfig(),
+                                   25.0) == (7, None)
+
+
+def _egyutemu_kockak(szelso=(36.0, 3.0), szelso_csapat=Team.HOME,
+                     szelso_szerep=None, labda_lyuk=None):
+    """Együtemű lövés ritkítva: a 6-os tartja a labdát (0–3. kocka), a
+    passz-szár két gyors mintája után a labda a szélsőnél (6. kocka)
+    megtörik, és a lövés-szár a kapuba megy — kézben tartott kocka a
+    szélsőnél NINCS."""
+    ut = [(28.2, 10.0)] * 4 + [(31.0, 7.5), (34.0, 4.5), (36.0, 3.0),
+                               (38.0, 6.5), (40.0, 10.0)]
+    frames = []
+    for t, (x, y) in enumerate(ut):
+        jatekosok = [_pl(6, Team.HOME, 28.0, 10.0),
+                     PlayerPosition(track_id=2, team=szelso_csapat,
+                                    x=szelso[0], y=szelso[1],
+                                    source=PositionSource.MEASURED,
+                                    confidence=1.0, role=szelso_szerep)]
+        labda = None if t == labda_lyuk else Ball(x=x, y=y, confidence=1.0)
+        frames.append(Frame(t=t, players=jatekosok, ball=labda))
+    return Match(_meta(8.33), frames)
+
+
+def test_shooter_at_flight_kink_a_toresponton_allo_a_lovo():
+    """A röppálya töréspontja (passz-szár → lövés-szár) mellett álló
+    saját mezőnyjátékos a lövő, az elengedés kockája a töréspont — akár
+    a lövés-szár, akár a passz-szár kockájáról indul a keresés."""
+    from handball.pipeline.event_detection import _shooter_at_flight_kink
+
+    m = _egyutemu_kockak()
+    assert _shooter_at_flight_kink(m, 8, 0, Team.HOME, 8.33) == (2, 6)
+    assert _shooter_at_flight_kink(m, 7, 0, Team.HOME, 8.33) == (2, 6)
+    # A passz-szár kockájáról is: a gyors, kapu felé tartó szakaszokat
+    # előre követi a lövés-szár végéig.
+    assert _shooter_at_flight_kink(m, 5, 0, Team.HOME, 8.33) == (2, 6)
+
+
+def test_shooter_at_flight_kink_nem_talalgat():
+    """None (a régi út dönt), ha a töréspontnál nincs saját
+    mezőnyjátékos 2,5 m-en belül (messze áll, ellenfél, kapus), ha a
+    visszanézésben nincs irányváltás, ha lassú (kézben tartott) kocka
+    jön előbb, vagy ha a labda közben nem látszik."""
+    from handball.pipeline.event_detection import (SHOOTER_KINK_NEAR_M,
+                                                   _shooter_at_flight_kink)
+
+    assert SHOOTER_KINK_NEAR_M == 2.5
+    messze = _egyutemu_kockak(szelso=(36.0, 6.0))            # 3 m-re
+    assert _shooter_at_flight_kink(messze, 8, 0, Team.HOME, 8.33) is None
+    kozel = _egyutemu_kockak(szelso=(36.0, 5.0))             # 2 m-re
+    assert _shooter_at_flight_kink(kozel, 8, 0, Team.HOME, 8.33) == (2, 6)
+    ellenfel = _egyutemu_kockak(szelso_csapat=Team.AWAY)
+    assert _shooter_at_flight_kink(ellenfel, 8, 0, Team.HOME, 8.33) is None
+    kapus = _egyutemu_kockak(szelso_szerep="kapus")
+    assert _shooter_at_flight_kink(kapus, 8, 0, Team.HOME, 8.33) is None
+    # A visszanézés a lövés-szárnál véget ér (back = 7): nincs töréspont.
+    m = _egyutemu_kockak()
+    assert _shooter_at_flight_kink(m, 8, 7, Team.HOME, 8.33) is None
+    # Egyenes átlövés: a lövés-szár előtt a labda kézben volt (lassú).
+    atlovo = _atlovo_match()
+    assert _shooter_at_flight_kink(atlovo, 11, 0, Team.HOME, 25.0) is None
+    # A passz-szár egyik mintája hiányzik: nem találgatunk.
+    lyukas = _egyutemu_kockak(labda_lyuk=5)
+    assert _shooter_at_flight_kink(lyukas, 8, 0, Team.HOME, 8.33) is None
+
+
+def _latott(pontok, gyenge=()):
+    """Kockák a labda x-éből (y = 10; None = nem látszik); a `gyenge`
+    indexeken a labda csak becsült (megbízhatóság 0,2)."""
+    return [Frame(t=i, players=[],
+                  ball=None if x is None else Ball(
+                      x=x, y=10.0, confidence=0.2 if i in gyenge else 1.0))
+            for i, x in enumerate(pontok)]
+
+
+def test_inferred_goal_moment_a_kapu_fele_tarto_gyors_labda():
+    """(1) A lövés nélküli gól pillanata az utolsó LÁTOTT, kapu felé
+    tartó, lövés-sebességű labda — nem a labda utolsó kapu előtti
+    kockája (az már a gól utáni: a kapus szedi ki a hálóból). Mindkét
+    kapura, és az index-alak ugyanazt adja."""
+    from handball.pipeline.event_detection import (_inferred_goal_index,
+                                                   _inferred_goal_moment)
+
+    # 0–4: kézben (30 m); 5–8: lövés (2 m / kocka = 50 m/s); utána a
+    # hálóban áll.
+    xs = [30.0] * 5 + [32.0, 34.0, 36.0, 38.0] + [39.5] * 20
+    frames = _latott(xs)
+    j = len(frames) - 1
+    # Az utolsó gyors, kapu felé tartó minta-pár ELSŐ kockája: 38 → 39,5.
+    assert _inferred_goal_moment(frames, j, 40.0, 25.0, 0.3) == (8, "loves")
+    assert _inferred_goal_index(frames, j, 40.0, 25.0, 0.3) == 8
+    tukor = _latott([40.0 - x for x in xs])
+    assert _inferred_goal_moment(tukor, j, 0.0, 25.0, 0.3) == (8, "loves")
+    # A másik kapu felől nézve ugyanez a labda TÁVOLODIK: nem lövés.
+    assert _inferred_goal_moment(tukor, j, 40.0, 25.0, 0.3)[1] != "loves"
+
+
+def test_inferred_goal_moment_a_labda_eltunese_vagy_az_utolso_kocka():
+    """(2) Gyors labda híján az utolsó látott labda a kapu előtt, amely
+    után legalább 0,4 mp hézag jön (az elmosódott lövés-labda eltűnése);
+    (3) különben marad a `j`. Üres kocka-listára is (j, "utolso")."""
+    from handball.pipeline.event_detection import (THROWOFF_GOALTIME_GAP_S,
+                                                   _inferred_goal_index,
+                                                   _inferred_goal_moment)
+
+    assert THROWOFF_GOALTIME_GAP_S == 0.4            # 25 fps-en 10 kocka
+    # 0–10: áll a labda 33 m-nél; 11–24: nem látszik; 25-től a hálóban.
+    xs = [33.0] * 11 + [None] * 14 + [39.5] * 10
+    frames = _latott(xs)
+    j = len(frames) - 1
+    assert _inferred_goal_moment(frames, j, 40.0, 25.0, 0.3) == (
+        10, "eltunes")
+    assert _inferred_goal_index(frames, j, 40.0, 25.0, 0.3) == 10
+    # A hézag csak 0,36 mp (9 kocka): nem eltűnés — és a két minta közt
+    # 0,5 mp-en belül a labda 6,5 m-t ment a kapu felé: az már LÖVÉS.
+    rovid = _latott([33.0] * 11 + [None] * 8 + [39.5] * 10)
+    assert _inferred_goal_moment(rovid, len(rovid) - 1, 40.0, 25.0,
+                                 0.3) == (10, "loves")
+    # Végig álló, látott labda: nincs miből következtetni.
+    allo = _latott([39.0] * 30)
+    assert _inferred_goal_moment(allo, 29, 40.0, 25.0, 0.3) == (29, "utolso")
+    assert _inferred_goal_moment([], 7, 40.0, 25.0, 0.3) == (7, "utolso")
+
+
+def test_inferred_goal_moment_csak_latott_kozeli_friss_labdabol():
+    """A becsült (kis megbízhatóságú) labda nem bizonyíték; a kaputól 12
+    m-nél messzebbről induló gyors labda nem lövés; és csak az utolsó 15
+    MÁSODPERC számít — a kép-rátától függetlenül."""
+    from handball.pipeline.event_detection import (
+        THROWOFF_GOALTIME_BACK_S, THROWOFF_GOALTIME_RANGE_M,
+        _inferred_goal_moment)
+
+    assert (THROWOFF_GOALTIME_BACK_S, THROWOFF_GOALTIME_RANGE_M) == (
+        15.0, 12.0)
+    xs = [30.0] * 5 + [32.0, 34.0, 36.0, 38.0] + [39.5] * 20
+    j = len(xs) - 1
+    # A lövés-szár kockái csak becsültek: a látott minták (30 → 39,5)
+    # közt 0,2 mp telik el — a kapu felé tartó gyors labda így is
+    # megvan, de a kezdete az utolsó LÁTOTT kocka (a 4.).
+    becsult = _latott(xs, gyenge={5, 6, 7, 8})
+    assert _inferred_goal_moment(becsult, j, 40.0, 25.0, 0.3) == (4, "loves")
+    # Minden labda becsült: nincs látott minta.
+    semmi = _latott(xs, gyenge=set(range(len(xs))))
+    assert _inferred_goal_moment(semmi, j, 40.0, 25.0, 0.3) == (j, "utolso")
+    # Gyors labda a pálya közepén (20 → 26 m: a kaputól 14+ m-re indul),
+    # utána lassan gurul a kapu elé.
+    tavoli = _latott([20.0] * 3 + [22.0, 24.0, 26.0]
+                     + [26.0 + 0.1 * i for i in range(1, 30)])
+    assert _inferred_goal_moment(tavoli, len(tavoli) - 1, 40.0, 25.0,
+                                 0.3)[1] == "utolso"
+    # A lövés 16 mp-cel a `j` előtt volt: kívül az ablakon; 14 mp-nél
+    # belül — 25 és 12,5 fps-en ugyanúgy.
+    for fps in (25.0, 12.5):
+        lepes = 50.0 / fps                      # 50 m/s kockánként
+        regi = _latott([30.0] * 3 + [30.0 + lepes, 30.0 + 2 * lepes]
+                       + [39.5] * int(17 * fps))
+        assert _inferred_goal_moment(regi, 4 + int(16 * fps), 40.0, fps,
+                                     0.3)[1] == "utolso", fps
+        assert _inferred_goal_moment(regi, 4 + int(14 * fps), 40.0, fps,
+                                     0.3)[1] == "loves", fps
+
+
+def _halos_atlovo_match(allas=20):
+    """Az átlövő (7-es) elengedi a labdát, az 1 m / kockával (25 m/s) a
+    kapuig repül, aztán `allas` kockán át a hálóban áll."""
+    alap = _atlovo_match()
+    frames = list(alap.frames)
+    jatekosok = frames[-1].players
+    t = frames[-1].t + 1
+    for x in [36.0, 37.0, 38.0, 39.0] + [39.5] * allas:
+        frames.append(Frame(t=t, players=jatekosok,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_shooter_hint_a_latott_loves_elengedoje():
+    """A lövés nélküli gól VALÓSZÍNŰ lövője: ha a kapu felé tartó gyors
+    labdát láttuk, a lövő az, aki elengedte (a 7-es) — nem a röppálya
+    mellett álló beálló."""
+    from handball.pipeline.event_detection import _shooter_hint
+    from handball.pipeline.tactics import TacticsConfig
+
+    m = _halos_atlovo_match()
+    j = len(m.frames) - 1
+    assert _shooter_hint(m, m.frames, j, 40.0, Team.HOME, TacticsConfig(),
+                         25.0, 0.3) == 7
+    # A vendég csapatból senki sem tartotta a labdát: nincs tipp.
+    assert _shooter_hint(m, m.frames, j, 40.0, Team.AWAY, TacticsConfig(),
+                         25.0, 0.3) is None
+
+
+def test_shooter_hint_none_ha_a_lovest_nem_lattuk():
+    """Ha a gól pillanata csak a labda eltűnéséből vagy az utolsó
+    kockából következik (nem látott lövésből), nincs lövő-tipp — akkor
+    sem, ha a labdánál ott áll egy támadó."""
+    from handball.pipeline.event_detection import (_inferred_goal_moment,
+                                                   _shooter_hint)
+    from handball.pipeline.tactics import TacticsConfig
+
+    # A 7-es végig a labdánál áll a kapu előtt: nincs gyors labda.
+    frames = [Frame(t=i, players=[_pl(7, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(30)]
+    m = Match(_meta(), frames)
+    assert _inferred_goal_moment(frames, 29, 40.0, 25.0, 0.3)[1] == "utolso"
+    assert _shooter_hint(m, frames, 29, 40.0, Team.HOME, TacticsConfig(),
+                         25.0, 0.3) is None
+    # Eltűnő labda (0,6 mp hézag) — ez sem látott lövés.
+    lyukas = [Frame(t=i, players=[_pl(7, Team.HOME, 33.0, 10.0)],
+                    ball=(None if 11 <= i < 26 else Ball(
+                        x=33.0 if i < 11 else 39.5, y=10.0, confidence=1.0)))
+              for i in range(36)]
+    assert _inferred_goal_moment(lyukas, 35, 40.0, 25.0, 0.3)[1] == "eltunes"
+    assert _shooter_hint(Match(_meta(), lyukas), lyukas, 35, 40.0, Team.HOME,
+                         TacticsConfig(), 25.0, 0.3) is None
+
+
+def test_near_goal_stretch_start_a_kapu_elotti_utolso_szakasz_eleje():
+    """A `j`-től visszafelé, amíg a labda a kapu előtti 9 m-es sávban
+    van — a labda-hézag nem szakítja meg, az első sávon kívüli labda
+    igen; ha a `j` kockán a labda nincs a sávban, a szakasz maga a `j`."""
+    from handball.pipeline.event_detection import (THROWOFF_GOAL_ZONE_M,
+                                                   _near_goal_stretch_start)
+
+    assert THROWOFF_GOAL_ZONE_M == 9.0
+    frames = _latott([20.0, 25.0, 33.0, None, None, 35.0, 38.0, 39.0])
+    assert _near_goal_stretch_start(frames, 7, 40.0) == 2
+    assert _near_goal_stretch_start(frames, 5, 40.0) == 2
+    assert _near_goal_stretch_start(frames, 1, 40.0) == 1      # sávon kívül
+    # A sáv széle még benne van (31 m), egy centivel kijjebb már nem.
+    assert _near_goal_stretch_start(_latott([31.0, 39.0]), 1, 40.0) == 0
+    assert _near_goal_stretch_start(_latott([30.99, 39.0]), 1, 40.0) == 1
+    # A másik kapura tükrözve ugyanaz.
+    tukor = _latott([20.0, 15.0, 7.0, None, None, 5.0, 2.0, 1.0])
+    assert _near_goal_stretch_start(tukor, 7, 0.0) == 2
+    # A felvétel elejéig tartó szakasz (és a kezdő hézag) sem hiba.
+    assert _near_goal_stretch_start(_latott([None, 36.0, 39.0]), 2,
+                                    40.0) == 1
+
+
+def _kapuelotti(n, kint=(), nem_latszik=(), gyenge=()):
+    """`n` kocka 5 fps-en: a labda alapból a hálóban (39,5; 10), a
+    `kint` indexeken a kapuelőtéren kívül (28; 10), a `nem_latszik`
+    indexeken nincs labda, a `gyenge` indexeken csak becsült."""
+    return [Frame(t=i, players=[],
+                  ball=None if i in nem_latszik else Ball(
+                      x=28.0 if i in kint else 39.5, y=10.0,
+                      confidence=0.2 if i in gyenge else 1.0))
+            for i in range(n)]
+
+
+def test_held_at_goal_since_a_labda_a_haloban_maradt():
+    """A lövés (k) után a labda a kapuelőtérben maradt, és csak a végén
+    vitték ki a középre: a támadás nem folytatódott — igaz. A lövés
+    utáni repülés (1 mp) még a kapuelőtéren kívül lehet."""
+    from handball.pipeline.event_detection import _held_at_goal_since
+
+    fps = 5.0
+    # A 200. kocka a lövés: a labda még 1 mp-ig (5 kocka) úton van,
+    # aztán a hálóban; a 291.-től viszik ki a középre.
+    kint = set(range(200, 206)) | set(range(291, 301))
+    frames = _kapuelotti(301, kint=kint)
+    assert _held_at_goal_since(frames, 200, 300, 40.0, fps, 0.3) is True
+    # Végig a hálóban (a `j` kockán is): szintén igaz.
+    assert _held_at_goal_since(_kapuelotti(301), 200, 300, 40.0, fps,
+                               0.3) is True
+    # A becsült labda nem számít: a közbeeső "kinti" becslések nem
+    # rontják el.
+    becsult = _kapuelotti(301, kint=kint | {240, 241},
+                          gyenge={240, 241})
+    assert _held_at_goal_since(becsult, 200, 300, 40.0, fps, 0.3) is True
+
+
+def test_held_at_goal_since_hamis_ha_a_tamadas_folytatodott():
+    """Hamis, ha a labda a repülés után kijött a kapuelőtérből és újra
+    visszakerült (lepattanó, újabb helyzet), ha egyszer sem volt a
+    kapuelőtérben, vagy ha a kapuelőteret több mint 5 mp-cel a `j` előtt
+    hagyta el."""
+    from handball.pipeline.event_detection import (THROWOFF_HELD_EXIT_S,
+                                                   THROWOFF_HELD_FLIGHT_S,
+                                                   THROWOFF_HELD_M,
+                                                   _held_at_goal_since)
+
+    assert (THROWOFF_HELD_M, THROWOFF_HELD_FLIGHT_S,
+            THROWOFF_HELD_EXIT_S) == (6.0, 1.0, 5.0)
+    fps = 5.0
+    # Lepattanó: a 220–230. kockán a labda újra kint, aztán megint bent.
+    lepattano = _kapuelotti(301, kint=set(range(220, 231)))
+    assert _held_at_goal_since(lepattano, 200, 300, 40.0, fps, 0.3) is False
+    # Ugyanez a repülés idején belül (a 201–205. kockán) még belefér.
+    repules = _kapuelotti(301, kint=set(range(200, 206)))
+    assert _held_at_goal_since(repules, 200, 300, 40.0, fps, 0.3) is True
+    # Egyszer sem volt bent.
+    soha = _kapuelotti(301, kint=set(range(0, 301)))
+    assert _held_at_goal_since(soha, 200, 300, 40.0, fps, 0.3) is False
+    # A labda nem látszik a lövés után: nincs bizonyíték.
+    vak = _kapuelotti(301, nem_latszik=set(range(200, 301)))
+    assert _held_at_goal_since(vak, 200, 300, 40.0, fps, 0.3) is False
+    # A kapuelőteret 5 mp-nél (25 kocka) régebben hagyta el: 26 kocka.
+    regen = _kapuelotti(301, kint=set(range(275, 301)))
+    assert _held_at_goal_since(regen, 200, 300, 40.0, fps, 0.3) is False
+    epp = _kapuelotti(301, kint=set(range(276, 301)))
+    assert _held_at_goal_since(epp, 200, 300, 40.0, fps, 0.3) is True
+    # A másik kapunál (x = 0) ugyanez a labda 39,5 m-re van: nincs bent.
+    assert _held_at_goal_since(_kapuelotti(301), 200, 300, 0.0, fps,
+                               0.3) is False
+
+
+def test_upgradable_shot_a_golt_szerzo_utolso_friss_lovese():
+    """A középkezdés előtti gól LÁTOTT lövése: a gólt szerző csapat
+    legutolsó (nem gól) lövése, legfeljebb 10 mp-cel a labda utolsó kapu
+    előtti kockája előtt — az `events` listabeli indexével."""
+    from handball.pipeline.event_detection import (THROWOFF_LOOKBACK_S,
+                                                   THROWOFF_UPGRADE_S,
+                                                   _upgradable_shot)
+
+    assert (THROWOFF_LOOKBACK_S, THROWOFF_UPGRADE_S) == (45.0, 10.0)
+    fps = 5.0
+    frames = _kapuelotti(400, kint=set(range(0, 240)))
+    j, t0 = 300, 320            # a labda utolsó kapu előtti kockája, kezdés
+    events = [
+        _ev(255, EventType.SHOT, Team.AWAY),     # 0: a másik csapaté
+        _ev(260, EventType.SHOT, Team.HOME),     # 1: friss lövés
+        _ev(270, EventType.PASS, Team.HOME),     # 2: nem lövés
+        _ev(280, EventType.SHOT, Team.HOME),     # 3: a legutolsó friss
+        _ev(290, EventType.GOAL, Team.HOME),     # 4: már gól — nem javítandó
+        _ev(330, EventType.SHOT, Team.HOME),     # 5: a középkezdés UTÁN
+    ]
+    assert _upgradable_shot(frames, events, Team.HOME, t0, j, 40.0, fps,
+                            0.3) == 3
+    assert _upgradable_shot(frames, events, Team.AWAY, t0, j, 40.0, fps,
+                            0.3) == 0
+    # Az előre kiszámolt idő-lista ugyanazt adja.
+    assert _upgradable_shot(frames, events, Team.HOME, t0, j, 40.0, fps,
+                            0.3, idok=[f.t for f in frames]) == 3
+    # Nincs lövés (vagy üres az esemény-lista): None.
+    assert _upgradable_shot(frames, events[2:3], Team.HOME, t0, j, 40.0,
+                            fps, 0.3) is None
+    assert _upgradable_shot(frames, [], Team.HOME, t0, j, 40.0, fps,
+                            0.3) is None
+
+
+def test_upgradable_shot_regi_loves_csak_ha_a_labda_a_haloban_maradt():
+    """A 10 mp-nél régebbi lövés után a támadás folytatódhatott — az a
+    védés nem írható át gólra; KIVÉVE, ha a lövés óta a labda végig a
+    kapuelőtérben maradt. A 45 mp-es visszanézésen túli lövés soha."""
+    from handball.pipeline.event_detection import _upgradable_shot
+
+    fps = 5.0
+    j, t0 = 300, 320
+    regi = [_ev(200, EventType.SHOT, Team.HOME)]      # 20 mp-cel a j előtt
+    # A lövés (200) után a labda a hálóban maradt, a 291.-től viszik ki.
+    haloban = _kapuelotti(400, kint=set(range(200, 206))
+                          | set(range(291, 400)))
+    assert _upgradable_shot(haloban, regi, Team.HOME, t0, j, 40.0, fps,
+                            0.3) == 0
+    # A lövés után lepattanó: a támadás folytatódott → nincs javítás.
+    lepattano = _kapuelotti(400, kint=set(range(220, 231))
+                            | set(range(291, 400)))
+    assert _upgradable_shot(lepattano, regi, Team.HOME, t0, j, 40.0, fps,
+                            0.3) is None
+    # Pont a 10 mp-es határon (250) a lövés még friss — a labda útja
+    # nem számít (itt a lövés után, a 260–270. kockán lepattanó jön);
+    # egy kockával régebbről ugyanez a lepattanó már kizárja.
+    kesoi = _kapuelotti(400, kint=set(range(260, 271))
+                        | set(range(291, 400)))
+    hataron = [_ev(250, EventType.SHOT, Team.HOME)]
+    assert _upgradable_shot(kesoi, hataron, Team.HOME, t0, j, 40.0, fps,
+                            0.3) == 0
+    assert _upgradable_shot(kesoi, [_ev(249, EventType.SHOT, Team.HOME)],
+                            Team.HOME, t0, j, 40.0, fps, 0.3) is None
+    # A középkezdés előtt 45 mp-nél (225 kocka) régebbi lövés: soha,
+    # akkor sem, ha a labda azóta a hálóban volt.
+    vegig = _kapuelotti(400)
+    assert _upgradable_shot(vegig, [_ev(95, EventType.SHOT, Team.HOME)],
+                            Team.HOME, t0, j, 40.0, fps, 0.3) == 0
+    assert _upgradable_shot(vegig, [_ev(94, EventType.SHOT, Team.HOME)],
+                            Team.HOME, t0, j, 40.0, fps, 0.3) is None

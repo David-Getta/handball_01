@@ -17,6 +17,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_kk_parok_of` — őr: a valódi jelentés képei a tárolt mintákból
     újraszámolhatók), `_sit_habit`, `_figure_dossier_of`,
     `_setplay_library_of`.
+  - `event_detection`: `_shooter_release_before`,
+    `_shooter_at_flight_kink`, `_inferred_goal_moment` /
+    `_inferred_goal_index` (az idő-ablak másodpercben), `_shooter_hint`,
+    `_near_goal_stretch_start`, `_held_at_goal_since`,
+    `_upgradable_shot`.
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
