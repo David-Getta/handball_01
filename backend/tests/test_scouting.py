@@ -2761,3 +2761,106 @@ def test_a_felderites_hatokoron_belul_csapatonkent_egyszer_epul():
         assert scout_team(m, Team.HOME).matches == 1
         # A másik csapat külön bejegyzés — nem keveredik.
         assert scout_team(m, Team.AWAY).team != elso.team
+
+
+def test_rep_earn_count_osszeadja_a_kiharcolt_kiallitasokat():
+    """A riport kiharcolt kiállításainak összege a susp_earners listából;
+    üres (vagy None) lista → 0, hiányzó "earned" mező → 0."""
+    from handball.pipeline.scouting import rep_earn_count
+
+    rep = ScoutingReport(team="home", team_name="Mi",
+                         susp_earners=[{"player_id": 7, "earned": 2},
+                                       {"player_id": 9, "earned": 1},
+                                       {"player_id": 4}])
+    assert rep_earn_count(rep) == 3
+    assert rep_earn_count(ScoutingReport(team="home", team_name="Mi")) == 0
+    ures = ScoutingReport(team="home", team_name="Mi")
+    ures.susp_earners = None
+    assert rep_earn_count(ures) == 0
+
+
+def test_rep_earn_count_a_kettos_hatrany_szabalyt_kapuzza():
+    """A 248) páros szabály: az ő végzetes kettős hátrányuk × a ti
+    kiharcolt kiállításaitok — 2 kiharcolásnál szól, 1-nél hallgat."""
+    from handball.pipeline.scouting import matchup_plan
+
+    opp = ScoutingReport(team="away", team_name="Ok", dsh_conceded=3)
+    sok = ScoutingReport(team="home", team_name="Mi",
+                         susp_earners=[{"player_id": 7, "earned": 1},
+                                       {"player_id": 9, "earned": 1}])
+    keves = ScoutingReport(team="home", team_name="Mi",
+                           susp_earners=[{"player_id": 7, "earned": 1}])
+    jel = "A kettős emberhátrány végzetes nekik"
+    assert any(jel in p_ for p_ in matchup_plan(sok, opp))
+    assert not any(jel in p_ for p_ in matchup_plan(keves, opp))
+
+
+# ---- 241) Szünet utáni oldal-váltás × a ti falat váltó védekezésetek ---------
+
+def _oldalvalto_ellenfel(fh_frames=120, sh_frames=120):
+    """Az ellenfél az első félidőben balra (50%), a másodikban jobbra
+    (58%) súlypontoz — kocka-darabszámokkal, ahogy a riport tárolja."""
+    return ScoutingReport(
+        team="away", team_name="Ok",
+        sds_fh_frames=fh_frames, sds_sh_frames=sh_frames,
+        sds_fh_counts={"bal": 60, "közép": 30, "jobb": 30},
+        sds_sh_counts={"bal": 20, "közép": 30, "jobb": 70})
+
+
+def _falvalto_sajat(fh=("6-0", 5, 6), sh=("5-1", 6, 8)):
+    """A saját csapat félidőnként stabil, kimondható formát játszik:
+    (forma, ennyi támadás ellen, az összesből)."""
+    return ScoutingReport(
+        team="home", team_name="Mi",
+        dfs_fh_labels={fh[0]: fh[1]}, dfs_fh_attacks=fh[2],
+        dfs_sh_labels={sh[0]: sh[1]}, dfs_sh_attacks=sh[2])
+
+
+def test_meccsterv_241_oldalvaltas_ellen_a_tukrozest_keri():
+    """Ha ők a szünet után oldalt váltanak (bal → jobb), és a ti falatok
+    mindkét félidőben stabil formát játszik (≥60%, ≥5 támadás), a terv a
+    szünetbeli tükrözést kéri — a két oldal nevével."""
+    from handball.pipeline.scouting import matchup_plan
+
+    plan = matchup_plan(_falvalto_sajat(), _oldalvalto_ellenfel())
+    sor = [p_ for p_ in plan if "A szünet után oldalt váltanak" in p_]
+    assert len(sor) == 1
+    assert "(bal → jobb)" in sor[0]
+    assert "készítsétek elő a tükrözést" in sor[0]
+
+
+def test_meccsterv_241_keves_mintanal_vagy_valtas_nelkul_hallgat():
+    """Hallgat, ha (a) az ellenfélnek félidőnként 100 kockánál kevesebb a
+    mintája, (b) nem váltanak oldalt, (c) nincs uralkodó oldaluk (40%
+    alatt), (d) a saját falról kevés a minta (5 támadás alatt) vagy
+    (e) nem stabil (60% alatt), vagy (f) nincs is forma-adat."""
+    from handball.pipeline.scouting import matchup_plan
+
+    jel = "A szünet után oldalt váltanak"
+
+    def szol(own, opp):
+        return any(jel in p_ for p_ in matchup_plan(own, opp))
+
+    assert szol(_falvalto_sajat(), _oldalvalto_ellenfel())
+    # (a) kevés ellenfél-kocka az egyik félidőben
+    assert not szol(_falvalto_sajat(), _oldalvalto_ellenfel(fh_frames=99))
+    assert not szol(_falvalto_sajat(), _oldalvalto_ellenfel(sh_frames=99))
+    # (b) mindkét félidőben ugyanaz az oldal
+    ugyanaz = _oldalvalto_ellenfel()
+    ugyanaz.sds_sh_counts = {"bal": 70, "közép": 30, "jobb": 20}
+    assert not szol(_falvalto_sajat(), ugyanaz)
+    # (c) nincs uralkodó oldal (a legnagyobb is csak 39%)
+    szort = _oldalvalto_ellenfel()
+    szort.sds_fh_counts = {"bal": 47, "közép": 37, "jobb": 36}
+    assert not szol(_falvalto_sajat(), szort)
+    # (d) a saját falról kevés a minta az első félidőben
+    assert not szol(_falvalto_sajat(fh=("6-0", 4, 4)),
+                    _oldalvalto_ellenfel())
+    # (e) a saját fal nem stabil a második félidőben (50%)
+    assert not szol(_falvalto_sajat(sh=("5-1", 4, 8)),
+                    _oldalvalto_ellenfel())
+    # (f) nincs forma-adat / üres riportok
+    assert not szol(ScoutingReport(team="home", team_name="Mi"),
+                    _oldalvalto_ellenfel())
+    assert not szol(_falvalto_sajat(),
+                    ScoutingReport(team="away", team_name="Ok"))

@@ -30,6 +30,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     (`figure_formation_summary`, `setplay_score_summary`,
     `powerplay_figures_summary`, `clutch_figures_summary`,
     `empty_net_figures_summary`) — együtt ítél, külön kevés a minta.
+  - `scouting`: `rep_earn_count`; a 241) "szünet utáni oldal-váltás"
+    meccsterv-szabály (eddig egyszer sem szólalt meg tesztben) a
+    hallgatás hat okával.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
