@@ -780,3 +780,95 @@ def test_attack_tempo_variety_rovid_szakasz_nem_tamadas():
     atv = attack_tempo_variety(_atv_match([1.0] * 9))
     assert atv["home"]["attacks"] == 0
     assert atv["home"]["verdict"] is None
+
+
+# ---- segment_phases / most_common_formations -------------------------------
+
+def test_segment_phases_frame_enkent_sorrendben():
+    """A fázis-címkék kockánként, a meccs sorrendjében jönnek: hazai támadás,
+    vendég támadás, saját térfeles felépítés (átmenet), labda nélküli kocka."""
+    from handball.pipeline.tactics import segment_phases
+
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=30.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(11, Team.AWAY, 8.0, 10.0)],
+              ball=Ball(x=8.0, y=10.0, confidence=1.0)),
+        Frame(t=2, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+              ball=Ball(x=10.0, y=10.0, confidence=1.0)),
+        Frame(t=3, players=[_pl(1, Team.HOME, 30.0, 10.0)], ball=None),
+    ]
+    assert segment_phases(Match(_meta(), frames)) == [
+        Phase.HOME_ATTACK, Phase.AWAY_ATTACK, Phase.TRANSITION, Phase.UNKNOWN]
+
+
+def test_segment_phases_ures_meccs_es_forditott_irany():
+    """Üres meccsen nincs címke; fordított támadási iránynál ugyanaz a kocka
+    a hazai SAJÁT térfele lesz (átmenet), nem támadás."""
+    from handball.pipeline.tactics import segment_phases
+
+    assert segment_phases(Match(_meta(), [])) == []
+    frames = [Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                    ball=Ball(x=30.0, y=10.0, confidence=1.0))]
+    cfg = TacticsConfig(home_attacks_positive=False)
+    assert segment_phases(Match(_meta(), frames), cfg) == [Phase.TRANSITION]
+
+
+def _mcf_frame(t, defenders):
+    """Hazai támadás (labda a hazai támadó térfelén), a vendég védőfal a
+    megadott helyeken (vendég saját kapuja x=40)."""
+    players = [_pl(1, Team.HOME, 28.0, 10.0)]
+    players += [_pl(11 + i, Team.AWAY, x, y) for i, (x, y) in enumerate(defenders)]
+    return Frame(t=t, players=players, ball=Ball(x=28.0, y=10.0, confidence=1.0))
+
+
+def test_most_common_formations_a_vedekezo_csapat_leggyakoribb_formaja():
+    """Három 6-0-s és egy 5-1-es védekező kocka → a vendég formája 6-0; a
+    hazai nem védekezett → "—" (nincs minta, nincs kitalált forma)."""
+    from handball.pipeline.tactics import most_common_formations
+
+    hat_null = [(34.0, y) for y in (3, 6, 9, 11, 14, 17)]
+    ot_egy = [(34.0, 3), (34.0, 6), (34.0, 9), (34.0, 11), (34.0, 14),
+              (30.5, 14)]
+    frames = [_mcf_frame(0, hat_null), _mcf_frame(1, ot_egy),
+              _mcf_frame(2, hat_null), _mcf_frame(3, hat_null)]
+    res = most_common_formations(Match(_meta(), frames))
+    assert res == {"away": "6-0", "home": "—"}
+
+
+def test_most_common_formations_vedekezes_nelkul_nincs_forma():
+    """Csak átmenet és labda nélküli kocka: egyik csapat sem védekezett
+    szervezett támadás ellen → mindkettő "—"."""
+    from handball.pipeline.tactics import most_common_formations
+
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+              ball=Ball(x=10.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(11, Team.AWAY, 34.0, 10.0)], ball=None),
+    ]
+    assert most_common_formations(Match(_meta(), frames)) == {
+        "home": "—", "away": "—"}
+    assert most_common_formations(Match(_meta(), [])) == {
+        "home": "—", "away": "—"}
+
+
+# ---- TacticsConfig: melyik kapu kié ----------------------------------------
+
+def test_attacks_toward_x_az_ellenfel_kapuja():
+    """Alapértelmezésben a hazai a +x (x=40) kapura támad, a vendég a x=0-ra;
+    a támadott kapu mindig az ELLENFÉL saját kapuja."""
+    cfg = TacticsConfig()
+    assert cfg.attacks_toward_x(Team.HOME) == 40.0
+    assert cfg.attacks_toward_x(Team.AWAY) == 0.0
+    assert cfg.attacks_toward_x(Team.HOME) == cfg.own_goal_x(Team.AWAY)
+    assert cfg.attacks_toward_x(Team.AWAY) == cfg.own_goal_x(Team.HOME)
+
+
+def test_attacks_toward_x_forditott_iranynal_megfordul():
+    """Fordított támadási iránynál (térfélcsere) a két kapu szerepet cserél,
+    és egy csapat sosem a saját kapujára támad."""
+    cfg = TacticsConfig(home_attacks_positive=False)
+    assert cfg.attacks_toward_x(Team.HOME) == 0.0
+    assert cfg.attacks_toward_x(Team.AWAY) == 40.0
+    for team in (Team.HOME, Team.AWAY):
+        assert cfg.attacks_toward_x(team) != cfg.own_goal_x(team)

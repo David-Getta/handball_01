@@ -24,6 +24,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     lista-szerződés, üres detektálás → üres lista) — eddig sosem futott.
   - `teams`: `TeamClassifier.classify` / `is_goalkeeper` / `is_referee`
     két különböző színkészlettel; profil vagy szín nélkül nem találgat.
+  - `tactics`: `segment_phases`, `most_common_formations` (védekezés
+    nélkül "—"), `TacticsConfig.attacks_toward_x`.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
