@@ -40,6 +40,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     doksi-szinkron és a main író / ellenőrző módja (tmp mappában).
   - `scripts/process_video`: törzs-szín és sárga bíró-szűrő, a tartalék
     út követője, a parancssori belépő, `StallSkippingFeed.abandon`.
+  - `scripts/order_sensitivity`: a mérés próba-rétegekkel (szerep
+    nélküli meccsen megtalálja a szerep-függő réteget) és a main.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
