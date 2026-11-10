@@ -238,3 +238,42 @@ def test_main_hibas_retegnel_1_es_kod_kulonben_0(monkeypatch, tmp_path,
     assert kert == {"seconds": ms.DEFAULT_SECONDS, "seed": ms.DEFAULT_SEED}
     assert "hibás: 0" in capsys.readouterr().out
     assert "## Hibás réteg: nincs" in ki_fajl.read_text(encoding="utf-8")
+
+
+# ---- Az összehasonlítás kanonikus alakja (harmadik kör) ---------------------
+
+def test_canon_a_kulcs_sorrend_nem_szamit_a_tartalom_igen():
+    """A tükrözés-őr két réteg-kimenetet a kanonikus JSON-alakjukon vet
+    össze: a szótár-kulcsok sorrendje nem számít, a lista sorrendje és
+    minden érték igen; az ékezetes címke olvasható marad (az oldal-címke
+    keresése ezen a szövegen fut), a nem JSON-érték szövegként megy."""
+    from handball.models.tracking import Team
+    from scripts import mirror_sides as ms
+
+    a = {"home": {"side": "bal szél", "n": 3}, "away": {"n": 1, "side": None}}
+    b = {"away": {"side": None, "n": 1}, "home": {"n": 3, "side": "bal szél"}}
+    assert ms._canon(a) == ms._canon(b)
+    assert '"bal szél"' in ms._canon(a)              # nem \\u-kódolt
+    assert ms._canon({"x": [1, 2]}) != ms._canon({"x": [2, 1]})
+    assert ms._canon({"x": 1}) != ms._canon({"x": 1.5})
+    assert ms._canon({"x": None}) != ms._canon({})
+    # Nem JSON-érték (enum, halmaz, tuple-kulcs nélküli objektum): szöveg.
+    assert ms._canon({"t": Team.HOME}) == ms._canon({"t": Team.HOME})
+    assert isinstance(ms._canon({"h": {1, 2}}), str)
+    assert ms._canon((1, 2)) == ms._canon([1, 2])    # a tuple lista
+    assert ms._canon(None) == "null"
+
+
+def test_canon_a_tukrozott_kimenet_osszevetese():
+    """A mérés lényege a _canon-nal: a helyesen megforduló réteg
+    tükörképének oldal-cseréje UGYANAZ a kanonikus alak, a nem forduló
+    rétegé más — és az oldal-címke keresése is ezen a szövegen megy."""
+    from scripts import mirror_sides as ms
+
+    eredeti = {"home": {"side": "bal szél"}, "away": {"side": "jobb szél"}}
+    tukor_jo = {"home": {"side": "jobb szél"}, "away": {"side": "bal szél"}}
+    assert ms._canon(ms.swap_sides(tukor_jo)) == ms._canon(eredeti)
+    assert ms._canon(ms.swap_sides(eredeti)) != ms._canon(eredeti)
+    assert ms.has_side_label(eredeti) is True
+    assert ms.has_side_label({"home": {"verdict": "a bal szélen sokat "
+                                       "lőnek"}}) is False

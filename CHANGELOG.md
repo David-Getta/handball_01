@@ -35,6 +35,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `api`: `_MatchStore.put_cold` (a fejléc hidegként, felülírással és
     anélkül), `_halozati_or_telepit` (alapból nincs őr; nyitott motornál
     csak az engedett utak; a saját gépről minden megy).
+  - `scripts/mirror_sides`: `_canon` (a kulcs-sorrend nem számít, a
+    tartalom igen; a tükrözött kimenet összevetése).
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
