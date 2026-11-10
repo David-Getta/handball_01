@@ -2514,6 +2514,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kiállítás-sokk: a hátrány ELEJÉN (első 40 mp) vagy a VÉGÉN kapják-e
+  // a gólt — mindkét szakaszból 60 mp, összesen 3 gól, a hangsúlyos
+  // szakaszban 2 gól és 1,5-szörös ütem kell (a backenddel azonos
+  // küszöbök: SHO_ONSET_S, SHO_MIN_PART_S, SHO_MIN_GOALS, SHO_RATIO,
+  // SHO_MIN_PART_GOALS).
+  String? _shorthandedOnset(Map<String, dynamic> r) {
+    final es = (r["sho_early_s"] as num?)?.toDouble() ?? 0.0;
+    final ls = (r["sho_late_s"] as num?)?.toDouble() ?? 0.0;
+    final eg = (r["sho_early_goals"] as num?)?.toInt() ?? 0;
+    final lg = (r["sho_late_goals"] as num?)?.toInt() ?? 0;
+    if (es < 60.0 || ls < 60.0 || eg + lg < 3) return null;
+    final e = 60.0 * eg / es, v = 60.0 * lg / ls;
+    if (eg >= 2 && e >= 1.5 * v) {
+      return "a kiállításuk első 40 másodpercében kapják a gólt "
+          "(percenként ${huNum(e)}, utána ${huNum(v)}) · a "
+          "kiállításuk után azonnal, gyors játékba hozással támadjatok";
+    }
+    if (lg >= 2 && v >= 1.5 * e) {
+      return "a kiállításuk végére fogynak el (percenként "
+          "${huNum(v)} gól az első 40 mp után, előtte ${huNum(e)}) · "
+          "türelmes emberelőny, a gól a második percben érik be";
+    }
+    return null;
+  }
+
   // Emberfogás-váltás: a szünet után emberfogásra váltanak-e (2 m
   // alatt emberfogás, 0,7-es arány a váltás — a backenddel azonos
   // küszöbök: MSH_TIGHT_M, MSH_DROP_RATIO).
@@ -12674,6 +12699,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberfogás-váltás", _markingShift(r)!],
       if (_suspensionCost(r) != null)
         ["Kétperc ára", _suspensionCost(r)!],
+      if (_shorthandedOnset(r) != null)
+        ["Kiállítás-sokk", _shorthandedOnset(r)!],
       if (_keyPlayer(r) != null)
         ["Kulcs-ember", _keyPlayer(r)!],
       if (_powerplayTurnoverPlayer(r) != null)

@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Kiállítás-sokk: a kiállítás ELEJÉN vagy a VÉGÉN kapják a gólt**
+  (új réteg, `rules.shorthanded_onset`): a kétperc ára azt mondja meg,
+  mennyi gólba kerül egy kiállításuk — ez azt, MIKOR fáj a hátrány. A
+  kiállítás-ablakok első 40 másodpercét (amíg öt emberre
+  átrendeződnek) veti össze a maradékkal, percre vetített kapott
+  góllal; mindkét szakaszból 60 mp, összesen 3 gól, a hangsúlyos
+  szakaszban 2 gól és 1,5-szeres ütem kell, különben nincs ítélet.
+  Edzői olvasat: ha az ELEJÉN kapják, lassan rendeződnek át — a
+  kiállításuk pillanata támadás-jelzés, azonnal, gyors játékba
+  hozással kell rájuk menni; ha a VÉGÉN, elfogynak — türelmes
+  emberelőny, a gól a második percben érik be. Felületek: `/analyze`
+  és a meccs-csomag, edzői összefoglaló (játékstílus-szakasz),
+  felderítés (négy összeg-mező, pontos összegzés meccsek közt, edzői
+  kulcs), meccsterv 476) (az ő sokkjuk × a ti 45% feletti
+  emberelőnyötök), edzés-fókusz 496) (átrendeződés a kiállítás
+  pillanatában / hátrány-védekezés a második percben), kliens-csempe
+  „Kiállítás-sokk”. Az „eleje” hossza másodpercben él: a termék
+  ritkításán ugyanaz az ítélet. (A réteget egy helyi fejlesztő-ügynök
+  kezdte el; a motor és a tesztjei tőle valók.)
 - **Kiadás előtti őrök: mind a hat lefutott; a poszt-labdatartás
   érintés-küszöbe másodpercben** (javítás): a sorrend-függés (521
   réteg, 0 függő), a tükrözés (11 oldal-címkés réteg, 0 hibás), a

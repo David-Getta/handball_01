@@ -1508,6 +1508,14 @@ class ScoutingReport:
     # windows).
     sct_windows: int = 0
     sct_conceded: int = 0
+    # Kiállítás-sokk (rules.shorthanded_onset): a kiállítás-ablakok
+    # eleje (az első SHO_ONSET_S mp) és maradéka — másodperc (egészre
+    # kerekítve) és a közben kapott gólok. Összeg, pontosan összegződik
+    # (a minta a négy összegből számolódik újra).
+    sho_early_s: int = 0
+    sho_late_s: int = 0
+    sho_early_goals: int = 0
+    sho_late_goals: int = 0
     # Emberfogás-váltás: a legszorosabb őrzési páros átlagtávolsága
     # félidőnként (méter) — egy meccs képe, több meccsnél az UTOLSÓ
     # felvétel értéke marad (nem összegezhető átlag).
@@ -5922,6 +5930,32 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "alatt) — olcsón megússzák a hátrányt: ne a "
                 "kiállítás kiharcolására játsszatok, marad a "
                 "felállt támadás.")
+
+    # Kiállítás-sokk: a hátrány ELEJÉN vagy a VÉGÉN kapják-e a gólt
+    # (rules.shorthanded_onset_kind — a motorral közös döntés).
+    try:
+        from .rules import SHO_ONSET_S, shorthanded_onset_kind
+        _sho_kind, _sho_e, _sho_v = shorthanded_onset_kind(
+            rep.sho_early_s, rep.sho_late_s,
+            rep.sho_early_goals, rep.sho_late_goals)
+        if _sho_kind == "eleje":
+            keys.append(
+                f"A kiállításuk elején kapják a gólt "
+                f"({rep.sho_early_goals} gól a hátrány első "
+                f"{SHO_ONSET_S:.0f} másodpercében — percenként "
+                f"{_sho_e:.1f}, utána {_sho_v:.1f}) — öt emberre lassan "
+                "rendeződnek át: a kiállításuk után azonnal, gyors "
+                "játékba hozással támadjatok, ne várjátok ki a "
+                "felállásukat.")
+        elif _sho_kind == "vége":
+            keys.append(
+                f"A kiállításuk végére fogynak el ({rep.sho_late_goals} "
+                f"gól a hátrány első {SHO_ONSET_S:.0f} másodperce után "
+                f"— percenként {_sho_v:.1f}, előtte {_sho_e:.1f}) — az "
+                "elején még összezárnak: türelmes emberelőny, a fal "
+                "járatása, a gól a második percben érik be.")
+    except Exception:
+        pass
 
     # Emberfogás-váltás: mire készüljünk a szünet után.
     if rep.msh_fh_dist_m > 0.0 and rep.msh_sh_dist_m > 0.0:
@@ -12292,6 +12326,12 @@ def _scout_team_cached(match: Match, team: Team,
         sctrec = _sct(match, config)[team.value]
         rep.sct_windows = int(sctrec["windows"])
         rep.sct_conceded = int(sctrec["conceded"])
+        from .rules import shorthanded_onset as _sho
+        shorec = _sho(match, config)[team.value]
+        rep.sho_early_s = int(round(shorec["early_s"]))
+        rep.sho_late_s = int(round(shorec["late_s"]))
+        rep.sho_early_goals = int(shorec["early_goals"])
+        rep.sho_late_goals = int(shorec["late_goals"])
         from .defense import marking_shift as _msh
         mshrec = _msh(match, config)[team.value]
         rep.msh_fh_dist_m = float(mshrec["fh_dist_m"] or 0.0)
@@ -15714,6 +15754,36 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 476) Kiállítás-sokk: az ő hátrányuk ELEJE vagy VÉGE fáj (a négy
+    # összegből, a motorral közös döntéssel) × a TI emberelőnyötök
+    # hatékonysága (legalább 5 emberelőnyös lövés, 45% felett) — az
+    # elejénél azonnal, gyors játékba hozással, a végénél türelmesen.
+    try:
+        from .rules import SHO_ONSET_S, shorthanded_onset_kind
+        _k476, _e476, _v476 = shorthanded_onset_kind(
+            opp.sho_early_s, opp.sho_late_s,
+            opp.sho_early_goals, opp.sho_late_goals)
+        if (_k476 and own.ppy_pp_shots >= 5
+                and own.ppy_pp_goals / own.ppy_pp_shots >= 0.45):
+            _pct476 = 100.0 * own.ppy_pp_goals / own.ppy_pp_shots
+            if _k476 == "eleje":
+                plan.append(
+                    f"Kiállítás-sokk: a kiállításuk első {SHO_ONSET_S:.0f} "
+                    f"másodpercében kapják a gólt (percenként {_e476:.1f}, "
+                    f"utána {_v476:.1f}) — a ti emberelőnyötök {_pct476:.0f}%-os: "
+                    "a kiállítás pillanatában azonnal, gyors játékba "
+                    "hozással támadjatok, mielőtt az öt ember beáll.")
+            else:
+                plan.append(
+                    f"Kiállítás-sokk: a kiállításuk végére fogynak el "
+                    f"(percenként {_v476:.1f} gól az első "
+                    f"{SHO_ONSET_S:.0f} másodperc után, előtte {_e476:.1f}) — "
+                    f"a ti emberelőnyötök {_pct476:.0f}%-os: türelmes "
+                    "emberelőny, járassátok a falat, a gól a második "
+                    "percben érik be.")
     except Exception:
         pass
 
@@ -24124,6 +24194,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.kpl_layers_by_player for r in reports),
         sct_windows=sum(r.sct_windows for r in reports),
         sct_conceded=sum(r.sct_conceded for r in reports),
+        sho_early_s=sum(r.sho_early_s for r in reports),
+        sho_late_s=sum(r.sho_late_s for r in reports),
+        sho_early_goals=sum(r.sho_early_goals for r in reports),
+        sho_late_goals=sum(r.sho_late_goals for r in reports),
         msh_fh_dist_m=max((r.msh_fh_dist_m for r in reports),
                           default=0.0),
         msh_sh_dist_m=max((r.msh_sh_dist_m for r in reports),

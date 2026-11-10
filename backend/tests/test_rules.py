@@ -2634,6 +2634,184 @@ def test_suspension_cost_silent_with_few_windows():
     assert rec["per_susp"] is None, rec
 
 
+# ---- Kiállítás-sokk (a hátrány elején vagy a végén kapják a gólt) -----------
+
+def _sho_match(windows, fps=25.0, window_s=120.0):
+    """A VENDÉG van emberhátrányban; a `windows` elemei (korai, késői)
+    párok: hány hazai gól esik a kiállítás 10. másodperce körül, és
+    hány a 60. után. Minden szakasz 10 mp-re igazított, hogy a
+    kiállítás-ablak (PP_WINDOW_S) pontosan a hátrány elején nyíljon."""
+    frames = []
+
+    def _cast(away_n):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(away_n)]
+        return players
+
+    def _hold_until(t_end, away_n):
+        while len(frames) < t_end:
+            frames.append(Frame(t=len(frames), players=_cast(away_n),
+                                ball=Ball(x=20.0, y=9.0, confidence=1.0)))
+
+    def _home_goal(away_n):
+        # 25 m/s-os lövés a +x kapuba, a képrátától függetlenül.
+        lepes = 25.0 / fps
+        for i in range(max(3, round(0.4 * fps))):
+            players = _cast(away_n)
+            players.append(_pl(1, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=len(frames), players=players,
+                                ball=Ball(x=min(34.0 + i * lepes, 40.4),
+                                          y=10.0, confidence=1.0)))
+        _hold_until(len(frames) + int(3.0 * fps), away_n)
+
+    _hold_until(int(20.0 * fps), 6)
+    for early, late in windows:
+        w0 = len(frames)
+        _hold_until(w0 + int(10.0 * fps), 5)
+        for _ in range(early):
+            _home_goal(5)
+        _hold_until(w0 + int(60.0 * fps), 5)
+        for _ in range(late):
+            _home_goal(5)
+        _hold_until(w0 + int(window_s * fps), 5)
+        _hold_until(len(frames) + int(30.0 * fps), 6)
+    return Match(_meta(fps), frames)
+
+
+def test_shorthanded_onset_flags_the_slow_reorganisation():
+    """Ha a hátrányban kapott gólok a kiállítás első 40 másodpercében
+    esnek, öt emberre lassan rendeződnek át — azonnal támadni kell."""
+    from handball.pipeline.rules import (SHO_MIN_GOALS, SHO_ONSET_S,
+                                         shorthanded_onset)
+
+    rec = shorthanded_onset(_sho_match([(2, 0), (1, 0), (1, 1)]))["away"]
+    assert rec["windows"] == 3, rec
+    assert rec["early_s"] == 3 * SHO_ONSET_S, rec
+    assert rec["late_s"] == 3 * (120.0 - SHO_ONSET_S), rec
+    assert rec["early_goals"] == 4 and rec["late_goals"] == 1, rec
+    assert rec["early_goals"] + rec["late_goals"] >= SHO_MIN_GOALS
+    assert rec["early_per_min"] == 2.0 and rec["late_per_min"] == 0.25
+    assert rec["pattern"] == "eleje", rec
+    assert rec["verdict"] and "elején kapják" in rec["verdict"], rec
+    assert "azonnal" in rec["verdict"], rec
+    # A hazai csapat nem volt hátrányban: róla nincs mit mondani.
+    home = shorthanded_onset(_sho_match([(2, 0), (1, 0), (1, 1)]))["home"]
+    assert home["windows"] == 0 and home["verdict"] is None, home
+
+
+def test_shorthanded_onset_flags_the_late_fade():
+    """Ha az elején összezárnak, de a hátrány második felében kapják a
+    gólokat, türelmes emberelőny kell."""
+    from handball.pipeline.rules import shorthanded_onset
+
+    rec = shorthanded_onset(_sho_match([(0, 2), (0, 2), (1, 2)]))["away"]
+    assert rec["early_goals"] == 1 and rec["late_goals"] == 6, rec
+    assert rec["pattern"] == "vége", rec
+    assert rec["verdict"] and "végére fogynak el" in rec["verdict"], rec
+    assert "türelmes" in rec["verdict"], rec
+
+
+def test_shorthanded_onset_silent_when_balanced():
+    """Azonos percenkénti ütem az elején és a végén: nincs minta."""
+    from handball.pipeline.rules import shorthanded_onset
+
+    rec = shorthanded_onset(_sho_match([(1, 2), (1, 2)]))["away"]
+    assert rec["early_per_min"] == rec["late_per_min"] == 1.5, rec
+    assert rec["pattern"] is None and rec["verdict"] is None, rec
+
+
+def test_shorthanded_onset_silent_with_little_evidence():
+    """Kevés minta → None: egyetlen kiállításból nincs meg az "eleje"
+    idő-minimuma; két gólból nincs ítélet; és egyetlen korai gól nem
+    minta, hiába magasabb az üteme."""
+    from handball.pipeline.rules import (SHO_MIN_PART_S, SHO_ONSET_S,
+                                         shorthanded_onset)
+
+    egy = shorthanded_onset(_sho_match([(3, 0)]))["away"]
+    assert egy["windows"] == 1 and egy["early_s"] == SHO_ONSET_S, egy
+    assert SHO_ONSET_S < SHO_MIN_PART_S
+    assert egy["early_per_min"] is None, egy
+    assert egy["pattern"] is None and egy["verdict"] is None, egy
+
+    ket_gol = shorthanded_onset(_sho_match([(1, 0), (1, 0)]))["away"]
+    assert ket_gol["early_per_min"] == 1.5, ket_gol
+    assert ket_gol["pattern"] is None and ket_gol["verdict"] is None
+
+    egy_korai = shorthanded_onset(
+        _sho_match([(1, 1), (0, 1)]))["away"]
+    assert egy_korai["early_per_min"] == 0.75, egy_korai
+    assert egy_korai["late_per_min"] == 0.75, egy_korai
+    assert egy_korai["verdict"] is None, egy_korai
+
+
+def test_shorthanded_onset_a_ritkitott_meccsen_is_ugyanaz():
+    """Az "eleje" hossza MÁSODPERC: a termék ritkításánál (fps/3)
+    ugyanaz az idő és ugyanaz a minta, mint sűrűn."""
+    from handball.pipeline.rules import shorthanded_onset
+
+    suru = shorthanded_onset(_sho_match([(2, 0), (2, 0)]))["away"]
+    ritka = shorthanded_onset(
+        _sho_match([(2, 0), (2, 0)], fps=5.0))["away"]
+    for kulcs in ("windows", "early_s", "late_s", "early_goals",
+                  "late_goals", "pattern"):
+        assert suru[kulcs] == ritka[kulcs], (kulcs, suru, ritka)
+    assert suru["pattern"] == "eleje", suru
+
+
+def test_shorthanded_onset_a_feluleteken_valodi_retegbol(monkeypatch):
+    """A felderítés (mezők, összegzés, edzői kulcs), a meccsterv (476) és
+    az edzés-fókusz (496) a VALÓDI rétegből szólal meg — a mezőnevek nem
+    némulhatnak el a try/except mögött."""
+    from handball.models.tracking import Team as _T
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    m = _sho_match([(2, 0), (1, 0), (1, 1)])
+    opp = scout_team(m, _T.AWAY)
+    assert (opp.sho_early_s, opp.sho_late_s) == (120, 240), opp
+    assert (opp.sho_early_goals, opp.sho_late_goals) == (4, 1)
+    keys = _coach_keys(opp)[2]
+    assert any("kiállításuk elején kapják" in k for k in keys), keys
+    # meccsek közt az összegek pontosan összeadódnak
+    both = combine_reports([opp, opp])
+    assert (both.sho_early_s, both.sho_early_goals) == (240, 8)
+    # 476: az ő gyengéjük × a ti hatékony emberelőnyötök
+    own = scout_team(m, _T.HOME)
+    own.ppy_pp_shots, own.ppy_pp_goals = 8, 5
+    plan = matchup_plan(own, opp)
+    assert any(p.startswith("Kiállítás-sokk:") and "azonnal" in p
+               for p in plan), plan
+    own.ppy_pp_goals = 2          # gyenge emberelőnnyel nincs páros
+    assert not any(p.startswith("Kiállítás-sokk:")
+                   for p in matchup_plan(own, opp))
+    # 496: a hátrányban lévő csapat edzés-fókusza (a rangsor-plafon
+    # nélkül: a szabály megszólalását nézzük, nem a helyezését)
+    import handball.pipeline.training as _tr
+    monkeypatch.setattr(_tr, "MAX_ITEMS", 10_000)
+    tf = training_focus(m)["away"]
+    assert any(i["title"] == "Átrendeződés a kiállítás pillanatában"
+               for i in tf), [i["title"] for i in tf]
+
+
+def test_shorthanded_onset_kevés_minta_a_feluleteken_hallgat():
+    """Kevés minta → a felderítés kulcsa és a meccsterv sora sincs."""
+    from handball.models.tracking import Team as _T
+    from handball.pipeline.scouting import (_coach_keys, matchup_plan,
+                                            scout_team)
+
+    m = _sho_match([(1, 0)])
+    opp = scout_team(m, _T.AWAY)
+    assert not any("Kiállítás" in k or "kiállításuk" in k
+                   for k in _coach_keys(opp)[2] if "40 másodperc" in k)
+    own = scout_team(m, _T.HOME)
+    own.ppy_pp_shots, own.ppy_pp_goals = 8, 6
+    assert not any(p.startswith("Kiállítás-sokk:")
+                   for p in matchup_plan(own, opp))
+
+
 # ---- Emberelőny-hibázók (ki adja el a labdát a két perc alatt) --------------
 
 def test_powerplay_turnover_players_names_the_loser():

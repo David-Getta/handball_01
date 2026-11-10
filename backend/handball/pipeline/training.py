@@ -1857,6 +1857,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 496) Kiállítás-sokk: a hátrányban kapott gólok a kiállítás ELEJÉN
+    # (lassú átrendeződés öt emberre) vagy a VÉGÉN (elfogynak) esnek —
+    # az előbbit a kiállítás utáni első védekezés forgatókönyve, az
+    # utóbbit a hátrány-védekezés állóképessége gyógyítja.
+    _szabaly = 496
+    try:
+        from .rules import SHO_ONSET_S, shorthanded_onset
+        sho496 = shorthanded_onset(match, config)
+        for side in ("home", "away"):
+            r496 = sho496.get(side) or {}
+            if r496.get("pattern") == "eleje":
+                add(side, "védekezés", "Átrendeződés a kiállítás pillanatában",
+                    r496["verdict"],
+                    "kiállítás-jelzésre azonnali átállás öt emberre: ki hova "
+                    "lép, ki zárja a beállót, ki megy a szélre — "
+                    f"{SHO_ONSET_S:.0f} másodperces sorozatok gyors "
+                    "játékba hozással ellenük, időre mérve")
+            elif r496.get("pattern") == "vége":
+                add(side, "védekezés", "Hátrány-védekezés a második percben",
+                    r496["verdict"],
+                    "két perces, folyamatos 5 a 6 elleni védekezés a végéig "
+                    "terhelve (a fal járatása ellen), csere nélkül — a "
+                    "második perc csúszó mozgására és a kommunikációra")
+    except Exception:
+        pass
+
     # 495) Lövés-elosztás: a tanult lövőink × az ő kapusuk szerint ki ér
     # a legtöbbet lövésenként, és ehhez képest ki lőtt túl keveset vagy
     # túl sokat — a játékrendszer a ritkán lövő értékes lövőt hozza
