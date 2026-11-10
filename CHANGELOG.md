@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Teszt-lefedettség, második kör: a pipeline belső segédei** (teszt):
+  az aláhúzásos segéd-függvények, amelyekre eddig csak a hívójukon át,
+  közvetve futott teszt, közvetlen tesztet kapnak — a pozitív eset
+  mellé a "kevés minta → None / üres" esettel. Modulonként:
+  - `video_meta`: `_mvhd_creation` (mindkét doboz-verzió, csonka doboz,
+    véletlen bájt-egyezés) és a fájl-olvasás szélei.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
