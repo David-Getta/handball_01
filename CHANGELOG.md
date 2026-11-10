@@ -21,6 +21,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `scripts/train_digit_net`: a számjegy-háló tanítása kicsiben
     (renderelés → adathalmaz → tanítás → a `jersey_ocr` osztályozója);
     őr: a szállított `digit_net.npz` a szkript eloszlásán pontos.
+  - `scripts/swallowed_exceptions`: a nyomkövető (`_Gyujto`) egy
+    próba-modulon, a mérés próba-rétegekkel és mini-alkalmazással (a
+    végpont szálán született kivételt is megtalálja), a main.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
