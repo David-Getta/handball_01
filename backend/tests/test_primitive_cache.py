@@ -408,3 +408,227 @@ def test_az_esemeny_masolat_fuggetlen_es_egyenlo():
     assert masolat == [replace(e) for e in events]
     assert all(a is not b for a, b in zip(events, masolat))
     assert all(type(a) is type(b) for a, b in zip(events, masolat))
+
+
+# ---- A védő-másolatok (copy_rows / copy_by_id / copy_sides / …) -------------
+
+def test_copy_rows_a_sorok_fuggetlenek_a_tartalom_azonos():
+    """A dict-sorok másolata egyenlő, de független: a hívó jelölése nem
+    látszik az eredetin. A nem-dict elem változatlanul megy át; üres
+    listából üres lista lesz (nem None)."""
+    from handball.pipeline.primitive_cache import copy_rows
+
+    eredeti = [{"start_frame": 0, "home": 6}, {"start_frame": 250, "home": 5},
+               "nem-sor", 7]
+    masolat = copy_rows(eredeti)
+    assert masolat == eredeti and masolat is not eredeti
+    assert masolat[0] is not eredeti[0] and masolat[1] is not eredeti[1]
+    masolat[0]["home"] = 99
+    masolat.append({"start_frame": 500})
+    assert eredeti[0]["home"] == 6 and len(eredeti) == 4
+    assert masolat[2] == "nem-sor" and masolat[3] == 7
+    assert copy_rows([]) == []
+
+
+def test_copy_by_id_az_adatosztalyt_masolja_a_tobbit_atengedi():
+    """{azonosító: adatosztály}: a példányok függetlenek, a mezők
+    egyenlők. A sima érték és maga az OSZTÁLY (nem példány) változatlanul
+    megy át; None-ból üres szótár lesz."""
+    from dataclasses import dataclass
+
+    from handball.pipeline.primitive_cache import copy_by_id
+
+    @dataclass
+    class Stat:
+        goals: int = 0
+        shots: int = 0
+
+    eredeti = {7: Stat(goals=3, shots=5), 9: Stat(), "megj": "szöveg",
+               "tipus": Stat}
+    masolat = copy_by_id(eredeti)
+    assert masolat == eredeti and masolat is not eredeti
+    assert masolat[7] is not eredeti[7] and masolat[9] is not eredeti[9]
+    masolat[7].goals = 99
+    assert eredeti[7].goals == 3
+    assert masolat["megj"] == "szöveg" and masolat["tipus"] is Stat
+    assert copy_by_id(None) == {} and copy_by_id({}) == {}
+
+
+def test_copy_sides_csapatonkent_fuggetlen_szotar():
+    """{oldal: {kulcs: érték}}: a belső szótár független; a hiányzó
+    (None) oldalból üres szótár, a None bemenetből üres szótár lesz."""
+    from handball.pipeline.primitive_cache import copy_sides
+
+    eredeti = {"home": {"attacks": 8, "verdict": "gyors"}, "away": None}
+    masolat = copy_sides(eredeti)
+    assert masolat == {"home": {"attacks": 8, "verdict": "gyors"}, "away": {}}
+    assert masolat["home"] is not eredeti["home"]
+    masolat["home"]["verdict"] = None
+    assert eredeti["home"]["verdict"] == "gyors"
+    assert copy_sides(None) == {} and copy_sides({}) == {}
+
+
+def test_copy_nested_ket_szintig_masol():
+    """{oldal: {azonosító: dict}}: a játékos-sor is független (a
+    copy_sides itt megosztaná); None szint → üres szótár."""
+    from handball.pipeline.primitive_cache import copy_nested, copy_sides
+
+    eredeti = {"home": {7: {"role": "irányító"}, 9: {"role": "beálló"}},
+               "away": None}
+    masolat = copy_nested(eredeti)
+    assert masolat == {"home": eredeti["home"], "away": {}}
+    assert masolat["home"][7] is not eredeti["home"][7]
+    masolat["home"][7]["role"] = "kapus"
+    assert eredeti["home"][7]["role"] == "irányító"
+    # Ellenpróba: a sekély (egyszintű) másolat a játékos-sort megosztja.
+    sekely = copy_sides(eredeti)
+    assert sekely["home"][9] is eredeti["home"][9]
+    assert copy_nested(None) == {} and copy_nested({}) == {}
+
+
+def test_copy_deep_a_beagyazott_listat_sem_osztja_meg():
+    """Tetszőleges mélység: a belső lista és annak sorai is függetlenek;
+    a skalár és a None változatlan."""
+    from handball.pipeline.primitive_cache import copy_deep
+
+    eredeti = {"home": {"players": [{"id": 7, "zones": [1, 2]}],
+                        "verdict": None}}
+    masolat = copy_deep(eredeti)
+    assert masolat == eredeti
+    masolat["home"]["players"][0]["zones"].append(3)
+    masolat["home"]["players"].append({"id": 9})
+    assert eredeti["home"]["players"] == [{"id": 7, "zones": [1, 2]}]
+    assert copy_deep(None) is None and copy_deep(5) == 5
+
+
+def test_a_masolo_dekoratorral_a_hivo_jelolese_nem_szivarog():
+    """A `copy=copy_rows`-zal becsomagolt mérés a hatókörben egyszer fut,
+    de minden hívó SAJÁT sorokat kap: az egyik jelölése a másiknál nem
+    látszik."""
+    from handball.pipeline.primitive_cache import copy_rows
+
+    calls = []
+
+    @memoize_primitive("teszt_sorok", copy=copy_rows)
+    def measure(match, config=None):
+        calls.append(1)
+        return [{"start_frame": 0, "home": 6}]
+
+    m = _goal_match()
+    with primitive_cache(m):
+        elso = measure(m)
+        elso[0]["home"] = 99
+        masodik = measure(m)
+    assert len(calls) == 1
+    assert masodik == [{"start_frame": 0, "home": 6}]
+
+
+# ---- Kézi hatókör (open_scope / close_scope) ---------------------------------
+
+def test_open_scope_ugyanugy_gyorsit_mint_a_with_blokk():
+    """A kézzel nyitott hatókörben a mérés egyszer fut, a meccs az aktív
+    meccs; a bezárás után nincs hatókör, a mérés újra lefut."""
+    from handball.pipeline.primitive_cache import close_scope, open_scope
+
+    calls = []
+
+    @memoize_primitive("teszt_kezi_hatokor")
+    def measure(match, config=None):
+        calls.append(1)
+        return [len(match.frames)]
+
+    m = _goal_match()
+    assert active_match() is None
+    token = open_scope(m)
+    try:
+        assert token is not None
+        assert active_match() is m
+        assert measure(m) == measure(m) == [60]
+        assert len(calls) == 1
+    finally:
+        close_scope(token)
+    assert active_match() is None
+    measure(m)
+    assert len(calls) == 2
+
+
+def test_open_scope_nyitaskor_megjeloli_a_kapust():
+    """A kézi nyitás is elvégzi a kapus-jelölést — a `with` blokkal
+    azonos, sorrend-független kiindulás."""
+    from handball.pipeline.primitive_cache import close_scope, open_scope
+
+    m = _gk_match()
+    assert not any(p.role == "kapus" for f in m.frames for p in f.players)
+    token = open_scope(m)
+    try:
+        assert any(p.role == "kapus" for f in m.frames for p in f.players)
+    finally:
+        close_scope(token)
+
+
+def test_open_scope_ujra_belepve_none_es_a_kulso_tar_megmarad():
+    """Ha a meccsre már nyitva van hatókör, az újabb nyitás None-t ad, és
+    a None bezárása nem művelet: a külső hatókör és a tára megmarad."""
+    from handball.pipeline.primitive_cache import close_scope, open_scope
+
+    calls = []
+
+    @memoize_primitive("teszt_kezi_ujra")
+    def measure(match, config=None):
+        calls.append(1)
+        return [1]
+
+    m = _goal_match()
+    with primitive_cache(m):
+        measure(m)
+        belso = open_scope(m)
+        assert belso is None
+        measure(m)
+        close_scope(belso)               # None → nem zár be semmit
+        assert active_match() is m
+        measure(m)
+    assert len(calls) == 1
+    assert active_match() is None
+
+    # Fordítva is: kézi külső hatókörben a `with` blokk nem nyit újat.
+    kulso = open_scope(m)
+    try:
+        with primitive_cache(m):
+            measure(m)
+        assert active_match() is m       # a with nem zárta be a külsőt
+        measure(m)
+    finally:
+        close_scope(kulso)
+    assert len(calls) == 2
+    assert active_match() is None
+
+
+def test_open_scope_masik_meccsre_beagyazva_visszaall_a_kulso():
+    """Más meccsre nyitva új (belső) hatókör nyílik; a bezárása a külső
+    meccs hatókörét ÉS annak már kiszámolt méréseit adja vissza."""
+    from handball.pipeline.primitive_cache import close_scope, open_scope
+
+    calls = []
+
+    @memoize_primitive("teszt_kezi_beagyazva")
+    def measure(match, config=None):
+        calls.append(match.meta.match_id)
+        return [match.meta.match_id]
+
+    a, b = _goal_match(), _goal_match()
+    b.meta.match_id = "masik"
+    ta = open_scope(a)
+    try:
+        measure(a)
+        tb = open_scope(b)
+        try:
+            assert tb is not None and active_match() is b
+            assert measure(b) == ["masik"]
+        finally:
+            close_scope(tb)
+        assert active_match() is a
+        assert measure(a) == ["pc"]
+    finally:
+        close_scope(ta)
+    assert calls == ["pc", "masik"]      # a külső mérés nem futott újra
+    assert active_match() is None
