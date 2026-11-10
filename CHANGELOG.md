@@ -14,6 +14,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     Windows-ága (ékezetes út → rövid alak).
   - `preflight`: `_sikeres_futasok` (csak a kész, hiánytalan, azonos
     profilú futások).
+  - `crashlog`: `crash_log_path` / `crash_log_size`, `_rovid`, `_sajat`,
+    `pid_alive` (a Windows-ág is). **Javítás:** a `pid_alive` túl nagy
+    vagy végtelen azonosítóra `OverflowError`-t dobott — egy sérült
+    futó-munka jel megakasztotta a félbehagyott munkák helyreállítását;
+    mostantól ez is "nem él" (regressziós teszt a valódi úton).
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés

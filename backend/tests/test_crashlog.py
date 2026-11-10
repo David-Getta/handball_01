@@ -235,3 +235,182 @@ def test_a_futo_munka_jele_el_es_a_vegen_torlodik(tmp_path, monkeypatch):
     assert latott["jel"]["job_id"] == jid and latott["jel"]["stage"] == "B"
     assert latott["jel"]["pid"] == os.getpid()
     assert not list((tmp_path / "data" / "futo_munkak").glob("*.json"))
+
+
+# ---- A napló helye, mérete, az út rövidítése és a folyamat-ellenőrzés -------
+
+def test_crash_log_path_es_size_az_adatmappaban(tmp_path, monkeypatch):
+    """A napló az adat-gyökérben él (engine-crash.log); a mérete a munka
+    indulásakor feljegyzett offset — hiányzó fájlnál és hiányzó mappánál
+    0, nem kivétel."""
+    from handball.crashlog import (CRASH_LOG_NAME, crash_log_path,
+                                   crash_log_size)
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    assert CRASH_LOG_NAME == "engine-crash.log"
+    assert crash_log_path() == tmp_path / "engine-crash.log"
+    assert crash_log_size() == 0                      # még nincs napló
+    crash_log_path().write_bytes(b"x" * 137)
+    assert crash_log_size() == 137
+    crash_log_path().write_text("árvíztűrő", encoding="utf-8")
+    assert crash_log_size() == len("árvíztűrő".encode("utf-8"))   # bájtban
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path / "nincs" / "ilyen"))
+    assert crash_log_size() == 0
+
+
+def test_rovid_az_ut_utolso_ket_tagja():
+    """A hibaüzenetbe az út utolsó két tagja kerül — a felhasználói
+    mappa neve nem; Windows- és Unix-elválasztóval is."""
+    from handball.crashlog import _rovid
+
+    assert _rovid("/home/dávid/app/handball/pipeline/detect.py") == \
+        "pipeline/detect.py"
+    assert _rovid("C:\\Users\\Dávid\\SportMachine\\_internal\\cv2\\"
+                  "__init__.py") == "cv2/__init__.py"
+    assert _rovid("C:\\app/scripts\\process_video.py") == \
+        "scripts/process_video.py"
+    assert _rovid("detect.py") == "detect.py"
+    assert _rovid("") == ""
+
+
+def test_sajat_a_mi_kodunk_az_ut_tagja_szerint():
+    """Saját kód az, aminek az útjában a handball vagy a scripts MAPPA
+    szerepel (bármelyik elválasztóval) — a hasonló nevű telepítési mappa
+    vagy fájl nem."""
+    from handball.crashlog import _sajat
+
+    assert _sajat("/app/_internal/handball/pipeline/detect.py")
+    assert _sajat("C:\\app\\_internal\\scripts\\process_video.py")
+    assert not _sajat("/app/_internal/cv2/__init__.py")
+    assert not _sajat("/usr/lib/python3.11/threading.py")
+    assert not _sajat("C:\\handball_videok\\cv2\\__init__.py")
+    assert not _sajat("/home/user/scripts.py")
+    assert not _sajat("")
+
+
+def test_pid_alive_az_elo_es_a_megszunt_folyamat():
+    """A saját folyamat él; a már kilépett (megvárt) gyerek-folyamat
+    nem; értelmezhetetlen vagy nem pozitív azonosítóra hamis (kétes
+    esetben a félbehagyott munkát inkább jelezzük)."""
+    from handball.crashlog import pid_alive
+
+    assert pid_alive(os.getpid()) is True
+    assert pid_alive(str(os.getpid())) is True        # a jel-fájlból szöveg
+    gyerek = subprocess.Popen([sys.executable, "-c", "pass"])
+    gyerek.wait(timeout=60)
+    assert pid_alive(gyerek.pid) is False
+    for rossz in (None, "", "abc", 0, -1, "-7", [1], float("nan")):
+        assert pid_alive(rossz) is False, rossz
+
+
+def test_pid_alive_tul_nagy_vagy_vegtelen_azonosito_sem_kivetel():
+    """REGRESSZIÓ: a rendszer pid-típusánál nagyobb szám és a végtelen
+    OverflowError-t dobott (az int() és az os.kill is) — ez is "kétes
+    eset": hamis, nem kivétel."""
+    from handball.crashlog import pid_alive
+
+    for rossz in (3.0e40, 2 ** 70, 2 ** 31, float("inf"), float("-inf"),
+                  "99999999999999999999999"):
+        assert pid_alive(rossz) is False, rossz
+
+
+def test_a_serult_pid_u_jel_nem_akasztja_meg_a_helyreallitast(
+        tmp_path, monkeypatch):
+    """REGRESSZIÓ a valódi úton: a futó-munka jel pid-je sérült fájlban
+    bármi lehet (óriási szám, Infinity, szöveg, null). A helyreállítás
+    ettől nem állhat meg: MINDEN ilyen munka hibaként visszakerül, a
+    jelek elfogynak, a motor elindul."""
+    pytest.importorskip("fastapi")
+    mappa = tmp_path / "data" / "futo_munkak"
+    mappa.mkdir(parents=True)
+    pidek = {"oriaspid001": "1e40", "vegtelen001": "Infinity",
+             "nagyegesz01": str(2 ** 70), "szovegpid01": '"abc"',
+             "nullaspid01": "null"}
+    for jid, pid in pidek.items():
+        # Kézzel írt JSON: a json.dumps az Infinity-t is így írná ki.
+        (mappa / f"{jid}.json").write_text(
+            '{"job_id": "%s", "stage": "B", "progress": 0.4, '
+            '"boot": "regi", "pid": %s, "updated": %r, "crash_offset": 0}'
+            % (jid, pid, time.time()), encoding="utf-8")
+    c = _app(tmp_path, monkeypatch)
+    for jid in pidek:
+        j = c.get(f"/jobs/{jid}").json()
+        assert j["status"] == "error" and j["crashed"] is True, jid
+        assert "a motor váratlanul leállt" in j["error"], jid
+    assert not list(mappa.glob("*.json"))             # minden jel elfogyott
+
+
+def test_pid_alive_jogosultsag_hianya_is_elo_folyamat(monkeypatch):
+    """Ha a rendszer a jelzést jogosultság híján utasítja el, a folyamat
+    LÉTEZIK (csak nem a miénk) — él; minden más rendszerhiba: nem él."""
+    import handball.crashlog as cl
+
+    if sys.platform == "win32":
+        pytest.skip("a jelzés-alapú ág nem Windowsra való")
+    kapott = []
+
+    def tiltott(pid, jel):
+        kapott.append((pid, jel))
+        raise PermissionError("nem a miénk")
+
+    monkeypatch.setattr(cl.os, "kill", tiltott)
+    assert cl.pid_alive(4321) is True
+    assert kapott == [(4321, 0)]                      # 0-s jel: csak kérdez
+
+    def nincs(pid, jel):
+        raise ProcessLookupError("nincs ilyen folyamat")
+
+    monkeypatch.setattr(cl.os, "kill", nincs)
+    assert cl.pid_alive(4321) is False
+
+
+class _HamisKernel32:
+    """A Windows folyamat-lekérdezés hamisítványa: `kilepes_kod` None =
+    a folyamat nem nyitható meg; 259 = STILL_ACTIVE."""
+
+    def __init__(self, kilepes_kod, sikeres=1):
+        self.kilepes_kod, self.sikeres = kilepes_kod, sikeres
+        self.megnyitva, self.lezarva = [], []
+
+    def OpenProcess(self, jog, orokol, pid):
+        self.megnyitva.append((jog, pid))
+        return 0 if self.kilepes_kod is None else 77
+
+    def GetExitCodeProcess(self, h, ref):
+        ref._obj.value = self.kilepes_kod
+        return self.sikeres
+
+    def CloseHandle(self, h):
+        self.lezarva.append(h)
+
+
+def test_pid_alive_windows_aga_a_kilepesi_kodbol(monkeypatch):
+    """Windowson a folyamat akkor él, ha megnyitható ÉS a kilépési kódja
+    STILL_ACTIVE (259); a megnyitott leíró minden ágon bezárul; a
+    rendszerhívás hibája: nem él."""
+    import ctypes
+    import types
+
+    import handball.crashlog as cl
+
+    monkeypatch.setattr(cl, "sys", types.SimpleNamespace(platform="win32"))
+
+    def futtat(k32):
+        monkeypatch.setattr(ctypes, "windll",
+                            types.SimpleNamespace(kernel32=k32),
+                            raising=False)
+        return cl.pid_alive(4321)
+
+    el = _HamisKernel32(259)
+    assert futtat(el) is True
+    assert el.megnyitva == [(0x1000, 4321)] and el.lezarva == [77]
+    kilepett = _HamisKernel32(0)
+    assert futtat(kilepett) is False and kilepett.lezarva == [77]
+    sikertelen = _HamisKernel32(259, sikeres=0)       # a lekérdezés bukik
+    assert futtat(sikertelen) is False and sikertelen.lezarva == [77]
+    nincs = _HamisKernel32(None)
+    assert futtat(nincs) is False and nincs.lezarva == []
+    # A rendszerhívás kivétele (vagy hiányzó windll) sem jut ki.
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(),
+                        raising=False)
+    assert cl.pid_alive(4321) is False

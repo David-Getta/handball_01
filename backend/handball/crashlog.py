@@ -156,9 +156,12 @@ def crash_summary(offset: int = 0) -> str | None:
 def pid_alive(pid) -> bool:
     """Él-e még a folyamat (egy MÁSIK motor-példány dolgozhat a munkán).
     Kétes esetben hamis: a félbehagyott munkát inkább jelezzük."""
+    # A pid a futó-munka jel JSON-jából jön: sérült fájlban bármi lehet.
+    # A végtelen (int(inf)) és a rendszer pid-típusánál nagyobb szám
+    # OverflowError-t dob — ez is "kétes eset", nem kivétel a hívónak.
     try:
         pid = int(pid)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
     if pid <= 0:
         return False
@@ -182,5 +185,5 @@ def pid_alive(pid) -> bool:
         return True
     except PermissionError:
         return True
-    except OSError:
+    except (OSError, OverflowError):
         return False
