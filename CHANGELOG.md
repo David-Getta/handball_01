@@ -51,6 +51,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_still_at_center`, `_half_boundaries`, …).
   - `estimation`: `_clamp` (a becsült pozíció a pályán marad).
   - `ball_filter`: `_dist`.
+  - `attack_types`: `_advance_speed` (a támadott kapu felé; labda vagy
+    idő nélkül 0).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
