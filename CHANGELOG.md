@@ -44,6 +44,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     nélküli meccsen megtalálja a szerep-függő réteget) és a main.
   - `scripts/mirror_sides`: a mérés próba-rétegekkel (helyesen /
     hibásan tükröződő), a jelentés, a main kilépőkódja.
+  - `scripts/layer_catalog`: a regisztráció kiolvasása, a réteg
+    megkeresése, a katalógus építése, a main író / ellenőrző módja.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
