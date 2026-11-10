@@ -1018,7 +1018,14 @@ def role_receive_zones(match: Match,
 # névre szóló hold_time_players-szel azonos küszöb), posztonként
 # ennyi labdás szakasz kell az ítélethez, és ennyi másodperccel a
 # csapat-átlag felett labdatartó egy poszt.
-RHT_MIN_FRAMES = 5
+#
+# Az érintés-küszöb MÁSODPERCBEN (a decisions.HOLD_MIN_S párja): ez
+# időtartam, nem mintaszám. Kockában ("5 kocka") a termék ritkításánál
+# (fps/3) 0,6 mp lett volna — a névre szóló réteg 0,2 mp-től számolta
+# a labdatartást, a poszt-réteg pedig ugyanazon a meccsen csak 0,6
+# mp-től, tehát a gyors kezű posztok érintései kiestek az átlagból.
+RHT_MIN_S = 0.2
+RHT_MIN_FRAMES = 5   # örökölt kocka-alak (25 fps); a motor a _S-t használja
 RHT_MIN_HOLDS = 8
 RHT_GAP_S = 0.7
 
@@ -1042,7 +1049,7 @@ def role_hold_time(match: Match,
     egész átrendeződést ér.
 
     A réteg a kockánkénti birtoklásból dolgozik (nem a kapu-felé
-    torzító lövő-hozzárendelésből), az érintésnyi (RHT_MIN_FRAMES
+    torzító lövő-hozzárendelésből), az érintésnyi (RHT_MIN_S
     alatti) birtoklás pedig zaj — azt nem számoljuk.
 
     Visszatérés csapatonként: {"holds", "team_avg_s",
@@ -1059,6 +1066,8 @@ def role_hold_time(match: Match,
     roles = estimate_positions(match, config)
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     attack_phase = {"home": Phase.HOME_ATTACK, "away": Phase.AWAY_ATTACK}
+    # Az érintés-küszöb a meccs SAJÁT képrátájából (lásd RHT_MIN_S).
+    hold_min = max(1, int(round(RHT_MIN_S * fps)))
 
     tally: dict = {"home": {}, "away": {}}
     totals: dict = {"home": [0, 0], "away": [0, 0]}  # [szakasz, kocka]
@@ -1068,7 +1077,7 @@ def role_hold_time(match: Match,
     def _flush():
         nonlocal cur_side, cur_poszt, run
         if cur_side is not None and cur_poszt is not None \
-                and run >= RHT_MIN_FRAMES:
+                and run >= hold_min:
             rec = tally[cur_side].setdefault(cur_poszt, [0, 0])
             rec[0] += 1
             rec[1] += run

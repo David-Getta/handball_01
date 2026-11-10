@@ -35,6 +35,10 @@ awk 'BEGIN{b=0} {n=gsub(/\{/,"x"); m=gsub(/\}/,"x"); b+=n-m} \
 # nincs előre telepítve; a scratchpadba bontva (kb. 1 GB):
 #   curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_<VERZIÓ>-stable.tar.xz
 #   tar -xJf flutter.tar.xz            # → ./flutter/bin/flutter
+# macOS (Apple Silicon) — zip, a repón KÍVÜLI mappába (pl. ~/flutter-sdk):
+#   curl -o flutter.zip https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_<VERZIÓ>-stable.zip
+#   unzip -q flutter.zip               # → ./flutter/bin/flutter
+# (a legfrissebb stabil verzió és sha256: .../releases/releases_macos.json)
 cd client && flutter pub get && flutter analyze --no-pub   # hiba (error) ne legyen
 cd client && flutter test                                 # test/*_test.dart
 ```
