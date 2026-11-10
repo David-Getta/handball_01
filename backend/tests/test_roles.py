@@ -793,6 +793,47 @@ def test_role_hold_time_silent_with_few_holds():
     assert rec["slowest"] is None and rec["verdict"] is None, rec
 
 
+def test_role_hold_time_erintes_kuszob_masodpercben():
+    """A 0,36 mp-es labdatartás valódi birtoklás, nem érintés — sűrűn
+    (9 kocka) és a termék ritkításánál (3 kocka) is. A régi "5 kocka"
+    küszöb ritkítva 0,6 mp-et követelt: a gyors kezű beálló összes
+    labdatartása kiesett, miközben a névre szóló hold_time_players
+    (HOLD_MIN_S) ugyanazon a meccsen számolta őket."""
+    from handball.pipeline.decisions import HOLD_MIN_S
+    from handball.pipeline.roles import RHT_MIN_S, role_hold_time
+
+    # A két réteg érintés-küszöbe közös (a komment ezt ígéri).
+    assert RHT_MIN_S == HOLD_MIN_S
+    cycles = 10
+    holds = {}
+    for fps in (25.0, 25.0 / 3):
+        frames = []
+
+        def _add(ball_xy):
+            ball = (Ball(x=ball_xy[0], y=ball_xy[1], confidence=1.0)
+                    if ball_xy is not None else None)
+            frames.append(Frame(t=len(frames), players=_arp_players(),
+                                ball=ball))
+
+        for _ in range(150):                         # poszt-minta
+            _add(_ARP[3])
+        for _ in range(cycles):
+            _add(None)                               # a labda a levegőben
+            for _ in range(int(round(2.0 * fps))):   # irányító: 2 mp
+                _add(_ARP[3])
+            _add(None)
+            for _ in range(int(round(0.36 * fps))):  # beálló: 0,36 mp
+                _add(_ARP[1])
+        m = Match(MatchMeta(match_id="hts", home_team="H", away_team="A",
+                            fps=fps), frames)
+        rec = role_hold_time(m)["home"]
+        holds[fps] = {p: r["holds"] for p, r in rec["roles"].items()}
+        assert rec["roles"]["beálló"]["avg_s"] < 0.5, (fps, rec)
+    # A bemelegítő szakasz is egy irányító-tartás (cycles + 1).
+    assert holds[25.0] == holds[25.0 / 3] == {
+        "irányító": cycles + 1, "beálló": cycles}, holds
+
+
 # ---- Poszt-eladási zóna ------------------------------------------------------
 
 # A hazai (+x kapura támadó) felállás. A pálya-harmadok a HOSSZ (x)

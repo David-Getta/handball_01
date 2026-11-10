@@ -5,6 +5,30 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Kiadás előtti őrök: mind a hat lefutott; a poszt-labdatartás
+  érintés-küszöbe másodpercben** (javítás): a sorrend-függés (521
+  réteg, 0 függő), a tükrözés (11 oldal-címkés réteg, 0 hibás), a
+  hash-függés (521 réteg, 0 függő) és az elnyelt-kivétel jelentés (618
+  felület, 0 elnyelt — a beírt jelentés egy felülettel elavult volt)
+  listája ÜRES; a stride-jelentés a beírttal egyezik (21 eltérő ítélet
+  — a lista nem nőtt; tételesen csak kettőt néztünk meg: az
+  indító-poszt küszöb-közeli részarány, a blokkolt-poszt a
+  blokk-felismerés leírt határa). A
+  stride-lista átnézése közben viszont előkerült egy kocka-küszöb, amit
+  a jelentés a szimulált meccsen nem lát: a `role_hold_time`
+  ("melyik posztnál áll meg a labda") az "ennél rövidebb birtoklás csak
+  érintés" határt még kockában mérte (`RHT_MIN_FRAMES = 5`), miközben a
+  névre szóló párja (`hold_time_players`) már másodpercben
+  (`HOLD_MIN_S = 0,2`). A termék ritkításánál (fps/3) ez 0,6 mp-et
+  jelentett: a gyors kezű poszt (jellemzően a beálló) 0,2–0,6 mp-es
+  labdatartásai kiestek, a poszt-átlag felfelé torzult. Most
+  `RHT_MIN_S = 0,2` a meccs saját képrátájából (25 fps-en bitre azonos
+  a régivel), a kocka-alak örökölt alapérték, az idő-küszöb őr
+  (`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) új párral védi. A
+  sebesség-profil ezen a gépen: 521 réteg 23,0 mp (a keret 5 perc —
+  MEGFELEL), ebből az edzői összefoglaló 19,4 mp (85%) — a gyorsítás
+  első jelöltje.
+
 - **Kliens: tiszta `flutter analyze`** (Flutter 3.47.9 stable, macOS):
   a fordító-szintű ellenőrzés 0 error, 0 warning mellett 8 info-t
   jelzett — mind javítva, a `flutter analyze` most "No issues found!",
