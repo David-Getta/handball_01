@@ -379,3 +379,196 @@ def test_a_felvett_gol_a_naplobeli_mezszamu_lovohoz_kerul():
     assert ops[0] == {"op": "add", "t": 100, "type": "goal", "team": "home",
                       "player_id": 5}
     assert "player_id" not in ops[1]
+
+
+# ---- A normalizálás építőkövei közvetlenül -----------------------------------
+
+def test_text_levag_tisztit_es_csak_szoveget_szamot_fogad():
+    """A szöveg-mező: a szélein megtisztítva, a korlátra vágva; a szám
+    szöveggé alakul (a mezszám számként is jöhet), minden más (None,
+    lista, szótár, logikai érték) üres — nem kivétel."""
+    from handball.annotations import _text
+
+    assert _text("  gól a rövidbe  ", 40) == "gól a rövidbe"
+    assert _text("x" * 50, 10) == "x" * 10
+    assert _text("  " + "y" * 50, 5) == "yyyyy"       # előbb tisztít, aztán vág
+    assert _text(7, 6) == "7" and _text(7.5, 6) == "7.5"
+    assert _text(None, 10) == "" and _text("", 10) == ""
+    assert _text(["a"], 10) == "" and _text({"a": 1}, 10) == ""
+    assert _text("   ", 10) == ""
+
+
+def test_num_veges_szam_vagy_az_alapertek():
+    """A szám-mező: véges szám (szövegből is), különben az alapérték —
+    a NaN és a végtelen is alapérték (a pálya-koordináta nem lehet az)."""
+    from handball.annotations import _num
+
+    assert _num(3) == 3.0 and _num("12.5") == 12.5 and _num(-2.5) == -2.5
+    assert _num(True) == 1.0                          # a bool szám
+    for rossz in (None, "abc", "", [1], {"x": 1}, float("nan"),
+                  float("inf"), float("-inf"), "nan", "inf"):
+        assert _num(rossz) is None, rossz
+        assert _num(rossz, 20.0) == 20.0, rossz
+    assert _num(0, 20.0) == 0.0                       # a nulla nem "hiányzik"
+
+
+def test_now_iso_masodpercre_vagott_utc_idobelyeg():
+    """A mentés időbélyege UTC, másodpercre vágva, ISO-alakban — így a
+    kliens bármely időzónában helyesen írja ki, és visszaolvasható."""
+    import datetime as dt
+
+    from handball.annotations import _now_iso
+
+    elotte = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    belyeg = _now_iso()
+    utana = dt.datetime.now(dt.timezone.utc)
+    ido = dt.datetime.fromisoformat(belyeg)
+    assert belyeg.endswith("+00:00") and "." not in belyeg
+    assert ido.tzinfo is not None and ido.utcoffset() == dt.timedelta(0)
+    assert elotte <= ido <= utana
+
+
+def test_norm_event_a_hibas_mezoket_javitja():
+    """Egy esemény-sor normalizálása: hiányzó azonosító → sorszám-alapú,
+    negatív / hibás idő → 0, ismeretlen csapat → üres, hiányzó típus →
+    "egyéb", a tábla-hivatkozás csak létező táblára marad meg; nem
+    szótárra None."""
+    from handball.annotations import _norm_event
+
+    teljes = _norm_event({"id": "e9", "t_s": 95.04, "team": "away",
+                          "type": "lövés", "jersey": 7, "to_jersey": "11",
+                          "outcome": "gól", "note": "  rövid sarok ",
+                          "scene_id": "s1", "ismeretlen": "eldobjuk"},
+                         0, {"s1"})
+    assert teljes == {"id": "e9", "t_s": 95.0, "team": "away",
+                      "type": "lövés", "jersey": "7", "to_jersey": "11",
+                      "outcome": "gól", "note": "rövid sarok",
+                      "scene_id": "s1"}
+    hianyos = _norm_event({"t_s": -5, "team": "biro", "scene_id": "nincs"},
+                          4, {"s1"})
+    assert hianyos == {"id": "e5", "t_s": 0.0, "team": "", "type": "egyéb",
+                       "jersey": "", "to_jersey": "", "outcome": "",
+                       "note": "", "scene_id": ""}
+    assert _norm_event({"t_s": "abc"}, 0, set())["t_s"] == 0.0
+    assert _norm_event({"t_s": float("nan")}, 0, set())["t_s"] == 0.0
+    assert len(_norm_event({"note": "x" * 900}, 0, set())["note"]) == \
+        ANN_MAX_TEXT
+    for nem_szotar in (None, "lövés", 5, ["a"]):
+        assert _norm_event(nem_szotar, 0, set()) is None
+
+
+def test_norm_token_a_palyara_szoritja_a_babut():
+    """Egy bábu: a koordináta a pályára szorul (40×20 m), hibás számnál
+    a pálya közepe; a felirat a mezszám hosszára vágva; ismeretlen
+    csapatú bábu és nem-szótár elesik (None)."""
+    from handball.annotations import _norm_token
+
+    assert _norm_token({"id": "h7", "team": "home", "label": "7",
+                        "x": 12.345, "y": 8.0}, 0) == {
+        "id": "h7", "team": "home", "label": "7", "x": 12.35, "y": 8.0}
+    kint = _norm_token({"team": "away", "x": 55.0, "y": -3.0,
+                        "label": "123456"}, 2)
+    assert kint == {"id": "t3", "team": "away", "label": "1234",
+                    "x": ANN_COURT_LENGTH_M, "y": 0.0}
+    assert len(kint["label"]) == ANN_MAX_LABEL
+    kozep = _norm_token({"team": "ball", "x": "abc", "y": None}, 0)
+    assert (kozep["x"], kozep["y"]) == (ANN_COURT_LENGTH_M / 2,
+                                        ANN_COURT_WIDTH_M / 2)
+    assert _norm_token({"team": "biro", "x": 1, "y": 1}, 0) is None
+    assert _norm_token({"x": 1, "y": 1}, 0) is None
+    assert _norm_token("bábu", 0) is None
+
+
+def test_norm_arrow_babuhoz_vagy_ponthoz():
+    """Nyíl bábuból bábuhoz (passz) vagy ponthoz (futás, lövés): a nem
+    létező bábuból induló, az ismeretlen fajtájú és a cél nélküli nyíl
+    elesik; a nem létező (vagy önmagára mutató) cél-bábunál a pont
+    marad, ha van — a pályára szorítva."""
+    from handball.annotations import _norm_arrow
+
+    babuk = {"h7", "h9"}
+    assert _norm_arrow({"kind": "pass", "from": "h7", "to": "h9"},
+                       babuk) == {"kind": "pass", "from": "h7", "to": "h9"}
+    # A bábuhoz mutató nyílnál a pont nem kell (és nem is marad meg).
+    assert _norm_arrow({"kind": "pass", "from": "h7", "to": "h9",
+                        "x": 1.0, "y": 2.0}, babuk) == {
+        "kind": "pass", "from": "h7", "to": "h9"}
+    assert _norm_arrow({"kind": "shot", "from": "h9", "x": 44.0,
+                        "y": 10.126}, babuk) == {
+        "kind": "shot", "from": "h9", "to": "", "x": 40.0, "y": 10.13}
+    # Nem létező / önmagára mutató cél: a pont a tartalék.
+    assert _norm_arrow({"kind": "pass", "from": "h7", "to": "h99",
+                        "x": 30.0, "y": 5.0}, babuk) == {
+        "kind": "pass", "from": "h7", "to": "", "x": 30.0, "y": 5.0}
+    assert _norm_arrow({"kind": "run", "from": "h7", "to": "h7",
+                        "x": 30.0, "y": 5.0}, babuk)["to"] == ""
+    # Ami elesik:
+    for rossz in ({"kind": "pass", "from": "h99", "to": "h9"},      # nincs forrás
+                  {"kind": "csel", "from": "h7", "to": "h9"},       # fajta
+                  {"kind": "pass", "from": "h7", "to": "h99"},      # nincs cél
+                  {"kind": "run", "from": "h7", "x": 3.0},          # fél pont
+                  {"kind": "run", "from": "h7", "x": "a", "y": 1},  # hibás pont
+                  {"kind": "pass", "from": "h7", "to": "h7"},       # önmagára
+                  "nyíl", None):
+        assert _norm_arrow(rossz, babuk) is None, rossz
+
+
+def test_norm_scene_babuk_nyilak_es_az_alapnevek():
+    """Egy tábla: az ismétlődő azonosítójú és a hibás bábu kimarad, a
+    nyilak csak a megmaradt bábukra hivatkozhatnak; hiányzó név →
+    "Tábla N", hiányzó idő → None (a tábla nem kötött pillanathoz),
+    negatív idő → 0; nem-lista bábu/nyíl mező üres lista; nem szótárra
+    None."""
+    from handball.annotations import (ANN_MAX_ARROWS, ANN_MAX_TOKENS,
+                                      _norm_scene)
+
+    tabla = _norm_scene({
+        "id": "s1", "name": "  Keresztmozgás ", "t_s": 95.04,
+        "note": "balról indul",
+        "tokens": [{"id": "h7", "team": "home", "x": 10, "y": 5},
+                   {"id": "h7", "team": "home", "x": 11, "y": 6},   # ismétlés
+                   {"id": "x1", "team": "biro", "x": 1, "y": 1},    # hibás
+                   {"id": "h9", "team": "home", "x": 20, "y": 9}],
+        "arrows": [{"kind": "pass", "from": "h7", "to": "h9"},
+                   {"kind": "pass", "from": "x1", "to": "h9"},      # kiesett bábu
+                   {"kind": "shot", "from": "h9", "x": 40, "y": 10}]}, 0)
+    assert (tabla["id"], tabla["name"], tabla["t_s"], tabla["note"]) == (
+        "s1", "Keresztmozgás", 95.0, "balról indul")
+    assert [t["id"] for t in tabla["tokens"]] == ["h7", "h9"]
+    assert tabla["tokens"][0]["x"] == 10.0            # az ELSŐ h7 marad
+    assert tabla["arrows"] == [
+        {"kind": "pass", "from": "h7", "to": "h9"},
+        {"kind": "shot", "from": "h9", "to": "", "x": 40.0, "y": 10.0}]
+    ures = _norm_scene({"tokens": "nem lista", "arrows": None, "t_s": -3}, 4)
+    assert ures == {"id": "s5", "name": "Tábla 5", "t_s": 0.0, "note": "",
+                    "tokens": [], "arrows": []}
+    assert _norm_scene({}, 0)["t_s"] is None
+    # A darabszám-korlát: táblánként legfeljebb ennyi bábu és nyíl.
+    sok = _norm_scene({
+        "tokens": [{"id": f"t{i}", "team": "home", "x": 1, "y": 1}
+                   for i in range(ANN_MAX_TOKENS + 10)],
+        "arrows": [{"kind": "run", "from": "t0", "x": 2, "y": 2}
+                   for _ in range(ANN_MAX_ARROWS + 10)]}, 0)
+    assert len(sok["tokens"]) == ANN_MAX_TOKENS
+    assert len(sok["arrows"]) == ANN_MAX_ARROWS
+    for nem_szotar in (None, "tábla", 3, []):
+        assert _norm_scene(nem_szotar, 0) is None
+
+
+def test_a_segedek_egyutt_a_teljes_normalizalasban():
+    """A VALÓDI úton: a teljes normalizálás (normalize_annotations) az
+    eseményt és a táblát ugyanezekkel a segédekkel tisztítja — a kimenet
+    sorai megegyeznek a segédek közvetlen kimenetével."""
+    from handball.annotations import _norm_event, _norm_scene
+
+    dok = _dok()
+    tiszta = normalize_annotations(dok, "m1")
+    tablak = [_norm_scene(s, i) for i, s in enumerate(dok["scenes"])]
+    assert tiszta["scenes"] == tablak
+    azonositok = {s["id"] for s in tablak}
+    esemenyek = [_norm_event(e, i, azonositok)
+                 for i, e in enumerate(dok["events"])]
+    assert sorted(tiszta["events"], key=lambda e: e["id"]) == sorted(
+        esemenyek, key=lambda e: e["id"])
+    assert tiszta["updated_at"] is None or isinstance(tiszta["updated_at"],
+                                                      str)

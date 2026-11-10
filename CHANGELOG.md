@@ -19,6 +19,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     vagy végtelen azonosítóra `OverflowError`-t dobott — egy sérült
     futó-munka jel megakasztotta a félbehagyott munkák helyreállítását;
     mostantól ez is "nem él" (regressziós teszt a valódi úton).
+  - `annotations`: `_text`, `_num`, `_now_iso`, `_norm_event`,
+    `_norm_token`, `_norm_arrow`, `_norm_scene` (a javító és az eldobó
+    ágak külön-külön).
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
