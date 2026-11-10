@@ -70,6 +70,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     nélkül üres).
   - `calibration`: `Calibrator.homography_for_frame` (a referenciát
     adja; kalibráció nélkül is fut).
+  - `calib_overlay`: `court_to_pixels` (horizont mögött / képtől messze
+    None), `fit_on_points` (20 minta alatt None), `region_label`,
+    `better_setting`. A teszt hibát is fogott: a kalibráló képernyő
+    "MÁS beállításra ül jobban" üzenete mérhetetlen mostani
+    illeszkedésnél vesszővel végződött — javítva.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés

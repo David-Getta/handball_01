@@ -578,13 +578,21 @@ def better_setting(measured: dict, region: str, rotate: bool,
     if ro_best != rotate:
         mit.append("kapcsold be a 180°-os forgatást" if ro_best
                    else "kapcsold ki a 180°-os forgatást")
+
+    def _tizedes(v: float) -> str:
+        # Magyar tizedesvessző SZÁMONKÉNT: a kész mondaton végzett
+        # "az első két pont" csere mérhetetlen mostani illeszkedésnél
+        # (csak egy szám van) a mondatvégi pontot is vesszőre cserélte.
+        return f"{v:.2f}".replace(".", ",")
+
     return {"region": r_best, "rotate": bool(ro_best),
             "fit": round(float(f_best), 3),
             "uzenet": ("A bejelölt négyszög MÁS beállításra ül jobban: "
                        + " és ".join(mit)
-                       + f" (illeszkedés {f_best:.2f} a mostani "
-                       + (f"{alap:.2f}" if fit is not None else "mérhetetlen")
-                       + " helyett).").replace(".", ",", 2)}
+                       + f" (illeszkedés {_tizedes(f_best)} a mostani "
+                       + (_tizedes(alap) if fit is not None
+                          else "mérhetetlen")
+                       + " helyett).")}
 
 
 def calib_verdict(fit: Optional[float], shift: Optional[dict] = None,
