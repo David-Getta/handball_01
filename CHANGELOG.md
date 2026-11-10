@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
+  két tesztje arra épített, hogy az előttük futó teszt törli a
+  `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
+  kerülve (amelyek beállítva hagyják) véletlenszerűen buktak. Most maguk
+  állítják be és állítják vissza a változót; őr-teszt figyeli.
 - **Két időzítés-függő teszt versenymentes** (teszt): a teljes csomag
   terhelt gépen két helyen véletlenszerűen bukott. A klip-válogatás
   tesztjei (`test_clip_players`) a háttérben futó klip-munkát 200
