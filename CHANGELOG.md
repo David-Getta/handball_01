@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Edzés-szabályok: megszólalnak a rétegek saját fixture-jein** (teszt):
+  a 494 edzés-szabályból 190 egyetlen tesztben sem szólalt meg — a réteg
+  tesztje a réteget nézte, a rá épülő szabályt senki nem futtatta. A
+  `tests/test_szabalyok_megszolalnak.py` a rétegek tesztfájljainak
+  fixture-építőit adja az edzés-fókusznak, és megköveteli, hogy a
+  táblában felsorolt szabályok a valódi rétegekkel megszólaljanak, ép
+  szöveggel: 37 fixture 324 szabályt fed le, köztük 65 eddig soha le nem
+  futót. Szándékos küszöb-változásnál a táblát kell igazítani (a modul
+  eleje leírja); a maradék 170 szabálynak nincs ilyen fixture-je.
 - **A "Sorozatok" szakasz szoros, oda-vissza meccsen is megszólal**
   (javítás): ha a vezetés fordult, de egyik csapat sem lőtt három gólt
   válasz nélkül, az összefoglaló a leghosszabb sorozatot az üres listán
