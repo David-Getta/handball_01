@@ -73,6 +73,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_mmss`, `_mismatch_html`.
   - `figura_video`: `_pont_felirat` (ékezet nélkül), kodek-választás
     (működő író, megjegyezve; végső tartalék az mp4v).
+  - `figura_lap`: `_pont_felirat`, `_hely`, `_szam`, a dokumentum-keret,
+    a térfélre vágott ábra, a figura törzse (mozgás nélkül várakozás).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
