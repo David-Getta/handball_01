@@ -294,3 +294,38 @@ def test_a_ritkitott_meccsen_a_becsult_jatekos_hamarabb_megall():
     x25 = _hol(25.0, 30)
     x8 = _hol(25.0 / 3.0, 30)
     assert x8 < x25, (x8, x25)
+
+
+# ---- A pálya-határra vágás (_clamp) -----------------------------------------
+
+def test_clamp_a_tartomanyba_vag():
+    """Az érték a [low, high] tartományba kerül: a határon belüli
+    változatlan, a kívül eső a közelebbi határra — a becslés így nem
+    kerülhet a pályán kívülre."""
+    from handball.pipeline.estimation import _clamp
+
+    assert _clamp(12.5, 0.0, 40.0) == 12.5
+    assert _clamp(-3.0, 0.0, 40.0) == 0.0
+    assert _clamp(47.2, 0.0, 40.0) == 40.0
+    assert _clamp(0.0, 0.0, 40.0) == 0.0 and _clamp(40.0, 0.0, 40.0) == 40.0
+    assert _clamp(5.0, 5.0, 5.0) == 5.0          # elfajult tartomány
+
+
+def test_a_becsult_pozicio_a_palyan_marad():
+    """A VALÓDI úton: a pálya széle felé nagy sebességgel kilépő játékos
+    becsült helye a pályán belül marad (a határra vágva), nem repül ki."""
+    from handball.models.events import RosterTimeline
+    from handball.models.tracking import PlayerPosition, Team
+    from handball.pipeline.estimation import OffScreenEstimator
+
+    est = OffScreenEstimator(RosterTimeline())
+
+    def mert(x, y):
+        return [PlayerPosition(track_id=1, team=Team.HOME, x=x, y=y)]
+
+    est.update_seen(0, mert(37.0, 1.5))
+    est.update_seen(1, mert(39.0, 0.5))          # 2 m/kocka a sarok felé
+    becsult = est.estimate_missing(10, [])
+    assert [p.track_id for p in becsult] == [1]
+    assert 0.0 <= becsult[0].x <= 40.0 and 0.0 <= becsult[0].y <= 20.0
+    assert becsult[0].x == 40.0 and becsult[0].y == 0.0
