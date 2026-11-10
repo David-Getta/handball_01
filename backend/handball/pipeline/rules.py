@@ -3347,6 +3347,131 @@ def suspension_cost(match: Match,
     return out
 
 
+# Kiállítás-sokk: a kiállítás-ablak első ennyi másodperce az
+# ÁTRENDEZŐDÉS (amíg öt ember megtalálja az új helyét a falban);
+# mindkét szakaszból (eleje / maradék) ennyi másodperc és összesen
+# ennyi hátrányban kapott gól kell az ítélethez; a percre vetített
+# kapott gól ekkora aránya (az egyik szakasz a másikhoz mérve) a
+# minta, és a hangsúlyos szakaszban legalább ennyi gól kell — egyetlen
+# gól nem minta.
+SHO_ONSET_S = 40.0
+SHO_MIN_PART_S = 60.0
+SHO_MIN_GOALS = 3
+SHO_RATIO = 1.5
+SHO_MIN_PART_GOALS = 2
+
+
+def shorthanded_onset_kind(early_s: float, late_s: float,
+                           early_goals: int, late_goals: int) -> tuple:
+    """A kiállítás-sokk döntése a négy összegből — a motor, a
+    felderítés és a meccsterv közös ítélete (meccsek közt az összegek
+    adódnak össze, a minta ebből számolódik újra).
+
+    Visszatérés: (minta, eleje gól/perc, maradék gól/perc) — a minta
+    "eleje" / "vége" / None; egy ütem None, ha a szakaszából nincs meg
+    a SHO_MIN_PART_S másodperc.
+    """
+    e = (60.0 * early_goals / early_s
+         if early_s >= SHO_MIN_PART_S else None)
+    v = (60.0 * late_goals / late_s
+         if late_s >= SHO_MIN_PART_S else None)
+    kind = None
+    if (e is not None and v is not None
+            and early_goals + late_goals >= SHO_MIN_GOALS):
+        if early_goals >= SHO_MIN_PART_GOALS and e >= SHO_RATIO * v:
+            kind = "eleje"
+        elif late_goals >= SHO_MIN_PART_GOALS and v >= SHO_RATIO * e:
+            kind = "vége"
+    return kind, e, v
+
+
+def shorthanded_onset(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Kiállítás-sokk: A KIÁLLÍTÁS ELEJÉN vagy a VÉGÉN kapják a gólt.
+
+    A kétperc ára (suspension_cost) azt mondja meg, MENNYI gólba kerül
+    egy kiállításuk, a visszaállás (post_powerplay) azt, mi történik,
+    amikor visszaér az ember — ez azt, MIKOR fáj a hátrány: minden
+    kiállítás-ablak első SHO_ONSET_S másodpercét (amíg öt emberre
+    átrendeződnek) veti össze az ablak maradékával, percre vetített
+    kapott góllal.
+
+    Edzőileg: ha az ELEJÉN kapják a gólt, a visszarendeződésük lassú —
+    a kiállítás pillanata támadás-jelzés: azonnal, gyors játékba
+    hozással kell rájuk menni, mielőtt az öt ember megtalálná a helyét
+    (az emberelőny első támadása a legértékesebb, nem szabad kivárni).
+    Ha a VÉGÉN, az elején még összezárnak, de elfogynak — türelmes
+    emberelőny kell: a fal járatása, és a gól a második percben érik
+    be. Saját csapatra az előbbi a "kiállítás utáni első védekezés"
+    forgatókönyve (ki hova lép, amikor egy ember kiesik), az utóbbi a
+    hátrány-védekezés állóképessége.
+
+    Visszatérés csapatonként (a KIÁLLÍTOTT oldal): {"windows",
+    "early_s", "late_s", "early_goals", "late_goals", "early_per_min",
+    "late_per_min", "pattern", "verdict"} — egy ütem None, ha a
+    szakaszából nincs SHO_MIN_PART_S másodperc; a pattern ("eleje" /
+    "vége") és a verdict None, ha kevés a szakasz-idő, kevés
+    (SHO_MIN_GOALS alatti) a hátrányban kapott gól, vagy a két ütem
+    aránya a SHO_RATIO alatt marad.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    onset = max(1, round(SHO_ONSET_S * fps))
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    out: dict = {side: {"windows": 0, "early_s": 0.0, "late_s": 0.0,
+                        "early_goals": 0, "late_goals": 0,
+                        "early_per_min": None, "late_per_min": None,
+                        "pattern": None, "verdict": None}
+                 for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        down = w["team_down"]
+        up = "away" if down == "home" else "home"
+        rec = out[down]
+        t0, t1 = w["start_frame"], w["end_frame"]
+        cut = min(t1, t0 + onset - 1)      # az "eleje" utolsó kockája
+        rec["windows"] += 1
+        rec["early_s"] += (cut - t0 + 1) / fps
+        rec["late_s"] += (t1 - cut) / fps
+        for (gt, gs) in goals:
+            if gs != up or not t0 <= gt <= t1:
+                continue
+            if gt <= cut:
+                rec["early_goals"] += 1
+            else:
+                rec["late_goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["early_s"] = round(rec["early_s"], 1)
+        rec["late_s"] = round(rec["late_s"], 1)
+        kind, e, v = shorthanded_onset_kind(
+            rec["early_s"], rec["late_s"],
+            rec["early_goals"], rec["late_goals"])
+        rec["early_per_min"] = round(e, 2) if e is not None else None
+        rec["late_per_min"] = round(v, 2) if v is not None else None
+        rec["pattern"] = kind
+        if kind == "eleje":
+            rec["verdict"] = (
+                f"a kiállítás elején kapják a gólt ({rec['early_goals']} "
+                f"gól a hátrány első {SHO_ONSET_S:.0f} másodpercében — "
+                f"percenként {e:.1f}, utána {v:.1f}) — öt emberre lassan "
+                "rendeződnek át: a kiállításuk után azonnal, gyors "
+                "játékba hozással kell támadni, az emberelőny első "
+                "támadása a legértékesebb")
+        elif kind == "vége":
+            rec["verdict"] = (
+                f"a kiállítás végére fogynak el ({rec['late_goals']} gól "
+                f"a hátrány első {SHO_ONSET_S:.0f} másodperce után — "
+                f"percenként {v:.1f}, előtte {e:.1f}) — az elején még "
+                "összezárnak: türelmes emberelőny kell, a fal járatása, "
+                "a gól a második percben érik be")
+    return out
+
+
 # Emberelőny-hibázók: ennyi emberelőny-eladástól emeljük ki a
 # játékost (a két perc rövid, ezért alacsony a küszöb).
 PPTP_MIN_TURNOVERS = 2

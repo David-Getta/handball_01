@@ -11592,6 +11592,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import shorthanded_onset
+            res["shorthanded_onset"] = shorthanded_onset(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.rules import powerplay_turnover_players
             res["powerplay_turnover_players"] = \
                 powerplay_turnover_players(match)
@@ -13952,6 +13957,9 @@ def create_app():
                 from ..pipeline.rules import suspension_cost
                 _layer("suspension_cost",
                        lambda: suspension_cost(match))
+                from ..pipeline.rules import shorthanded_onset
+                _layer("shorthanded_onset",
+                       lambda: shorthanded_onset(match))
                 from ..pipeline.rules import powerplay_turnover_players
                 _layer("powerplay_turnover_players",
                        lambda: powerplay_turnover_players(match))
