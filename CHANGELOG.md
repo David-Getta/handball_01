@@ -79,6 +79,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `content_spread` (totál nagy, közeli kicsi; él nélkül 0).
   - `benchmark`: `BenchmarkReport.all_passed` és a négy `benchmark_*`
     metrika külön (seed nélkül az üres futás nem megy át).
+  - `appearance`: `AppearanceProfile.labeled_colors` (csak a megadott
+    színek; friss lista).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
