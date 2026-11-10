@@ -27,6 +27,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_hash_password`, `_public` (titok nélkül), `_find`, `_new_token`
     (lejárat, takarítás, plafon), `account_for_token`,
     `accounts_status`.
+  - `sim/match_simulator`: `_roster_specs`, `_player_xy` (az ingadozás
+    másodpercben halad), `_ball_xy`, `_shot_episode` — és a szimulált
+    lövés útja a valódi meccsen.
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
