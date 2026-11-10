@@ -75,6 +75,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `better_setting`. A teszt hibát is fogott: a kalibráló képernyő
     "MÁS beállításra ül jobban" üzenete mérhetetlen mostani
     illeszkedésnél vesszővel végződött — javítva.
+  - `broadcast`: `color_histogram` (normált; vágásnál ugrik) és
+    `content_spread` (totál nagy, közeli kicsi; él nélkül 0).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
