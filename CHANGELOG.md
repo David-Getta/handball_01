@@ -68,6 +68,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     eddig sosem futott.
   - `court3d`: `shared3d_felvetel_nev` (tisztítás, hossz-korlát; név
     nélkül üres).
+  - `calibration`: `Calibrator.homography_for_frame` (a referenciát
+    adja; kalibráció nélkül is fut).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
