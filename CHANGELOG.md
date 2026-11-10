@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Teszt-lefedettség: a backend többi modulja** (teszt): a pipeline, az
+  api és a scripts után a `handball` csomag többi, közvetlen teszt
+  nélküli függvénye — a pozitív eset mellé a "nincs miből → None" és a
+  hibaág. Modulonként:
+  - `video_io`: `video_fps` / `video_seconds` (valódi videóból; a videó
+    mindig elengedődik), `_windows_short_path`, az `open_capture`
+    Windows-ága (ékezetes út → rövid alak).
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
