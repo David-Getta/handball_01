@@ -1510,3 +1510,46 @@ def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
     assert sum(valodi["home"]["jo"][:1] + valodi["home"]["rossz"][:1]) == \
         sum(1 for r in recs if r["side"] == "home")
     assert valodi["home"]["jo"][1] == valodi["home"]["rossz"][1] == 0
+
+
+# ---- A névelő a választás / helyzet elé (sit_article) ------------------------
+
+def test_sit_article_a_valasztasok_elott():
+    """A mondatok ("pedig az átadás érne többet") névelője: magánhangzó
+    előtt "az", mássalhangzó előtt "a" — a réteg MINDEN választására és
+    helyzetére."""
+    from handball.pipeline.decisions import (SIT_ACTIONS, SIT_SITUATIONS,
+                                             sit_article)
+
+    vart = {"lövés": "a", "passz a 6 m-re": "a", "passz a szélre": "a",
+            "visszajátszás": "a", "átadás": "az"}
+    assert set(vart) == set(SIT_ACTIONS)        # új választásnál bővítendő
+    for szo, nevelo in vart.items():
+        assert sit_article(szo) == nevelo, szo
+    for helyzet in SIT_SITUATIONS:              # mind mássalhangzóval kezd
+        assert sit_article(helyzet) == "a", helyzet
+
+
+def test_sit_article_ekezetes_es_nagybetus_maganhangzo():
+    """Az ékezetes magánhangzók (á é í ó ö ő ú ü ű) és a nagybetűs
+    kezdet is "az"-t kap; a mássalhangzó nagybetűvel is "a"."""
+    from handball.pipeline.decisions import sit_article
+
+    for szo in ("alapállás", "átlövés", "elzárás", "építés", "indítás",
+                "ív", "oldal", "óra", "ötös", "őr", "ugrás", "út",
+                "ütem", "űr", "Átadás", "Indítás", "Ötös"):
+        assert sit_article(szo) == "az", szo
+    for szo in ("beálló", "csel", "gyors indítás", "szélső", "zárás",
+                "Lövés", "Passz a szélre", "y-tengely"):
+        assert sit_article(szo) == "a", szo
+
+
+def test_sit_article_csak_az_elso_betu_szamit():
+    """A szó belseje nem számít (a "passz a szélre" belsejében álló "a"
+    nem ad "az"-t), és a szám / írásjel kezdet "a"."""
+    from handball.pipeline.decisions import sit_article
+
+    assert sit_article("passz az átlövőnek") == "a"
+    assert sit_article("átadás a beállónak") == "az"
+    assert sit_article("6 m-es passz") == "a"
+    assert sit_article("\"átadás\"") == "a"
