@@ -26,6 +26,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   szöveggel: 37 fixture 324 szabályt fed le, köztük 65 eddig soha le nem
   futót. Szándékos küszöb-változásnál a táblát kell igazítani (a modul
   eleje leírja); a maradék 170 szabálynak nincs ilyen fixture-je.
+  Második kör: a tábla a tesztekben szereplő konkrét (paraméteres)
+  fixture-hívásokkal 84 hívásra és 418 szabályra nőtt — ebből 128 a
+  munka előtt egyetlen tesztben sem futott le; 76 szabálynak továbbra
+  sincs megszólaltató fixture-hívása.
 - **A "Sorozatok" szakasz szoros, oda-vissza meccsen is megszólal**
   (javítás): ha a vezetés fordult, de egyik csapat sem lőtt három gólt
   válasz nélkül, az összefoglaló a leghosszabb sorozatot az üres listán
