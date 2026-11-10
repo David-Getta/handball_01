@@ -48,6 +48,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     megkeresése, a katalógus építése, a main író / ellenőrző módja.
   - `scripts/hash_sensitivity`: a munkás-folyamat, az összevetés (előre
     megírt és VALÓDI háromfolyamatos méréssel), a main három módja.
+  - `scripts/finetune`: `install_weights` (a régi súly mentésével) és a
+    main útjai kamu YOLO-val.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
