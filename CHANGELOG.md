@@ -24,6 +24,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `scripts/swallowed_exceptions`: a nyomkövető (`_Gyujto`) egy
     próba-modulon, a mérés próba-rétegekkel és mini-alkalmazással (a
     végpont szálán született kivételt is megtalálja), a main.
+  - `scripts/stride_sensitivity`: a mérés próba-rétegekkel (a
+    kockaszám-küszöbű réteget megnevezi), a jelentés és a main.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
