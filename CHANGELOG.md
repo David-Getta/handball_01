@@ -18,6 +18,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `scripts/validate_match`: hibakódok (hiányzó CSV / meccs → 2,
     gyenge felismerés → 1 a megnézendő tételekkel), a jegyzőkönyv-sor
     beszúrása a pontosság-tábla végére.
+  - `scripts/train_digit_net`: a számjegy-háló tanítása kicsiben
+    (renderelés → adathalmaz → tanítás → a `jersey_ocr` osztályozója);
+    őr: a szállított `digit_net.npz` a szkript eloszlásán pontos.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
