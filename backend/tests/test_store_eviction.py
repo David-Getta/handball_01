@@ -501,3 +501,74 @@ def test_a_felderites_memoria_tara_kilincsnel_sem_no_hivasonkent(monkeypatch):
     tar = app.state.scout_cache
     assert len(tar) <= 2 * 2, sorted(tar)
     assert len(tar) >= 1
+
+
+# ---- A fejléc hidegként: put_cold (és a put_raw nem-felülíró ága) -----------
+
+def test_put_cold_a_fejlec_betoltes_nelkul_kerul_a_tarba():
+    """A fejléc-indexből a meccs FEJLÉCE betöltés nélkül kerül a tárba:
+    a könyvtár látja (benne van, megvan a fejléce és a kockaszáma), a
+    memóriában mégsincs; az első hozzáférés tölti be a lemezről, és
+    onnantól meleg."""
+    lemez = {"m0": _meccs("m0", n=7)}
+    store, hivasok = _tar(2, lemez)
+    store.put_cold("m0", lemez["m0"].meta, 7)
+    assert "m0" in store and len(store) == 1
+    assert dict.__len__(store) == 0                  # a memóriában nincs
+    assert [(meta.match_id, n) for meta, n in store.summaries()] == [
+        ("m0", 7)]
+    assert hivasok == []                             # eddig nem olvastunk
+    assert store["m0"] is lemez["m0"] and hivasok == ["m0"]
+    assert dict.__len__(store) == 1                  # már meleg
+    # A fejléc nem duplázódik: egyszer szerepel (a meleg példányból).
+    assert [(meta.match_id, n) for meta, n in store.summaries()] == [
+        ("m0", 7)]
+    # A kockaszám egésszé alakul (az index JSON-ból jön).
+    store.put_cold("m9", _meccs("m9").meta, "12")
+    assert dict(((meta.match_id, n) for meta, n in store.summaries()))[
+        "m9"] == 12
+
+
+def test_put_cold_felulir_vagy_megkimeli_a_mar_bent_levot():
+    """Alapból felülír: a meleg meccs is hideg lesz (kikerül a
+    memóriából), a hideg fejléce frissül. `overwrite=False`-szal a már
+    bent lévőt — meleget és hideget — nem bántja (a háttér-betöltő nem
+    írhatja felül a közben elkészült feldolgozást)."""
+    lemez = {"m0": _meccs("m0", n=5), "m1": _meccs("m1", n=5)}
+    store, hivasok = _tar(4, lemez)
+    store["m0"] = lemez["m0"]                        # meleg
+    store.put_cold("m1", lemez["m1"].meta, 5)        # hideg
+    # Nem-felülíró beírás: semmi sem változik.
+    store.put_cold("m0", lemez["m0"].meta, 99, overwrite=False)
+    store.put_cold("m1", lemez["m1"].meta, 99, overwrite=False)
+    assert dict.__contains__(store, "m0")            # a meleg meleg maradt
+    assert {meta.match_id: n for meta, n in store.summaries()} == {
+        "m0": 5, "m1": 5}
+    # Új kulcsra a nem-felülíró beírás is beír.
+    store.put_cold("m2", _meccs("m2").meta, 3, overwrite=False)
+    assert "m2" in store and len(store) == 3
+    # Felülíró beírás: a meleg meccs hideg lesz, a hideg fejléce frissül.
+    store.put_cold("m0", lemez["m0"].meta, 6)
+    store.put_cold("m1", lemez["m1"].meta, 8)
+    assert not dict.__contains__(store, "m0") and "m0" in store
+    assert {meta.match_id: n for meta, n in store.summaries()} == {
+        "m0": 6, "m1": 8, "m2": 3}
+    assert hivasok == []                             # mindez olvasás nélkül
+
+
+def test_put_raw_nem_irja_felul_a_hideg_fejlecet_sem():
+    """A háttér-betöltő (`put_raw(..., overwrite=False)`) a már bent lévő
+    meccset nem írja felül — akkor sem, ha az csak HIDEGEN (fejléccel)
+    van bent; felülíró módban a hidegből meleg lesz."""
+    regi, uj = _meccs("m0", n=5), _meccs("m0", n=9)
+    store, _ = _tar(4, {"m0": regi})
+    store.put_cold("m0", regi.meta, 5)
+    store.put_raw("m0", uj, overwrite=False)
+    assert not dict.__contains__(store, "m0")        # hideg maradt
+    assert [n for _, n in store.summaries()] == [5]
+    store.put_raw("m0", uj)                          # felülír
+    assert dict.__getitem__(store, "m0") is uj
+    assert [n for _, n in store.summaries()] == [9]
+    # A meleget a nem-felülíró beírás szintén megkíméli.
+    store.put_raw("m0", regi, overwrite=False)
+    assert dict.__getitem__(store, "m0") is uj

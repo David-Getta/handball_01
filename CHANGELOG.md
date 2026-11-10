@@ -32,6 +32,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `report_html`: `_note_diagram_svg` (pálya, játékosok, labda, nyilak;
     a valódi jegyzet-ábrából is), `_match_report_html_cached` (a
     hatókörben és anélkül ugyanaz a jelentés).
+  - `api`: `_MatchStore.put_cold` (a fejléc hidegként, felülírással és
+    anélkül), `_halozati_or_telepit` (alapból nincs őr; nyitott motornál
+    csak az engedett utak; a saját gépről minden megy).
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
