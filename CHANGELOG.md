@@ -18,6 +18,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `substitutions`: `_in_sub_zone` (a cserezóna határai).
   - `stats`: `_speed_segments` (lyuk, ugrás, becsült pozíció kimarad;
     másodpercben mér) és `_sprint_and_zones` (a villanás nem sprint).
+  - `setplays`: az öt ítélet-mondat segédje (`_forma_itelet`,
+    `_allas_itelet`, `_elony_itelet`, `_hajra_itelet`,
+    `_hetedik_itelet`), `_figura_kimenetek`, `_copy_side_rows`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

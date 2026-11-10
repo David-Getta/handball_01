@@ -2203,3 +2203,280 @@ def test_empty_net_figures_summary_keves_mintanal_none():
         {"shape": _alak(0), "attacks": 2}])
     assert harmad["verdict"] is None
     assert empty_net_figures_summary(None)["figures"] == []
+
+
+# ---- Belső segédek közvetlenül: védő-másolat, ítélet-mondatok, kimenetek ------
+
+def test_copy_side_rows_oldalankent_fuggetlen_sorok():
+    """A gyorsítótár védő-másolata: oldalanként a sorok független
+    másolatai; a hiányzó (None) oldalból üres lista, None-ból üres
+    szótár lesz."""
+    from handball.pipeline.setplays import _copy_side_rows
+
+    eredeti = {"home": [{"label": 0, "attacks": 4}, {"label": 1}],
+               "away": None}
+    masolat = _copy_side_rows(eredeti)
+    assert masolat == {"home": eredeti["home"], "away": []}
+    assert masolat["home"][0] is not eredeti["home"][0]
+    masolat["home"][0]["attacks"] = 99
+    masolat["home"].append({"label": 9})
+    assert eredeti["home"] == [{"label": 0, "attacks": 4}, {"label": 1}]
+    assert _copy_side_rows(None) == {} and _copy_side_rows({}) == {}
+
+
+def test_forma_itelet_a_leggyengebb_format_ajanlja():
+    """Egy figura formánkénti mérlegéből: a leggyengébb és a legjobb
+    forma a hozammal, és a tanács — abban álljatok fel, amelyik ellen a
+    figura a legkevésbé megy; névvel a figura nevét idézi."""
+    from handball.pipeline.setplays import _forma_itelet
+
+    forms = {"6-0": {"attacks": 4, "goals": 0, "goal_pct": 0.0},
+             "5-1": {"attacks": 4, "goals": 3, "goal_pct": 75.0},
+             "3-2-1": {"attacks": 3, "goals": 1, "goal_pct": 33.3}}
+    assert _forma_itelet("közép, a kapuelőtér előtt", forms) == (
+        "a(z) közép, a kapuelőtér előtt figurájuk a 6-0 ellen 0% (0/4), "
+        "a 5-1 ellen 75% (3/4) — erre a figurára 6-0-ban álljatok fel")
+    nevvel = _forma_itelet("közép", forms, nev="Kereszt")
+    assert nevvel.startswith("a(z) „Kereszt” figurájuk a 6-0 ellen 0%")
+
+
+def test_forma_itelet_keves_mintanal_vagy_kis_resnel_none():
+    """Formánként 3 támadás kell, és legalább KÉT ilyen forma; 25 pp
+    alatti résnél sincs ítélet — a kevés mintás forma nem dönthet."""
+    from handball.pipeline.setplays import (FVF_GAP_PP, FVF_MIN_ATTACKS,
+                                            _forma_itelet)
+
+    assert (FVF_MIN_ATTACKS, FVF_GAP_PP) == (3, 25.0)
+    assert _forma_itelet("z", {}) is None
+    assert _forma_itelet("z", {
+        "6-0": {"attacks": 9, "goals": 0, "goal_pct": 0.0}}) is None
+    # A második forma csak 2 támadás: kevés → nincs mihez mérni.
+    assert _forma_itelet("z", {
+        "6-0": {"attacks": 9, "goals": 0, "goal_pct": 0.0},
+        "5-1": {"attacks": 2, "goals": 2, "goal_pct": 100.0}}) is None
+    # Két mérhető forma, 20 pp rés.
+    assert _forma_itelet("z", {
+        "6-0": {"attacks": 5, "goals": 2, "goal_pct": 40.0},
+        "5-1": {"attacks": 5, "goals": 3, "goal_pct": 60.0}}) is None
+    # Pont a küszöbön (25 pp) már szól.
+    assert _forma_itelet("z", {
+        "6-0": {"attacks": 4, "goals": 1, "goal_pct": 25.0},
+        "5-1": {"attacks": 4, "goals": 2, "goal_pct": 50.0}}) is not None
+
+
+def _allapot(attacks, *figurak):
+    return {"attacks": attacks,
+            "figures": [{"label": lab, "zone": zone, "share_pct": pct}
+                        for (lab, zone, pct) in figurak]}
+
+
+def test_allas_itelet_a_legnagyobb_reszarany_resu_figura():
+    """A két állapot között a legnagyobb részarány-eltérésű figura
+    mondata: előbb az az állapot, ahol TÖBBET játsszák; a csak az egyik
+    állapotban játszott figura a másikban 0%."""
+    from handball.pipeline.setplays import _allas_itelet
+
+    states = {
+        "leading": _allapot(6, (0, "bal oldal", 70.0),
+                            (1, "közép", 30.0)),
+        "level": _allapot(2, (1, "közép", 100.0)),          # kevés: kimarad
+        "trailing": _allapot(8, (1, "közép", 40.0),
+                             (2, "jobb oldal", 60.0)),
+    }
+    assert _allas_itelet(states) == (
+        "állásfüggően váltanak figurát: a(z) \"bal oldal\" figurájuk "
+        "vezetésnél a támadásaik 70%-a, hátrányban csak 0% — a fal a "
+        "meccs állása szerint készülhet rá (a hajrában nem kell "
+        "kitalálni, mi jön)")
+    # Fordítva: ha hátrányban játsszák többet, az áll elöl.
+    forditva = {"leading": _allapot(6, (0, "bal oldal", 10.0)),
+                "trailing": _allapot(6, (0, "bal oldal", 80.0))}
+    assert "hátrányban a támadásaik 80%-a, vezetésnél csak 10%" in \
+        _allas_itelet(forditva)
+    # Döntetlen állapot is összevethető.
+    dontetlen = {"level": _allapot(5, (0, "közép", 90.0)),
+                 "trailing": _allapot(5, (0, "közép", 40.0))}
+    assert "döntetlennél a támadásaik 90%-a, hátrányban csak 40%" in \
+        _allas_itelet(dontetlen)
+
+
+def test_allas_itelet_keves_mintanal_vagy_kis_resnel_none():
+    """Legalább KÉT állapotban kell 5 mért figura-támadás, és legalább
+    25 pp rés; üres / hiányos állapot-szótárra None (nem kivétel)."""
+    from handball.pipeline.setplays import (SBS_GAP_PP, SBS_MIN_ATTACKS,
+                                            _allas_itelet)
+
+    assert (SBS_MIN_ATTACKS, SBS_GAP_PP) == (5, 25.0)
+    assert _allas_itelet({}) is None
+    assert _allas_itelet({"leading": None, "level": {}}) is None
+    egy_eleg = {"leading": _allapot(9, (0, "közép", 100.0)),
+                "trailing": _allapot(4, (1, "bal oldal", 100.0))}
+    assert _allas_itelet(egy_eleg) is None
+    kis_res = {"leading": _allapot(6, (0, "közép", 60.0),
+                                   (1, "bal oldal", 40.0)),
+               "trailing": _allapot(6, (0, "közép", 40.0),
+                                    (1, "bal oldal", 60.0))}
+    assert _allas_itelet(kis_res) is None
+    # Elég támadás, de figura nélkül: nincs mit összevetni.
+    assert _allas_itelet({"leading": _allapot(6),
+                          "trailing": _allapot(6)}) is None
+
+
+def _fo_figura(share, attacks=4, goals=2, rest_share=0.0):
+    return [{"zone": "közép, a kapuelőtér előtt", "share_pct": share,
+             "attacks": attacks, "goals": goals,
+             "rest_share_pct": rest_share}]
+
+
+def test_elony_es_hetedik_itelet_egy_figurara_epitenek():
+    """Emberelőnyben, illetve a hetedik emberrel: ha a fő figura a
+    támadások legalább felét adja (és van legalább 4 támadás), a
+    védekezésnek szóló mondat megnevezi a figurát a mérleggel."""
+    from handball.pipeline.setplays import _elony_itelet, _hetedik_itelet
+
+    elony = _elony_itelet(6, _fo_figura(66.7))
+    assert elony == (
+        "emberelőnyben egy figurára építenek: \"közép, a kapuelőtér "
+        "előtt\" a két perc alatti támadásaik 67%-a (4/6, 2 gól) — "
+        "emberhátrányban ezt kell bejátszani és erre rendezni az öt "
+        "embert, a többit rá lehet engedni")
+    hetedik = _hetedik_itelet(5, _fo_figura(80.0))
+    assert hetedik.startswith(
+        "a hetedik emberrel egy figurára építenek: \"közép, a kapuelőtér "
+        "előtt\" az üres kapus támadásaik 80%-a (4/5, 2 gól)")
+    assert "AZONNAL az üres kapura nézni" in hetedik
+
+
+def test_elony_es_hetedik_itelet_keves_minta_vagy_szort_jatek_none():
+    """4 támadás alatt, figura-sor nélkül vagy 50% alatti fő figuránál
+    nincs ítélet; pont a két küszöbön (4 támadás, 50%) már van."""
+    from handball.pipeline.setplays import (ENF_MIN_ATTACKS, ENF_SHARE_PCT,
+                                            PPF_MIN_ATTACKS, PPF_SHARE_PCT,
+                                            _elony_itelet, _hetedik_itelet)
+
+    assert (PPF_MIN_ATTACKS, PPF_SHARE_PCT) == (4, 50.0)
+    assert (ENF_MIN_ATTACKS, ENF_SHARE_PCT) == (4, 50.0)
+    for itelet in (_elony_itelet, _hetedik_itelet):
+        assert itelet(3, _fo_figura(100.0, attacks=3)) is None
+        assert itelet(0, []) is None and itelet(9, []) is None
+        assert itelet(8, _fo_figura(49.9)) is None
+        assert itelet(4, _fo_figura(50.0, attacks=2)) is not None
+
+
+def test_hajra_itelet_szukules_csak_ha_a_torzsben_mast_jatszanak():
+    """A hajrá-szűkülés: a fő figura a hajrá legalább fele ÉS legalább
+    25 pp-tal több, mint a meccs többi részén; kevés hajrá-támadásnál,
+    szórt játéknál vagy ha a törzsben is ezt játsszák, None."""
+    from handball.pipeline.setplays import (CSP_GAP_PP, CSP_MIN_ATTACKS,
+                                            CSP_SHARE_PCT, _hajra_itelet)
+
+    assert (CSP_MIN_ATTACKS, CSP_SHARE_PCT, CSP_GAP_PP) == (4, 50.0, 25.0)
+    szukul = _hajra_itelet(6, _fo_figura(83.3, attacks=5, goals=2,
+                                         rest_share=20.0))
+    assert szukul == (
+        "a hajrában egy figurára szűkülnek: \"közép, a kapuelőtér előtt\" "
+        "az utolsó öt perc támadásainak 83%-a (5/6, 2 gól), a meccs többi "
+        "részén csak 20% — a végjátékban a fal ne tippeljen: erre álljon "
+        "fel")
+    assert _hajra_itelet(3, _fo_figura(100.0, attacks=3)) is None
+    assert _hajra_itelet(6, []) is None
+    assert _hajra_itelet(6, _fo_figura(45.0, rest_share=10.0)) is None
+    assert _hajra_itelet(6, _fo_figura(90.0, rest_share=70.0)) is None
+    assert _hajra_itelet(4, _fo_figura(75.0, rest_share=50.0)) is not None
+
+
+def _kimenet_kornyezet(monkeypatch, esemenyek, hetesek=()):
+    """A figura-kimenetekhez: előre megadott események (t, típus, csapat)
+    és hetesek (t, csapat) — a felismerők helyett."""
+    from types import SimpleNamespace
+
+    from handball.pipeline import event_detection as ed
+    from handball.pipeline import rules
+
+    monkeypatch.setattr(ed, "detect_events", lambda match, config=None: [
+        SimpleNamespace(t=t, type=tipus, team=team)
+        for (t, tipus, team) in esemenyek])
+    monkeypatch.setattr(rules, "detect_seven_meters",
+                        lambda match, config=None: [
+                            {"t": t, "team": team.value}
+                            for (t, team) in hetesek])
+
+
+def _szakasz(start, end, team=Team.HOME):
+    from handball.pipeline.setplays import AttackSequence
+    return AttackSequence(team=team, start_t=start, end_t=end)
+
+
+def test_figura_kimenetek_a_legerosebb_befejezes_szamit(monkeypatch):
+    """Figuránként a befejezés a szakasz alatt vagy a vége után 2 mp-en
+    belül: gól > hetes > lövés > eladás > egyéb — egy támadás EGY
+    kimenetet kap (a legerősebbet), a kimenetek rögzített sorrendben."""
+    from handball.pipeline.event_detection import EventType
+    from handball.pipeline.setplays import (FIGURA_KIMENETEK,
+                                            _figura_kimenetek)
+
+    assert FIGURA_KIMENETEK == ("gól", "hetes", "lövés", "eladás", "egyéb")
+    m = Match(MatchMeta(match_id="fk", home_team="H", away_team="A",
+                        fps=25.0), [])
+    _kimenet_kornyezet(monkeypatch, [
+        (120, EventType.SHOT, Team.HOME),       # 1. támadás: lövés ÉS gól
+        (140, EventType.GOAL, Team.HOME),       #   (a vége után 2 mp-en belül)
+        (330, EventType.SHOT, Team.HOME),       # 2. támadás: lövés
+        (520, EventType.TURNOVER, Team.HOME),   # 3. támadás: eladás
+        (1010, EventType.GOAL, Team.AWAY),      # 5. alatt az ELLENFÉL gólja
+        (1300, EventType.TURNOVER, Team.HOME),  # 6.: hetes ÉS eladás
+    ], hetesek=[(1310, Team.HOME)])
+    talalt = [("Kereszt", _szakasz(0, 100)), ("Kereszt", _szakasz(300, 400)),
+              ("Kereszt", _szakasz(500, 600)),
+              ("Kereszt", _szakasz(700, 800)),          # semmi → egyéb
+              ("Beálló", _szakasz(1000, 1050)),         # csak az ellenfél gólja
+              ("Beálló", _szakasz(1290, 1350))]
+    assert _figura_kimenetek(m, TacticsConfig(), talalt) == {
+        "Kereszt": {"gól": 1, "lövés": 1, "eladás": 1, "egyéb": 1},
+        "Beálló": {"hetes": 1, "egyéb": 1}}
+    assert list(_figura_kimenetek(m, TacticsConfig(), talalt)["Kereszt"]) \
+        == ["gól", "lövés", "eladás", "egyéb"]
+
+
+def test_figura_kimenetek_az_utoido_masodpercben_el(monkeypatch):
+    """A szakasz vége utáni ablak 2 MÁSODPERC: 25 fps-en 50 kocka (az
+    51. már nem ehhez a támadáshoz tartozik), harmad-fps-en ~17 kocka."""
+    from handball.pipeline.attack_types import ATTACK_TAIL_S
+    from handball.pipeline.event_detection import EventType
+    from handball.pipeline.setplays import _figura_kimenetek
+
+    assert ATTACK_TAIL_S == 2.0
+
+    def kimenet(fps, gol_t):
+        m = Match(MatchMeta(match_id="fk", home_team="H", away_team="A",
+                            fps=fps), [])
+        _kimenet_kornyezet(monkeypatch, [(gol_t, EventType.GOAL, Team.HOME)])
+        return _figura_kimenetek(m, TacticsConfig(),
+                                 [("F", _szakasz(0, 100))])["F"]
+
+    assert kimenet(25.0, 150) == {"gól": 1}
+    assert kimenet(25.0, 151) == {"egyéb": 1}
+    assert kimenet(25.0 / 3.0, 117) == {"gól": 1}
+    assert kimenet(25.0 / 3.0, 118) == {"egyéb": 1}
+    # A szakasz ELŐTTI gól sem ehhez a támadáshoz tartozik.
+    m = Match(MatchMeta(match_id="fk", home_team="H", away_team="A",
+                        fps=25.0), [])
+    _kimenet_kornyezet(monkeypatch, [(99, EventType.GOAL, Team.HOME)])
+    assert _figura_kimenetek(m, TacticsConfig(),
+                             [("F", _szakasz(100, 200))]) == {
+        "F": {"egyéb": 1}}
+
+
+def test_figura_kimenetek_talalat_nelkul_ures(monkeypatch):
+    """Felismert figura nélkül nincs mit számolni: üres szótár; a
+    kimenet-szöveg üres mérlegre üres."""
+    from handball.pipeline.setplays import (_figura_kimenetek,
+                                            figura_kimenet_szoveg)
+
+    m = Match(MatchMeta(match_id="fk", home_team="H", away_team="A",
+                        fps=25.0), [])
+    _kimenet_kornyezet(monkeypatch, [])
+    assert _figura_kimenetek(m, TacticsConfig(), []) == {}
+    assert figura_kimenet_szoveg({}) == "" and figura_kimenet_szoveg(None) == ""
+    assert figura_kimenet_szoveg({"gól": 2, "eladás": 1, "lövés": 0}) == \
+        "2 gól · 1 eladás"
