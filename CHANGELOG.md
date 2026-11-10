@@ -50,6 +50,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     (`_save_by_goalkeeper`, `_throw_off_low_team`, `_throw_off_followed`,
     `_still_at_center`, `_half_boundaries`, …).
   - `estimation`: `_clamp` (a becsült pozíció a pályán marad).
+  - `ball_filter`: `_dist`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
