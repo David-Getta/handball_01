@@ -42,6 +42,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     út követője, a parancssori belépő, `StallSkippingFeed.abandon`.
   - `scripts/order_sensitivity`: a mérés próba-rétegekkel (szerep
     nélküli meccsen megtalálja a szerep-függő réteget) és a main.
+  - `scripts/mirror_sides`: a mérés próba-rétegekkel (helyesen /
+    hibásan tükröződő), a jelentés, a main kilépőkódja.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
