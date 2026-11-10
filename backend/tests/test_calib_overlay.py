@@ -1003,3 +1003,40 @@ def test_better_setting_none_ha_nincs_erdemben_jobb():
     vegyes = better_setting({("left", False): None, ("right", False): 0.8},
                             "full", False, 0.2)
     assert vegyes["region"] == "right"
+
+
+# ---- Az előjel-normálás és a terület-közép (második kör) -----------------------
+
+def test_sign_normalized_a_referencia_pontnal_pozitiv_nevezo():
+    """A homográfia és a (−1)-szerese ugyanaz a leképezés, de a horizont-
+    vizsgálat az előjelre épül: a mátrixot úgy fordítjuk, hogy a
+    referencia-pontnál a nevező pozitív legyen — a már jó előjelű
+    mátrix változatlan (ugyanaz az objektum)."""
+    from handball.pipeline.calib_overlay import _sign_normalized
+
+    jo = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 1.0]]
+    assert _sign_normalized(jo, 20.0, 10.0) is jo
+    negalt = [[-v for v in sor] for sor in jo]
+    assert _sign_normalized(negalt, 20.0, 10.0) == jo
+    # Perspektívás mátrix: a nevező 1 − 0,04·x; x = 30-nál negatív.
+    persp = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [-0.04, 0.0, 1.0]]
+    assert _sign_normalized(persp, 10.0, 10.0) is persp
+    forditott = _sign_normalized(persp, 30.0, 10.0)
+    assert forditott == [[-v for v in sor] for sor in persp]
+    assert forditott[2][0] * 30.0 + forditott[2][2] > 0
+    # A nevező pontosan 0 (a referencia a horizonton): nem fordítunk.
+    assert _sign_normalized(persp, 25.0, 10.0) is persp
+
+
+def test_region_center_a_kalibralt_terulet_kozepe():
+    """A kalibrált terület közepe méterben: a teljes pályánál a
+    középpont, a fél pályáknál a térfél közepe; a hiányzó / ismeretlen
+    kulcs a teljes pálya."""
+    from handball.pipeline.calib_overlay import _region_center
+
+    assert _region_center("full") == (20.0, 10.0)
+    assert _region_center("left") == (10.0, 10.0)
+    assert _region_center("right") == (30.0, 10.0)
+    assert _region_center() == (20.0, 10.0)
+    assert _region_center(None) == (20.0, 10.0)
+    assert _region_center("ismeretlen") == (20.0, 10.0)
