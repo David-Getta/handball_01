@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
+  pipeline után az `api` és a `scripts` soha le nem futó részei is
+  tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
+  (beszélő hiba, nem 500 / nem kivétel). Modulonként:
+  - `api`: tizenkét végpont, amelyet eddig egy teszt sem hívott —
+    feltétel-elfogadás és jelszócsere, referencia-képkocka,
+    közvetítés-szakaszok, a mentett kalibráció visszaolvasása,
+    játékos-lap, pontosság-validáció, egyesített felderítés és
+    fejlődés-követés (JSON + nyomtatható HTML), demó-meccs,
+    figura-törlés.
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
