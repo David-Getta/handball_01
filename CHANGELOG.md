@@ -22,6 +22,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     védő-másolatai (`_tf_copy`, `_ptf_copy`).
   - `tracking_step`: a követés váza (Track alak, `Tracker.update`
     lista-szerződés, üres detektálás → üres lista) — eddig sosem futott.
+  - `teams`: `TeamClassifier.classify` / `is_goalkeeper` / `is_referee`
+    két különböző színkészlettel; profil vagy szín nélkül nem találgat.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
