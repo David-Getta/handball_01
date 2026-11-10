@@ -53,6 +53,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `ball_filter`: `_dist`.
   - `attack_types`: `_advance_speed` (a támadott kapu felé; labda vagy
     idő nélkül 0).
+  - `analytics`: `_empty_grid` (független sorok).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
