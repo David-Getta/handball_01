@@ -33,6 +33,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `scouting`: `rep_earn_count`; a 241) "szünet utáni oldal-váltás"
     meccsterv-szabály (eddig egyszer sem szólalt meg tesztben) a
     hallgatás hat okával.
+  - `rules`: `field_count_timeline` (kapus / becsült / villanó track
+    nem számít), `_seven_direction` (a dobó szemszögéből; None, ha a
+    labda nem ér a kapusíkhoz), `rules_report`.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
