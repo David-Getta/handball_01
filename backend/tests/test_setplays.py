@@ -2000,3 +2000,206 @@ def test_a_figuraik_probaja_visszaternek_e():
     assert p["verdict"].endswith("a visszatérő figuráikra érdemes készülni")
     assert figure_recurrence_backtest(meccsek, "B") is None
     assert figure_recurrence_backtest(meccsek[:FIG_PROBA_MIN]) is None
+
+
+# ---- A meccsek közti figura-összefésülők (felderítés-oldal) ----------------
+#
+# A ScoutingReport lapos, darabszám-alapú sorait fésülik össze. Az alak
+# 6x3-as rács (18 elem); az egy cellára koncentrált alak súlypontja a cella
+# közepe: a 11-es cella (ix=5, iy=1) "közép, a kapuelőtér előtt", a 4-es
+# (ix=4, iy=0) "bal oldal, a 9-es körül".
+
+def _alak(idx, mellek=None, suly=0.05):
+    """Egy cellára koncentrált alak; `mellek` cellára kis súlyt tolva egy
+    közeli (összevonandó) változatot ad."""
+    v = [0.0] * 18
+    v[idx] = 1.0
+    if mellek is not None:
+        v[idx] -= suly
+        v[mellek] += suly
+    return v
+
+
+def test_figure_formation_summary_osszevonja_es_itel():
+    """Két meccs ugyanazon (közeli) alakja egy figurává áll össze; a 6-0
+    ellen 0%, az 5-1 ellen 75% → az ítélet a 6-0-t mondja."""
+    from handball.pipeline.setplays import figure_formation_summary
+
+    rows = [
+        {"shape": _alak(11), "formation": "6-0", "attacks": 2, "goals": 0},
+        {"shape": _alak(11, mellek=5), "formation": "6-0", "attacks": 2,
+         "goals": 0},
+        {"shape": _alak(11), "formation": "5-1", "attacks": 4, "goals": 3},
+        {"shape": _alak(4), "formation": "6-0", "attacks": 1, "goals": 1},
+    ]
+    res = figure_formation_summary(rows)
+    assert len(res["figures"]) == 2
+    fo = res["figures"][0]
+    assert fo["attacks"] == 8
+    assert fo["zone"] == "közép, a kapuelőtér előtt"
+    assert fo["forms"]["6-0"] == {"attacks": 4, "goals": 0, "goal_pct": 0.0}
+    assert fo["forms"]["5-1"]["goal_pct"] == 75.0
+    assert res["verdict"] == fo["verdict"]
+    assert "6-0 ellen 0%" in res["verdict"]
+    assert "6-0-ban álljatok fel" in res["verdict"]
+    assert res["figures"][1]["zone"] == "bal oldal, a 9-es körül"
+    assert res["figures"][1]["verdict"] is None
+
+
+def test_figure_formation_summary_keves_mintanal_nincs_itelet():
+    """Formánként 3 alatti támadás → nincs ítélet; alak vagy forma nélküli
+    sor kimarad; üres bemenet → üres lista, None."""
+    from handball.pipeline.setplays import figure_formation_summary
+
+    rows = [
+        {"shape": _alak(11), "formation": "6-0", "attacks": 2, "goals": 0},
+        {"shape": _alak(11), "formation": "5-1", "attacks": 2, "goals": 2},
+        {"shape": [], "formation": "6-0", "attacks": 9, "goals": 0},
+        {"shape": _alak(11), "formation": None, "attacks": 9, "goals": 0},
+    ]
+    res = figure_formation_summary(rows)
+    assert [f["attacks"] for f in res["figures"]] == [4]
+    assert res["verdict"] is None
+    assert figure_formation_summary([]) == {"figures": [], "verdict": None}
+    assert figure_formation_summary(None) == {"figures": [], "verdict": None}
+
+
+def test_setplay_score_summary_ket_meccs_egyutt_mar_itel():
+    """Külön-külön kevés (állapotonként 3) a minta, együtt már 6 — a
+    vezetésnél játszott figura részaránya a hátrányhoz képest nagy rés."""
+    from handball.pipeline.setplays import setplay_score_summary
+
+    meccs = [
+        {"shape": _alak(11), "state": "leading", "attacks": 3, "goals": 1},
+        {"shape": _alak(4), "state": "trailing", "attacks": 3, "goals": 0},
+    ]
+    egy = setplay_score_summary(meccs)
+    assert egy["states"]["leading"]["attacks"] == 3
+    assert egy["verdict"] is None          # 5 alatti állapotok: nincs ítélet
+
+    ketto = setplay_score_summary(meccs + [
+        {"shape": _alak(11, mellek=5), "state": "leading", "attacks": 3,
+         "goals": 0},
+        {"shape": _alak(4), "state": "trailing", "attacks": 3, "goals": 2},
+    ])
+    vez = ketto["states"]["leading"]
+    assert vez["attacks"] == 6
+    assert vez["figures"][0]["share_pct"] == 100.0
+    assert vez["figures"][0]["goals"] == 1
+    assert ketto["states"]["trailing"]["figures"][0]["goals"] == 2
+    assert ketto["states"]["level"] == {"attacks": 0, "figures": []}
+    assert ketto["verdict"] is not None
+    assert "állásfüggően váltanak figurát" in ketto["verdict"]
+    assert "vezetésnél" in ketto["verdict"] and "hátrányban" in ketto["verdict"]
+
+
+def test_setplay_score_summary_ures_es_hianyos_sor():
+    """Állapot nélküli sor kimarad; üres bemenet → nulla támadás, None."""
+    from handball.pipeline.setplays import setplay_score_summary
+
+    res = setplay_score_summary([{"shape": _alak(11), "attacks": 9}])
+    assert all(res["states"][a] == {"attacks": 0, "figures": []}
+               for a in ("leading", "level", "trailing"))
+    assert res["verdict"] is None
+    assert setplay_score_summary([])["verdict"] is None
+
+
+def test_powerplay_figures_summary_egy_figurara_epitenek():
+    """Két meccs 2+2 emberelőnyös támadása ugyanarra az alakra → 4/5 = 80%,
+    a küszöb (50%) fölött → ítélet."""
+    from handball.pipeline.setplays import powerplay_figures_summary
+
+    res = powerplay_figures_summary([
+        {"shape": _alak(11), "attacks": 2, "goals": 1},
+        {"shape": _alak(11, mellek=5), "attacks": 2, "goals": 1},
+        {"shape": _alak(4), "attacks": 1, "goals": 0},
+        {"shape": [], "attacks": 7, "goals": 7},   # alak nélkül kimarad
+    ])
+    assert res["attacks"] == 5
+    fo = res["figures"][0]
+    assert (fo["attacks"], fo["goals"]) == (4, 2)
+    assert fo["share_pct"] == 80.0 and fo["goal_pct"] == 50.0
+    assert "emberelőnyben egy figurára építenek" in res["verdict"]
+    assert "(4/5, 2 gól)" in res["verdict"]
+
+
+def test_powerplay_figures_summary_keves_minta_vagy_szort_jatek_none():
+    """3 támadás (a küszöb 4) → None; szétszórt figurák (max 33%) → None."""
+    from handball.pipeline.setplays import powerplay_figures_summary
+
+    keves = powerplay_figures_summary([
+        {"shape": _alak(11), "attacks": 3, "goals": 3}])
+    assert keves["attacks"] == 3 and keves["verdict"] is None
+    szort = powerplay_figures_summary([
+        {"shape": _alak(11), "attacks": 2}, {"shape": _alak(4), "attacks": 2},
+        {"shape": _alak(0), "attacks": 2}])
+    assert szort["attacks"] == 6 and szort["verdict"] is None
+    assert powerplay_figures_summary([]) == {
+        "attacks": 0, "figures": [], "verdict": None}
+
+
+def test_clutch_figures_summary_a_hajraban_szukulnek():
+    """A hajrában 5/6 egy figura, a törzsben ugyanaz csak 2/10 → szűkülés."""
+    from handball.pipeline.setplays import clutch_figures_summary
+
+    res = clutch_figures_summary([
+        {"shape": _alak(11), "attacks": 3, "goals": 2, "rest_attacks": 1},
+        {"shape": _alak(11, mellek=5), "attacks": 2, "goals": 0,
+         "rest_attacks": 1},
+        {"shape": _alak(4), "attacks": 1, "goals": 0, "rest_attacks": 8},
+    ])
+    assert res["attacks"] == 6
+    fo = res["figures"][0]
+    assert (fo["attacks"], fo["goals"], fo["rest_attacks"]) == (5, 2, 2)
+    assert fo["share_pct"] == 83.3 and fo["rest_share_pct"] == 20.0
+    assert "a hajrában egy figurára szűkülnek" in res["verdict"]
+
+
+def test_clutch_figures_summary_nincs_itelet_ha_a_torzsben_is_ezt_jatsszak():
+    """Ha a törzsben is ugyanez a fő figura (rés < 25 pp), vagy kevés a
+    hajrá-támadás, nincs ítélet."""
+    from handball.pipeline.setplays import clutch_figures_summary
+
+    ugyanaz = clutch_figures_summary([
+        {"shape": _alak(11), "attacks": 5, "rest_attacks": 9},
+        {"shape": _alak(4), "attacks": 1, "rest_attacks": 1},
+    ])
+    assert ugyanaz["figures"][0]["rest_share_pct"] == 90.0
+    assert ugyanaz["verdict"] is None
+    keves = clutch_figures_summary([
+        {"shape": _alak(11), "attacks": 3, "rest_attacks": 0}])
+    assert keves["verdict"] is None
+    # A csak a törzsben játszott figura is bent marad (0 hajrá-támadással).
+    torzs = clutch_figures_summary([
+        {"shape": _alak(4), "attacks": 0, "rest_attacks": 6}])
+    assert torzs["figures"][0]["rest_attacks"] == 6
+    assert torzs["attacks"] == 0 and torzs["verdict"] is None
+
+
+def test_empty_net_figures_summary_a_hetedik_emberrel_egy_figura():
+    """Két meccs 7a6 szakaszai: 4/6 ugyanaz az alak → ítélet."""
+    from handball.pipeline.setplays import empty_net_figures_summary
+
+    res = empty_net_figures_summary([
+        {"shape": _alak(11), "attacks": 2, "goals": 1},
+        {"shape": _alak(11, mellek=5), "attacks": 2, "goals": 0},
+        {"shape": _alak(4), "attacks": 2, "goals": 2},
+    ])
+    assert res["attacks"] == 6
+    assert res["figures"][0]["attacks"] == 4
+    assert res["figures"][0]["share_pct"] == 66.7
+    assert "a hetedik emberrel egy figurára építenek" in res["verdict"]
+
+
+def test_empty_net_figures_summary_keves_mintanal_none():
+    """A 7 a 6 ritka: 3 szakasz (a küszöb 4) → nincs ítélet; három
+    egyforma súlyú figuránál (a fő figura 33%-a) sincs."""
+    from handball.pipeline.setplays import empty_net_figures_summary
+
+    assert empty_net_figures_summary([
+        {"shape": _alak(11), "attacks": 3}])["verdict"] is None
+    harmad = empty_net_figures_summary([
+        {"shape": _alak(11), "attacks": 2}, {"shape": _alak(4), "attacks": 2},
+        {"shape": _alak(0), "attacks": 2}])
+    assert harmad["verdict"] is None
+    assert empty_net_figures_summary(None)["figures"] == []
