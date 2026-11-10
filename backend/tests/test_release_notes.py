@@ -170,3 +170,83 @@ def test_a_workflow_fajlba_irat():
         pytest.skip("nincs kiadási workflow a fában")
     text = wf.read_text(encoding="utf-8")
     assert "--out" in text, "a workflow nem fájlba íratja a jegyzetet"
+
+
+# ---- A "Kiadatlan" szakasz és a kimenetre írás (eddig közvetlen teszt nélkül) --
+
+def test_unreleased_section_a_kiadatlan_szakasz_torzse():
+    """A "## Kiadatlan (…)" szakasz törzse a fejléc nélkül, a szélein
+    üres sor nélkül — a következő szakasz (a legutóbb kiadott verzió)
+    nem szivárog bele."""
+    from scripts.release_notes import unreleased_section
+
+    assert unreleased_section(_SAMPLE) == "- Egy még ki nem adott dolog."
+    tobb = _SAMPLE.replace(
+        "- Egy még ki nem adott dolog.",
+        "- Első kiadatlan.\n  folytatás\n- Második kiadatlan.")
+    torzs = unreleased_section(tobb)
+    assert torzs == "- Első kiadatlan.\n  folytatás\n- Második kiadatlan."
+    assert "Első újdonság" not in torzs and "v0.1.24" not in torzs
+    # A fejléc zárójeles része szabad szöveg, a szakasz a fájl végéig is
+    # tarthat.
+    assert unreleased_section("## Kiadatlan\n\n- a\n- b\n") == "- a\n- b"
+
+
+def test_unreleased_section_nincs_vagy_ures_szakasznal_none():
+    """Ha nincs Kiadatlan szakasz, vagy a törzse üres (frissen lezárt
+    kiadás után), None — a hívó ilyenkor a CHANGELOG-ra mutat, nem üres
+    "Mi változott" listát ad."""
+    from scripts.release_notes import unreleased_section
+
+    assert unreleased_section("") is None
+    assert unreleased_section("# Változásnapló\n\n## v1.0.0 — kiadva\n\n- x\n"
+                              ) is None
+    ures = _SAMPLE.replace("- Egy még ki nem adott dolog.\n\n", "")
+    assert "## Kiadatlan" in ures
+    assert unreleased_section(ures) is None
+    assert unreleased_section("## Kiadatlan (a v1 óta)\n\n   \n") is None
+    # A "Kiadatlan" szó a szöveg belsejében nem szakasz-fejléc.
+    assert unreleased_section("Lásd a ## Kiadatlan részt.\n") is None
+    # Üres Kiadatlan szakasznál a leírás a CHANGELOG-ra mutat.
+    text = build("9.9.9", ures)
+    assert "lásd a CHANGELOG.md-t" in text
+    assert "Mi változott" not in text
+
+
+def test_az_eles_changelog_kiadatlan_szakasza_olvashato():
+    """Az ÉLES CHANGELOG-ban a Kiadatlan szakasz megvan és a minta illik
+    rá — a következő kiadás leírása ebből készül."""
+    import pathlib
+
+    from scripts.release_notes import unreleased_section
+
+    cl = (pathlib.Path(__file__).resolve().parent.parent.parent
+          / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "\n## Kiadatlan" in cl
+    torzs = unreleased_section(cl)
+    if torzs is not None:                      # közvetlenül kiadás után üres
+        assert torzs.startswith("- ") or torzs.startswith(">")
+        assert "\n## " not in torzs
+
+
+def test_main_kimeneti_fajl_nelkul_a_kimenetre_ir(capsys):
+    """--out nélkül a leírás a kimenetre megy (ugyanaz a szöveg, mint a
+    fájlba írt), 0-s kilépőkóddal."""
+    assert main(["0.1.24"]) == 0
+    ki = capsys.readouterr().out
+    assert ki == build("0.1.24")
+    assert "Mi változott a v0.1.24-ben" in ki
+    assert "SportMachine-Setup.exe" in ki
+
+
+def test_build_changelog_fajl_nelkul_is_kiadja_a_telepitest(monkeypatch,
+                                                            tmp_path):
+    """Ha a CHANGELOG fájl nincs meg (csonka kivétel), a kiadás leírása
+    akkor is elkészül: telepítési tudnivaló + mutató a CHANGELOG-ra."""
+    from scripts import release_notes as rn
+
+    monkeypatch.setattr(rn, "_CHANGELOG", tmp_path / "nincs.md")
+    text = rn.build("1.2.3")
+    assert "SportMachine-Setup.exe" in text
+    assert "lásd a CHANGELOG.md-t" in text
+    assert "Mi változott" not in text

@@ -202,3 +202,66 @@ def test_window_out_a_tenyleges_vagast_is_kiadja():
     assert out["found"] is True
     assert out["head_cut_s"] == info["head_cut_s"] == 75.0
     assert out["tail_cut_s"] == info["tail_cut_s"] == 0.0
+
+
+# ---- Az ablak-ítélet közvetlenül (_is_game_window) --------------------------
+
+def test_is_game_window_a_jatek_jel_negy_feltetele():
+    """Egy ablak akkor játék, ha elég mért játékos van a pályán, mindkét
+    csapatból van elég minta, a két csapat EGY térfélen van, és
+    mozognak: a játék-szakasz az, a bemelegítés (külön térfelek), a
+    bevonulás (álló sorfal) és az üres pálya nem."""
+    from handball.pipeline.game_window import _is_game_window
+
+    assert _is_game_window(_seg(0, 10, "game"), FPS) is True
+    assert _is_game_window(_seg(0, 10, "warmup"), FPS) is False
+    assert _is_game_window(_seg(0, 10, "lineup"), FPS) is False
+    assert _is_game_window(_seg(0, 10, "empty"), FPS) is False
+
+
+def test_is_game_window_keves_minta_vagy_egy_csapat_nem_jatek():
+    """Üres ablak, egyetlen kocka (nincs miből mozgást mérni), csak az
+    egyik csapat, vagy csupa becsült pozíció: nincs játék-jel — hamis,
+    nem kivétel."""
+    from handball.pipeline.game_window import _is_game_window
+
+    assert _is_game_window([], FPS) is False
+    assert _is_game_window(_seg(0, 10, "game")[:1], FPS) is False
+
+    csak_hazai = _seg(0, 10, "game")
+    for f in csak_hazai:
+        f.players = [p for p in f.players if p.team == Team.HOME] * 2
+    assert _is_game_window(csak_hazai, FPS) is False
+
+    becsult = _seg(0, 10, "game")
+    for f in becsult:
+        for p in f.players:
+            p.source = PositionSource.ESTIMATED
+    assert _is_game_window(becsult, FPS) is False
+
+
+def test_is_game_window_a_kuszobok_hatarai():
+    """A létszám-küszöb ablak-ÁTLAG (6 mért játékos / kocka): 3-3
+    játékossal épp megvan, 2-3-mal nincs; a csapat-súlypontok 12 m-nél
+    nagyobb x-távolsága bemelegítés."""
+    from handball.pipeline.game_window import (GW_MAX_SPLIT_M,
+                                               GW_MIN_PLAYERS,
+                                               _is_game_window)
+
+    assert (GW_MIN_PLAYERS, GW_MAX_SPLIT_M) == (6.0, 12.0)
+
+    def ablak(n_hazai, n_vendeg, tav):
+        frames = []
+        for i in range(50):
+            wig = 0.1 if i % 2 == 0 else -0.1
+            players = [_pl(k, Team.HOME, 20.0 + wig, 3.0 + 2 * k)
+                       for k in range(n_hazai)]
+            players += [_pl(10 + k, Team.AWAY, 20.0 + tav + wig, 3.0 + 2 * k)
+                        for k in range(n_vendeg)]
+            frames.append(Frame(t=i, players=players, ball=None))
+        return frames
+
+    assert _is_game_window(ablak(3, 3, 2.0), FPS) is True
+    assert _is_game_window(ablak(2, 3, 2.0), FPS) is False     # 5 < 6
+    assert _is_game_window(ablak(3, 3, 12.0), FPS) is True     # pont a határ
+    assert _is_game_window(ablak(3, 3, 12.5), FPS) is False    # bemelegítés

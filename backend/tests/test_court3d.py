@@ -1018,3 +1018,133 @@ def test_a_jegyzet_abra_a_legkozelebbi_kocka_jatekosaival():
     assert note_diagram(Match(MatchMeta(match_id="ures", home_team="A",
                                         away_team="B", fps=25.0), []),
                         0) is None
+
+
+# ---- A megbeszélés-felvétel neve (shared3d_felvetel_nev) ---------------------
+
+def test_shared3d_felvetel_nev_megtisztitja_es_levagja():
+    """A felvétel neve: csak kiírható jelek, a szélein szóköz nélkül,
+    legfeljebb SHARED3D_REC_NAME_MAX jel — az ékezet és a belső szóköz
+    megmarad."""
+    from handball.pipeline.court3d import (SHARED3D_REC_NAME_MAX,
+                                           shared3d_felvetel_nev)
+
+    assert shared3d_felvetel_nev("  Keddi videózás — védekezés \n") == \
+        "Keddi videózás — védekezés"
+    assert shared3d_felvetel_nev("Fal\x00-vál\ttás\x1b") == "Fal-váltás"
+    assert shared3d_felvetel_nev("Árvíztűrő tükörfúrógép") == \
+        "Árvíztűrő tükörfúrógép"
+    hosszu = "m" * 300
+    assert shared3d_felvetel_nev(hosszu) == "m" * SHARED3D_REC_NAME_MAX
+    assert len(shared3d_felvetel_nev("  " + hosszu)) == SHARED3D_REC_NAME_MAX
+    # A szám is név lehet (szöveggé válik).
+    assert shared3d_felvetel_nev(2026) == "2026"
+
+
+def test_shared3d_felvetel_nev_ures_ha_nincs_nev():
+    """None, üres, csupa szóköz vagy csupa vezérlőjel → üres szöveg: a
+    hívó (a mentés végpontja) tesz alapnevet ("Megbeszélés")."""
+    from handball.pipeline.court3d import shared3d_felvetel_nev
+
+    for semmi in (None, "", "   ", "\n\t ", "\x00\x1b\x7f", 0, [], {}):
+        assert shared3d_felvetel_nev(semmi) == "", repr(semmi)
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_jersey_map_trackenkent_az_elso_ismert_mezszam():
+    """track_id → mezszám: trackenként az ELSŐ ismert érték számít (a
+    későbbi, eltérő OCR-olvasat nem írja felül); mezszám nélküli track
+    nincs a szótárban; üres meccsen üres."""
+    from handball.pipeline.court3d import _jersey_map
+
+    def kocka(t, mezek):
+        players = []
+        for tid, mez in mezek.items():
+            p = _pl(tid, Team.HOME, 10.0, 10.0)
+            p.jersey_number = mez
+            players.append(p)
+        return Frame(t=t, players=players, ball=None)
+
+    m = Match(MatchMeta(match_id="jm", home_team="H", away_team="A",
+                        fps=25.0),
+              [kocka(0, {1: None, 2: 9}), kocka(1, {1: 7, 2: 19}),
+               kocka(2, {1: 17, 3: None})])
+    assert _jersey_map(m) == {2: 9, 1: 7}
+    assert _jersey_map(Match(m.meta, [])) == {}
+    # A hívó módosítása nem rontja el a következő hívást.
+    _jersey_map(m)[99] = 1
+    assert 99 not in _jersey_map(m)
+
+
+def test_nearest_keeper_a_kapujahoz_legkozelebbi_kapus():
+    """A csapat kapus-jelölésű játékosa a kockán; több ilyennél (cserés
+    átfedés, hibás jelölés) a saját kapu közepéhez legközelebbi; a másik
+    csapat kapusa nem számít; kapus vagy kocka nélkül None."""
+    from handball.pipeline.court3d import _nearest_keeper
+
+    def kapus(tid, team, x, y):
+        p = _pl(tid, team, x, y)
+        p.role = "kapus"
+        return p
+
+    f = Frame(t=0, players=[kapus(90, Team.AWAY, 39.0, 10.0),
+                            kapus(91, Team.AWAY, 33.0, 4.0),
+                            kapus(80, Team.HOME, 1.0, 10.0),
+                            _pl(21, Team.AWAY, 39.5, 10.0)], ball=None)
+    assert _nearest_keeper(f, Team.AWAY, 40.0).track_id == 90
+    assert _nearest_keeper(f, Team.HOME, 0.0).track_id == 80
+    csak_mezony = Frame(t=0, players=[_pl(21, Team.AWAY, 39.5, 10.0)],
+                        ball=None)
+    assert _nearest_keeper(csak_mezony, Team.AWAY, 40.0) is None
+    assert _nearest_keeper(None, Team.AWAY, 40.0) is None
+    assert _nearest_keeper(Frame(t=0, players=[], ball=None), Team.HOME,
+                           0.0) is None
+
+
+def test_post_segment_distance_a_kapufak_kozti_szakasztol():
+    """A pont távolsága a két kapufa közti szakasztól (ebből adódik a
+    6 és a 9 m-es vonal): a kapu előtt a gólvonaltól mért távolság, a
+    kapufán kívül a közelebbi kapufától."""
+    from handball.pipeline.court3d import _post_segment_distance
+
+    assert _post_segment_distance(34.0, 10.0, 40.0) == 6.0
+    assert _post_segment_distance(34.0, 8.5, 40.0) == 6.0     # a kapufa vonala
+    assert _post_segment_distance(40.0, 10.0, 40.0) == 0.0
+    # A felső kapufától (y = 11,5) 3-4-5 háromszög.
+    assert abs(_post_segment_distance(36.0, 14.5, 40.0) - 5.0) < 1e-9
+    assert abs(_post_segment_distance(4.0, 5.5, 0.0) - 5.0) < 1e-9
+
+
+def test_third_a_palya_harmad_a_tamadasi_irany_szerint():
+    """A pálya-harmad a TÁMADÁSI irány szerint: a megtámadott kapu
+    közelében "támadó", a saját kapunál "saját", köztük "közép" —
+    mindkét támadási irányra."""
+    from handball.pipeline.court3d import _third
+
+    # A +x kapura (x=40) támadva.
+    assert _third(38.0, 40.0) == "támadó"
+    assert _third(20.0, 40.0) == "közép"
+    assert _third(5.0, 40.0) == "saját"
+    # A x=0 kapura támadva tükrözve.
+    assert _third(2.0, 0.0) == "támadó"
+    assert _third(20.0, 0.0) == "közép"
+    assert _third(35.0, 0.0) == "saját"
+    # A harmad-határok (13,33 és 26,67 m a +x irányban).
+    assert _third(13.0, 40.0) == "saját" and _third(14.0, 40.0) == "közép"
+    assert _third(26.0, 40.0) == "közép" and _third(27.0, 40.0) == "támadó"
+
+
+def test_szam1_js_a_bongeszo_kerekitesevel():
+    """Egy tizedes, vesszővel — a böngésző toFixed(1) és az app
+    toStringAsFixed(1) kerekítésével (döntetlennél a NAGYOBB felé): a
+    0,25 itt "0,3", pedig a Python formázása "0,2"-t adna."""
+    from handball.pipeline.court3d import _szam1_js
+
+    assert _szam1_js(0.25) == "0,3"
+    assert f"{0.25:.1f}" == "0.2"               # ezért kell a segéd
+    assert _szam1_js(0.75) == "0,8"
+    assert _szam1_js(1.0) == "1,0" and _szam1_js(0) == "0,0"
+    assert _szam1_js(12.34) == "12,3" and _szam1_js(12.36) == "12,4"
+    assert _szam1_js(-0.25) == "-0,3"
+    assert _szam1_js(2) == "2,0"

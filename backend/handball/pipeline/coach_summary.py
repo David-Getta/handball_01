@@ -54,6 +54,16 @@ def _player_label(track_id: int, team_of: dict, jersey_of: dict,
     return f"{side} #{jersey}" if jersey is not None else f"{side} ({track_id}. játékos)"
 
 
+def _nagy_kezdo(szoveg: str) -> str:
+    """A szöveg első betűje nagy — a TÖBBI VÁLTOZATLAN.
+
+    A felsorolásból összefűzött szakasz-törzs ("a(z) Szeged …; a(z)
+    Veszprém …") mondatként nagybetűvel kezdődik. A `str.capitalize()`
+    erre nem jó: a maradékot KISBETŰSÍTI, így a csapatnévből "szeged",
+    az "xG"-ből "xg", a kiemelt "SZABADON"-ból "szabadon" lett."""
+    return szoveg[:1].upper() + szoveg[1:]
+
+
 def _events_section(match: Match, home: str, away: str) -> dict | None:
     from .event_detection import unseen_goal
     goals_h = goals_a = shots = saves = 0
@@ -516,7 +526,7 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     if not parts:
         return None, highlights
     return {"title": "Védekezés",
-            "body": ("; ".join(parts) + ".").capitalize()}, highlights
+            "body": _nagy_kezdo("; ".join(parts) + ".")}, highlights
 
 
 def _style_section(match: Match, home: str, away: str) -> dict | None:
@@ -7836,7 +7846,7 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         pass
     if not parts:
         return None
-    return {"title": "Kapusok", "body": "; ".join(parts).capitalize() + "."}
+    return {"title": "Kapusok", "body": _nagy_kezdo("; ".join(parts)) + "."}
 
 
 def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:
@@ -7867,14 +7877,18 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         why = f" — {', '.join(r['context'])}" if r.get("context") else ""
         parts.append(f"{name} {r['length']} gólos sorozata a {clock(r['start_frame'])}"
                      f"–{clock(r['end_frame'])} között (állás utána {h}–{a}){why}")
-    # A leghosszabb sorozat külön "mire nézz rá" jelzést kap.
-    top = max(runs, key=lambda r: r["length"])
-    tname = names.get(top["team"], top["team"])
-    highlights.append(
-        f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, mi "
-        "működött, és a másik oldalon hol akadt el a játék (időkérés, "
-        "védekezés-váltás).")
-    body = "; ".join(parts).capitalize() + "." if parts else ""
+    # A leghosszabb sorozat külön "mire nézz rá" jelzést kap — HA volt
+    # sorozat. Fordulásos, de sorozat nélküli (szoros, oda-vissza) meccsen
+    # a szakasz a fordulásokról szól: ott az üres listán hívott max()
+    # kivétele az EGÉSZ szakaszt elvitte (a hívó try/except-je elnyelte).
+    if runs:
+        top = max(runs, key=lambda r: r["length"])
+        tname = names.get(top["team"], top["team"])
+        highlights.append(
+            f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, "
+            "mi működött, és a másik oldalon hol akadt el a játék (időkérés, "
+            "védekezés-váltás).")
+    body = _nagy_kezdo("; ".join(parts)) + "." if parts else ""
     if prog and prog["lead_changes"] >= 1:
         names = {"home": home, "away": away}
         bl = prog["biggest_lead"]
@@ -8229,7 +8243,7 @@ def _coach_summary_cached(match: Match) -> dict:
                             f"gól, {best[1]['goal_pct']:.0f}%)")
         if bits:
             sections.append({"title": "Támadás-hatékonyság",
-                             "body": ("; ".join(bits) + ".").capitalize()})
+                             "body": _nagy_kezdo("; ".join(bits) + ".")})
     except Exception:
         pass
 
@@ -8255,7 +8269,7 @@ def _coach_summary_cached(match: Match) -> dict:
                 f"dobott és {rec['goals_against_after']} kapott gól")
         if parts:
             sections.append({"title": "Cserék",
-                             "body": ("; ".join(parts) + ".").capitalize()})
+                             "body": _nagy_kezdo("; ".join(parts) + ".")})
     except Exception:
         pass
 
@@ -8425,7 +8439,7 @@ def _coach_summary_cached(match: Match) -> dict:
                     "figurákat gyakorolni.")
         if parts:
             sections.append({"title": "Kiállítások és hétméteresek",
-                             "body": (" · ".join(parts)).capitalize() + "."})
+                             "body": _nagy_kezdo(" · ".join(parts)) + "."})
         if passive:
             highlights.append(
                 f"{len(passive)} hosszú, lövés nélküli felállt támadás volt "

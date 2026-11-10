@@ -176,3 +176,78 @@ def test_a_klub_halozat_az_appbol():
             os.environ.pop("HANDBALL_HOST", None)
         else:
             os.environ["HANDBALL_HOST"] = regi
+
+
+# ---- Az őr telepítője közvetlenül (harmadik kör) ----------------------------
+
+def _csupasz_app(monkeypatch, host):
+    """Egy csupasz FastAPI alkalmazás két úttal — csak az őr telepítője
+    fut rá (a teljes motor nélkül)."""
+    from fastapi import FastAPI
+
+    from handball.api.app import _halozati_or_telepit
+
+    if host is None:
+        monkeypatch.delenv("HANDBALL_HOST", raising=False)
+    else:
+        monkeypatch.setenv("HANDBALL_HOST", host)
+    app = FastAPI()
+
+    @app.get("/kovet")
+    def kovet():
+        return {"ok": "kovet"}
+
+    @app.get("/titkos")
+    def titkos():
+        return {"ok": "titkos"}
+
+    @app.post("/kovet")
+    def kovet_iras():
+        return {"ok": "iras"}
+
+    _halozati_or_telepit(app)
+    return app
+
+
+def test_halozati_or_telepit_alapbol_nem_telepit_semmit(monkeypatch):
+    """Alapból (a motor csak a saját gépen hallgat: nincs HANDBALL_HOST,
+    vagy az 127.0.0.1 / localhost / ::1 / üres) az őr NINCS telepítve —
+    egy "távoli" kérés is mindent elér (a hálózat felől úgysem jöhet)."""
+    for host in (None, "127.0.0.1", "localhost", "::1", "", "  "):
+        app = _csupasz_app(monkeypatch, host)
+        assert app.user_middleware == [], host
+        tavoli = TestClient(app, client=("192.168.1.23", 50000))
+        assert tavoli.get("/titkos").json() == {"ok": "titkos"}
+
+
+def test_halozati_or_telepit_nyitott_motornal_csak_az_engedett_ut(
+        monkeypatch):
+    """Hálózatra nyitott motornál (HANDBALL_HOST = 0.0.0.0 vagy a gép
+    címe) a más gépről jövő kérés csak az engedett út + módszer párost
+    éri el; a többi 403 beszélő üzenettel — a nem létező út is (az őr az
+    útválasztás előtt áll)."""
+    for host in ("0.0.0.0", "192.168.1.10"):
+        app = _csupasz_app(monkeypatch, host)
+        assert len(app.user_middleware) == 1, host
+        tavoli = TestClient(app, client=("192.168.1.23", 50000))
+        assert tavoli.get("/kovet").json() == {"ok": "kovet"}
+        for valasz in (tavoli.get("/titkos"), tavoli.get("/nincs-ilyen"),
+                       tavoli.post("/kovet")):      # a /kovet csak GET-tel
+            assert valasz.status_code == 403
+            assert valasz.json()["detail"].startswith(
+                "a hálózatról csak a közös nézés érhető el")
+
+
+def test_halozati_or_telepit_a_sajat_geprol_minden_megy(monkeypatch):
+    """A saját gépről (loopback IPv4 / IPv6, "localhost") a nyitott
+    motornál is minden megy; ami nem cím és nem "localhost" (ismeretlen
+    kliens), az távolinak számít — az őr a biztonságos oldalra téved."""
+    app = _csupasz_app(monkeypatch, "0.0.0.0")
+    for cim in ("127.0.0.1", "127.0.0.53", "::1", "localhost"):
+        helyi = TestClient(app, client=(cim, 50000))
+        assert helyi.get("/titkos").json() == {"ok": "titkos"}, cim
+        assert helyi.post("/kovet").json() == {"ok": "iras"}, cim
+    for cim in ("testclient", "10.0.0.5", "nem-cim"):
+        idegen = TestClient(app, client=(cim, 50000))
+        assert idegen.get("/titkos").status_code == 403, cim
+        assert idegen.get("/kovet").status_code == 200, cim

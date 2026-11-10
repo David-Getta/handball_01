@@ -204,3 +204,63 @@ if __name__ == "__main__":
     test_same_jersey_candidate_wins()
     test_rename_out_reports_final_mapping()
     print("Minden track-összefűzés teszt OK.")
+
+
+# ---- A track-átlagszín (_mean_colors) -------------------------------------------
+
+def test_mean_colors_trackenkent_atlagol():
+    """Trackenként a színminták csatornánkénti átlaga (r, g, b) — egy
+    mintánál maga a minta; a lista és a tuple minta egyaránt jó."""
+    from handball.pipeline.track_stitch import _mean_colors
+
+    ki = _mean_colors({
+        1: [(240, 240, 240), (200, 220, 230), (220, 200, 250)],
+        2: [(20, 30, 40)],
+        3: [[10, 20, 30], [30, 40, 50]],
+    })
+    assert ki == {1: (220.0, 220.0, 240.0), 2: (20.0, 30.0, 40.0),
+                  3: (20.0, 30.0, 40.0)}
+    assert all(isinstance(v, tuple) and len(v) == 3 for v in ki.values())
+
+
+def test_mean_colors_minta_nelkuli_track_kimarad():
+    """Akinek nincs színmintája (üres lista / None), az nem kap átlagszínt
+    (nem fekete, nem szürke — egyszerűen nincs a szótárban); None vagy
+    üres bemenetre üres szótár."""
+    from handball.pipeline.track_stitch import _mean_colors
+
+    assert _mean_colors({1: [], 2: None, 3: [(5, 6, 7)]}) == {
+        3: (5.0, 6.0, 7.0)}
+    assert _mean_colors(None) == {}
+    assert _mean_colors({}) == {}
+
+
+def test_szin_nelkul_a_ter_ido_dont_szinnel_a_szin_is_beleszol():
+    """A VALÓDI felhasználóval: a színminta nélküli track az összefűzésnél
+    nem akad meg a szín-kapun (nincs mihez mérni), a nagyon eltérő
+    átlagszínű viszont igen."""
+    from handball.models.tracking import (Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.track_stitch import stitch_tracks
+
+    def meccs():
+        frames = []
+        for t in range(10):                      # az 1-es track
+            frames.append(Frame(t=t, players=[PlayerPosition(
+                track_id=1, team=Team.HOME, x=10.0 + 0.1 * t, y=10.0,
+                source=PositionSource.MEASURED, confidence=1.0)], ball=None))
+        for t in range(12, 22):                  # a 2-es ott folytatja
+            frames.append(Frame(t=t, players=[PlayerPosition(
+                track_id=2, team=Team.HOME, x=11.2 + 0.1 * (t - 12), y=10.0,
+                source=PositionSource.MEASURED, confidence=1.0)], ball=None))
+        return Match(MatchMeta(match_id="mc", home_team="H", away_team="A",
+                               fps=25.0), frames)
+
+    assert stitch_tracks(meccs()) == 1                       # szín nélkül
+    assert stitch_tracks(meccs(), colors_by_track={1: [], 2: []}) == 1
+    feher, fekete = [(240, 240, 240)] * 3, [(10, 10, 10)] * 3
+    assert stitch_tracks(meccs(),
+                         colors_by_track={1: feher, 2: feher}) == 1
+    assert stitch_tracks(meccs(),
+                         colors_by_track={1: feher, 2: fekete}) == 0

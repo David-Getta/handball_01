@@ -972,3 +972,108 @@ def test_a_videozando_csomag_kapott_lerohanasa_a_befejezes_kore(tmp_path,
     kontra = [e for e in elkapott["ev"] if e["type"] == "key_scene"
               and e.get("label") == "kapott-lerohanas"]
     assert [e["t"] for e in kontra] == [vart[round(r["s"], 2)] for r in sorok]
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_clock_fajlnevbe_illo_perc_masodperc():
+    """A klip fájlnevébe kerülő játékóra: "pp-mm" (kettőspont nélkül,
+    két számjeggyel) — a fájlok név szerint időrendben állnak."""
+    from handball.pipeline.clips import _clock
+
+    assert _clock(0) == "00-00" and _clock(83.9) == "01-23"
+    assert _clock(600) == "10-00" and _clock(3599) == "59-59"
+    assert _clock(3725) == "62-05"                # egy óra fölött is perc
+    assert sorted([_clock(700), _clock(65), _clock(8)]) == [
+        "00-08", "01-05", "11-40"]
+
+
+def test_segment_of_melyik_forras_szakaszba_esik_a_kocka():
+    """A játékidő-kockához tartozó forrás-szakasz: a kezdet benne van, a
+    vég már nem (a következő szakaszé); a nyitott végű (None) utolsó
+    szakasz a meccs végéig tart; szakaszon kívüli kockára None."""
+    from handball.pipeline.clips import _segment_of
+
+    szakaszok = [{"t_from": 0, "t_to": 100, "video": "a.mp4"},
+                 {"t_from": 100, "t_to": 250, "video": "b.mp4"},
+                 {"t_from": 300, "t_to": None, "video": "c.mp4"}]
+    assert _segment_of(szakaszok, 0)["video"] == "a.mp4"
+    assert _segment_of(szakaszok, 99)["video"] == "a.mp4"
+    assert _segment_of(szakaszok, 100)["video"] == "b.mp4"
+    assert _segment_of(szakaszok, 249)["video"] == "b.mp4"
+    assert _segment_of(szakaszok, 250) is None            # lyuk a darabok közt
+    assert _segment_of(szakaszok, 300)["video"] == "c.mp4"
+    assert _segment_of(szakaszok, 10 ** 9)["video"] == "c.mp4"
+    assert _segment_of(szakaszok, -1) is None
+    assert _segment_of([], 5) is None
+
+
+def test_jersey_of_track_az_elso_ismert_mezszam():
+    """A klip-motor mezszám-térképe ugyanaz a szabály, mint a 3D
+    rétegeké: trackenként az első ismert mezszám."""
+    from handball.models.tracking import PlayerPosition, Team
+    from handball.pipeline.clips import _jersey_of_track
+    from handball.pipeline.court3d import _jersey_map
+
+    def kocka(t, mez):
+        return Frame(t=t, players=[PlayerPosition(
+            track_id=1, team=Team.HOME, x=10.0, y=10.0, jersey_number=mez)],
+            ball=None)
+
+    m = Match(MatchMeta(match_id="jt", home_team="H", away_team="A",
+                        fps=25.0), [kocka(0, None), kocka(1, 7), kocka(2, 17)])
+    assert _jersey_of_track(m) == {1: 7} == _jersey_map(m)
+    assert _jersey_of_track(Match(m.meta, [])) == {}
+
+
+def _skala10():
+    # Pixel → méter: 10 px = 1 m (a 400×200-as kép a teljes pálya).
+    return [[0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 1.0]]
+
+
+def test_draw_arrows_on_frame_a_nyil_a_kalibracioval_a_kepre_kerul():
+    """A jegyzet nyila pálya-méterből pixelre vetítve kerül a kockára, a
+    3D nyíl színével: a szár mentén a nyíl színe látszik, a kép többi
+    része érintetlen; a függvény a rajzolt nyilak számát adja."""
+    from handball.pipeline.clips import _draw_arrows_on_frame
+    from handball.pipeline.court3d import DRAWING_COLORS
+
+    img = np.full((200, 400, 3), 30, np.uint8)
+    n = _draw_arrows_on_frame(img, [(10.0, 10.0, 20.0, 10.0, 0)],
+                              [(_skala10(), "full")], None, 0.0)
+    assert n == 1
+    h = DRAWING_COLORS[0]
+    szin_bgr = (int(h[4:6], 16), int(h[2:4], 16), int(h[0:2], 16))
+    assert tuple(int(v) for v in img[100, 150]) == szin_bgr   # a szár közepe
+    assert tuple(int(v) for v in img[20, 20]) == (30, 30, 30)  # a sarok
+    assert tuple(int(v) for v in img[100, 300]) == (30, 30, 30)  # a hegyen túl
+    # A másik szín-kód más színnel rajzol.
+    img2 = np.full((200, 400, 3), 30, np.uint8)
+    _draw_arrows_on_frame(img2, [(10.0, 10.0, 20.0, 10.0, 2)],
+                          [(_skala10(), "full")], None, 0.0)
+    assert tuple(int(v) for v in img2[100, 150]) != szin_bgr
+
+
+def test_draw_arrows_on_frame_kalibracio_vagy_nyil_nelkul_nem_rajzol():
+    """Nyíl nélkül, kalibráció nélkül, vagy ha a nyíl térfelére nincs
+    kalibráció (csak a bal térfélé van, a nyíl a jobbon), semmi sem
+    rajzolódik: 0, és a kép változatlan."""
+    from handball.pipeline.clips import _draw_arrows_on_frame
+
+    def ures():
+        return np.full((200, 400, 3), 30, np.uint8)
+
+    img = ures()
+    assert _draw_arrows_on_frame(img, [], [(_skala10(), "full")], None,
+                                 0.0) == 0
+    assert _draw_arrows_on_frame(img, [(10.0, 10.0, 20.0, 10.0, 0)], [],
+                                 None, 0.0) == 0
+    jobb_terfel = [(30.0, 10.0, 36.0, 10.0, 0)]
+    assert _draw_arrows_on_frame(img, jobb_terfel, [(_skala10(), "left")],
+                                 None, 0.0) == 0
+    assert np.array_equal(img, ures())
+    # A jobb térfél kalibrációjával ugyanez a nyíl megrajzolható.
+    assert _draw_arrows_on_frame(img, jobb_terfel, [(_skala10(), "left"),
+                                                    (_skala10(), "right")],
+                                 None, 0.0) == 1
+    assert not np.array_equal(img, ures())

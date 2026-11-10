@@ -1510,3 +1510,189 @@ def test_a_dontes_proba_mintaja_a_dontesek_utani_golokbol(monkeypatch):
     assert sum(valodi["home"]["jo"][:1] + valodi["home"]["rossz"][:1]) == \
         sum(1 for r in recs if r["side"] == "home")
     assert valodi["home"]["jo"][1] == valodi["home"]["rossz"][1] == 0
+
+
+# ---- A névelő a választás / helyzet elé (sit_article) ------------------------
+
+def test_sit_article_a_valasztasok_elott():
+    """A mondatok ("pedig az átadás érne többet") névelője: magánhangzó
+    előtt "az", mássalhangzó előtt "a" — a réteg MINDEN választására és
+    helyzetére."""
+    from handball.pipeline.decisions import (SIT_ACTIONS, SIT_SITUATIONS,
+                                             sit_article)
+
+    vart = {"lövés": "a", "passz a 6 m-re": "a", "passz a szélre": "a",
+            "visszajátszás": "a", "átadás": "az"}
+    assert set(vart) == set(SIT_ACTIONS)        # új választásnál bővítendő
+    for szo, nevelo in vart.items():
+        assert sit_article(szo) == nevelo, szo
+    for helyzet in SIT_SITUATIONS:              # mind mássalhangzóval kezd
+        assert sit_article(helyzet) == "a", helyzet
+
+
+def test_sit_article_ekezetes_es_nagybetus_maganhangzo():
+    """Az ékezetes magánhangzók (á é í ó ö ő ú ü ű) és a nagybetűs
+    kezdet is "az"-t kap; a mássalhangzó nagybetűvel is "a"."""
+    from handball.pipeline.decisions import sit_article
+
+    for szo in ("alapállás", "átlövés", "elzárás", "építés", "indítás",
+                "ív", "oldal", "óra", "ötös", "őr", "ugrás", "út",
+                "ütem", "űr", "Átadás", "Indítás", "Ötös"):
+        assert sit_article(szo) == "az", szo
+    for szo in ("beálló", "csel", "gyors indítás", "szélső", "zárás",
+                "Lövés", "Passz a szélre", "y-tengely"):
+        assert sit_article(szo) == "a", szo
+
+
+def test_sit_article_csak_az_elso_betu_szamit():
+    """A szó belseje nem számít (a "passz a szélre" belsejében álló "a"
+    nem ad "az"-t), és a szám / írásjel kezdet "a"."""
+    from handball.pipeline.decisions import sit_article
+
+    assert sit_article("passz az átlövőnek") == "a"
+    assert sit_article("átadás a beállónak") == "az"
+    assert sit_article("6 m-es passz") == "a"
+    assert sit_article("\"átadás\"") == "a"
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_point_segment_distance_a_szakaszhoz_nem_az_egyeneshez():
+    """A pont távolsága a SZAKASZTÓL (a passz vonalának ellenőrzéséhez):
+    a szakasz mellett a merőleges távolság, a végeken túl a közelebbi
+    végponttól mért — az elfajult (nulla hosszú) szakasznál a ponttól."""
+    from handball.pipeline.decisions import _point_segment_distance
+
+    # A (0,0)–(10,0) szakasz fölött 3 m-rel.
+    assert _point_segment_distance(5.0, 3.0, 0.0, 0.0, 10.0, 0.0) == 3.0
+    # A szakaszon rajta.
+    assert _point_segment_distance(4.0, 0.0, 0.0, 0.0, 10.0, 0.0) == 0.0
+    # A végen túl: a (10,0) végponttól 5 m (3-4-5 háromszög).
+    assert _point_segment_distance(13.0, 4.0, 0.0, 0.0, 10.0, 0.0) == 5.0
+    assert _point_segment_distance(-3.0, 4.0, 0.0, 0.0, 10.0, 0.0) == 5.0
+    # Nulla hosszú szakasz: a ponttól mért távolság, osztás nélkül.
+    assert _point_segment_distance(3.0, 4.0, 0.0, 0.0, 0.0, 0.0) == 5.0
+    # Ferde szakasz: a (0,0)–(10,10) átlótól a (10,0) pont 7,07 m-re van.
+    assert abs(_point_segment_distance(10.0, 0.0, 0.0, 0.0, 10.0, 10.0)
+               - 50.0 ** 0.5) < 1e-9
+
+
+def test_ball_holder_a_labdahoz_legkozelebbi_a_sugaron_belul():
+    """A birtokos a labdához legközelebbi játékos, ha a birtoklási
+    sugáron belül van; labda vagy játékos nélkül, illetve gazdátlan
+    (messzi) labdánál None."""
+    from handball.pipeline.decisions import _ball_holder
+
+    cfg = TacticsConfig(possession_radius_m=3.0)
+
+    def pl(tid, x, y, team=Team.HOME):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    labda = Ball(x=20.0, y=10.0, confidence=1.0)
+    f = Frame(t=0, players=[pl(1, 22.0, 10.0), pl(2, 21.0, 10.5),
+                            pl(11, 25.0, 10.0, Team.AWAY)], ball=labda)
+    assert _ball_holder(f, cfg).track_id == 2
+    # Pont a sugáron még birtokos, kicsivel túl már nem.
+    assert _ball_holder(Frame(t=0, players=[pl(1, 23.0, 10.0)], ball=labda),
+                        cfg).track_id == 1
+    assert _ball_holder(Frame(t=0, players=[pl(1, 23.1, 10.0)], ball=labda),
+                        cfg) is None
+    assert _ball_holder(Frame(t=0, players=[pl(1, 20.0, 10.0)], ball=None),
+                        cfg) is None
+    assert _ball_holder(Frame(t=0, players=[], ball=labda), cfg) is None
+
+
+def test_from_area_m_tavolsag_a_hatos_vonalatol():
+    """A kapuelőtér (6 m-es) vonalától mért távolság: a kapufák között a
+    gólvonaltól mért távolság − 6, a kapufán kívül a közelebbi kapufától
+    mérve; a vonalon és azon belül 0 (nem negatív)."""
+    from handball.pipeline.decisions import _from_area_m
+
+    assert _from_area_m(31.0, 10.0, 40.0) == 3.0          # 9 m-ről: 3 m
+    assert _from_area_m(34.0, 10.0, 40.0) == 0.0          # a vonalon
+    assert _from_area_m(37.0, 10.0, 40.0) == 0.0          # a hatoson belül
+    assert _from_area_m(9.0, 9.0, 0.0) == 3.0             # a másik kapunál
+    # A kapufán kívül: a felső kapufától (y = 11,5) 10 m-re (6-8-10) → 4 m.
+    assert abs(_from_area_m(32.0, 17.5, 40.0) - 4.0) < 1e-9
+    assert abs(_from_area_m(32.0, 2.5, 40.0) - 4.0) < 1e-9
+
+
+def test_jatekos_szorzo_a_lovo_es_a_kapus_savja():
+    """A játékos-modell szorzója egy lövőhelyre: a lövő tanult szorzója a
+    hely sávjában × a szemközti kapus sáv-szorzója; modell, mezszám vagy
+    tanult sáv nélkül 1 (átlagos lövő, átlagos kapus)."""
+    from types import SimpleNamespace
+
+    from handball.pipeline.decisions import _jatekos_szorzo
+    from handball.pipeline.play_simulation import kapus_sav
+
+    lovo = PlayerPosition(track_id=1, team=Team.HOME, x=31.0, y=10.0,
+                          jersey_number=9)
+    sav = kapus_sav(31.0, 10.0, 40.0)
+    tamadas = SimpleNamespace(lovok={9: {sav: 1.2}, 7: {sav: 0.8}})
+    kapus = {sav: 1.1}
+    assert abs(_jatekos_szorzo(lovo, 40.0, tamadas, kapus) - 1.32) < 1e-9
+    assert _jatekos_szorzo(lovo, 40.0, tamadas, None) == 1.2
+    assert _jatekos_szorzo(lovo, 40.0, None, kapus) == 1.1
+    assert _jatekos_szorzo(lovo, 40.0, None, None) == 1.0
+    assert _jatekos_szorzo(lovo, 40.0, None, {}) == 1.0
+    # Mezszám nélkül / nem tanult lövő / nem tanult sáv: 1.
+    nevtelen = PlayerPosition(track_id=2, team=Team.HOME, x=31.0, y=10.0)
+    assert _jatekos_szorzo(nevtelen, 40.0, tamadas, None) == 1.0
+    idegen = PlayerPosition(track_id=3, team=Team.HOME, x=31.0, y=10.0,
+                            jersey_number=44)
+    assert _jatekos_szorzo(idegen, 40.0, tamadas, None) == 1.0
+    assert _jatekos_szorzo(lovo, 40.0, tamadas, {"masik-sav": 9.0}) == 1.2
+
+
+def test_modell_felirat_a_lovok_es_a_kapusuk_sora():
+    """A döntés-modell felirata: a lövők sora és a szemközti kapus sora
+    ("a kapusuk …"), pontosvesszővel; ha egyik sem mond érdemit, üres."""
+    from handball.pipeline.decisions import _modell_felirat
+    from handball.pipeline.play_simulation import (kapus_felirat,
+                                                   lovo_felirat)
+
+    assert _modell_felirat(None, {}) == ""
+    assert _modell_felirat(None, None) == ""
+    kapus = {"far": 1.2}
+    kapus_sor = kapus_felirat(kapus)
+    assert kapus_sor, "a próba-kapus szorzója elég nagy a felirathoz"
+    felirat = _modell_felirat(None, kapus)
+    assert felirat == kapus_sor.replace("a kapus ", "a kapusuk ", 1)
+    assert "a kapusuk" in felirat and lovo_felirat(None) == ""
+
+
+# ---- A felderítés darabszám-alapú szokása a motorral egyezik (3. kör) -------
+
+def test_a_felderites_helyzet_szokasa_egyezik_a_motorral():
+    """ŐR a valódi láncon: a felderítés a tárolt darabszámokból
+    (scouting._sit_habit) UGYANAZT a helyzetet, szokást és legjobb
+    opciót nevezi meg, ugyanazokkal a százalékokkal, mint a motor
+    (situational_decisions) ítélete — két meccs összegéből is; ahol a
+    motor hallgat (a legjobbat választják, kevés a döntés, a másik
+    csapat), ott a felderítés is None."""
+    from handball.pipeline.decisions import situational_decisions
+    from handball.pipeline.scouting import (_sit_habit, combine_reports,
+                                            scout_team)
+
+    meccs = _sit_match()
+    motor = situational_decisions(meccs)["home"]
+    rep = scout_team(meccs, Team.HOME)
+    szokas = _sit_habit(rep)
+    assert szokas == ("kilépnek rá", "visszajátszás", "passz a 6 m-re",
+                      100.0, 0.0, 10)
+    assert szokas[:3] == (motor["situation"], motor["habit"],
+                          motor["best_action"])
+    # A motor mondata ugyanezekkel a százalékokkal beszél.
+    assert f"a döntéseik {szokas[3]:.0f}%-a {szokas[1]}" in motor["verdict"]
+    assert f"csak {szokas[4]:.0f}%-ban" in motor["verdict"]
+    # Két meccs: a darabszámok összeadódnak, a szokás ugyanaz.
+    ossz = combine_reports([rep, scout_team(_sit_match(match_id="s2"),
+                                            Team.HOME)])
+    assert _sit_habit(ossz) == szokas[:5] + (20,)
+    # Ahol a motor hallgat, a felderítés is.
+    for csendes, oldal in ((_sit_match(target=2), Team.HOME),
+                           (_sit_match(n=3), Team.HOME),
+                           (meccs, Team.AWAY)):
+        assert situational_decisions(csendes)[oldal.value]["verdict"] is None
+        assert _sit_habit(scout_team(csendes, oldal)) is None

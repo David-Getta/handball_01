@@ -219,3 +219,72 @@ def test_a_fuzio_a_kozos_tar_irason_megy(tmp_path, monkeypatch):
     # Újrafűzés ugyanazon a néven: a régi jelentés kiesik a tárból.
     assert client.post("/matches/fuse", json=keres).status_code == 200
     assert not any(k[0] == "fuzio-tar" for k in tar), sorted(tar)
+
+
+# ---- Egy kocka észleléseinek egyesítése (_fuse_players) ----------------------
+
+def _szerepes(tid, team, x, y, role=None):
+    p = _pl(tid, team, x, y)
+    p.role = role
+    return p
+
+
+def test_fuse_players_a_kozeli_azonos_csapatu_eszlelesek_egy_jatekos():
+    """Két nézet 1,5 m-en belüli, azonos csapatú észlelése egy játékos: a
+    pozíció az átlag, a nézet-szám 2; a távolabbi észlelés és a másik
+    csapat játékosa (akár ugyanott) külön marad."""
+    from handball.pipeline.fusion import FUSE_RADIUS_M, _fuse_players
+
+    assert FUSE_RADIUS_M == 1.5
+    a = [_pl(1, Team.HOME, 10.0, 10.0), _pl(2, Team.HOME, 20.0, 5.0)]
+    b = [_pl(7, Team.HOME, 10.4, 10.2),          # ugyanaz, mint az 1-es
+         _pl(8, Team.HOME, 23.0, 5.0),           # 3 m-re a 2-estől: más
+         _pl(9, Team.AWAY, 10.1, 10.0)]          # ugyanott, de vendég
+    ki = _fuse_players([a, b])
+    assert len(ki) == 4
+    egy = ki[0]
+    assert abs(egy["x"] - 10.2) < 1e-9 and abs(egy["y"] - 10.1) < 1e-9
+    assert egy["n_views"] == 2 and egy["team"] == Team.HOME
+    assert [c["n_views"] for c in ki[1:]] == [1, 1, 1]
+    assert {c["team"] for c in ki} == {Team.HOME, Team.AWAY}
+
+
+def test_fuse_players_harom_nezet_atlaga_es_a_szerep_megmarad():
+    """Három nézet észlelése futó átlaggal egyesül (mindhárom egyforma
+    súllyal); a szerepet (pl. kapus) az a nézet adja, amelyik ismeri —
+    a már ismert szerepet a későbbi nézet nem írja felül."""
+    from handball.pipeline.fusion import _fuse_players
+
+    ki = _fuse_players([
+        [_szerepes(1, Team.HOME, 1.0, 10.0)],
+        [_szerepes(1, Team.HOME, 1.3, 10.3, role="kapus")],
+        [_szerepes(1, Team.HOME, 0.7, 9.7, role="beálló")]])
+    assert len(ki) == 1
+    assert abs(ki[0]["x"] - 1.0) < 1e-9 and abs(ki[0]["y"] - 10.0) < 1e-9
+    assert ki[0]["n_views"] == 3 and ki[0]["role"] == "kapus"
+
+
+def test_fuse_players_a_legkozelebbi_klaszterhez_csatlakozik():
+    """Ha egy észlelés két meglévő játékoshoz is elég közel van, a
+    KÖZELEBBIHEZ csatlakozik (nem az elsőhöz a listában)."""
+    from handball.pipeline.fusion import _fuse_players
+
+    a = [_pl(1, Team.HOME, 10.0, 10.0), _pl(2, Team.HOME, 12.0, 10.0)]
+    b = [_pl(3, Team.HOME, 11.4, 10.0)]          # 1,4 m és 0,6 m
+    ki = _fuse_players([a, b])
+    assert [c["n_views"] for c in ki] == [1, 2]
+    assert abs(ki[1]["x"] - 11.7) < 1e-9
+
+
+def test_fuse_players_ures_nezetekre_ures_lista():
+    """Nézet nélkül, vagy ha egyik nézet sem lát játékost, nincs kit
+    egyesíteni: üres lista; egyetlen nézet észlelései változatlanul
+    (egy-egy nézettel) mennek tovább."""
+    from handball.pipeline.fusion import _fuse_players
+
+    assert _fuse_players([]) == []
+    assert _fuse_players([[], []]) == []
+    egy = _fuse_players([[_pl(1, Team.HOME, 5.0, 5.0),
+                          _pl(2, Team.AWAY, 30.0, 12.0)]])
+    assert [(c["x"], c["y"], c["n_views"]) for c in egy] == [
+        (5.0, 5.0, 1), (30.0, 12.0, 1)]

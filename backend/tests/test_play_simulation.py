@@ -3792,3 +3792,434 @@ def test_a_szuper_csere_valasztas_es_probaja(monkeypatch):
                              "támadása gól nélkül — hozd be a 14-est: "
                              + kc["verdict"])
     assert live_super_sub_alerts(m, None) == {"alerts": []}
+
+
+# ---- A vonal védői és a védőnkénti kettőzés (DefenseModel) -------------------
+
+def test_vonal_vedok_a_rendszer_eloretoltjai_nelkul():
+    """Hat védőből a 6-0 mind a vonalban áll, az 5-1-ben öt, a 4-2-ben
+    négy, a 3-2-1-ben és a 3-3-ban három — és a `respond` kimenetének
+    első ennyi eleme a vonal (y szerint növekvő), utána az előretoltak."""
+    from handball.pipeline.play_simulation import VEDEKEZESI_RENDSZEREK
+
+    vart = {"6-0": 6, "5-1": 5, "4-2": 4, "3-2-1": 3, "3-3": 3}
+    assert set(vart) == set(VEDEKEZESI_RENDSZEREK)
+    labda = Ball(x=25.0, y=10.0, confidence=1.0)      # lőtávolságon kívül
+    for rendszer, n in vart.items():
+        fal = DefenseModel(rendszer=rendszer)
+        assert fal.vonal_vedok() == n, rendszer
+        helyek = fal.respond(labda, 40.0)
+        assert len(helyek) == 6, rendszer
+        vonal_y = [y for _, y in helyek[:n]]
+        assert vonal_y == sorted(vonal_y), rendszer
+        # A vonal a kapuhoz közelebb áll, mint bármelyik előretolt.
+        if n < 6:
+            assert max(x for x, _ in helyek[n:]) < min(
+                x for x, _ in helyek[:n]), rendszer
+
+
+def test_vonal_vedok_keves_vedonel_legalabb_egy_a_vonalban():
+    """Kevés védőnél (kiállítás) az előretoltakból csak annyi marad, hogy
+    legalább egy védő a vonalban álljon; ismeretlen rendszer = 6-0;
+    nulla/negatív védőszám is egy védőnek számít (nem oszt nullával)."""
+    assert DefenseModel(num_defenders=2, rendszer="3-3").vonal_vedok() == 1
+    assert DefenseModel(num_defenders=3, rendszer="3-2-1").vonal_vedok() == 1
+    assert DefenseModel(num_defenders=5, rendszer="5-1").vonal_vedok() == 4
+    assert DefenseModel(num_defenders=1, rendszer="5-1").vonal_vedok() == 1
+    assert DefenseModel(num_defenders=0, rendszer="4-2").vonal_vedok() == 1
+    assert DefenseModel(rendszer="ismeretlen").vonal_vedok() == 6
+    assert DefenseModel(num_defenders=7).vonal_vedok() == 7
+
+
+def test_vedo_kettozes_a_sajat_hajlam_kulonben_a_csapate():
+    """A vonal-védő SAJÁT kettőzési hajlama számít, ha ismert; ha a
+    védőé None (kevés minta), ha a slot az előretoltaké, vagy ha nincs
+    ennyi tanult védő, a csapat-szintű hajlam marad."""
+    vedok = [{"mez": 2, "press_rate": 0.9, "double_rate": 0.8},
+             {"mez": 3, "press_rate": None, "double_rate": None},
+             {"mez": 4, "press_rate": 0.0, "double_rate": 0.0}]
+    fal = DefenseModel(double_rate=0.25, press_rate=0.4, vedok=vedok)
+    assert fal.vedo_kettozes(0) == 0.8
+    assert fal.vedo_kettozes(1) == 0.25        # None → a csapaté
+    assert fal.vedo_kettozes(2) == 0.0         # a tanult 0 nem "hiány"
+    assert fal.vedo_kettozes(5) == 0.25        # nincs ennyi tanult védő
+    # A kilépés ugyanígy, a maga mezőjéből.
+    assert fal.vedo_kilepes(0) == 0.9
+    assert fal.vedo_kilepes(1) == 0.4
+    assert fal.vedo_kilepes(2) == 0.0
+    # 3-3-ban csak három védő áll a vonalban: a 3. slot már előretolt,
+    # rá a csapat hajlama érvényes, akkor is, ha lenne tanult sora.
+    negy = vedok + [{"mez": 5, "press_rate": 1.0, "double_rate": 1.0}]
+    harom_harom = DefenseModel(rendszer="3-3", double_rate=0.25,
+                               press_rate=0.4, vedok=negy)
+    assert harom_harom.vedo_kettozes(3) == 0.25
+    assert harom_harom.vedo_kilepes(3) == 0.4
+    assert DefenseModel(rendszer="6-0", double_rate=0.25,
+                        vedok=negy).vedo_kettozes(3) == 1.0
+
+
+def test_vedo_kettozes_tanult_ved_nelkul_a_csapat_hajlama():
+    """Tanult védők nélkül (alap fal) minden slot a csapat hajlamát adja
+    — alapból 0, tehát a fal zárt marad."""
+    assert DefenseModel().vedo_kettozes(0) == 0.0
+    assert DefenseModel(double_rate=0.6).vedo_kettozes(4) == 0.6
+
+
+def test_a_masodik_vedo_a_sajat_kettozesevel_lep_a_szimulacioban():
+    """A `respond`-ban a labdáshoz MÁSODIK legközelebbi vonal-védő a
+    saját kettőzési hajlamával mozdul: 1-nél rálép a labdásra, 0-nál a
+    falban marad — a csapat-szintű hajlamtól függetlenül."""
+    import math
+
+    labda = Ball(x=31.0, y=14.5, confidence=1.0)
+    zart = DefenseModel().respond(labda, 40.0)
+    sorrend = sorted(range(6), key=lambda k: math.hypot(
+        zart[k][0] - labda.x, zart[k][1] - labda.y))
+    masodik = sorrend[1]
+
+    def fal(sajat):
+        vedok = [{"mez": i + 2, "press_rate": 0.0, "double_rate": 0.0}
+                 for i in range(6)]
+        vedok[masodik]["double_rate"] = sajat
+        return DefenseModel(double_rate=0.5, vedok=vedok)
+
+    kettoz = fal(1.0).respond(labda, 40.0)
+    marad = fal(0.0).respond(labda, 40.0)
+    assert marad == zart
+    assert kettoz[masodik] != zart[masodik]
+    tav = lambda p: math.hypot(p[0] - labda.x, p[1] - labda.y)  # noqa: E731
+    assert tav(kettoz[masodik]) < tav(zart[masodik])
+    assert [p for k, p in enumerate(kettoz) if k != masodik] == \
+        [p for k, p in enumerate(zart) if k != masodik]
+
+
+# ---- A lövő-záradék és a figura neve ----------------------------------------
+
+def test_lovo_zaradek_megnevezi_a_lovot_es_a_szorzot():
+    """Tanult lövőnél a záradék a mezszámot névelővel, a szorzót magyar
+    tizedesvesszővel mondja; az előtag cserélhető."""
+    from handball.pipeline.play_simulation import lovo_zaradek
+
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": 1.3}) == (
+        ", a végén a 9-es lövésével, aki innen 1,3× annyit lő be, mint "
+        "amennyit a helyzet ér")
+    assert lovo_zaradek({"lovo_mez": 5, "lovo_szorzo": 0.7}, elo=" — ") == (
+        " — az 5-ös lövésével, aki innen 0,7× annyit lő be, mint "
+        "amennyit a helyzet ér")
+    # A szorzó szövegként (JSON-ból) is jó.
+    assert "a 10-es lövésével, aki innen 1,5×" in lovo_zaradek(
+        {"lovo_mez": 10, "lovo_szorzo": "1.5"})
+
+
+def test_lovo_zaradek_ures_ha_nincs_lovo_vagy_atlagos():
+    """Nincs tanult lövő / szorzó, vagy a szorzó a küszöbnél
+    (LOVO_FELIRAT_ELTERES) kevésbé tér el az 1-től → üres záradék."""
+    from handball.pipeline.play_simulation import (LOVO_FELIRAT_ELTERES,
+                                                   lovo_zaradek)
+
+    assert lovo_zaradek({}) == ""
+    assert lovo_zaradek({"lovo_mez": 9}) == ""
+    assert lovo_zaradek({"lovo_szorzo": 1.4}) == ""
+    assert lovo_zaradek({"lovo_mez": None, "lovo_szorzo": 1.4}) == ""
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": None}) == ""
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": 1.0}) == ""
+    alatta = 1.0 + LOVO_FELIRAT_ELTERES / 2
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": alatta}) == ""
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": 2.0 - alatta}) == ""
+    # A küszöbön túl mindkét irányban megszólal.
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": 1.2}) != ""
+    assert lovo_zaradek({"lovo_mez": 9, "lovo_szorzo": 0.8}) != ""
+
+
+def test_figura_nev_megtisztitja_es_levagja_a_nevet():
+    """A vezérlőjelek kiesnek, a szélekről a szóköz lemegy, a név
+    legfeljebb FIGURA_3D_NEV_MAX jel (a vágás után sem marad szóköz a
+    végén); a védelem-névhez hosszabb korlát adható."""
+    from handball.pipeline.play_simulation import (FIGURA_3D_NEV_MAX,
+                                                   FIGURA_3D_VEDO_NEV_MAX,
+                                                   figura_nev)
+
+    assert figura_nev("  Keresztmozgás a bal szélre \n") == \
+        "Keresztmozgás a bal szélre"
+    assert figura_nev("Be\x00ál\tló\x1b-leválás") == "Beálló-leválás"
+    assert figura_nev("Árvíztűrő tükörfúrógép 7–6") == \
+        "Árvíztűrő tükörfúrógép 7–6"
+    hosszu = "x" * 200
+    assert figura_nev(hosszu) == "x" * FIGURA_3D_NEV_MAX
+    assert len(figura_nev(hosszu, FIGURA_3D_VEDO_NEV_MAX)) == \
+        FIGURA_3D_VEDO_NEV_MAX
+    # A vágás szóközre esik → a név végén nem marad szóköz.
+    szokoz = "a" * (FIGURA_3D_NEV_MAX - 1) + "   vége"
+    assert figura_nev(szokoz) == "a" * (FIGURA_3D_NEV_MAX - 1)
+    assert figura_nev("rövid", 3) == "röv"
+
+
+def test_figura_nev_ures_ha_nincs_nev():
+    """None, üres, csupa szóköz vagy csupa vezérlőjel → üres szöveg (a
+    hívó teszi mellé a "Figura" / "névtelen" alapot); a szám is szöveg."""
+    from handball.pipeline.play_simulation import figura_nev
+
+    assert figura_nev(None) == ""
+    assert figura_nev("") == ""
+    assert figura_nev("   \t\n ") == ""
+    assert figura_nev("\x00\x1b\x7f") == ""
+    assert figura_nev(0) == ""
+    assert figura_nev(12) == "12"
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_hatoson_kivulre_a_kapueloteren_kivulre_tol():
+    """A hatoson BELÜLI pontot sugárirányban a 6 m-es ívre toljuk (a
+    kapufák közt a gólvonaltól, a kapufán kívül a közelebbi kapufától
+    mérve); a kívül álló pont változatlan."""
+    import math
+
+    from handball.pipeline.play_simulation import _hatoson_kivulre
+
+    # Középen, a +x kapu előtt 3 m-re: egyenesen ki a hatosra.
+    assert _hatoson_kivulre(37.0, 10.0, 40.0) == (34.0, 10.0)
+    # A másik kapunál tükrözve.
+    assert _hatoson_kivulre(2.0, 9.0, 0.0) == (6.0, 9.0)
+    # A kapufán kívül (y = 14): a felső kapufától (y = 11,5) sugárirányban.
+    x, y = _hatoson_kivulre(38.0, 14.0, 40.0)
+    assert abs(math.hypot(x - 40.0, y - 11.5) - 6.0) < 1e-9
+    assert x < 38.0 and y > 14.0
+    # Kívül álló pontok nem mozdulnak (a határ maga is kívül van).
+    assert _hatoson_kivulre(30.0, 10.0, 40.0) == (30.0, 10.0)
+    assert _hatoson_kivulre(34.0, 10.0, 40.0) == (34.0, 10.0)
+    assert _hatoson_kivulre(39.0, 19.0, 40.0) == (39.0, 19.0)
+
+
+def test_hatoson_kivulre_a_golvonalon_allo_pontot_nem_osztja_nullaval():
+    """A pont pontosan a gólvonalon, a kapufák közt (nulla távolság): nincs
+    irány, amerre tolni lehetne — a pont változatlan, osztás nélkül."""
+    from handball.pipeline.play_simulation import _hatoson_kivulre
+
+    assert _hatoson_kivulre(40.0, 10.0, 40.0) == (40.0, 10.0)
+    assert _hatoson_kivulre(0.0, 8.5, 0.0) == (0.0, 8.5)
+
+
+def test_pont_nev_a_kulcs_pozicio_neve():
+    """A kulcs-pozíció neve: három pontnál Kezdő / Közép / Vég, kettőnél
+    Kezdő / Vég, különben sorszám."""
+    from handball.pipeline.play_simulation import _pont_nev
+
+    assert [_pont_nev(i, 3) for i in range(3)] == ["Kezdő", "Közép", "Vég"]
+    assert [_pont_nev(i, 2) for i in range(2)] == ["Kezdő", "Vég"]
+    assert [_pont_nev(i, 4) for i in range(4)] == ["1.", "2.", "3.", "4."]
+    assert _pont_nev(0, 1) == "1."
+
+
+def test_csapat_szorzo_a_gol_es_az_xg_hanyadosa_simitva():
+    """A csapat befejezési szorzója: gól / xG, 6 átlagos lövéssel simítva
+    és a [0,7; 1,3] sávba szorítva — a helyzeteinél többet lövő csapat 1
+    fölött, a kevesebbet lövő 1 alatt van."""
+    from handball.pipeline.play_simulation import (LOVO_SULY,
+                                                   LOVO_SZORZO_MAX,
+                                                   LOVO_SZORZO_MIN,
+                                                   _csapat_szorzo)
+
+    assert (LOVO_SULY, LOVO_SZORZO_MIN, LOVO_SZORZO_MAX) == (6, 0.7, 1.3)
+    # 20 lövés, 10 xG, 12 gól: (12 + 6·0,5) / (10 + 6·0,5) = 15/13.
+    jo = {9: {"mid": [10, 7, 5.0]}, 7: {"close": [10, 5, 5.0]}}
+    assert abs(_csapat_szorzo(jo) - 15.0 / 13.0) < 1e-12
+    # Pontosan a helyzeteinek megfelelően: 1.
+    assert _csapat_szorzo({9: {"mid": [10, 5, 5.0]}}) == 1.0
+    # Szélsőségek: a sáv két széle.
+    assert _csapat_szorzo({9: {"mid": [50, 50, 10.0]}}) == LOVO_SZORZO_MAX
+    assert _csapat_szorzo({9: {"mid": [50, 0, 25.0]}}) == LOVO_SZORZO_MIN
+
+
+def test_csapat_szorzo_loves_nelkul_egy():
+    """Lövés (vagy xG) nélkül nincs miből tanulni: a szorzó 1 (átlagos
+    csapat) — nem 0 és nem osztás nullával."""
+    from handball.pipeline.play_simulation import _csapat_szorzo
+
+    assert _csapat_szorzo({}) == 1.0
+    assert _csapat_szorzo({9: {}}) == 1.0
+    assert _csapat_szorzo({9: {"mid": [0, 0, 0.0]}}) == 1.0
+    assert _csapat_szorzo({9: {"mid": [3, 1, 0.0]}}) == 1.0
+
+
+def test_kapus_osszes_szorzo_es_a_kapott_arany():
+    """A kapus sávok nélküli szorzója: a kapott gól és az átlagos kapus
+    várt kapott góljának hányadosa (simítva, a [0,7; 1,3] sávba
+    szorítva); az átlagos kapus 1; ismeretlen sáv kimarad."""
+    from handball.pipeline.play_simulation import (KAPUS_ALAP_GOL,
+                                                   KAPUS_SZORZO_MAX,
+                                                   KAPUS_SZORZO_MIN,
+                                                   _kapott_arany,
+                                                   _kapus_osszes_szorzo)
+
+    assert KAPUS_ALAP_GOL == {"close": 0.70, "mid": 0.55, "far": 0.40}
+    # 20 közepes lövés, 9 védés → 11 kapott = pont az átlag (0,55).
+    atlagos = {"mid": [20, 9]}
+    assert abs(_kapus_osszes_szorzo(atlagos) - 1.0) < 1e-12
+    assert abs(_kapott_arany(atlagos) - 0.55) < 1e-12
+    # Mindent véd → a sáv alja; semmit sem véd → a sáv teteje.
+    assert _kapus_osszes_szorzo({"mid": [40, 40]}) == KAPUS_SZORZO_MIN
+    assert _kapus_osszes_szorzo({"far": [40, 0]}) == KAPUS_SZORZO_MAX
+    assert _kapott_arany({"mid": [40, 40]}) == 0.0
+    assert _kapott_arany({"far": [40, 0]}) == 1.0
+    # Ismeretlen sáv nem számít a szorzóba.
+    assert _kapus_osszes_szorzo({"mid": [20, 9], "ismeretlen": [50, 0]}) \
+        == _kapus_osszes_szorzo(atlagos)
+
+
+def test_kapus_szorzo_es_kapott_arany_loves_nelkul():
+    """Kaputra érkezett lövés nélkül a szorzó 1 (átlagos kapus), a kapott
+    arány pedig None — nem hallgatólagos 0% (ami hibátlan kapust
+    jelentene)."""
+    from handball.pipeline.play_simulation import (_kapott_arany,
+                                                   _kapus_osszes_szorzo)
+
+    assert _kapus_osszes_szorzo({}) == 1.0
+    assert _kapus_osszes_szorzo({"mid": [0, 0]}) == 1.0
+    assert _kapus_osszes_szorzo({"ismeretlen": [9, 3]}) == 1.0
+    assert _kapott_arany({}) is None and _kapott_arany(None) is None
+    assert _kapott_arany({"mid": [0, 0]}) is None
+
+
+def test_kapus_varhato_a_sav_alapja_es_a_kapus_szorzoja():
+    """A várt kapott gól: sávonként a kaputra érkezett lövés × a sáv
+    alap-gólaránya × a kapus szorzója abban a sávban (szorzó nélkül
+    átlagos kapus); üres mintára 0."""
+    from handball.pipeline.play_simulation import _kapus_varhato
+
+    minta = {"close": [10, 2], "far": [10, 7]}
+    assert abs(_kapus_varhato(minta) - (10 * 0.70 + 10 * 0.40)) < 1e-12
+    assert abs(_kapus_varhato(minta, {"close": 1.2, "far": 0.8})
+               - (10 * 0.70 * 1.2 + 10 * 0.40 * 0.8)) < 1e-12
+    # A szorzóból hiányzó sáv átlagos (1,0).
+    assert abs(_kapus_varhato(minta, {"close": 1.2}) - (8.4 + 4.0)) < 1e-12
+    assert _kapus_varhato({}) == 0 and _kapus_varhato(None) == 0
+
+
+def test_elorejelzes_profil_savonkent_osszead():
+    """A csapat profilja a korábbi meccsekből: sávonként a leadott (lo)
+    és a kapott (kap) lövés / gól / xG összege, a gólok mindkét irányban
+    (összes és látott), a meccsszám; történet nélkül üres profil."""
+    from handball.pipeline.play_simulation import _elorejelzes_profil
+
+    sajat1 = {"lovesek": {"mid": (10, 4, 5.0), "far": (2, 0, 0.6)},
+              "golok": 25, "latott_golok": 20}
+    ellen1 = {"lovesek": {"mid": (8, 5, 4.0)}, "golok": 22,
+              "latott_golok": 21}
+    sajat2 = {"lovesek": {"mid": (6, 3, 3.0)}, "golok": 30,
+              "latott_golok": 30}
+    ellen2 = {"lovesek": None, "golok": None}
+    p = _elorejelzes_profil([(sajat1, ellen1), (sajat2, ellen2)])
+    assert p == {"n": 2,
+                 "lo": {"mid": [16, 7, 8.0], "far": [2, 0, 0.6]},
+                 "kap": {"mid": [8, 5, 4.0]},
+                 "gf": 55, "ga": 22, "gf_l": 50, "ga_l": 21}
+    assert _elorejelzes_profil([]) == {"n": 0, "lo": {}, "kap": {}, "gf": 0,
+                                       "ga": 0, "gf_l": 0, "ga_l": 0}
+
+
+def test_elorejelzes_gol_a_tamadas_es_a_vedelem_talalkozasa():
+    """A várható gól a támadó leadott és a védő kapott lövéseinek
+    átlagos mennyiségéből és minőségéből jön: átlagos befejezésnél és
+    védelemnél pontosan az xG; a nem látott gólok átlaga hozzáadódik; a
+    jobban befejező csapatnak több jár."""
+    from handball.pipeline.play_simulation import _elorejelzes_gol
+
+    liga = 1.0
+    # Meccsenként 20 közepes lövés 0,5 xG-vel, mindkét oldalon; a látott
+    # gólok pont az xG-t adják → szorzó 1 → 20 · 0,5 = 10 gól.
+    tam = {"n": 2, "lo": {"mid": [40, 20, 20.0]}, "kap": {}, "gf": 20,
+           "ga": 0, "gf_l": 20, "ga_l": 0}
+    ved = {"n": 2, "lo": {}, "kap": {"mid": [40, 20, 20.0]}, "gf": 0,
+           "ga": 20, "gf_l": 0, "ga_l": 20}
+    assert abs(_elorejelzes_gol(tam, ved, liga) - 10.0) < 1e-9
+    # Meccsenként 3 nem látott gól a támadónál, 1 a védőnél → +2.
+    tam_nl = {**tam, "gf": 26}
+    ved_nl = {**ved, "ga": 22}
+    assert abs(_elorejelzes_gol(tam_nl, ved_nl, liga) - 12.0) < 1e-9
+    # A helyzeteinél többet lövő támadó → több várható gól.
+    tam_jo = {**tam, "gf": 30, "gf_l": 30}
+    assert _elorejelzes_gol(tam_jo, ved, liga) > 10.0
+    # Lövés nélküli profilokból (csak a meccsszám ismert) 0 gól jön.
+    ures_t = {"n": 1, "lo": {}, "kap": {}, "gf": 0, "ga": 0, "gf_l": 0,
+              "ga_l": 0}
+    assert _elorejelzes_gol(ures_t, ures_t, liga) == 0.0
+
+
+def test_hetes_irany_emberhatrany_es_szuper_csere_osszegek():
+    """A több meccses minták összegzői: a hetes-mérleg mezszámonként
+    [dobás, gól], az irányok mezszámonként irányonként, az emberhátrány-
+    mérleg falanként [támadás, kapott gól], a szuper-csere mezszámonként
+    a pad-gólok és a padról jött meccsek száma — a szöveges mezszám-kulcs
+    (JSON-ból) egésszé válik."""
+    from handball.pipeline.play_simulation import (HI_IRANYOK,
+                                                   _emberhatrany_merleg,
+                                                   _hetes_osszeg,
+                                                   _irany_osszeg, _ssc_osszeg)
+
+    assert _hetes_osszeg([{"7": [3, 2], 9: [1, 1]}, {7: [2, 2]}, None]) == {
+        7: [5, 4], 9: [1, 1]}
+    assert HI_IRANYOK == ("bal", "közép", "jobb")
+    assert _irany_osszeg([{"7": {"bal": 2, "jobb": 1}},
+                          {7: {"bal": 1, "közép": 1, "fel": 9}},
+                          {9: None}]) == {
+        7: {"bal": 3, "közép": 1, "jobb": 1},
+        9: {"bal": 0, "közép": 0, "jobb": 0}}
+    assert _emberhatrany_merleg([[("5-0", 1), ("5-0", 0), ("4-1", 0)],
+                                 [("5-0", True)], None]) == {
+        "5-0": [3, 2], "4-1": [1, 0]}
+    assert _ssc_osszeg([{"gol": {"14": 2, 9: 1}, "pad": [14, 9]},
+                        {"gol": {14: 1}, "pad": ["14"]}, None, {}]) == (
+        {14: 3, 9: 1}, {14: 2, 9: 1})
+
+
+def test_az_osszegzok_ures_bemenetre_uresek():
+    """Minta nélkül (None, üres lista, csupa üres meccs) mind a négy
+    összegző üres eredményt ad — kivétel nélkül."""
+    from handball.pipeline.play_simulation import (_emberhatrany_merleg,
+                                                   _hetes_osszeg,
+                                                   _irany_osszeg, _ssc_osszeg)
+
+    for ures in (None, [], [None, {}]):
+        assert _hetes_osszeg(ures) == {}
+        assert _irany_osszeg(ures) == {}
+        assert _ssc_osszeg(ures) == ({}, {})
+    for ures in (None, [], [None, []]):
+        assert _emberhatrany_merleg(ures) == {}
+
+
+def test_review_until_csak_az_addigi_kockakbol_es_ha_mar_odaert_a_meccs():
+    """A várakozás-valóság összevetés a megadott percig CSAK az addigi
+    kockákból számol (okszerű), a várakozást a perc arányában veszi; ha
+    a meccs még nem ért el addig a percig (vagy üres), nincs sor és
+    nincs időpont."""
+    from handball.pipeline.play_simulation import (ELO_MECCS_PERC,
+                                                   _review_until)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=90, fps=25.0, seed=5,
+                              shots_per_min=8)
+    nevek = {"home": m.meta.home_team, "away": m.meta.away_team}
+    varakozas = {"home_goals": 30.0, "away_goals": 24.0}
+    t0 = m.frames[0].t
+
+    egy_perc = _review_until(m, 1.0, nevek, varakozas)
+    assert egy_perc["t"] == t0 + 1500 and egy_perc["t_s"] == 60.0
+    assert egy_perc["perc"] == 1.0
+    assert egy_perc["sorok"], "egy perc után már van mit összevetni"
+    # A várakozás a perc arányában (1/60) szerepel az összevetésben.
+    assert ELO_MECCS_PERC == 60
+    szoveg = " ".join(str(s) for s in egy_perc["sorok"])
+    # 30 várt gól / 60 perc = 0,5 gól az első percre: a 8 hazai gól így
+    # 7,5-tel van a várt felett (nem 22-vel alatta).
+    assert "lett: 8–0" in szoveg
+    assert "7,5 góllal a várt felett" in szoveg
+
+    # A meccs csak 90 mp hosszú: a 2. percig még nem ért el.
+    korai = _review_until(m, 2.0, nevek, varakozas)
+    assert korai["t"] is None and korai["t_s"] is None
+    assert korai["sorok"] == [] and korai["perc"] == 2.0
+    # Üres meccs: ugyanaz az üres válasz.
+    from handball.models.tracking import Match as _Match
+    ures = _review_until(_Match(m.meta, []), 1.0, nevek, varakozas)
+    assert ures["t"] is None and ures["sorok"] == []

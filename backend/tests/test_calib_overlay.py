@@ -766,3 +766,277 @@ def test_a_kalibralo_kepernyo_vonalszine_a_motor_kulcsai():
     assert "lineColor: _lineColor" in src
     assert "_storeSeen(r);" in src
     assert "seenLines: seen" in src
+
+
+# ---- Pálya-pont → pixel (court_to_pixels) -----------------------------------
+
+def test_court_to_pixels_ugyanaz_a_vetites_mint_a_vonalake():
+    """A pálya-pontok pixelben, a bemenet sorrendjében — pontosan oda,
+    ahová az overlay_pixels a pályavonal megfelelő pontját rajzolja."""
+    from handball.pipeline.calib_overlay import court_to_pixels
+
+    px = court_to_pixels(_skala(10.0), None,
+                         [(40.0, 20.0), (0.0, 0.0), (20.0, 10.0)])
+    assert len(px) == 3
+    for kapott, vart in zip(px, [(400.0, 200.0), (0.0, 0.0),
+                                 (200.0, 100.0)]):
+        assert abs(kapott[0] - vart[0]) < 1e-6
+        assert abs(kapott[1] - vart[1]) < 1e-6
+    # A pálya körvonalának sarkai a két függvényből ugyanazok.
+    sarkok = court_polylines()[0]
+    vonal = overlay_pixels(_skala(10.0), None)[0]
+    pontok = court_to_pixels(_skala(10.0), None, sarkok)
+    assert len(pontok) == len(vonal)
+    for a, b in zip(pontok, vonal):
+        assert abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6
+
+
+def test_court_to_pixels_a_kamera_eltolasat_koveti():
+    """A kamera-mozgás (G) a pontokat ugyanúgy tolja, mint a vonalakat."""
+    from handball.pipeline.calib_overlay import court_to_pixels
+
+    g = [[1.0, 0.0, -30.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    alap = court_to_pixels(_skala(10.0), None, [(20.0, 10.0)])[0]
+    tolt = court_to_pixels(_skala(10.0), g, [(20.0, 10.0)])[0]
+    assert abs(tolt[0] - (alap[0] + 30.0)) < 1e-6
+    assert abs(tolt[1] - alap[1]) < 1e-6
+
+
+def test_court_to_pixels_none_a_horizont_mogott_es_a_keptol_messze():
+    """Amit nem lehet a kockára rajzolni, annak a helyén None áll (a
+    hívó ott nem rajzol): a homográfia horizontja mögötti pont, és — a
+    kép méretét ismerve — a képtől messze kívül eső pont. A sorrend és
+    a hossz megmarad."""
+    from handball.pipeline._homography import invert_3x3
+    from handball.pipeline.calib_overlay import court_to_pixels
+
+    # Pálya → pixel perspektívával: a nevező 1 − 0,04·x, x = 25 m-nél
+    # vált előjelet (az a horizont).
+    palya_to_px = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [-0.04, 0.0, 1.0]]
+    h0 = invert_3x3(palya_to_px)
+    px = court_to_pixels(h0, None, [(10.0, 6.0), (25.0, 6.0), (30.0, 6.0)])
+    assert px[1] is None and px[2] is None
+    assert abs(px[0][0] - 100.0 / 0.6) < 1e-6
+    assert abs(px[0][1] - 60.0 / 0.6) < 1e-6
+    # A (−1)-szeres mátrix UGYANAZ a leképezés — az előjel-normálás
+    # nélkül minden pont a horizont mögé kerülne.
+    negalt = [[-v for v in sor] for sor in h0]
+    px_neg = court_to_pixels(negalt, None, [(10.0, 6.0), (30.0, 6.0)])
+    assert px_neg[1] is None
+    assert abs(px_neg[0][0] - px[0][0]) < 1e-6
+
+    # A kép méretével: a (40, 20) m → (400, 200) px egy 100×100-as képtől
+    # több mint egy képnyire esik → None; az (5, 5) m a képen van.
+    kicsi = court_to_pixels(_skala(10.0), None, [(40.0, 20.0), (5.0, 5.0)],
+                            width=100, height=100)
+    assert kicsi[0] is None
+    assert abs(kicsi[1][0] - 50.0) < 1e-6 and abs(kicsi[1][1] - 50.0) < 1e-6
+    # Méret nélkül nincs "messze": ugyanaz a pont megjön.
+    assert court_to_pixels(_skala(10.0), None, [(40.0, 20.0)])[0] is not None
+    assert court_to_pixels(_skala(10.0), None, []) == []
+
+
+# ---- Illeszkedés a kész él-térképen (fit_on_points) ---------------------------
+
+def _fuggoleges_el(w=100, h=60, x=50):
+    """Él-térkép egyetlen függőleges vonallal (1,0 az x. oszlopban)."""
+    import numpy as np
+    sav = np.zeros((h, w), np.float32)
+    sav[:, x] = 1.0
+    return sav
+
+
+def _oszlop_pontok(x, n=40, y0=10):
+    import numpy as np
+    return np.array([(float(x), float(y0 + i)) for i in range(n)],
+                    np.float32)
+
+
+def test_fit_on_points_a_vonalon_magas_melle_csuszva_nulla():
+    """A vonalon ülő mintapontokra az illeszkedés 1, a 10 px-szel mellé
+    csúszottakra 0 — az alapszint (a kép átlagos él-erőssége) levonva."""
+    from handball.pipeline.calib_overlay import fit_on_points
+
+    sav = _fuggoleges_el()
+    rajta = fit_on_points(sav, 0.1, _oszlop_pontok(50))
+    assert rajta == {"fit": 1.0, "on_line": 1.0, "baseline": 0.1,
+                     "samples": 40}
+    mellette = fit_on_points(sav, 0.1, _oszlop_pontok(60))
+    assert mellette["fit"] == 0.0 and mellette["on_line"] == 0.0
+    assert mellette["samples"] == 40
+
+
+def test_fit_on_points_az_eltolast_a_pontokra_alkalmazza():
+    """A (dx, dy) eltolás a mintapontokat tolja: a 10 px-szel balra
+    rajzolt vonal +10 px eltolással ül a valódi vonalra (ebből él az
+    önkorrekció rácsa); a félig vonalon ülő pontsor a kettő között."""
+    import numpy as np
+
+    from handball.pipeline.calib_overlay import fit_on_points
+
+    sav = _fuggoleges_el()
+    pts = _oszlop_pontok(40)
+    assert fit_on_points(sav, 0.1, pts)["fit"] == 0.0
+    assert fit_on_points(sav, 0.1, pts, dx=10.0)["fit"] == 1.0
+    assert fit_on_points(sav, 0.1, pts, dx=10.0, dy=5.0)["fit"] == 1.0
+    fele = np.concatenate([_oszlop_pontok(50, n=20),
+                           _oszlop_pontok(60, n=20)])
+    f = fit_on_points(sav, 0.1, fele)
+    assert f["on_line"] == 0.5 and f["samples"] == 40
+    assert f["fit"] == round((0.5 - 0.1) / 0.9, 3)
+
+
+def test_fit_on_points_keves_mintanal_none():
+    """20-nál kevesebb KÉPEN BELÜLI mintapontból nincs ítélet (None, nem
+    0): mintapont nélkül, kevés ponttal, vagy ha a pontok a képen kívülre
+    esnek (az eltolás kitolta őket)."""
+    import numpy as np
+
+    from handball.pipeline.calib_overlay import fit_on_points
+
+    sav = _fuggoleges_el()
+    ures = fit_on_points(sav, 0.123456, np.zeros((0, 2), np.float32))
+    assert ures == {"fit": None, "on_line": None, "baseline": 0.123,
+                    "samples": 0}
+    keves = fit_on_points(sav, 0.1, _oszlop_pontok(50, n=19))
+    assert keves["fit"] is None and keves["on_line"] is None
+    assert keves["samples"] == 19
+    assert fit_on_points(sav, 0.1, _oszlop_pontok(50, n=20))["fit"] == 1.0
+    # 40 pontból csak 15 esik a 60 magas képre (y = 45..84).
+    kilog = fit_on_points(sav, 0.1, _oszlop_pontok(50, n=40, y0=45))
+    assert kilog["fit"] is None and kilog["samples"] == 15
+    kitolva = fit_on_points(sav, 0.1, _oszlop_pontok(50), dx=500.0)
+    assert kitolva["fit"] is None and kitolva["samples"] == 0
+
+
+def test_fit_on_points_csupa_el_kepen_nem_oszt_nullaval():
+    """Ha a kép alapszintje 1,0 (mindenhol él), az illeszkedés 0 — a
+    vonal nem emelkedik ki —, osztás nélkül; az eredmény 0..1 közé
+    szorítva marad akkor is, ha a vonal az alapszint alatt van."""
+    import numpy as np
+
+    from handball.pipeline.calib_overlay import fit_on_points
+
+    tele = np.ones((60, 100), np.float32)
+    assert fit_on_points(tele, 1.0, _oszlop_pontok(50))["fit"] == 0.0
+    sav = _fuggoleges_el()
+    assert fit_on_points(sav, 0.4, _oszlop_pontok(60))["fit"] == 0.0
+
+
+# ---- A terület neve és a jobb beállítás javaslata -----------------------------
+
+def test_region_label_a_valaszto_emberi_neve():
+    """A terület-kulcs emberi neve az üzenetekhez; a hiányzó (None / üres)
+    kulcs a teljes pálya, az ismeretlen kulcs önmaga marad."""
+    from handball.pipeline.calib_overlay import region_label
+
+    assert region_label("full") == "teljes pálya"
+    assert region_label("left") == "bal térfél"
+    assert region_label("right") == "jobb térfél"
+    assert region_label(None) == "teljes pálya"
+    assert region_label("") == "teljes pálya"
+    assert region_label("kozep") == "kozep"
+
+
+def test_better_setting_a_legjobban_ulo_masik_beallitast_ajanlja():
+    """Ha ugyanaz a négyszög egy MÁSIK térfél / forgatás beállításra
+    érdemben jobban ül, azt ajánljuk — a tennivalóval és a két
+    illeszkedéssel (magyar tizedesvesszővel)."""
+    from handball.pipeline.calib_overlay import better_setting
+
+    mert = {("full", False): 0.2, ("left", False): 0.6,
+            ("right", True): 0.4}
+    alt = better_setting(mert, "full", False, 0.2)
+    assert (alt["region"], alt["rotate"], alt["fit"]) == ("left", False, 0.6)
+    assert alt["uzenet"] == (
+        "A bejelölt négyszög MÁS beállításra ül jobban: a térfél-választó "
+        "legyen \"bal térfél\" (illeszkedés 0,60 a mostani 0,20 helyett).")
+    # Csak a forgatás más → csak azt kéri; be- és kikapcsolni is tudja.
+    be = better_setting({("full", True): 0.7}, "full", False, 0.2)
+    assert be["rotate"] is True
+    assert "kapcsold be a 180°-os forgatást" in be["uzenet"]
+    assert "térfél-választó" not in be["uzenet"]
+    ki = better_setting({("full", False): 0.7}, "full", True, 0.2)
+    assert ki["rotate"] is False
+    assert "kapcsold ki a 180°-os forgatást" in ki["uzenet"]
+    # Mindkettő más → a két tennivaló "és"-sel.
+    mind = better_setting({("right", True): 0.7}, "full", False, 0.2)
+    assert ("a térfél-választó legyen \"jobb térfél\" és kapcsold be a "
+            "180°-os forgatást") in mind["uzenet"]
+
+
+def test_better_setting_merhetetlen_mostani_illeszkedesnel():
+    """Ha a mostani beállítás nem is mérhető (None), a 0-hoz mérünk, és
+    az üzenet "mérhetetlen"-t mond — ponttal a mondat végén. (Korábban a
+    tizedesvessző-csere itt a mondatvégi pontot is vesszőre írta.)"""
+    from handball.pipeline.calib_overlay import CALIB_ALT_GAIN, better_setting
+
+    alt = better_setting({("left", False): 0.6}, "full", False, None)
+    assert alt["fit"] == 0.6
+    assert alt["uzenet"] == (
+        "A bejelölt négyszög MÁS beállításra ül jobban: a térfél-választó "
+        "legyen \"bal térfél\" (illeszkedés 0,60 a mostani mérhetetlen "
+        "helyett).")
+    # A küszöb ilyenkor is él: a 0-nál CALIB_ALT_GAIN-nel jobb kell.
+    assert better_setting({("left", False): CALIB_ALT_GAIN / 2},
+                          "full", False, None) is None
+
+
+def test_better_setting_none_ha_nincs_erdemben_jobb():
+    """Nincs javaslat, ha nincs más mért beállítás (üres / None / csak a
+    mostani / csupa mérhetetlen), vagy a legjobb jelölt nem jobb legalább
+    CALIB_ALT_GAIN-nel — pont a küszöbön már igen."""
+    from handball.pipeline.calib_overlay import CALIB_ALT_GAIN, better_setting
+
+    assert better_setting({}, "full", False, 0.2) is None
+    assert better_setting(None, "full", False, 0.2) is None
+    assert better_setting({("full", False): 0.9}, "full", False, 0.2) is None
+    assert better_setting({("left", False): None, ("right", True): None},
+                          "full", False, 0.2) is None
+    alap = 0.5
+    epp = alap + CALIB_ALT_GAIN
+    assert better_setting({("left", False): epp - 0.01},
+                          "full", False, alap) is None
+    kuszobon = better_setting({("left", False): epp}, "full", False, alap)
+    assert kuszobon is not None and kuszobon["region"] == "left"
+    # A mérhetetlen jelölt nem nyerhet a mérhető előtt.
+    vegyes = better_setting({("left", False): None, ("right", False): 0.8},
+                            "full", False, 0.2)
+    assert vegyes["region"] == "right"
+
+
+# ---- Az előjel-normálás és a terület-közép (második kör) -----------------------
+
+def test_sign_normalized_a_referencia_pontnal_pozitiv_nevezo():
+    """A homográfia és a (−1)-szerese ugyanaz a leképezés, de a horizont-
+    vizsgálat az előjelre épül: a mátrixot úgy fordítjuk, hogy a
+    referencia-pontnál a nevező pozitív legyen — a már jó előjelű
+    mátrix változatlan (ugyanaz az objektum)."""
+    from handball.pipeline.calib_overlay import _sign_normalized
+
+    jo = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 1.0]]
+    assert _sign_normalized(jo, 20.0, 10.0) is jo
+    negalt = [[-v for v in sor] for sor in jo]
+    assert _sign_normalized(negalt, 20.0, 10.0) == jo
+    # Perspektívás mátrix: a nevező 1 − 0,04·x; x = 30-nál negatív.
+    persp = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [-0.04, 0.0, 1.0]]
+    assert _sign_normalized(persp, 10.0, 10.0) is persp
+    forditott = _sign_normalized(persp, 30.0, 10.0)
+    assert forditott == [[-v for v in sor] for sor in persp]
+    assert forditott[2][0] * 30.0 + forditott[2][2] > 0
+    # A nevező pontosan 0 (a referencia a horizonton): nem fordítunk.
+    assert _sign_normalized(persp, 25.0, 10.0) is persp
+
+
+def test_region_center_a_kalibralt_terulet_kozepe():
+    """A kalibrált terület közepe méterben: a teljes pályánál a
+    középpont, a fél pályáknál a térfél közepe; a hiányzó / ismeretlen
+    kulcs a teljes pálya."""
+    from handball.pipeline.calib_overlay import _region_center
+
+    assert _region_center("full") == (20.0, 10.0)
+    assert _region_center("left") == (10.0, 10.0)
+    assert _region_center("right") == (30.0, 10.0)
+    assert _region_center() == (20.0, 10.0)
+    assert _region_center(None) == (20.0, 10.0)
+    assert _region_center("ismeretlen") == (20.0, 10.0)

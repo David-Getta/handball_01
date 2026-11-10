@@ -194,3 +194,203 @@ def test_a_stream_atiranyitas_a_hibakezelesen_belul_fut():
     assert try_poz < ensure_poz, (
         "az _ensure_streams a hibakezelésen KÍVÜL fut — nem írható "
         "adatmappánál a motor nyom nélkül hal meg")
+
+
+# ---- Az indító lépései: stream-átirányítás, mérföldkő, main --------------------
+# (eddig egyszer sem futottak a csomagban — csak a forrásukat néztük)
+
+def test_ensure_streams_ablak_nelkul_naploba_iranyit(tmp_path, monkeypatch):
+    """Ablak nélküli (csomagolt) futásnál nincs stdout/stderr: a kimenet
+    a felhasználói adatmappa engine.log fájljába megy — a print nem dől
+    el, és hiba esetén van mit megnézni."""
+    import sys
+
+    from scripts.serve import _ensure_streams
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path / "adat"))
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    _ensure_streams()
+    naplo_fajl = sys.stdout
+    try:
+        assert naplo_fajl is not None and sys.stderr is naplo_fajl
+        print("a motor elindult — árvíztűrő")
+        print("hiba-sor", file=sys.stderr)
+    finally:
+        naplo_fajl.close()
+    naplo = tmp_path / "adat" / "engine.log"
+    assert naplo.read_text(encoding="utf-8") == (
+        "a motor elindult — árvíztűrő\nhiba-sor\n")
+
+
+def test_ensure_streams_csak_a_hianyzo_streamet_potolja(tmp_path, monkeypatch):
+    """Ha csak a stderr hiányzik, a stdout marad, ami volt; a napló
+    HOZZÁFŰZ (a korábbi indulás sorai megmaradnak)."""
+    import io
+    import sys
+
+    from scripts.serve import _ensure_streams
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    (tmp_path / "engine.log").write_text("korábbi indulás\n",
+                                         encoding="utf-8")
+    sajat = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", sajat)
+    monkeypatch.setattr(sys, "stderr", None)
+    _ensure_streams()
+    naplo_fajl = sys.stderr
+    try:
+        assert sys.stdout is sajat and naplo_fajl is not None
+        print("új hiba", file=sys.stderr)
+    finally:
+        naplo_fajl.close()
+    assert (tmp_path / "engine.log").read_text(encoding="utf-8") == (
+        "korábbi indulás\núj hiba\n")
+
+
+def test_ensure_streams_meglevo_streamekhez_nem_nyul(tmp_path, monkeypatch):
+    """Terminálból futtatva (van stdout és stderr) nem irányít át semmit,
+    és nem hoz létre naplófájlt."""
+    import sys
+
+    from scripts.serve import _ensure_streams
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path / "adat"))
+    ki, hiba = sys.stdout, sys.stderr
+    _ensure_streams()
+    assert sys.stdout is ki and sys.stderr is hiba
+    assert not (tmp_path / "adat").exists()
+
+
+def test_stage_merfoldko_a_naploba_es_a_hibaja_nem_all_meg(monkeypatch,
+                                                            capsys):
+    """Az indulási mérföldkő "[indulás] …" sorként megy ki; ha a kimenet
+    hiányzik vagy a cső eltört, a naplózás hibája nem állítja meg az
+    indulást."""
+    import sys
+
+    from scripts.serve import _stage
+
+    _stage("webszerver betöltése…")
+    assert capsys.readouterr().out == "[indulás] webszerver betöltése…\n"
+
+    class _TorottCso:
+        def write(self, _s):
+            raise BrokenPipeError("a kliens leállt")
+
+        def flush(self):
+            raise BrokenPipeError("a kliens leállt")
+
+    monkeypatch.setattr(sys, "stdout", _TorottCso())
+    _stage("ez nem dobhat")                      # nem dobhat
+    monkeypatch.setattr(sys, "stdout", None)
+    _stage("stdout nélkül sem dobhat")
+
+
+def _indito_kornyezet(monkeypatch, tmp_path):
+    """A main kamu webszerverrel és motorral: nem nyit portot, nem tölt
+    modellt — csak azt nézzük, mit indítana és hová."""
+    import pytest
+
+    uvicorn = pytest.importorskip("uvicorn")
+    import handball.api.app as api_mod
+    import handball.crashlog as crashlog
+
+    hivasok: dict = {"fault_log": 0}
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(crashlog, "enable_fault_log",
+                        lambda: hivasok.__setitem__(
+                            "fault_log", hivasok["fault_log"] + 1))
+    monkeypatch.setattr(api_mod, "create_app", lambda: "KAMU-APP")
+
+    def kamu_run(app, host, port, log_level):
+        hivasok["run"] = {"app": app, "host": host, "port": port,
+                          "log_level": log_level}
+
+    monkeypatch.setattr(uvicorn, "run", kamu_run)
+    return hivasok, uvicorn
+
+
+def test_main_a_beallitott_cimen_inditja_a_motort(tmp_path, monkeypatch,
+                                                   capsys):
+    """A main a környezetben megadott címen és (szabad) porton indítja a
+    kész alkalmazást, előtte bekapcsolja a natív összeomlás-naplót, és a
+    mérföldkövek a kimenetre mennek; a kilépőkód 0."""
+    import socket
+
+    from scripts.serve import main
+
+    hivasok, _ = _indito_kornyezet(monkeypatch, tmp_path)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    szabad = s.getsockname()[1]
+    s.close()
+    monkeypatch.setenv("HANDBALL_HOST", "127.0.0.1")
+    monkeypatch.setenv("HANDBALL_PORT", str(szabad))
+
+    assert main() == 0
+    assert hivasok["run"] == {"app": "KAMU-APP", "host": "127.0.0.1",
+                              "port": szabad, "log_level": "info"}
+    assert hivasok["fault_log"] == 1
+    ki = capsys.readouterr().out
+    assert "[indulás] az indító elindult (python " in ki
+    assert "[indulás] a motor betöltve" in ki
+    assert f"Sport Machine backend indul: http://127.0.0.1:{szabad}" in ki
+    assert "FIGYELEM" not in ki and "VÉGZETES" not in ki
+    assert not (tmp_path / "engine-crash.log").exists()
+
+
+def test_main_foglalt_portnal_tartalek_portra_kot(tmp_path, monkeypatch,
+                                                  capsys):
+    """Ha a kért portot már használja valami, a motor nem hal el: a
+    következő szabad portra köt, és ezt ki is mondja."""
+    import socket
+
+    from scripts.serve import main
+
+    hivasok, _ = _indito_kornyezet(monkeypatch, tmp_path)
+    foglalo = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    foglalo.bind(("127.0.0.1", 0))
+    foglalo.listen(1)
+    foglalt = foglalo.getsockname()[1]
+    monkeypatch.setenv("HANDBALL_HOST", "127.0.0.1")
+    monkeypatch.setenv("HANDBALL_PORT", str(foglalt))
+    try:
+        assert main() == 0
+    finally:
+        foglalo.close()
+    port = hivasok["run"]["port"]
+    assert foglalt < port <= foglalt + 10
+    ki = capsys.readouterr().out
+    assert f"FIGYELEM: a {foglalt}-es port foglalt — tartalék port: {port}" \
+        in ki
+    assert f"http://127.0.0.1:{port}" in ki
+
+
+def test_main_vegzetes_hibanal_1_es_kod_es_osszeomlas_naplo(tmp_path,
+                                                            monkeypatch,
+                                                            capsys):
+    """Ha az indulás közben bármi elszáll (itt: a webszerver), a main nem
+    hal meg némán: 1-es kilépőkód, a mérföldkő kimondja a végzetes hibát,
+    és a hiba lényege az engine-crash.log-ba kerül."""
+    from scripts.serve import main
+
+    hivasok, uvicorn = _indito_kornyezet(monkeypatch, tmp_path)
+
+    def elszall(*a, **k):
+        raise OSError("hiányzó rendszerkönyvtár: libomp")
+
+    monkeypatch.setattr(uvicorn, "run", elszall)
+    monkeypatch.setenv("HANDBALL_PORT", "8000")
+    assert main() == 1
+    ki = capsys.readouterr().out
+    assert "[indulás] VÉGZETES HIBA az indulás közben" in ki
+    assert "OSError: hiányzó rendszerkönyvtár: libomp" in ki
+    naplo = (tmp_path / "engine-crash.log").read_text(encoding="utf-8")
+    assert "OSError: hiányzó rendszerkönyvtár: libomp" in naplo
+    assert "Traceback" in naplo
+
+    # A rossz port-beállítás (nem szám) is ide esik — nem néma halál.
+    monkeypatch.setenv("HANDBALL_PORT", "nyolcezer")
+    assert main() == 1
+    assert "ValueError" in capsys.readouterr().out

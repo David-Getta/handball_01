@@ -351,10 +351,21 @@ def test_az_eloszamolas_egy_hatokorben_fut_a_felderites_egyszer_epul(
     monkeypatch.setattr(
         scouting, "_scout_team_cached",
         memoize_primitive("scout_team", copy=copy.deepcopy)(szamolt))
+    # Az előszámoló szálat az INDÍTÁSAKOR jegyezzük fel. A korábbi
+    # "indítás után keresd meg az élő szálak közt" verseny volt: ezen a
+    # kis meccsen a szál tized másodperc alatt végez, és terhelt gépen
+    # már azelőtt véget ért, hogy a teszt körülnézett volna.
+    inditott: list = []
+
+    class _FigyeltSzal(threading.Thread):
+        def start(self):
+            inditott.append(self)
+            super().start()
+
+    monkeypatch.setattr(threading, "Thread", _FigyeltSzal)
     app = create_app()
     app.state.warm_results("rc1")
-    szal = next((t for t in threading.enumerate() if t.name == "warm-rc1"),
-                None)
+    szal = next((t for t in inditott if t.name == "warm-rc1"), None)
     assert szal is not None, "az előszámoló szál elindult"
     szal.join(180)
     assert not szal.is_alive(), "az előszámolás végigért"

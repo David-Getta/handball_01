@@ -737,3 +737,573 @@ def test_a_meccs_jelentes_a_pad_donteseivel():
     assert "A pad döntései" not in match_report_html(
         m, tactics, [], None, dontesek={"nevek": d["nevek"],
                                         "home": {"sorok": []}, "away": {}})
+
+
+# ---- Belső építőelemek közvetlenül (második kör) ------------------------------
+
+def test_section_id_sorszam_alapu_horgony():
+    """A szekció horgonya sorszám alapú (az ékezetes címből képzett
+    azonosító törékeny lenne) — és a tartalomjegyzék ezt használja."""
+    from handball.pipeline.report_html import _section_id, with_toc
+
+    assert _section_id(1) == "sz1" and _section_id(42) == "sz42"
+    html = ("<html><head><style>x{}</style></head><body><header>F</header>"
+            + "".join(f"<h2>Szakasz {i}</h2>" for i in range(1, 9))
+            + "</body></html>")
+    kesz = with_toc(html, min_sections=3)
+    assert '<h2 id="sz1">Szakasz 1</h2>' in kesz
+    assert '<li><a href="#sz8">Szakasz 8</a></li>' in kesz
+
+
+def test_rows_es_metric_escape_elnek_es_az_ures_lista_tajekoztat():
+    """A felsorolás tételei és a mutató-kártya szövegei HTML-escape-elve
+    mennek ki (egy csapatnév "<" jele nem töri el a lapot); üres
+    listánál szürke tájékoztató sor áll (nem üres <ul>)."""
+    from handball.pipeline.report_html import _metric, _rows
+
+    assert _rows(["Gyors <indítás>", 7], "nincs") == \
+        "<li>Gyors &lt;indítás&gt;</li><li>7</li>"
+    assert _rows([], "Nincs elég minta & adat") == \
+        '<li class="empty">Nincs elég minta &amp; adat</li>'
+    assert _rows(None, "üres") == '<li class="empty">üres</li>'
+    assert _metric("Lövés <db>", "12 & 3") == (
+        '<div class="metric"><div class="mv">12 &amp; 3</div>'
+        '<div class="ml">Lövés &lt;db&gt;</div></div>')
+
+
+def test_defense_bars_megoszlas_savok_0_es_100_koze_szoritva():
+    """A megoszlás-sávok szélessége a százalék (0..100 közé szorítva, egész
+    %-ra); megoszlás nélkül tájékoztató bekezdés — a saját szöveggel is."""
+    from handball.pipeline.report_html import _defense_bars
+
+    h = _defense_bars({"6-0": 75.4, "5-1 <agresszív>": 24.6, "hibás": 140.0,
+                       "negatív": -5})
+    assert h.count('<div class="bar-row">') == 4
+    assert ('<span class="bar-label">6-0</span><span class="bar">'
+            '<span class="bar-fill" style="width:75%"></span></span>'
+            '<span class="bar-pct">75%</span>') in h
+    assert "5-1 &lt;agresszív&gt;" in h and "width:25%" in h
+    assert "width:100%" in h and "width:0%" in h
+    assert _defense_bars({}) == '<p class="empty">Nincs elég védekező minta.</p>'
+    assert _defense_bars(None, empty="Nincs támadás-mix.") == \
+        '<p class="empty">Nincs támadás-mix.</p>'
+
+
+def test_shot_zone_es_def_zone_bars_arany_es_gol_per_loves():
+    """A lövés-zónák sávja a lövésszám ARÁNYA, a felirat "gól/lövés"; a
+    kapott-lövés zónáknál a szabadon hagyott lövések száma is (ha van);
+    minta nélkül tájékoztató bekezdés."""
+    from handball.pipeline.report_html import _def_zone_bars, _shot_zone_bars
+
+    zonak = {"átlövés közép": {"shots": 6, "goals": 2},
+             "balszél": {"shots": 2, "goals": 2}}
+    h = _shot_zone_bars(zonak)
+    assert "width:75%" in h and "width:25%" in h
+    assert '<span class="bar-pct">2/6</span>' in h
+    assert '<span class="bar-pct">2/2</span>' in h
+    assert _shot_zone_bars({}) == \
+        '<p class="empty">Nincs elég lövés-minta.</p>'
+    # Lövés nélküli zónák: nem oszt nullával.
+    assert "width:0%" in _shot_zone_bars({"beálló": {"shots": 0, "goals": 0}})
+
+    kapott = {"beálló (6 m)": {"shots": 4, "goals": 3, "free": 2},
+              "jobbszél": {"shots": 4, "goals": 1}}
+    d = _def_zone_bars(kapott)
+    assert '<span class="bar-pct">3/4 · szabad: 2</span>' in d
+    assert '<span class="bar-pct">1/4</span>' in d
+    assert d.count("width:50%") == 2
+    assert _def_zone_bars({}) == \
+        '<p class="empty">Nincs elég kapott-lövés minta.</p>'
+
+
+def test_stoppers_es_breakpoints_block_hol_mivel_miert(monkeypatch):
+    """A két rangsorolt kivonat blokkja sorszámozott Hol / Mivel / Miért
+    tételekkel készül (escape-elve); üres listánál — vagy ha a kivonat
+    hibára fut — NINCS blokk (nem ígérünk ítéletet 0-ból)."""
+    from handball.pipeline import report_html, scouting
+
+    tetel = [{"hol": "bal <szél>", "mivel": "kettőzés", "miert": "5/6 gól",
+              "pont": 3.0},
+             {"hol": "közép", "mivel": "zárt fal", "miert": "70%", "pont": 1.0}]
+    monkeypatch.setattr(scouting, "attack_stoppers", lambda rep: tetel)
+    monkeypatch.setattr(scouting, "defence_breakpoints", lambda rep: tetel)
+    stop = report_html._stoppers_block(_rep())
+    assert stop.startswith('<div class="keys stop"><h2>Hogyan állítsd meg a '
+                           'támadásukat</h2><ol>')
+    assert stop.count("<li>") == 2
+    assert ("<li><b>Hol:</b> bal &lt;szél&gt;<br><b>Mivel:</b> kettőzés<br>"
+            '<span class="miert">Miért: 5/6 gól</span></li>') in stop
+    tores = report_html._breakpoints_block(_rep())
+    assert '<div class="keys break"><h2>Hol törhető fel a védekezésük</h2>' \
+        in tores and tores.count("<li>") == 2
+
+    monkeypatch.setattr(scouting, "attack_stoppers", lambda rep: [])
+    monkeypatch.setattr(scouting, "defence_breakpoints", lambda rep: [])
+    assert report_html._stoppers_block(_rep()) == ""
+    assert report_html._breakpoints_block(_rep()) == ""
+
+    def bukik(rep):
+        raise RuntimeError("nem megy")
+    monkeypatch.setattr(scouting, "attack_stoppers", bukik)
+    monkeypatch.setattr(scouting, "defence_breakpoints", bukik)
+    assert report_html._stoppers_block(_rep()) == ""
+    assert report_html._breakpoints_block(_rep()) == ""
+
+
+def test_stoppers_es_breakpoints_block_a_valodi_kivonattal():
+    """A VALÓDI kivonatokkal (attack_stoppers / defence_breakpoints): üres
+    riportból nincs blokk; a tételek kulcsai tényleg hol / mivel / miert."""
+    from handball.pipeline.report_html import (_breakpoints_block,
+                                               _stoppers_block)
+    from handball.pipeline.scouting import (attack_stoppers,
+                                            defence_breakpoints)
+
+    ures = ScoutingReport(team="home", team_name="Mi")
+    assert attack_stoppers(ures) == [] and defence_breakpoints(ures) == []
+    assert _stoppers_block(ures) == "" and _breakpoints_block(ures) == ""
+    from handball.models.tracking import Team
+    from handball.pipeline.scouting import scout_team
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    rep = scout_team(simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                                           shots_per_min=8), Team.HOME)
+    for kivonat, blokk in ((attack_stoppers, _stoppers_block),
+                           (defence_breakpoints, _breakpoints_block)):
+        tetelek = kivonat(rep)
+        assert all({"hol", "mivel", "miert"} <= set(t) for t in tetelek)
+        assert blokk(rep).count("<li>") == len(tetelek)
+
+
+def test_figura_ajanlo_es_vedekezesi_proba_sorok():
+    """A figura-ajánló: a mondat, alatta legfeljebb öt figura a
+    lövőhelyzettel és az alap fal elleni értékkel. A védekezési próba: a
+    mondat nagy kezdőbetűvel és ponttal, figuránként az ismétlés, az
+    időpont (p:mm) és — ha van — a 3D-link."""
+    from handball.pipeline.report_html import (FIGURA_AJANLO_SOROK,
+                                               _figura_ajanlo_rows,
+                                               _vedekezesi_proba_rows)
+
+    figurak = [{"name": f"Figura <{i}>", "pont_pct": 60.4 - i,
+                "alap_pct": 40.0} for i in range(7)]
+    h = _figura_ajanlo_rows({"ajanlas": "A <Kereszt> a legjobb",
+                             "figurak": figurak})
+    assert h.startswith("<p>A &lt;Kereszt&gt; a legjobb</p>")
+    assert h.count('<div class="bar-row">') == FIGURA_AJANLO_SOROK == 5
+    assert "Figura &lt;0&gt;" in h and "Figura &lt;5&gt;" not in h
+    assert "60% lövőhelyzet (alap fal: 40%)" in h
+    assert _figura_ajanlo_rows({}) == ""
+    assert _figura_ajanlo_rows({"figurak": [{"name": "X"}]}).count(
+        "0% lövőhelyzet (alap fal: 0%)") == 1
+
+    p = _vedekezesi_proba_rows({
+        "verdict": "a falunk többet enged a kelleténél",
+        "figurak": [{"ismetles": 3, "t0_s": 83.4, "pont_pct": 55.0,
+                     "alap_pct": 35.0, "link": "a=1&b=<2>"},
+                    {"ismetles": 2, "t0_s": 5.0, "pont_pct": 20.0,
+                     "alap_pct": 30.0}]})
+    assert p.startswith("<p>A falunk többet enged a kelleténél.</p>")
+    assert "3× · pl. 1:23" in p and "2× · pl. 0:05" in p
+    assert '<a href="/figura3d?a=1&amp;b=&lt;2&gt;">3D ↗</a>' in p
+    assert p.count("3D ↗") == 1
+    assert _vedekezesi_proba_rows({}) == ""
+
+
+def test_figure_svg_a_cella_atlatszatlansaga_a_latogatottsag():
+    """A figura-alak mini-pályán: a látogatott cellák rajzolódnak, a
+    leglátogatottabb a legsötétebb; rossz hosszú vagy üres alaknál nincs
+    rajz (üres szöveg); csupa nulla alak üres pálya, osztás nélkül."""
+    from handball.pipeline.report_html import _figure_svg
+
+    alak = [0.0] * 18
+    alak[11], alak[5] = 1.0, 0.5
+    svg = _figure_svg(alak)
+    assert svg.startswith('<svg width="150" height="75"') and svg.endswith(
+        "</svg>")
+    assert svg.count('fill="#2FD9C4"') == 2
+    assert 'opacity="0.90"' in svg and 'opacity="0.49"' in svg
+    # A 11-es cella (ix=5, iy=1) helye: x = 125, y = 25.
+    assert '<rect x="125.0" y="25.0" width="25.0" height="25.0"' in svg
+    assert _figure_svg([]) == "" and _figure_svg(None) == ""
+    assert _figure_svg([1.0] * 17) == ""
+    ures = _figure_svg([0.0] * 18)
+    assert ures.startswith("<svg") and 'fill="#2FD9C4"' not in ures
+    assert 'width="300"' in _figure_svg(alak, w=300, h=150)
+
+
+def test_setplay_library_rows_visszatero_figurak_vagy_tajekoztato():
+    """A visszatérő figurák sorai: rajz, edzői név (a zónával), meccs /
+    támadás / gól; legfeljebb hat sor; visszatérő figura nélkül
+    tájékoztató bekezdés (None könyvtárra is)."""
+    from handball.pipeline.report_html import _setplay_library_rows
+
+    alak = [0.0] * 18
+    alak[11] = 1.0
+    sor = {"shape": alak, "name": "Kereszt <A>", "zone": "közép",
+           "matches": 3, "attacks": 9, "goals": 4, "goal_pct": 44.4}
+    h = _setplay_library_rows({"recurring": [sor] * 8})
+    assert h.count('<div class="bar-row"') == 6
+    assert "<b>Kereszt &lt;A&gt;</b> (közép) — 3 meccsen 9 támadás, 4 gól " \
+           "(44%)" in h
+    assert h.count("<svg") == 6
+    assert "A rajz a támadó szemszögéből" in h
+    nev_nelkul = _setplay_library_rows({"recurring": [
+        {"shape": alak, "zone": "bal oldal", "matches": 2, "attacks": 4,
+         "goals": 1, "goal_pct": 25.0}]})
+    assert "<b>bal oldal</b> — 2 meccsen 4 támadás, 1 gól (25%)" in nev_nelkul
+    for ures in ({}, None, {"recurring": []}):
+        assert "Még nincs meccsről meccsre visszatérő figura" in \
+            _setplay_library_rows(ures)
+
+
+def test_fmt_clock_es_phase_bars():
+    """A játékóra p:mm alakja, és a fázis-megoszlás három sávja a két
+    csapat nevével (a hiányzó fázis 0%)."""
+    from handball.pipeline.report_html import _fmt_clock, _phase_bars
+
+    assert _fmt_clock(0) == "0:00" and _fmt_clock(83.4) == "1:23"
+    assert _fmt_clock(59.99) == "0:59" and _fmt_clock(3600) == "60:00"
+    h = _phase_bars({"home_attack": 45.6, "away_attack": 30.2}, "Mi <A>",
+                    "Ők")
+    assert h.count('<div class="bar-row">') == 3
+    assert "Mi &lt;A&gt; támadás" in h and "Ők támadás" in h
+    assert "width:46%" in h and "width:30%" in h
+    assert 'bar-fill gold" style="width:0%"' in h      # átmenet: nincs adat
+    assert _phase_bars({}, "H", "A").count("width:0%") == 3
+
+
+def test_heatmap_svg_a_latogatott_cellak_es_az_ures_terkep():
+    """A hőtérkép-SVG 2:1 arányú; csak a látogatott cellák rajzolódnak,
+    az átlátszóságuk a látogatottsággal arányos; üres térképnél csak a
+    pálya (cella és osztás nélkül)."""
+    from handball.models.tracking import (Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.analytics import compute_team_heatmap
+    from handball.pipeline.report_html import _heatmap_svg
+
+    frames = [Frame(t=t, players=[
+        PlayerPosition(track_id=1, team=Team.HOME, x=30.0, y=10.0),
+        PlayerPosition(track_id=2, team=Team.HOME,
+                       x=30.0 if t < 3 else 5.0, y=10.0 if t < 3 else 3.0),
+    ], ball=None) for t in range(4)]
+    m = Match(MatchMeta(match_id="hm", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    svg = _heatmap_svg(compute_team_heatmap(m, Team.HOME))
+    assert svg.startswith('<svg viewBox="0 0 360 180" width="360" '
+                          'height="180"')
+    assert svg.count('fill="#12988a"') == 2
+    assert 'fill-opacity="0.80"' in svg           # a leglátogatottabb cella
+    assert 'fill-opacity="0.18"' in svg           # 1/7-nyi látogatottság
+    ures = _heatmap_svg(compute_team_heatmap(m, Team.AWAY), color="#b2453a",
+                        width=200)
+    assert 'viewBox="0 0 200 100"' in ures and "fill-opacity" not in ures
+
+
+def _esemeny(t, tipus, team="home", player=None, detail=None):
+    return {"t": t, "type": tipus, "team": team, "player_id": player,
+            "detail": detail}
+
+
+def test_shot_positions_a_lovo_helye_kulonben_a_labdae():
+    """A lövés / gól helye a lövő pozíciója az esemény kockáján; ha a
+    lövő nincs a kockán (vagy ismeretlen), a labdáé; ha az sincs, vagy
+    nincs ilyen kocka, a lövés kimarad. A szótár- és az objektum-alakú
+    eseményt egyaránt érti; a passz nem lövés."""
+    from types import SimpleNamespace
+
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.event_detection import EventType
+    from handball.pipeline.report_html import _shot_positions
+
+    frames = [
+        Frame(t=10, players=[PlayerPosition(track_id=7, team=Team.HOME,
+                                            x=31.0, y=9.0)],
+              ball=Ball(x=38.0, y=10.0)),
+        Frame(t=20, players=[], ball=Ball(x=6.0, y=12.0)),
+        Frame(t=30, players=[], ball=None),
+    ]
+    m = Match(MatchMeta(match_id="sp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    esemenyek = [
+        _esemeny(10, "goal", player=7),                    # a lövő helye
+        _esemeny(20, "shot", team="away", player=99),      # nincs a kockán
+        _esemeny(30, "shot", player=None),                 # se lövő, se labda
+        _esemeny(40, "shot", player=7),                    # nincs ilyen kocka
+        _esemeny(10, "pass", player=7),                    # nem lövés
+        SimpleNamespace(t=10, type=EventType.SHOT, team=Team.HOME,
+                        player_id=None),                   # objektum-alak
+    ]
+    assert _shot_positions(m, esemenyek) == [
+        (31.0, 9.0, "home", True), (6.0, 12.0, "away", False),
+        (38.0, 10.0, "home", False)]
+    assert _shot_positions(m, []) == []
+
+
+def test_shot_map_svg_a_gol_arany_korvonalat_kap():
+    """A lövéstérképen a gól teli, arany körvonalú pont, a kimaradt lövés
+    halványabb; a csapatok a jelentés két színével; lövés nélkül üres
+    pálya."""
+    from handball.pipeline.report_html import _shot_map_svg
+
+    svg = _shot_map_svg([(30.0, 10.0, "home", True),
+                         (10.0, 5.0, "away", False),
+                         (20.0, 10.0, "ismeretlen", False)])
+    assert svg.startswith('<svg viewBox="0 0 480 240"')
+    assert ('<circle cx="360.0" cy="120.0" r="5" fill="#2f6fb2" '
+            'fill-opacity="1.0" stroke="#9d7526" stroke-width="2.5"/>') in svg
+    assert ('<circle cx="120.0" cy="60.0" r="5" fill="#b2453a" '
+            'fill-opacity="0.45"/>') in svg
+    assert 'fill="#8492A6" fill-opacity="0.45"' in svg
+    assert _shot_map_svg([]).count("<circle") == 0
+
+
+def test_intensity_svg_ket_vonal_vagy_ures():
+    """A tempó-alakulás két vonala (hazai / vendég) az ablakok közepén;
+    kevesebb mint két ablakból vagy kockából nincs rajz (üres szöveg);
+    csupa nulla sebességnél sem oszt nullával."""
+    from handball.pipeline.report_html import _intensity_svg
+
+    ablakok = [{"start_frame": 0, "home_avg_ms": 2.0, "away_avg_ms": 1.0},
+               {"start_frame": 750, "home_avg_ms": 3.0, "away_avg_ms": 2.5},
+               {"start_frame": 1500, "home_avg_ms": 1.5, "away_avg_ms": 2.0}]
+    svg = _intensity_svg(ablakok, total_frames=2250, fps=25.0)
+    assert svg.startswith('<svg viewBox="0 0 720 150"')
+    assert svg.count("<polyline") == 2
+    assert 'stroke="#2f6fb2"' in svg and 'stroke="#b2453a"' in svg
+    assert ">2'</text>" in svg                    # 2250 kocka = 1,5 perc → "2'"
+    assert _intensity_svg(ablakok[:1], 2250, 25.0) == ""
+    assert _intensity_svg([], 2250, 25.0) == ""
+    assert _intensity_svg(ablakok, 1, 25.0) == ""
+    allo = [{"start_frame": 0, "home_avg_ms": 0.0, "away_avg_ms": 0.0},
+            {"start_frame": 10, "home_avg_ms": 0.0, "away_avg_ms": 0.0}]
+    assert _intensity_svg(allo, 20, 25.0).count("<polyline") == 2
+
+
+def test_pass_pairs_a_leggyakoribb_parok_mezszammal():
+    """Egy csapat passz-összegzése: az összes passz és a leggyakoribb
+    párok (az irány nem számít: 7→9 és 9→7 egy pár), mezszámmal, ha
+    ismert; a másik csapat passza, a fogadó nélküli és az önmagának adott
+    "passz" kimarad; passz nélkül (0, [])."""
+    from handball.models.tracking import (Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.report_html import _pass_pairs
+
+    m = Match(MatchMeta(match_id="pp", home_team="H", away_team="A",
+                        fps=25.0), [Frame(t=0, players=[
+                            PlayerPosition(track_id=1, team=Team.HOME, x=1.0,
+                                           y=1.0, jersey_number=7),
+                            PlayerPosition(track_id=2, team=Team.HOME, x=2.0,
+                                           y=2.0, jersey_number=9),
+                            PlayerPosition(track_id=3, team=Team.HOME, x=3.0,
+                                           y=3.0)], ball=None)])
+
+    def passz(a, b, team="home"):
+        return _esemeny(0, "pass", team=team, player=a,
+                        detail={"receiver_id": b} if b is not None else None)
+
+    esemenyek = [passz(1, 2), passz(2, 1), passz(1, 2), passz(2, 3),
+                 passz(1, 1), passz(1, None), passz(11, 12, team="away"),
+                 _esemeny(0, "shot", player=1)]
+    assert _pass_pairs(m, esemenyek, "home") == (
+        4, [("#7", "#9", 3), ("#9", "id 3", 1)])
+    assert _pass_pairs(m, esemenyek, "home", top=1) == (4, [("#7", "#9", 3)])
+    assert _pass_pairs(m, esemenyek, "away") == (1, [("id 11", "id 12", 1)])
+    assert _pass_pairs(m, [], "home") == (0, [])
+
+
+def test_kep_img_beagyazott_jpeg():
+    """A jelentés videó-kockája beágyazott (base64) JPEG — a jelentés
+    önálló fájl marad; a bájtok visszafejthetők."""
+    import base64
+
+    from handball.pipeline.report_html import _kep_img
+
+    h = _kep_img(b"\xff\xd8\xff\xe0-jpeg-bajtok")
+    assert h.startswith('<img alt="" src="data:image/jpeg;base64,')
+    kod = h.split("base64,")[1].split('"')[0]
+    assert base64.b64decode(kod) == b"\xff\xd8\xff\xe0-jpeg-bajtok"
+    assert _kep_img(b"").startswith('<img alt="" src="data:image/jpeg;'
+                                    'base64,"')
+
+
+def test_report_frame_times_a_jegyzetek_idorendben_plafonnal():
+    """A jelentés videó-kockáinak ideje: a videózandó jelenetek horgonyai,
+    utánuk az időrendben első REPORT_NOTE_FRAMES_MAX jegyzet (egész
+    kockára váltva; a kocka nélküli jegyzet a 0. kocka); jelenet és
+    jegyzet nélkül üres."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.report_html import (REPORT_NOTE_FRAMES_MAX,
+                                               _report_frame_times)
+
+    ures = Match(MatchMeta(match_id="rf", home_team="H", away_team="A",
+                           fps=25.0), [])
+    assert _report_frame_times(ures, None) == []
+    assert _report_frame_times(ures, []) == []
+    jegyzetek = [{"frame": 300}, {"frame": 100}, {"frame": 200.7},
+                 {"text": "kocka nélkül"}]
+    assert _report_frame_times(ures, jegyzetek) == [0, 100, 200, 300]
+    sok = [{"frame": 10 * i} for i in range(REPORT_NOTE_FRAMES_MAX + 5)]
+    idok = _report_frame_times(ures, list(reversed(sok)))
+    assert idok == [10 * i for i in range(REPORT_NOTE_FRAMES_MAX)]
+
+
+def test_trend_metrics_table_irany_nyilakkal():
+    """A trend-tábla soronként a régi / új értéket és a változást adja:
+    javulásnál ▲ (up), romlásnál ▼ (down), semlegesnél –; mutató nélkül
+    tájékoztató bekezdés."""
+    from handball.pipeline.report_html import _trend_metrics_table
+
+    h = _trend_metrics_table({"metrics": [
+        {"label": "Gyors <indítás>", "unit": "%", "older": 8.24,
+         "newer": 12.0, "delta": 3.76, "better": True},
+        {"label": "Eladott labda", "unit": "", "older": 9.0, "newer": 12.5,
+         "delta": 3.5, "better": False},
+        {"label": "Tempó", "unit": " s", "older": 2.7, "newer": 2.7,
+         "delta": 0.0, "better": None}]})
+    assert h.startswith("<table><tr><th>Mutató</th>")
+    assert ('<tr><td>Gyors &lt;indítás&gt;</td><td class="num">8.2%</td>'
+            '<td class="num">12.0%</td><td class="num up">▲ +3.8%</td></tr>'
+            ) in h
+    assert '<td class="num down">▼ +3.5</td>' in h
+    assert '<td class="num ">– +0.0 s</td>' in h
+    assert _trend_metrics_table({"metrics": []}) == \
+        '<p class="empty">Nincs összevethető mutató.</p>'
+    assert _trend_metrics_table({}) == \
+        '<p class="empty">Nincs összevethető mutató.</p>'
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+def test_note_diagram_svg_palya_jatekosok_labda():
+    """A jegyzet felülnézeti ábrája: 2:1 arányú pálya (felezővonal, a
+    két 6 m-es vonal tömören, a két 9 m-es szaggatottan, a két kapu), a
+    játékosok csapatszínnel és mezszámmal, a labda kis körrel. Üres
+    jelenetre üres pálya — nem hiba."""
+    from handball.pipeline.report_html import _note_diagram_svg
+
+    ures = _note_diagram_svg({"players": [], "ball": None, "arrows": []})
+    assert ures.startswith('<svg viewBox="0 0 360 180" width="360" '
+                           'height="180"')
+    assert ures.endswith("</svg>")
+    assert ures.count("<path ") == 4                 # 2 × (6 m + 9 m)
+    assert ures.count('stroke-dasharray="4 3"') == 2 # csak a 9 m szaggatott
+    assert ures.count("<line ") == 3                 # felező + két kapu
+    assert "<circle" not in ures and "<polygon" not in ures
+    assert "<text" not in ures
+    # Hiányzó kulcsokkal (régi jegyzet) ugyanez.
+    assert _note_diagram_svg({}) == ures
+
+    abra = _note_diagram_svg({
+        "players": [{"x": 10.0, "y": 5.0, "team": "home", "jersey": 7},
+                    {"x": 30.0, "y": 15.0, "team": "away", "jersey": None},
+                    {"x": 20.0, "y": 10.0, "team": "biro", "jersey": 1}],
+        "ball": (12.0, 6.0), "arrows": []})
+    # 1 m = 9 px (360 px / 40 m).
+    assert '<circle cx="90.0" cy="45.0" r="6" fill="#2f6fb2"/>' in abra
+    assert '<circle cx="270.0" cy="135.0" r="6" fill="#b2453a"/>' in abra
+    assert '<circle cx="180.0" cy="90.0" r="6" fill="#8492A6"/>' in abra
+    assert abra.count("<text ") == 2                 # mezszám nélkül nincs
+    assert ('<text x="90.0" y="47.5" font-size="7" text-anchor="middle" '
+            'fill="#fff">7</text>') in abra
+    assert '<circle cx="108.0" cy="54.0" r="3" fill="#e8a33d"' in abra
+
+
+def test_note_diagram_svg_nyilak_szar_es_hegy_nyomtato_szinnel():
+    """A jegyzettel mentett nyíl szár + hegy: a hegy a nyíl hosszának
+    45%-a, de legfeljebb 0,9 m; a szín a nyomtatásra sötétített három
+    szerep-szín (labda/passz, futás, védő); a szélesség paraméter az
+    egész ábrát arányosan nagyítja."""
+    from handball.pipeline.report_html import (_NOTE_ARROW_PRINT,
+                                               _note_diagram_svg)
+
+    assert _NOTE_ARROW_PRINT == ("#c99a06", "#2f6fb2", "#c0392b")
+    hosszu = _note_diagram_svg({"arrows": [(10.0, 10.0, 20.0, 10.0, 1)]})
+    # 10 m-es nyíl: a hegy 0,9 m → a szár 19,1 m-ig (171,9 px) tart.
+    assert ('<line x1="90.0" y1="90.0" x2="171.9" y2="90.0" '
+            'stroke="#2f6fb2" stroke-width="3"/>') in hosszu
+    assert hosszu.count('<polygon class="nyil"') == 1
+    assert '180.0,90.0" fill="#2f6fb2"/>' in hosszu  # a csúcs a végponton
+    # 1 m-es nyíl: a hegy 0,45 m → a szár 10,55 m-ig (94,9 / 95,0 px).
+    rovid = _note_diagram_svg({"arrows": [(10.0, 10.0, 11.0, 10.0, 0)]})
+    assert 'x2="94.9" y2="90.0" stroke="#c99a06"' in rovid \
+        or 'x2="95.0" y2="90.0" stroke="#c99a06"' in rovid
+    # Három nyíl, három szín; a játékos-körök a nyilak FÖLÖTT (utánuk).
+    harom = _note_diagram_svg({
+        "arrows": [(5.0, 5.0, 9.0, 5.0, 0), (5.0, 8.0, 9.0, 8.0, 1),
+                   (5.0, 11.0, 5.0, 15.0, 2)],
+        "players": [{"x": 5.0, "y": 5.0, "team": "home", "jersey": 9}]})
+    assert harom.count('<polygon class="nyil"') == 3
+    for szin in _NOTE_ARROW_PRINT:
+        assert f'fill="{szin}"/>' in harom
+    assert harom.rindex("<polygon") < harom.index('r="6"')
+    # Dupla szélesség: minden koordináta kétszeres.
+    nagy = _note_diagram_svg({"arrows": [(10.0, 10.0, 20.0, 10.0, 1)]},
+                             width=720)
+    assert nagy.startswith('<svg viewBox="0 0 720 360" width="720" '
+                           'height="360"')
+    assert '<line x1="180.0" y1="180.0" x2="343.8" y2="180.0"' in nagy
+
+
+def test_note_diagram_svg_a_mezszamot_escape_eli():
+    """A mezszám szövegként kerül az ábrába — HTML-escape-pel (a kézzel
+    szerkesztett meccs-fájl sem törheti el a jelentést)."""
+    from handball.pipeline.report_html import _note_diagram_svg
+
+    abra = _note_diagram_svg({"players": [
+        {"x": 10.0, "y": 5.0, "team": "home", "jersey": "<7>"}]})
+    assert "&lt;7&gt;</text>" in abra and "<7>" not in abra
+
+
+def test_note_diagram_svg_a_valodi_jegyzet_abrajabol():
+    """A VALÓDI úton: a court3d.note_diagram adata (a jegyzet kockájának
+    játékosai, labdája és a dekódolt nyilak) — minden játékos egy kör, a
+    labda egy kis kör, nyilanként egy hegy; a túl rövid nyíl már a
+    dekódolásnál kimarad (nulla hosszú nyíl így nem érhet ide)."""
+    from handball.pipeline.court3d import DRAWING_MIN_M, note_diagram
+    from handball.pipeline.report_html import _note_diagram_svg
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=3)
+    d = note_diagram(m, 100, "10,10,20,10,1;5,5,5,9,2;7,7,7,7,0")
+    assert len(d["players"]) > 0
+    assert len(d["arrows"]) == 2 and DRAWING_MIN_M > 0   # a 0 hosszú kimarad
+    abra = _note_diagram_svg(d)
+    assert abra.count('r="6"') == len(d["players"])
+    assert abra.count('r="3"') == (1 if d["ball"] else 0)
+    assert abra.count('<polygon class="nyil"') == 2
+    assert abra.count("<text ") == sum(
+        1 for p in d["players"] if p.get("jersey") is not None)
+
+
+def test_match_report_html_cached_ugyanaz_a_hatokorben_es_anelkul():
+    """A meccs-jelentés az alap-méréseket gyorsítótárazó hatókörben épül
+    (match_report_html → _match_report_html_cached): a HTML bájtra
+    ugyanaz, mint a hatókör nélkül — a gyorsítótár csak gyorsít."""
+    import re
+
+    from handball.pipeline.event_detection import detect_events
+    from handball.pipeline.report_html import (_match_report_html_cached,
+                                               match_report_html)
+    from handball.pipeline.tactics import team_style_profile
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    profil, esemenyek = team_style_profile(m), detect_events(m)
+
+    def kelt_nelkul(html):
+        # A lábléc "Kelt: ÉÉÉÉ-HH-NN ÓÓ:PP" bélyege a két hívás közt
+        # percet válthat — az összevetésből kimarad.
+        return re.sub(r"Kelt: \d{4}-\d\d-\d\d \d\d:\d\d", "Kelt: —", html)
+
+    hatokorben = match_report_html(m, profil, esemenyek, None,
+                                   varakozas=["a jóslat bejött"])
+    nyersen = _match_report_html_cached(m, profil, esemenyek, None,
+                                        varakozas=["a jóslat bejött"])
+    assert "Kelt: —" in kelt_nelkul(nyersen)          # a bélyeg megvan
+    assert kelt_nelkul(hatokorben) == kelt_nelkul(nyersen)
+    assert nyersen.lstrip().lower().startswith("<!doctype html>")
+    assert re.search(r"<h2[^>]*>Várakozás és valóság</h2>", nyersen)
+    assert "<li>a jóslat bejött.</li>" in nyersen
+    # A választható szakasz üres bemenetnél elmarad (nem üres címsor).
+    assert "Várakozás és valóság" not in _match_report_html_cached(
+        m, profil, esemenyek, None)

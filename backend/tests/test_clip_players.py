@@ -51,6 +51,27 @@ def _client():
     return TestClient(create_app()), m.meta.match_id
 
 
+def _megvar(client, job_id, hatarido_s=120.0):
+    """Megvárja, hogy a klip-munka véget érjen (kész vagy hiba).
+
+    A munka HÁTTÉRSZÁLON fut (előbb a játékos-lap / edzői összefoglaló
+    készül el, csak utána hívja a vágót). A korábbi "200 lekérdezés,
+    várakozás nélkül" terhelt gépen előbb fogyott el, mint ahogy a szál
+    a vágóig jutott — a teszt ilyenkor üres kézzel bukott. Itt HATÁRIDŐIG
+    várunk, rövid szünetekkel: a gyors gépen ugyanolyan gyors, a
+    lassún nem versenyez."""
+    import time
+
+    vege = time.monotonic() + hatarido_s
+    while True:
+        job = client.get(f"/jobs/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            return job
+        assert time.monotonic() < vege, (
+            f"a klip-munka {hatarido_s:.0f} mp alatt sem ért véget: {job}")
+        time.sleep(0.02)
+
+
 def test_a_vegpont_megmondja_kihez_van_jelenet():
     """A felület nem találgathat: csak MŰKÖDŐ mezszámot kínálhat fel.
 
@@ -130,10 +151,7 @@ def test_a_klip_munkas_atadja_a_mezszamot_a_motornak():
                         json={"types": ["goal", "shot"], "jerseys": [mez]})
         assert r.status_code == 200
         job_id = r.json()["job_id"]
-        for _ in range(200):
-            job = client.get(f"/jobs/{job_id}").json()
-            if job["status"] in ("done", "error"):
-                break
+        _megvar(client, job_id)
     finally:
         clips_mod.export_event_clips = valodi
 
@@ -170,10 +188,7 @@ def test_az_elgepelt_mezszam_nem_szukiti_a_csomagot():
                         json={"types": ["goal"],
                               "jerseys": ["hetes", None, 9, "11"]})
         job_id = r.json()["job_id"]
-        for _ in range(200):
-            if client.get(f"/jobs/{job_id}").json()["status"] in (
-                    "done", "error"):
-                break
+        _megvar(client, job_id)
     finally:
         clips_mod.export_event_clips = valodi
 
@@ -238,10 +253,7 @@ def test_a_jatekos_lapja_a_klipek_melle_kerul():
         r = client.post(f"/matches/{mid}/clips/export",
                         json={"types": ["goal"], "jerseys": [mez]})
         job_id = r.json()["job_id"]
-        for _ in range(200):
-            if client.get(f"/jobs/{job_id}").json()["status"] in (
-                    "done", "error"):
-                break
+        _megvar(client, job_id)
     finally:
         clips_mod.export_event_clips = valodi
 
@@ -278,10 +290,7 @@ def test_mezszam_nelkul_nincs_jatekos_lap():
         r = client.post(f"/matches/{mid}/clips/export",
                         json={"types": ["goal"]})
         job_id = r.json()["job_id"]
-        for _ in range(200):
-            if client.get(f"/jobs/{job_id}").json()["status"] in (
-                    "done", "error"):
-                break
+        _megvar(client, job_id)
     finally:
         clips_mod.export_event_clips = valodi
 

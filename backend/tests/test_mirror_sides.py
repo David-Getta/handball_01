@@ -92,3 +92,188 @@ def test_defensive_gaps_zone_flips_in_the_mirror():
     assert plain["worst_zone"] is not None
     assert flipped["worst_zone"] == swap_sides(plain)["worst_zone"]
     assert flipped["worst_zone"] != plain["worst_zone"]
+
+
+# ---- A mérés, a jelentés és a main (eddig egyszer sem futottak a csomagban) ----
+
+def _kis_meres(monkeypatch, retegek, seconds=6.0):
+    from scripts import mirror_sides, order_sensitivity
+
+    monkeypatch.setattr(order_sensitivity, "_layer_functions",
+                        lambda: retegek)
+    return mirror_sides.measure(seconds=seconds, seed=7)
+
+
+def test_measure_megkulonbozteti_a_helyesen_es_a_hibasan_tukrozot(
+        monkeypatch):
+    """Kicsiben, próba-rétegekkel. A VÉDŐ szemszögéből nevező réteg a
+    tükörképben megfordul (rendben); a mindig "bal"-t mondó réteg nem
+    (hibás); az oldal-címke nélküli réteg nem számít vizsgáltnak."""
+    from handball.pipeline import xg
+
+    def helyes(match):
+        # A labda átlagos oldala: a tükörképben a másik oldal.
+        ys = [f.ball.y for f in match.frames if f.ball is not None]
+        atlag = sum(ys) / len(ys)
+        return {"home": {"weak_side": "bal" if atlag < 10.0 else "jobb"}}
+
+    def hibas(match):
+        return {"home": {"weak_side": "bal"}}     # a tükörképben is "bal"
+
+    def cimke_nelkul(match):
+        return {"home": {"verdict": "jobb szabad helyzet volt", "n": 3}}
+
+    monkeypatch.setattr(xg, "_proba_helyes", helyes, raising=False)
+    monkeypatch.setattr(xg, "_proba_hibas", hibas, raising=False)
+    monkeypatch.setattr(xg, "_proba_cimke_nelkul", cimke_nelkul,
+                        raising=False)
+    res = _kis_meres(monkeypatch, [
+        ("helyes", "xg", "_proba_helyes"), ("hibás", "xg", "_proba_hibas"),
+        ("címke nélkül", "xg", "_proba_cimke_nelkul")])
+    assert res == {"checked": 2, "mirrored_ok": ["helyes"],
+                   "broken": ["hibás"], "skipped_prose": []}
+
+
+def test_measure_a_prozat_kihagyja_a_hibas_reteget_nem_iteli(monkeypatch):
+    """A próza-gyártó összegzők (mondatban beszélnek oldalról) kimaradnak
+    — név szerint, rendezve —, a hibára futó és a hiányzó réteg pedig
+    nem kap ítéletet (sem jó, sem hibás)."""
+    from handball.pipeline import xg
+    from scripts.mirror_sides import PROSE_LAYERS
+
+    def bukik(match):
+        raise RuntimeError("nem megy")
+
+    hivva = []
+    monkeypatch.setattr(xg, "_proba_bukik", bukik, raising=False)
+    monkeypatch.setattr(xg, "_proba_proza",
+                        lambda match: hivva.append(1) or {}, raising=False)
+    assert {"coach_summary", "scouting", "training"} <= PROSE_LAYERS
+    res = _kis_meres(monkeypatch, [
+        ("training", "xg", "_proba_proza"),
+        ("coach_summary", "xg", "_proba_proza"),
+        ("bukó", "xg", "_proba_bukik"),
+        ("hiányzó", "xg", "_nincs_ilyen_fuggveny")])
+    assert res == {"checked": 0, "mirrored_ok": [], "broken": [],
+                   "skipped_prose": ["coach_summary", "training"]}
+    assert hivva == []                           # a prózát meg sem hívja
+
+
+def test_measure_a_valodi_oldal_cimkes_reteg_helyesen_tukrozodik(
+        monkeypatch):
+    """Egy VALÓDI oldal-címkés réteggel (defensive_gaps): a mérés
+    vizsgáltnak veszi, és a tükörképe helyes — ezt mondja a beírt
+    jelentés is."""
+    res = _kis_meres(monkeypatch,
+                     [("defensive_gaps", "defense", "defensive_gaps")],
+                     seconds=60.0)
+    assert res["broken"] == []
+    assert res["checked"] == len(res["mirrored_ok"]) <= 1
+
+
+def test_build_report_megnevezi_a_hibas_retegeket():
+    """A jelentés fejléce a mérést (hossz, mag, darabszámok) mondja; a
+    hibás rétegek névsorban, külön szakaszban állnak, alatta a vizsgált
+    és a kihagyott rétegek."""
+    from scripts.mirror_sides import build_report
+
+    res = {"checked": 4, "mirrored_ok": ["wing_usage", "attack_sides"],
+           "broken": ["zeta_reteg", "alfa_reteg"],
+           "skipped_prose": ["coach_summary", "training"]}
+    s = build_report(res, seconds=120.0, seed=7)
+    assert s.startswith("# Tükrözés-őr")
+    assert "120 mp-es szimulált meccs (mag: 7); **4 oldal-címkés réteg** " \
+           "vizsgálva, ebből **2 hibás**" in s
+    assert "## Hibás rétegek" in s and "Hibás réteg: nincs" not in s
+    assert s.index("- `alfa_reteg`") < s.index("- `zeta_reteg`")
+    vizsgalt = s.split("## Vizsgált rétegek")[1]
+    assert vizsgalt.index("- `attack_sides`") < vizsgalt.index(
+        "- `wing_usage`")
+    assert "- `coach_summary`\n- `training`\n" in s.split(
+        "## Kihagyva (próza-gyártó összegzők)")[1]
+
+
+def test_build_report_hiba_nelkul_kimondja():
+    """Hibás réteg nélkül a jelentés kimondja, hogy minden oldal-címkés
+    réteg helyesen tükröződik (ezt az állapotot kell tartani)."""
+    from scripts.mirror_sides import build_report
+
+    s = build_report({"checked": 1, "mirrored_ok": ["wing_usage"],
+                      "broken": [], "skipped_prose": []}, 60.0, 3)
+    assert "## Hibás réteg: nincs" in s
+    assert "Minden oldal-címkés réteg helyesen tükröződik." in s
+    assert "**1 oldal-címkés réteg** vizsgálva, ebből **0 hibás**" in s
+    assert "## Hibás rétegek" not in s
+
+
+def test_main_hibas_retegnel_1_es_kod_kulonben_0(monkeypatch, tmp_path,
+                                                 capsys):
+    """A main megírja a (tmp mappába irányított) jelentést és összegez;
+    a kilépőkód 1, ha van hibásan tükröződő réteg (a kiadás előtti őr
+    ezt nézi), különben 0."""
+    from scripts import mirror_sides as ms
+
+    kert: dict = {}
+    eredmeny = {"checked": 3, "mirrored_ok": ["wing_usage"],
+                "broken": ["rossz_reteg"], "skipped_prose": ["training"]}
+
+    def kamu_meres(seconds, seed):
+        kert.update(seconds=seconds, seed=seed)
+        return eredmeny
+
+    ki_fajl = tmp_path / "docs" / "TUKROZES.md"
+    monkeypatch.setattr(ms, "measure", kamu_meres)
+    monkeypatch.setattr(ms, "_OUT", ki_fajl)
+    assert ms.main(["--seconds", "30", "--seed", "4"]) == 1
+    assert kert == {"seconds": 30.0, "seed": 4}
+    assert ki_fajl.read_text(encoding="utf-8") == ms.build_report(
+        eredmeny, 30.0, 4)
+    ki = capsys.readouterr().out
+    assert f"Tükrözés-jelentés kiírva: {ki_fajl}" in ki
+    assert "vizsgálva: 3 réteg" in ki and "hibás: 1" in ki
+    assert "    - rossz_reteg" in ki
+
+    eredmeny["broken"] = []
+    assert ms.main([]) == 0
+    assert kert == {"seconds": ms.DEFAULT_SECONDS, "seed": ms.DEFAULT_SEED}
+    assert "hibás: 0" in capsys.readouterr().out
+    assert "## Hibás réteg: nincs" in ki_fajl.read_text(encoding="utf-8")
+
+
+# ---- Az összehasonlítás kanonikus alakja (harmadik kör) ---------------------
+
+def test_canon_a_kulcs_sorrend_nem_szamit_a_tartalom_igen():
+    """A tükrözés-őr két réteg-kimenetet a kanonikus JSON-alakjukon vet
+    össze: a szótár-kulcsok sorrendje nem számít, a lista sorrendje és
+    minden érték igen; az ékezetes címke olvasható marad (az oldal-címke
+    keresése ezen a szövegen fut), a nem JSON-érték szövegként megy."""
+    from handball.models.tracking import Team
+    from scripts import mirror_sides as ms
+
+    a = {"home": {"side": "bal szél", "n": 3}, "away": {"n": 1, "side": None}}
+    b = {"away": {"side": None, "n": 1}, "home": {"n": 3, "side": "bal szél"}}
+    assert ms._canon(a) == ms._canon(b)
+    assert '"bal szél"' in ms._canon(a)              # nem \\u-kódolt
+    assert ms._canon({"x": [1, 2]}) != ms._canon({"x": [2, 1]})
+    assert ms._canon({"x": 1}) != ms._canon({"x": 1.5})
+    assert ms._canon({"x": None}) != ms._canon({})
+    # Nem JSON-érték (enum, halmaz, tuple-kulcs nélküli objektum): szöveg.
+    assert ms._canon({"t": Team.HOME}) == ms._canon({"t": Team.HOME})
+    assert isinstance(ms._canon({"h": {1, 2}}), str)
+    assert ms._canon((1, 2)) == ms._canon([1, 2])    # a tuple lista
+    assert ms._canon(None) == "null"
+
+
+def test_canon_a_tukrozott_kimenet_osszevetese():
+    """A mérés lényege a _canon-nal: a helyesen megforduló réteg
+    tükörképének oldal-cseréje UGYANAZ a kanonikus alak, a nem forduló
+    rétegé más — és az oldal-címke keresése is ezen a szövegen megy."""
+    from scripts import mirror_sides as ms
+
+    eredeti = {"home": {"side": "bal szél"}, "away": {"side": "jobb szél"}}
+    tukor_jo = {"home": {"side": "jobb szél"}, "away": {"side": "bal szél"}}
+    assert ms._canon(ms.swap_sides(tukor_jo)) == ms._canon(eredeti)
+    assert ms._canon(ms.swap_sides(eredeti)) != ms._canon(eredeti)
+    assert ms.has_side_label(eredeti) is True
+    assert ms.has_side_label({"home": {"verdict": "a bal szélen sokat "
+                                       "lőnek"}}) is False

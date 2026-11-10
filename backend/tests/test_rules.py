@@ -2829,3 +2829,190 @@ def test_seven_taker_repeat_is_silent_on_thin_samples():
     assert rec["pairs"] == 2, rec          # dobónként 1-1 pár
     assert rec["verdict"] is None, rec
     assert rec["repeat_pct"] is None, rec
+
+
+# ---- Létszám-idővonal (field_count_timeline) ---------------------------------
+
+def test_field_count_timeline_ablakonkent_szamol():
+    """Három 10 mp-es ablak: 6-6, 5-6 (hazai emberhátrány), 6-6 — az
+    ablak kezdő kockájával, időrendben."""
+    from handball.pipeline.rules import field_count_timeline
+
+    frames = _roster_frames(0, 10, 6, 6) + _roster_frames(250, 10, 5, 6) \
+        + _roster_frames(500, 10, 6, 6)
+    tl = field_count_timeline(Match(_meta(), frames))
+    assert tl == [
+        {"start_frame": 0, "home": 6, "away": 6},
+        {"start_frame": 250, "home": 5, "away": 6},
+        {"start_frame": 500, "home": 6, "away": 6},
+    ]
+
+
+def test_field_count_timeline_kapus_becsult_es_villano_track_nem_szamit():
+    """A kapus (role="kapus"), a becsült pozíció és az ablak 20%-ánál
+    rövidebben látszó (zaj-) track nem mezőnyjátékos-létszám."""
+    from handball.pipeline.rules import PP_MIN_PRESENCE, field_count_timeline
+
+    frames = _roster_frames(0, 10, 4, 4)
+    kuszob = round(len(frames) * PP_MIN_PRESENCE)          # 50 kocka
+    for i, f in enumerate(frames):
+        f.players.append(PlayerPosition(
+            track_id=1, team=Team.HOME, x=1.0, y=10.0, role="kapus",
+            source=PositionSource.MEASURED, confidence=1.0))
+        f.players.append(PlayerPosition(
+            track_id=150, team=Team.HOME, x=12.0, y=3.0,
+            source=PositionSource.ESTIMATED, confidence=0.4))
+        if i < kuszob - 1:        # 49 kocka: a küszöb alatt → zaj
+            f.players.append(_pl(250, Team.AWAY, 30.0, 16.0))
+        if i < kuszob:            # pont a küszöb → már számít
+            f.players.append(_pl(160, Team.HOME, 14.0, 16.0))
+    tl = field_count_timeline(Match(_meta(), frames))
+    assert tl == [{"start_frame": 0, "home": 5, "away": 4}]
+
+
+def test_field_count_timeline_sajat_ablak_es_ures_meccs():
+    """A saját ablakhossz (5 mp) kétszer annyi ablakot ad; a csonka
+    utolsó ablak is kijön; üres meccsen nincs ablak (nem 0-0 sor)."""
+    from handball.pipeline.rules import field_count_timeline
+
+    m = Match(_meta(), _roster_frames(0, 12, 6, 5))
+    assert [w["start_frame"] for w in field_count_timeline(m)] == [0, 250]
+    ot = field_count_timeline(m, window_s=5.0)
+    assert [w["start_frame"] for w in ot] == [0, 125, 250]
+    assert all(w["home"] == 6 and w["away"] == 5 for w in ot)
+    assert field_count_timeline(Match(_meta(), [])) == []
+
+
+def test_field_count_timeline_ritkitott_felvetelen_is_10_mp_az_ablak():
+    """Az ablak MÁSODPERCBEN él: harmad-fps-en (a termék ritkítása)
+    ugyanaz a ~30 mp ugyanúgy három ablak (83 kockánként), nem egy."""
+    from handball.pipeline.rules import field_count_timeline
+
+    fps = 25.0 / 3.0
+    frames = _roster_frames(0, 30, 6, 5, fps=fps)[:249]     # 3 × 83 kocka
+    tl = field_count_timeline(Match(_meta(fps), frames))
+    assert [w["start_frame"] for w in tl] == [0, 83, 166]
+    assert all(w["home"] == 6 and w["away"] == 5 for w in tl)
+
+
+# ---- A hetes iránya a kapuban (_seven_direction) ------------------------------
+
+def _labda_ut(pontok, t0=0):
+    """Kockánként egy labda-pont (None = nem látszik a labda)."""
+    return Match(_meta(), [
+        Frame(t=t0 + i, players=[],
+              ball=None if p is None else Ball(x=p[0], y=p[1],
+                                               confidence=1.0))
+        for i, p in enumerate(pontok)])
+
+
+def test_seven_direction_a_dobo_szemszogebol_nevez_oldalt():
+    """A +x kapura dobva az alacsony y a BAL; a x=0 kapura dobva
+    ugyanaz az y a JOBB (a dobó szemből nézi a kaput) — a közép marad."""
+    from handball.pipeline.rules import SEVEN_DIR_SIDE_M, _seven_direction
+
+    def irany(y, goal_x):
+        xs = [33.0, 36.0, 39.5] if goal_x > 20 else [7.0, 4.0, 0.5]
+        return _seven_direction(_labda_ut([(x, y) for x in xs]), 0,
+                                goal_x, 25.0)
+
+    assert irany(8.8, 40.0) == "bal"
+    assert irany(11.2, 40.0) == "jobb"
+    assert irany(10.2, 40.0) == "közép"
+    assert irany(8.8, 0.0) == "jobb"
+    assert irany(11.2, 0.0) == "bal"
+    assert irany(10.0, 0.0) == "közép"
+    # A sáv-határ (0,5 m) már oldal, nem közép.
+    assert irany(10.0 - SEVEN_DIR_SIDE_M, 40.0) == "bal"
+    assert irany(10.0 + SEVEN_DIR_SIDE_M, 40.0) == "jobb"
+
+
+def test_seven_direction_a_kapusikhoz_legkozelebbi_kockabol_itel():
+    """Nem az első és nem az utolsó kocka dönt, hanem az, ahol a labda a
+    legközelebb járt a kapu síkjához (a kipattanó már nem számít)."""
+    from handball.pipeline.rules import _seven_direction
+
+    ut = [(33.0, 10.0), (36.0, 9.4), (39.8, 8.7), (37.0, 11.5)]
+    assert _seven_direction(_labda_ut(ut), 0, 40.0, 25.0) == "bal"
+
+
+def test_seven_direction_none_ha_a_labda_nem_ert_a_sik_kozelebe():
+    """Eltakart vagy elakadt labda: ha 1 mp-en belül nem jut a kapu
+    síkjának 1,5 m-es közelébe (vagy nem is látszik), nincs irány."""
+    from handball.pipeline.rules import SEVEN_DIR_MAX_PLANE_M, _seven_direction
+
+    messze = _labda_ut([(33.0, 8.8), (36.0, 8.8), (38.0, 8.8)])
+    assert 40.0 - 38.0 > SEVEN_DIR_MAX_PLANE_M
+    assert _seven_direction(messze, 0, 40.0, 25.0) is None
+    assert _seven_direction(_labda_ut([None, None, None]), 0, 40.0,
+                            25.0) is None
+    assert _seven_direction(Match(_meta(), []), 0, 40.0, 25.0) is None
+    # A kapuhoz érés az 1 mp-es ablakon KÍVÜL esik → nem ehhez a hetes­hez
+    # tartozik; a lövés ELŐTTI kockák sem számítanak.
+    keson = _labda_ut([(33.0, 8.8)] * 27 + [(39.5, 8.8)])
+    assert _seven_direction(keson, 0, 40.0, 25.0) is None
+    assert _seven_direction(keson, 3, 40.0, 25.0) == "bal"
+    elotte = _labda_ut([(39.5, 8.8), (33.0, 10.0), (33.0, 10.0)])
+    assert _seven_direction(elotte, 1, 40.0, 25.0) is None
+
+
+# ---- A szabály-réteg összegzése egy hívásban (rules_report) -------------------
+
+def test_rules_report_egy_hivasban_ugyanazt_adja_mint_a_retegek():
+    """Az API-nak szóló összegzés öt kulcsa a megfelelő réteg kimenete —
+    egy hetes-sorozaton a hetesek kimenettel és mérleggel jönnek."""
+    from handball.pipeline.rules import (
+        detect_powerplay, passive_play_risks, powerplay_efficiency,
+        rules_report, seven_meter_outcomes, seven_meter_summary,
+    )
+
+    m = _seven_dir_match([(8.8, False), (11.2, True)])
+    rep = rules_report(m)
+    assert set(rep) == {"powerplay", "powerplay_efficiency", "seven_meters",
+                        "seven_meter_summary", "passive_risk"}
+    assert rep["powerplay"] == detect_powerplay(m)
+    assert rep["powerplay_efficiency"] == powerplay_efficiency(m)
+    assert rep["seven_meters"] == seven_meter_outcomes(m)
+    assert rep["seven_meter_summary"] == seven_meter_summary(m)
+    assert rep["passive_risk"] == passive_play_risks(m)
+    # A tartalom is valódi: két hazai hetes, az első bal sarokba gól, a
+    # másodikat a jobb sarokban megfogta a kapus.
+    assert [s["team"] for s in rep["seven_meters"]] == ["home", "home"]
+    assert [s["outcome"] for s in rep["seven_meters"]] == ["gól", "védés"]
+    assert [s["irany"] for s in rep["seven_meters"]] == ["bal", "jobb"]
+    assert rep["seven_meter_summary"]["home"] == {
+        "attempts": 2, "goals": 1, "saved": 1, "missed": 0}
+    assert rep["seven_meter_summary"]["away"]["attempts"] == 0
+
+
+def test_rules_report_a_kiallitast_es_a_passzivot_is_hozza():
+    """Kiállításos meccsen a powerplay-ablak és a hatékonyság-bontás is
+    megjelenik; hosszú, lövés nélküli felállt támadásnál a passzív-jel."""
+    from handball.pipeline.rules import rules_report
+
+    frames = _roster_frames(0, 30, 6, 6) + _roster_frames(750, 60, 5, 6) \
+        + _roster_frames(2250, 30, 6, 6)
+    rep = rules_report(Match(_meta(), frames))
+    assert len(rep["powerplay"]) == 1
+    assert rep["powerplay"][0]["team_down"] == "home"
+    assert rep["powerplay_efficiency"]["away"]["pp_seconds"] >= 45.0
+    assert rep["powerplay_efficiency"]["home"]["sh_seconds"] >= 45.0
+
+    passziv = rules_report(_psr_match(n_attacks=1))
+    assert len(passziv["passive_risk"]) == 1
+    assert passziv["passive_risk"][0]["team"] == "home"
+
+
+def test_rules_report_ures_meccsen_ures_nem_kitalalt():
+    """Üres meccsen nincs kiállítás, hetes vagy passzív-jel: üres listák,
+    üres hatékonyság-szótár és nullás hetes-mérleg — kivétel nélkül."""
+    from handball.pipeline.rules import rules_report
+
+    rep = rules_report(Match(_meta(), []))
+    assert rep["powerplay"] == []
+    assert rep["powerplay_efficiency"] == {}
+    assert rep["seven_meters"] == []
+    assert rep["passive_risk"] == []
+    assert rep["seven_meter_summary"] == {
+        side: {"attempts": 0, "goals": 0, "saved": 0, "missed": 0}
+        for side in ("home", "away")}

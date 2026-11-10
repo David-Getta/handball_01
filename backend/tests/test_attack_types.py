@@ -5200,3 +5200,53 @@ def test_attack_depth_fade_felido_jel_nelkul_nincs_itelet():
     af = attack_depth_fade(Match(_meta(25.0), _adf_frames(0, 10.0)))
     assert af["home"]["drop_m"] is None
     assert af["away"]["drop_m"] is None
+
+
+# ---- A labda nettó előrehaladási sebessége (_advance_speed) ------------------
+
+def _szakasz_labdaval(xs, team=Team.HOME):
+    from handball.pipeline.setplays import AttackSequence
+
+    frames = [Frame(t=i, players=[], ball=None if x is None
+                    else Ball(x=x, y=10.0, confidence=1.0))
+              for i, x in enumerate(xs)]
+    return AttackSequence(team=team, start_t=0, end_t=len(xs) - 1,
+                          frames=frames)
+
+
+def test_advance_speed_a_kapu_fele_halado_labda():
+    """A szakasz első és utolsó labdás kockája közti x-elmozdulás a
+    TÁMADOTT kapu felé, a szakasz teljes idejére vetítve (m/s): a +x
+    kapura támadva a növekvő x, a x=0 kapura a csökkenő x a pozitív; a
+    hátrafelé játszott labda negatív."""
+    from handball.pipeline.attack_types import _advance_speed
+
+    elore = _szakasz_labdaval([10.0 + 0.4 * i for i in range(25)])
+    assert abs(_advance_speed(elore, 40.0, 25.0) - 9.6) < 1e-9
+    assert abs(_advance_speed(elore, 0.0, 25.0) + 9.6) < 1e-9
+    hatra = _szakasz_labdaval([30.0 - 0.2 * i for i in range(25)])
+    assert abs(_advance_speed(hatra, 0.0, 25.0) - 4.8) < 1e-9
+    # A labda nélküli kockák a szakasz idejébe beleszámítanak, a
+    # végpontokat a labdás kockák adják.
+    lyukas = _szakasz_labdaval([None, 10.0, None, None, 20.0])
+    assert abs(_advance_speed(lyukas, 40.0, 25.0) - 10.0 / (5 / 25.0)) < 1e-9
+    # Harmad-fps-en ugyanaz az út nagyjából ugyanaz a sebesség (az idő a
+    # kockaszámból jön, ezért a ritkább mintán a becslés pár tizeddel
+    # kisebb — a két érték 10%-on belül van).
+    ritka = _szakasz_labdaval([10.0 + 1.2 * i for i in range(9)])
+    suru = _szakasz_labdaval([10.0 + 0.4 * i for i in range(25)])
+    assert abs(_advance_speed(ritka, 40.0, 25.0 / 3.0)
+               - _advance_speed(suru, 40.0, 25.0)) < 1.0
+
+
+def test_advance_speed_labda_vagy_ido_nelkul_nulla():
+    """Labda nélküli, egykockás vagy üres szakaszban nincs miből
+    sebességet számolni: 0,0 — nem osztás nullával."""
+    from handball.pipeline.attack_types import _advance_speed
+
+    assert _advance_speed(_szakasz_labdaval([None, None, None]), 40.0,
+                          25.0) == 0.0
+    assert _advance_speed(_szakasz_labdaval([20.0]), 40.0, 25.0) == 0.0
+    assert _advance_speed(_szakasz_labdaval([]), 40.0, 25.0) == 0.0
+    # Álló labda: 0 előrehaladás.
+    assert _advance_speed(_szakasz_labdaval([20.0] * 10), 40.0, 25.0) == 0.0

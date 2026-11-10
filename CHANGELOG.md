@@ -5,6 +5,332 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Elnyelt-kivétel őr: kétoldalú és elfajult meccsen is, és statikusan
+  is** (teszt): a `tests/test_nema_kivetelek.py` eddig egy szimulált
+  meccsen nézte a négy nagy felületet, ahol csak a hazai lő gólt — a
+  fordulásos ágak így sosem futottak le (ezért nem vette észre a
+  "Sorozatok" szakasz hibáját). Mellé került: két kis, gólonként
+  felépített kétoldalú meccs; kilenc elfajult meccs (üres, egykockás,
+  labda / játékos / egyik csapat nélküli, nulla képrátájú, hézagos
+  idejű, csupa szünet) — a "kevés minta → None" elv őre az összes
+  rétegre egyszerre: egyetlen kivétel sem születhet; és egy statikus
+  pár, amely a forrásból megfogja, ha egy név használata megelőzi a
+  saját, későbbi helyi importját (ez ürítette ki egyszer némán a
+  felderítés szélső- és poszt-góljait).
+- **Edzés-szabályok: megszólalnak a rétegek saját fixture-jein** (teszt):
+  a 494 edzés-szabályból 190 egyetlen tesztben sem szólalt meg — a réteg
+  tesztje a réteget nézte, a rá épülő szabályt senki nem futtatta. A
+  `tests/test_szabalyok_megszolalnak.py` a rétegek tesztfájljainak
+  fixture-építőit adja az edzés-fókusznak, és megköveteli, hogy a
+  táblában felsorolt szabályok a valódi rétegekkel megszólaljanak, ép
+  szöveggel: 37 fixture 324 szabályt fed le, köztük 65 eddig soha le nem
+  futót. Szándékos küszöb-változásnál a táblát kell igazítani (a modul
+  eleje leírja); a maradék 170 szabálynak nincs ilyen fixture-je.
+  Második kör: a tábla a tesztekben szereplő konkrét (paraméteres)
+  fixture-hívásokkal 84 hívásra és 418 szabályra nőtt — ebből 128 a
+  munka előtt egyetlen tesztben sem futott le; 76 szabálynak továbbra
+  sincs megszólaltató fixture-hívása.
+- **A "Sorozatok" szakasz szoros, oda-vissza meccsen is megszólal**
+  (javítás): ha a vezetés fordult, de egyik csapat sem lőtt három gólt
+  válasz nélkül, az összefoglaló a leghosszabb sorozatot az üres listán
+  kereste — a kivételt a `try/except` elnyelte, és az egész szakasz
+  (fordulások száma, válasz-idő, gólcsend, elengedett vezetés) némán
+  kimaradt. A sorozat-kiemelés mostantól csak sorozat esetén készül, a
+  szakasz többi mondata nélküle is. A hibát a felületek nyomkövetős
+  futtatása találta a rétegek saját teszt-fixture-jein; regressziós
+  teszt valódi rétegekkel (`tests/test_coach_summary.py`).
+- **API-őr: ismeretlen meccsre 404, üres könyvtáron nincs szerver-hiba**
+  (teszt): a `tests/test_api_ismeretlen_meccs.py` az alkalmazás minden
+  útvonalát bejárja (az új végpont magától bekerül): nem létező
+  meccs-azonosítóra minden meccs-szintű végpont beszélő 404-et ad — az
+  író végpont sem hoz létre adatot —, és frissen telepített (üres) gépen
+  egyik lekérdező végpont sem ad 5xx-et. A két indokolt kivételt (a
+  közös nézés állapotának lekérdezése és leállítása) külön teszt őrzi.
+- **Mezőnév-őr: a felületek a rétegek létező mezőit olvassák** (teszt):
+  a lefedettség-mérés szerint a közel ötszáz edzés-szabályból mintegy
+  kétszáz egyetlen tesztben sem szólal meg — ezek `try/except` mögött
+  ülnek, ahol az elgépelt vagy elavult mezőnév némán elnémítja a
+  szabályt. Az új őr (`tests/test_mezonevek.py`) a forráskódból
+  kigyűjti, mely réteg mely mezőit olvassa az edzés-fókusz, az
+  összefoglaló, a felderítés és a meccs-jelentés (a csapat-rekordon,
+  beágyazott szótáron és lista-sorokon át), a VALÓDI réteget lefuttatja
+  egy szimulált meccsen, és megnézi, hogy a mező létezik-e — közel
+  négyezer olvasás, a meg nem szólaló szabályoké is. A felderítő
+  jelentés mezőit (`rep.` / `own.` / `opp.`) ugyanez a fájl őrzi.
+  Elavult mezőnév most nincs; a háló a jövőbeli elírást fogja meg. Amit
+  nem lát: a `.get()`-tel olvasott mező és az adat nélküli ág.
+- **Teszt-lefedettség: a backend többi modulja** (teszt): a pipeline, az
+  api és a scripts után a `handball` csomag többi, közvetlen teszt
+  nélküli függvénye — a pozitív eset mellé a "nincs miből → None" és a
+  hibaág. Modulonként:
+  - `video_io`: `video_fps` / `video_seconds` (valódi videóból; a videó
+    mindig elengedődik), `_windows_short_path`, az `open_capture`
+    Windows-ága (ékezetes út → rövid alak).
+  - `preflight`: `_sikeres_futasok` (csak a kész, hiánytalan, azonos
+    profilú futások).
+  - `crashlog`: `crash_log_path` / `crash_log_size`, `_rovid`, `_sajat`,
+    `pid_alive` (a Windows-ág is). **Javítás:** a `pid_alive` túl nagy
+    vagy végtelen azonosítóra `OverflowError`-t dobott — egy sérült
+    futó-munka jel megakasztotta a félbehagyott munkák helyreállítását;
+    mostantól ez is "nem él" (regressziós teszt a valódi úton).
+  - `annotations`: `_text`, `_num`, `_now_iso`, `_norm_event`,
+    `_norm_token`, `_norm_arrow`, `_norm_scene` (a javító és az eldobó
+    ágak külön-külön).
+  - `accounts`: `terms_text`, `accounts_path` / `load_accounts` /
+    `save_accounts` (sérült fájlnál üres lista), `normalize_email`,
+    `_hash_password`, `_public` (titok nélkül), `_find`, `_new_token`
+    (lejárat, takarítás, plafon), `account_for_token`,
+    `accounts_status`.
+  - `sim/match_simulator`: `_roster_specs`, `_player_xy` (az ingadozás
+    másodpercben halad), `_ball_xy`, `_shot_episode` — és a szimulált
+    lövés útja a valódi meccsen.
+  - `models/events`: `RosterTimeline.has_goalkeeper` (csapatonként
+    külön, a létszámtól függetlenül).
+  - A `test_analytics.py` és a `test_coaching.py` "pytest nélkül is
+    futtatható" blokkja újra a fájl végén áll, így script-módban is
+    minden (a második körben hozzáadott) teszt lefut.
+- **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
+  a belső függvények, amelyek neve az első két kör után sem szerepelt
+  egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
+  minta → None / üres" esettel, ahol másik réteget olvasnak, a VALÓDI
+  forrással is. Modulonként:
+  - `tactics`: `_possession_team`, `_classify_phase` (a gyorsítótár
+    mögötti számítás; őr: a burkoló kockánként ugyanazt adja).
+  - `scouting`: a mintákból származtatott képek (`_lsp_pick_of`,
+    `_kk_lovok_of`, `_el_lovok_of`, `_le_kep_of`, `_kc_kapusok_of`,
+    `_kk_parok_of` — őr: a valódi jelentés képei a tárolt mintákból
+    újraszámolhatók), `_sit_habit`, `_figure_dossier_of`,
+    `_setplay_library_of`.
+  - `event_detection`: `_shooter_release_before`,
+    `_shooter_at_flight_kink`, `_inferred_goal_moment` /
+    `_inferred_goal_index` (az idő-ablak másodpercben), `_shooter_hint`,
+    `_near_goal_stretch_start`, `_held_at_goal_since`,
+    `_upgradable_shot`.
+  - `decisions`: őr — a felderítés darabszám-alapú szokása
+    (`scouting._sit_habit`) a motor ítéletével egyezik.
+  - `coach_summary`: a szakasz-építők közvetlenül (`_xg_section`,
+    `_style_section`, `_intensity_section`, `_players_section`,
+    `_story_section`, `_weak_points_section`) kézi és valódi forrással,
+    és `_coach_summary_cached` (egy szakasz hibája nem viszi el a
+    többit).
+  - `report_html`: `_note_diagram_svg` (pálya, játékosok, labda, nyilak;
+    a valódi jegyzet-ábrából is), `_match_report_html_cached` (a
+    hatókörben és anélkül ugyanaz a jelentés).
+  - `api`: `_MatchStore.put_cold` (a fejléc hidegként, felülírással és
+    anélkül), `_halozati_or_telepit` (alapból nincs őr; nyitott motornál
+    csak az engedett utak; a saját gépről minden megy).
+  - `scripts/mirror_sides`: `_canon` (a kulcs-sorrend nem számít, a
+    tartalom igen; a tükrözött kimenet összevetése).
+- **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
+  hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
+  Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
+  törzset `str.capitalize()`-zal kezdte nagybetűvel, ami a szöveg többi
+  részét kisbetűsíti — az edző "a(z) szeged 40 lövést kapott; a(z)
+  veszprém lazán védekezett" alakot látott, a kiemelt "SZABADON" pedig
+  "szabadon" lett. Mostantól csak az első betű nagy, a többi változatlan
+  (a számok és a mondatok nem változnak). A szakasz-építők közvetlen
+  tesztje találta; regressziós teszt mind a hat szakaszra és őr a valódi
+  összefoglalóra (`tests/test_coach_summary.py`).
+- **Teszt-lefedettség, második kör: a pipeline belső segédei** (teszt):
+  az aláhúzásos segéd-függvények, amelyekre eddig csak a hívójukon át,
+  közvetve futott teszt, közvetlen tesztet kapnak — a pozitív eset
+  mellé a "kevés minta → None / üres" esettel. Modulonként:
+  - `video_meta`: `_mvhd_creation` (mindkét doboz-verzió, csonka doboz,
+    véletlen bájt-egyezés) és a fájl-olvasás szélei.
+  - `track_stitch`: `_mean_colors` (minta nélküli track kimarad) és a
+    szín-kapu a valódi összefűzésben.
+  - `tactics`: `_formation_label`, `_avg_attack_duration_s`,
+    `_avg_ball_speed_ms` (másodpercben mérnek; minta nélkül 0).
+  - `substitutions`: `_in_sub_zone` (a cserezóna határai).
+  - `stats`: `_speed_segments` (lyuk, ugrás, becsült pozíció kimarad;
+    másodpercben mér) és `_sprint_and_zones` (a villanás nem sprint).
+  - `setplays`: az öt ítélet-mondat segédje (`_forma_itelet`,
+    `_allas_itelet`, `_elony_itelet`, `_hajra_itelet`,
+    `_hetedik_itelet`), `_figura_kimenetek`, `_copy_side_rows`.
+  - `scouting`: a 73 meccsek közti összefésülő (`_merge_*`) táblázatos
+    teszttel (pontos összeadódás; őr: a VALÓDI felderítés sorain is
+    futnak), és további segédek (`_team_of_track`, `_fast_break_pct`,
+    `_defense_distribution`, `_shot_zones`, `_top_shooter_habit`,
+    `_avg_from_sums`, `_mpl_theme`).
+  - `report_html`: a jelentés építőelemei — sávok, Hol / Mivel / Miért
+    blokkok, figura- és hőtérkép-SVG, lövéstérkép, tempó-vonal,
+    passz-párok, trend-tábla (üres adatnál tájékoztató vagy nincs rajz).
+  - `priorities`: `_prf_copy`, `_copy_fatigue` (független másolat) és
+    `_cpl_words` (hat karakteres szótövek).
+  - `primitive_cache`: `_mark_goalkeepers` (idempotens, a felismerés
+    hibáját lenyeli; a másik meccs jelölése nem érvénytelenít).
+  - `play_simulation`: `_hatoson_kivulre`, a csapat- és kapus-szorzók
+    (lövés nélkül 1 / None), az előrejelzés profilja és várható gólja,
+    a több meccses összegzők, `_review_until`.
+  - `merge`: `_centroid_x_window`, `_mirror_frames`,
+    `_normalize_segment_sides` (három darab; az ablak másodpercben él).
+  - `jersey_ocr`: `_digit_templates` és a sablon-illesztés mint tartalék
+    (háló nélkül is olvas).
+  - `halftime`: `_segment_swap_halftime` (az egyetlen forduló
+    szakasz-határ; nem egyértelmű esetben None).
+  - `game_window`: `_is_game_window` (a játék-jel négy feltétele és a
+    küszöbök határai).
+  - `fusion`: `_fuse_players` (átlagolás, szerep megőrzése, a
+    legközelebbi klaszter).
+  - `event_detection`: a gól-, védés- és középkezdés-felismerés segédei
+    (`_save_by_goalkeeper`, `_throw_off_low_team`, `_throw_off_followed`,
+    `_still_at_center`, `_half_boundaries`, …).
+  - `estimation`: `_clamp` (a becsült pozíció a pályán marad).
+  - `ball_filter`: `_dist`.
+  - `attack_types`: `_advance_speed` (a támadott kapu felé; labda vagy
+    idő nélkül 0).
+  - `analytics`: `_empty_grid` (független sorok).
+  - `defense`: `_wall_metrics`, `_wall_zone`, `_wall_verdict`,
+    `_wall_signature` (három védő alatt None), `_dgap_tally`, a hajrá-fal
+    tanácsa és ítélete.
+  - `decisions`: `_point_segment_distance`, `_ball_holder`,
+    `_from_area_m`, `_jatekos_szorzo` (modell nélkül 1), `_modell_felirat`.
+  - `court3d`: `_jersey_map`, `_nearest_keeper`, `_post_segment_distance`,
+    `_third`, `_szam1_js` (a böngésző kerekítése).
+  - `coaching`: `_field_players`, `_side_label`, `_formation_suggestion`,
+    `_ball_speed_toward_attack`.
+  - `clips`: `_clock`, `_segment_of`, `_jersey_of_track`,
+    `_draw_arrows_on_frame` (kalibráció nélkül nem rajzol).
+  - `calib_overlay`: `_sign_normalized`, `_region_center`.
+  - `broadcast_lines`: `_erode`, `_dilate`, `_thin_line_mask`,
+    `_auto_color`.
+  - `benchmark`: `_project_court_to_image`.
+  - `validation`: `_parse_time`, `_prf` (minta nélkül None), `_verdict`,
+    `_mmss`, `_mismatch_html`.
+  - `figura_video`: `_pont_felirat` (ékezet nélkül), kodek-választás
+    (működő író, megjegyezve; végső tartalék az mp4v).
+  - `figura_lap`: `_pont_felirat`, `_hely`, `_szam`, a dokumentum-keret,
+    a térfélre vágott ábra, a figura törzse (mozgás nélkül várakozás).
+  - `coach_summary`: `_team_names`, `_jersey_of_track`, `_player_label`,
+    `_rotation_sentence` (a valódi `rotation_depth`-szel is),
+    `_quality_caveat` (üres meccsen és jó minőségnél None).
+- **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
+  pipeline után az `api` és a `scripts` soha le nem futó részei is
+  tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
+  (beszélő hiba, nem 500 / nem kivétel). Modulonként:
+  - `api`: tizenkét végpont, amelyet eddig egy teszt sem hívott —
+    feltétel-elfogadás és jelszócsere, referencia-képkocka,
+    közvetítés-szakaszok, a mentett kalibráció visszaolvasása,
+    játékos-lap, pontosság-validáció, egyesített felderítés és
+    fejlődés-követés (JSON + nyomtatható HTML), demó-meccs,
+    figura-törlés.
+  - `scripts/validate_match`: hibakódok (hiányzó CSV / meccs → 2,
+    gyenge felismerés → 1 a megnézendő tételekkel), a jegyzőkönyv-sor
+    beszúrása a pontosság-tábla végére.
+  - `scripts/train_digit_net`: a számjegy-háló tanítása kicsiben
+    (renderelés → adathalmaz → tanítás → a `jersey_ocr` osztályozója);
+    őr: a szállított `digit_net.npz` a szkript eloszlásán pontos.
+  - `scripts/swallowed_exceptions`: a nyomkövető (`_Gyujto`) egy
+    próba-modulon, a mérés próba-rétegekkel és mini-alkalmazással (a
+    végpont szálán született kivételt is megtalálja), a main.
+  - `scripts/stride_sensitivity`: a mérés próba-rétegekkel (a
+    kockaszám-küszöbű réteget megnevezi), a jelentés és a main.
+  - `scripts/speed_profile`: idő-alak, gép- és verzió-címke, a hibás
+    réteg kezelése, a main három módja (teljes / részleges / jegyzőkönyv).
+  - `scripts/simulate_match`: opciók, összefoglaló, fájlba írt Tracking
+    (pásztázó kamera / földi igazság), üres meccs.
+  - `scripts/serve`: stream-átirányítás ablak nélküli futásnál, az
+    indulási mérföldkő, a main (tartalék port, végzetes hiba naplója).
+  - `scripts/run_pipeline`: a minta-meccs (a szerződés minden eleme,
+    JSON-körbejárás) és a main két kimeneti módja.
+  - `scripts/release_notes`: `unreleased_section` (üres / hiányzó
+    szakasznál None), a kimenetre írás, hiányzó CHANGELOG.
+  - `scripts/project_facts`: `build_facts_md`, `_grouped`, a
+    doksi-szinkron és a main író / ellenőrző módja (tmp mappában).
+  - `scripts/process_video`: törzs-szín és sárga bíró-szűrő, a tartalék
+    út követője, a parancssori belépő, `StallSkippingFeed.abandon`.
+  - `scripts/order_sensitivity`: a mérés próba-rétegekkel (szerep
+    nélküli meccsen megtalálja a szerep-függő réteget) és a main.
+  - `scripts/mirror_sides`: a mérés próba-rétegekkel (helyesen /
+    hibásan tükröződő), a jelentés, a main kilépőkódja.
+  - `scripts/layer_catalog`: a regisztráció kiolvasása, a réteg
+    megkeresése, a katalógus építése, a main író / ellenőrző módja.
+  - `scripts/hash_sensitivity`: a munkás-folyamat, az összevetés (előre
+    megírt és VALÓDI háromfolyamatos méréssel), a main három módja.
+  - `scripts/finetune`: `install_weights` (a régi súly mentésével) és a
+    main útjai kamu YOLO-val.
+  - `scripts/compare_models`: egy- és kétmodelles eredménylap, a
+    labda-lefedettség változása előjellel.
+  - `scripts/collect_dataset`: `_make_detect_fn` (külön játékos- és
+    labda-küszöb) és a main kis próba-videókon.
+  - `scripts/benchmark`: verzió-felismerés, valódi rövid futás
+    (Markdown + JSON), bukó metrikánál 1-es kilépőkód.
+- **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
+  két tesztje arra épített, hogy az előttük futó teszt törli a
+  `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
+  kerülve (amelyek beállítva hagyják) véletlenszerűen buktak. Most maguk
+  állítják be és állítják vissza a változót; őr-teszt figyeli.
+- **Két időzítés-függő teszt versenymentes** (teszt): a teljes csomag
+  terhelt gépen két helyen véletlenszerűen bukott. A klip-válogatás
+  tesztjei (`test_clip_players`) a háttérben futó klip-munkát 200
+  várakozás nélküli lekérdezéssel "várták meg" — most határidőig
+  várnak; az előszámolás tesztje (`test_result_cache`) a szálat az
+  indítás után kereste az élők között — most az indításakor jegyzi fel.
+- **Teszt-lefedettség: a pipeline teszt nélküli függvényei** (teszt): a
+  `backend/handball/pipeline` azon függvényei, amelyekre eddig egyetlen
+  teszt sem hivatkozott (vagy a csomag sosem futtatta le őket),
+  közvetlen tesztet kapnak — a pozitív eset mellé a "kevés minta → None
+  / hallgat" esettel. Modulonként, az ábécé végéről:
+  - `training`: a 15) "Játék a … fal ellen" szabály (eddig egyszer sem
+    szólalt meg tesztben) kitalált ÉS valódi forrás-réteggel, a
+    formánkénti 4 lövés küszöbével; a gyorsítótárazott fókusz
+    védő-másolatai (`_tf_copy`, `_ptf_copy`).
+  - `tracking_step`: a követés váza (Track alak, `Tracker.update`
+    lista-szerződés, üres detektálás → üres lista) — eddig sosem futott.
+  - `teams`: `TeamClassifier.classify` / `is_goalkeeper` / `is_referee`
+    két különböző színkészlettel; profil vagy szín nélkül nem találgat.
+  - `tactics`: `segment_phases`, `most_common_formations` (védekezés
+    nélkül "—"), `TacticsConfig.attacks_toward_x`.
+  - `setplays`: a meccsek közti figura-összefésülők
+    (`figure_formation_summary`, `setplay_score_summary`,
+    `powerplay_figures_summary`, `clutch_figures_summary`,
+    `empty_net_figures_summary`) — együtt ítél, külön kevés a minta.
+  - `scouting`: `rep_earn_count`; a 241) "szünet utáni oldal-váltás"
+    meccsterv-szabály (eddig egyszer sem szólalt meg tesztben) a
+    hallgatás hat okával.
+  - `rules`: `field_count_timeline` (kapus / becsült / villanó track
+    nem számít), `_seven_direction` (a dobó szemszögéből; None, ha a
+    labda nem ér a kapusíkhoz), `rules_report`.
+  - `primitive_cache`: a védő-másolatok (`copy_rows`, `copy_by_id`,
+    `copy_sides`, `copy_nested`, `copy_deep`) és a kézi hatókör
+    (`open_scope` / `close_scope`: újra-belépés, beágyazás).
+  - `play_simulation`: `DefenseModel.vonal_vedok` / `vedo_kettozes`
+    (a saját hajlam, különben a csapaté), `lovo_zaradek`, `figura_nev`.
+  - `pipeline`: a `HandballPipeline.run` vezérlése hamis detektorral
+    (bíró-, zóna- és pálya-szűrés, becslés, labda) és a `summarize` —
+    eddig sosem futott.
+  - `halftime`: `detect_break_span` (rövid megállás, szél-üresjárat →
+    None; ritkítva is ugyanott) és `credible_break_span` (végig ritkás
+    követésnél None).
+  - `event_detection`: `goal_crossing_y` (a három gól-jel külön),
+    `annotate_assists` (az ablak másodpercben él), `_shooter_before`
+    (None, ha nincs támadó birtokos az ablakban).
+  - `detection`: `Detection.foot_point` (a doboz aljának közepe) és a
+    `Detector` váza (lusta töltés, modell nélkül üres lista) — eddig
+    sosem futott.
+  - `defense`: `wall_line`, `defense_shape_summary` és
+    `clutch_wall_summary` (két meccs együtt ítél; kevés mintánál None).
+  - `decisions`: `sit_article` (a/az a réteg minden választására).
+  - `dataset`: `write_dataset_yaml` (abszolút út, osztály-nevek; hiányzó
+    mappába nem ír).
+  - `court_coords`: `player_to_court` / `ball_to_court` (a talaj-pont
+    megy át a homográfián; kalibráció nélkül változatlan koordináta) —
+    eddig sosem futott.
+  - `court3d`: `shared3d_felvetel_nev` (tisztítás, hossz-korlát; név
+    nélkül üres).
+  - `calibration`: `Calibrator.homography_for_frame` (a referenciát
+    adja; kalibráció nélkül is fut).
+  - `calib_overlay`: `court_to_pixels` (horizont mögött / képtől messze
+    None), `fit_on_points` (20 minta alatt None), `region_label`,
+    `better_setting`. A teszt hibát is fogott: a kalibráló képernyő
+    "MÁS beállításra ül jobban" üzenete mérhetetlen mostani
+    illeszkedésnél vesszővel végződött — javítva.
+  - `broadcast`: `color_histogram` (normált; vágásnál ugrik) és
+    `content_spread` (totál nagy, közeli kicsi; él nélkül 0).
+  - `benchmark`: `BenchmarkReport.all_passed` és a négy `benchmark_*`
+    metrika külön (seed nélkül az üres futás nem megy át).
+  - `appearance`: `AppearanceProfile.labeled_colors` (csak a megadott
+    színek; friss lista).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés

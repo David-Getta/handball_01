@@ -852,3 +852,35 @@ def test_substitution_phase_silent_on_few_subs():
     rec = substitution_phase(_phase_match(Team.AWAY, n_waves=2))["home"]
     assert rec["subs"] == 2 and rec["verdict"] is None, rec
     assert rec["risky_pct"] is None, rec
+
+
+# ---- A cserezóna (_in_sub_zone) -----------------------------------------------
+
+def test_in_sub_zone_a_felezovonal_melletti_oldalsav():
+    """A cserezóna a felezővonal ±4,5 m-e az oldalvonalak 2,5 m-es
+    sávjában — mindkét oldalvonalnál; a határok még benne vannak."""
+    from handball.pipeline.substitutions import (SUB_ZONE_DEPTH_M,
+                                                 SUB_ZONE_HALF_W_M,
+                                                 _in_sub_zone)
+
+    assert (SUB_ZONE_HALF_W_M, SUB_ZONE_DEPTH_M) == (4.5, 2.5)
+    assert _in_sub_zone(20.0, 1.0) is True           # alsó oldalvonal
+    assert _in_sub_zone(20.0, 19.0) is True          # felső oldalvonal
+    assert _in_sub_zone(15.5, 2.5) is True           # a sáv két határa
+    assert _in_sub_zone(24.5, 17.5) is True
+    assert _in_sub_zone(20.0, 0.0) is True and _in_sub_zone(20.0, 20.0) is True
+
+
+def test_in_sub_zone_a_palya_tobbi_resze_nem_cserezona():
+    """A pálya közepe, a kapuk előtere és az oldalvonal a felezőtől távol
+    nem cserezóna — a csere-felismerés csak a zónában megjelenő /
+    eltűnő tracket nézi cserének."""
+    from handball.pipeline.substitutions import _in_sub_zone
+
+    assert _in_sub_zone(20.0, 10.0) is False         # a pálya közepe
+    assert _in_sub_zone(20.0, 2.6) is False          # már a sávon kívül
+    assert _in_sub_zone(20.0, 17.4) is False
+    assert _in_sub_zone(15.4, 1.0) is False          # a felezőtől messze
+    assert _in_sub_zone(24.6, 19.0) is False
+    assert _in_sub_zone(2.0, 1.0) is False           # a kapu sarka
+    assert _in_sub_zone(38.0, 19.0) is False

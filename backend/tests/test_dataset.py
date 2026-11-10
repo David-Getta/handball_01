@@ -156,3 +156,90 @@ if __name__ == "__main__":
         test_collect_writes_yolo_structure(Path(d))
     test_class_ids_for_coco_and_custom_models()
     print("Minden adathalmaz-teszt OK.")
+
+
+# ---- A YOLO dataset.yaml megírása (write_dataset_yaml) -----------------------
+
+def _yaml_sorok(path):
+    """A megírt dataset.yaml kulcs → érték párjai (a `names:` blokk az
+    osztály-azonosító → név szótára)."""
+    felso, nevek, blokk = {}, {}, False
+    for sor in path.read_text(encoding="utf-8").splitlines():
+        if sor.startswith("  "):
+            assert blokk, f"behúzott sor a names blokkon kívül: {sor!r}"
+            k, v = sor.strip().split(": ", 1)
+            nevek[int(k)] = v
+            continue
+        k, _, v = sor.partition(":")
+        blokk = (k == "names")
+        if not blokk:
+            felso[k] = v.strip()
+    return felso, nevek
+
+
+def test_write_dataset_yaml_a_tanitashoz_kello_kulcsokkal(tmp_path):
+    """A dataset.yaml a mappa ABSZOLÚT útját, a train/val képmappát és a
+    két osztály nevét (0 = person, 1 = ball) viszi — a visszaadott út
+    maga a megírt fájl."""
+    from handball.pipeline.dataset import CLASS_NAMES, write_dataset_yaml
+
+    out = tmp_path / "ds"
+    out.mkdir()
+    yaml_path = write_dataset_yaml(out)
+    assert yaml_path == out / "dataset.yaml" and yaml_path.is_file()
+    felso, nevek = _yaml_sorok(yaml_path)
+    assert felso == {"path": str(out.resolve()), "train": "images/train",
+                     "val": "images/val"}
+    assert nevek == CLASS_NAMES == {0: "person", 1: "ball"}
+    assert yaml_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_write_dataset_yaml_relativ_mappabol_is_abszolut_utat_ir(
+        tmp_path, monkeypatch):
+    """Relatív kimeneti mappánál is abszolút `path:` kerül a fájlba (a
+    tanítás más munkakönyvtárból is megtalálja), és az ismételt írás
+    felülír — nem fűz hozzá."""
+    from pathlib import Path
+
+    from handball.pipeline.dataset import write_dataset_yaml
+
+    (tmp_path / "rel_ds").mkdir()
+    monkeypatch.chdir(tmp_path)
+    elso = write_dataset_yaml(Path("rel_ds"))
+    felso, _ = _yaml_sorok(elso)
+    assert Path(felso["path"]).is_absolute()
+    assert Path(felso["path"]) == (tmp_path / "rel_ds").resolve()
+    tartalom = elso.read_text(encoding="utf-8")
+    assert write_dataset_yaml(Path("rel_ds")).read_text(
+        encoding="utf-8") == tartalom
+    assert tartalom.count("names:") == 1
+
+
+def test_write_dataset_yaml_hianyzo_mappaba_nem_ir(tmp_path):
+    """A függvény nem hoz létre mappát: nem létező kimeneti mappánál
+    hibát jelez (a gyűjtő hozza létre a szerkezetet), kóbor fájl nélkül."""
+    import pytest
+
+    from handball.pipeline.dataset import write_dataset_yaml
+
+    hianyzik = tmp_path / "nincs_ilyen"
+    with pytest.raises(FileNotFoundError):
+        write_dataset_yaml(hianyzik)
+    assert not hianyzik.exists()
+
+
+def test_collect_yaml_a_megirt_szerkezetre_mutat(tmp_path):
+    """A gyűjtés végén megírt dataset.yaml útjai a TÉNYLEGESEN létrejött
+    mappákra mutatnak, és a statisztika yaml_path mezője ez a fájl."""
+    from pathlib import Path
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    stats = collect_dataset(video, _stub_detect, tmp_path / "ds", samples=20)
+    yaml_path = Path(stats.yaml_path)
+    assert yaml_path == tmp_path / "ds" / "dataset.yaml"
+    felso, nevek = _yaml_sorok(yaml_path)
+    gyoker = Path(felso["path"])
+    assert (gyoker / felso["train"]).is_dir()
+    assert (gyoker / felso["val"]).is_dir()
+    assert set(nevek) == {0, 1}

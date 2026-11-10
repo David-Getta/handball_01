@@ -148,3 +148,18 @@ def test_a_ritkitott_meccsen_a_hosszu_hezag_nem_potlodik():
     m = Match(meta, frames)
     assert interpolate_ball_gaps(m) == 0
     assert all(f.ball is None for f in m.frames[1:9])
+
+
+# ---- Két labda-észlelés távolsága (_dist) -----------------------------------
+
+def test_dist_ket_labda_eszleles_tavolsaga():
+    """Két labda-észlelés euklideszi távolsága méterben — szimmetrikus,
+    azonos pontra 0; a megbízhatóság nem számít bele."""
+    from handball.pipeline.ball_filter import _dist
+
+    a, b = Ball(x=10.0, y=10.0, confidence=1.0), Ball(x=13.0, y=14.0,
+                                                      confidence=0.2)
+    assert _dist(a, b) == 5.0 and _dist(b, a) == 5.0
+    assert _dist(a, a) == 0.0
+    assert abs(_dist(Ball(x=0.0, y=0.0), Ball(x=40.0, y=20.0))
+               - (40.0 ** 2 + 20.0 ** 2) ** 0.5) < 1e-12

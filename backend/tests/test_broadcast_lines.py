@@ -309,3 +309,88 @@ def test_a_festett_feluleten_atfuto_feher_vonal_nem_el():
     mask = field_edge_mask(img)
     assert not mask[95:108, 100:200].any(), "a fehér vonal mentén él"
     assert mask[38:43, 150].any()
+
+
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_erode_es_dilate_negyzetes_szerkeszto_elemmel():
+    """A bináris tágítás r sugarú négyzettel hizlal, az erózió ugyanennyit
+    farag: egy 5×5-ös folt r=1 erózió után 3×3, tágítás után 7×7; a
+    kettő egymás után (nyitás) az eredeti foltot adja vissza."""
+    from handball.pipeline.broadcast_lines import _dilate, _erode
+
+    m = np.zeros((15, 15), dtype=bool)
+    m[5:10, 5:10] = True
+    e = _erode(m, 1)
+    assert e.sum() == 9 and e[6:9, 6:9].all()
+    d = _dilate(m, 1)
+    assert d.sum() == 49 and d[4:11, 4:11].all()
+    assert np.array_equal(_dilate(_erode(m, 1), 1), m)
+    assert e.dtype == bool and d.dtype == bool
+    # r = 0: változatlan; a bemenetet egyik sem módosítja.
+    assert np.array_equal(_erode(m, 0), m) and np.array_equal(_dilate(m, 0), m)
+    assert m.sum() == 25
+
+
+def test_erode_a_kepszelig_ero_folt_szele_nem_el():
+    """A képen kívül IGAZ: a képszélig érő folt széle nem kopik le
+    (különben a kép kerete vonalnak látszana); a vékony vonal viszont
+    eltűnik, az üres kép üres marad."""
+    from handball.pipeline.broadcast_lines import _dilate, _erode
+
+    tele = np.ones((10, 10), dtype=bool)
+    assert _erode(tele, 2).all()
+    sarok = np.zeros((10, 10), dtype=bool)
+    sarok[:4, :4] = True
+    e = _erode(sarok, 1)
+    assert e[:3, :3].all() and e.sum() == 9      # csak a belső szélek kopnak
+    vonal = np.zeros((10, 10), dtype=bool)
+    vonal[5, :] = True
+    assert not _erode(vonal, 1).any()
+    ures = np.zeros((6, 6), dtype=bool)
+    assert not _erode(ures, 1).any() and not _dilate(ures, 2).any()
+
+
+def test_thin_line_mask_a_vonal_megmarad_a_folt_belseje_kiesik():
+    """A vékony, a környezeténél erősebb pixelek maszkja: a keskeny
+    vonal megmarad, az egybefestett nagy folt BELSEJE kiesik; a túl kicsi
+    képen (nincs szomszéd, amihez mérni lehetne) üres maszk."""
+    from handball.pipeline.broadcast_lines import _thin_line_mask
+
+    kep = np.zeros((60, 60), np.uint8)
+    kep[30, 10:50] = 200                          # vékony vízszintes vonal
+    maszk = _thin_line_mask(kep, 50)
+    assert maszk[30, 20:40].all()
+    assert not maszk[20, 20:40].any()
+    folt = np.zeros((60, 60), np.uint8)
+    folt[10:50, 10:50] = 200                      # nagy tömör folt
+    assert not _thin_line_mask(folt, 50)[25:35, 25:35].any()
+    # A küszöbnél gyengébb vonal nem vonal.
+    halvany = np.zeros((60, 60), np.uint8)
+    halvany[30, 10:50] = 30
+    assert not _thin_line_mask(halvany, 50).any()
+    kicsi = _thin_line_mask(np.full((8, 8), 200, np.uint8), 50)
+    assert kicsi.shape == (8, 8) and not kicsi.any()
+
+
+def test_auto_color_a_szin_csak_egyertelmu_folennyel_nyer():
+    """Az "auto" mód: a legtöbb vonal-pixelt adó szín nyer, ha legalább
+    1,3-szor annyit hoz, mint a fehér — különben a fehér marad (a fehér
+    vonalas csarnok az alapeset); pixel nélkül is a fehér."""
+    from handball.pipeline.broadcast_lines import (COLOR_WIN_RATIO,
+                                                   LINE_COLORS, _auto_color)
+
+    assert COLOR_WIN_RATIO == 1.3
+
+    def pixelek(**szamok):
+        p = {c: 0 for c in LINE_COLORS}
+        p["feher"] = 0
+        p.update(szamok)
+        return p
+
+    assert _auto_color(pixelek(feher=1000, kek=1300)) == "kek"
+    assert _auto_color(pixelek(feher=1000, kek=1299)) == "feher"
+    assert _auto_color(pixelek(feher=1000, kek=2000, piros=2500)) == "piros"
+    assert _auto_color(pixelek(feher=0, sarga=2)) == "sarga"
+    assert _auto_color(pixelek(feher=0, sarga=1)) == "feher"
+    assert _auto_color(pixelek()) == "feher"

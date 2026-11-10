@@ -194,3 +194,69 @@ def test_beragadas_szol_a_felhasznalonak():
     guard.call(lambda: time.sleep(5.0))
     assert uzenetek and "mezszám-OCR" in uzenetek[0]
     assert "kihagyva" in uzenetek[0]
+
+
+# ---- A termelő elengedése korai kilépéskor (abandon) ---------------------------
+
+def test_abandon_megallitja_a_vegtelen_termelot():
+    """Ha a fogyasztó korán kilép (megszakítás, kocka-korlát), az
+    elengedett termelő NEM marad pörgő / várakozó háttérszál: a tele sor
+    miatt várakozó szál felébred és véget ér — a videót nem olvassa
+    tovább."""
+    import threading
+
+    allapot = {"db": 0, "szal": None}
+
+    def _vegtelen():
+        allapot["szal"] = threading.current_thread()
+        while True:
+            allapot["db"] += 1
+            yield allapot["db"]
+
+    feed = StallSkippingFeed(_vegtelen(), first_timeout_s=5.0,
+                             skip_timeout_s=5.0)
+    kockak = feed.frames()
+    assert [next(kockak) for _ in range(3)] == [1, 2, 3]
+    kockak.close()                               # a fogyasztó kilép
+    szal = allapot["szal"]
+    assert szal is not None and szal.is_alive()  # a termelő még dolgozna
+
+    feed.abandon()
+    szal.join(15.0)
+    assert not szal.is_alive(), "a termelő szál az elengedés után is él"
+    # A termelő nem olvasott ezreket: legfeljebb a sor (8) és az úton
+    # lévő egy-két elem készült el a három kiadotton felül.
+    assert allapot["db"] <= 3 + 8 + 3, allapot["db"]
+
+
+def test_abandon_ures_sorral_es_ketszer_is_biztonsagos():
+    """Az elengedés üres sornál (a termelő épp beragadt, nincs mit
+    kivenni) sem hibázik, és többször is hívható."""
+    feed = StallSkippingFeed(_blokkolo(), first_timeout_s=0.2,
+                             skip_timeout_s=0.2)
+    feed.abandon()                               # üres sor: nem dobhat
+    feed.abandon()
+    assert feed.stalled is False and feed.skips == 0
+
+
+def test_abandon_utan_a_regi_termelo_elemei_nem_jonnek_at():
+    """Az elengedés nemzedéket léptet: a régi termelő később érkező
+    elemeit az adagoló már nem adja ki (elavult nemzedék) — a fogyasztó
+    nem kap kockát egy elengedett olvasótól."""
+    import threading
+
+    mehet = threading.Event()
+
+    def _kesleltetett():
+        yield "első"
+        mehet.wait(5.0)
+        yield "elavult"
+
+    feed = StallSkippingFeed(_kesleltetett(), first_timeout_s=0.5,
+                             skip_timeout_s=0.3, max_skips=0)
+    kockak = feed.frames()
+    assert next(kockak) == "első"
+    feed.abandon()
+    mehet.set()                                  # a régi termelő folytatná
+    maradek = list(kockak)                       # folytató nélkül: feladja
+    assert "elavult" not in maradek
