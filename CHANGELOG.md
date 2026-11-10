@@ -13,6 +13,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     véletlen bájt-egyezés) és a fájl-olvasás szélei.
   - `track_stitch`: `_mean_colors` (minta nélküli track kimarad) és a
     szín-kapu a valódi összefűzésben.
+  - `tactics`: `_formation_label`, `_avg_attack_duration_s`,
+    `_avg_ball_speed_ms` (másodpercben mérnek; minta nélkül 0).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

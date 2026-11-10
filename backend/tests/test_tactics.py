@@ -872,3 +872,152 @@ def test_attacks_toward_x_forditott_iranynal_megfordul():
     assert cfg.attacks_toward_x(Team.AWAY) == 40.0
     for team in (Team.HOME, Team.AWAY):
         assert cfg.attacks_toward_x(team) != cfg.own_goal_x(team)
+
+
+# ---- Belső segédek közvetlenül: forma-név, támadáshossz, labdasebesség -------
+
+def test_formation_label_a_szokasos_formanevek():
+    """A sáv-létszámokból (hátsó, közép, előretolt) a kézilabda formanév:
+    6-0, 5-1 (az előretolt bármelyik sávban), 4-2, 3-2-1, 3-3."""
+    from handball.pipeline.tactics import _formation_label
+
+    assert _formation_label(6, 0, 0) == "6-0"
+    assert _formation_label(5, 1, 0) == "5-1"
+    assert _formation_label(5, 0, 1) == "5-1"
+    assert _formation_label(4, 2, 0) == "4-2"
+    assert _formation_label(3, 2, 1) == "3-2-1"
+    assert _formation_label(3, 3, 0) == "3-3"
+    assert _formation_label(3, 1, 2) == "3-3"
+    assert _formation_label(3, 0, 3) == "3-3"
+
+
+def test_formation_label_nem_tipikus_vagy_hianyos_fal_leiro_cimke():
+    """Ha a fal nem hat védő (kiállítás, takarás), vagy a hat védő nem
+    tipikus formában áll, nem erőltetünk rá formanevet: a sávok száma
+    megy ki leíró címkeként."""
+    from handball.pipeline.tactics import _formation_label
+
+    assert _formation_label(5, 0, 0) == "5-0-0 (hátsó-közép-előre)"
+    assert _formation_label(4, 1, 0) == "4-1-0 (hátsó-közép-előre)"
+    assert _formation_label(0, 0, 0) == "0-0-0 (hátsó-közép-előre)"
+    assert _formation_label(7, 0, 0) == "7-0-0 (hátsó-közép-előre)"
+    # Hat védő, de nem tipikus lépcsőzés.
+    assert _formation_label(4, 1, 1) == "4-1-1 (hátsó-közép-előre)"
+    assert _formation_label(4, 0, 2) == "4-0-2 (hátsó-közép-előre)"
+    assert _formation_label(2, 2, 2) == "2-2-2 (hátsó-közép-előre)"
+    assert _formation_label(2, 4, 0) == "2-4-0 (hátsó-közép-előre)"
+
+
+def test_detect_formation_a_cimket_a_savokbol_adja():
+    """A VALÓDI úton: a kockáról leolvasott sáv-létszámok címkéje ugyanaz,
+    amit a segéd ad — az 5-1-nél az előretolt védő a középső sávban áll."""
+    from handball.pipeline.tactics import _formation_label
+
+    players = [_pl(11 + i, Team.AWAY, 34.0, y)
+               for i, y in enumerate((3, 6, 9, 11, 14))]
+    players.append(_pl(16, Team.AWAY, 30.5, 10.0))
+    frame = Frame(t=0, players=players + [_pl(1, Team.HOME, 28.0, 10.0)],
+                  ball=Ball(x=28.0, y=10.0, confidence=1.0))
+    forma = detect_formation(frame, Team.AWAY, TacticsConfig())
+    assert (forma.back, forma.mid, forma.high) == (5, 1, 0)
+    assert forma.label == _formation_label(5, 1, 0) == "5-1"
+
+
+def _tamadas_kockak(t0, n, team):
+    """n kocka szervezett támadás (a labda a csapat támadó térfelén)."""
+    x = 30.0 if team == Team.HOME else 10.0
+    tid = 1 if team == Team.HOME else 11
+    return [Frame(t=t0 + i, players=[_pl(tid, team, x, 10.0)],
+                  ball=Ball(x=x, y=10.0, confidence=1.0)) for i in range(n)]
+
+
+def _atmenet_kockak(t0, n):
+    """n kocka átmenet (hazai labda a SAJÁT térfelén)."""
+    return [Frame(t=t0 + i, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+                  ball=Ball(x=10.0, y=10.0, confidence=1.0))
+            for i in range(n)]
+
+
+def test_avg_attack_duration_a_tamadas_szakaszok_atlaga():
+    """Az azonos támadó-fázisú, egymást követő kockák egy szakasz; a
+    szakaszok átlaghossza másodpercben. Két hazai (50 és 100 kocka) és
+    egy vendég (25 kocka) támadás, átmenettel elválasztva: (2+4+1)/3 mp."""
+    from handball.pipeline.tactics import _avg_attack_duration_s
+
+    frames = (_tamadas_kockak(0, 50, Team.HOME) + _atmenet_kockak(50, 10)
+              + _tamadas_kockak(60, 100, Team.HOME)
+              + _tamadas_kockak(160, 25, Team.AWAY))
+    m = Match(_meta(), frames)
+    assert abs(_avg_attack_duration_s(m, TacticsConfig()) - 7.0 / 3.0) < 1e-9
+    # A csapatváltás átmenet nélkül is szakasz-határ: 100 + 25 kocka.
+    ketto = Match(_meta(), _tamadas_kockak(0, 100, Team.HOME)
+                  + _tamadas_kockak(100, 25, Team.AWAY))
+    assert abs(_avg_attack_duration_s(ketto, TacticsConfig()) - 2.5) < 1e-9
+    # A tempó-metrika ezt az értéket viszi.
+    assert compute_tempo(m).avg_attack_duration_s == \
+        _avg_attack_duration_s(m, TacticsConfig())
+
+
+def test_avg_attack_duration_masodpercben_el_es_tamadas_nelkul_nulla():
+    """A hossz MÁSODPERC: harmad-fps-en ugyanaz a 6 mp-es támadás 50
+    kockából is 6 mp. Szervezett támadás nélkül (csak átmenet, vagy üres
+    meccs) az átlag 0,0 — nem osztás nullával."""
+    from handball.pipeline.tactics import _avg_attack_duration_s
+
+    suru = Match(_meta(), _tamadas_kockak(0, 150, Team.HOME))
+    ritka = Match(MatchMeta(match_id="r", home_team="H", away_team="A",
+                            fps=25.0 / 3.0),
+                  _tamadas_kockak(0, 50, Team.HOME))
+    cfg = TacticsConfig()
+    assert abs(_avg_attack_duration_s(suru, cfg) - 6.0) < 1e-9
+    assert abs(_avg_attack_duration_s(ritka, cfg) - 6.0) < 1e-9
+    assert _avg_attack_duration_s(Match(_meta(), _atmenet_kockak(0, 40)),
+                                  cfg) == 0.0
+    assert _avg_attack_duration_s(Match(_meta(), []), cfg) == 0.0
+
+
+def test_avg_ball_speed_az_egymast_koveto_labdas_kockakbol():
+    """A labda átlagsebessége az egymást követő labdás kockák közti
+    elmozdulásból: 0,4 m/kocka 25 fps-en 10 m/s; a labda nélküli kocka
+    megszakítja a láncot (a lyukon át nem mérünk "sebességet")."""
+    from handball.pipeline.tactics import _avg_ball_speed_ms
+
+    def meccs(pontok, fps=25.0):
+        return Match(MatchMeta(match_id="b", home_team="H", away_team="A",
+                               fps=fps),
+                     [Frame(t=i, players=[],
+                            ball=None if p is None
+                            else Ball(x=p[0], y=p[1], confidence=1.0))
+                      for i, p in enumerate(pontok)])
+
+    egyenletes = meccs([(10.0 + 0.4 * i, 10.0) for i in range(11)])
+    assert abs(_avg_ball_speed_ms(egyenletes) - 10.0) < 1e-9
+    # Lyuk: 10 → (nincs) → 30 m. A 20 m-es "ugrás" nem számít lépésnek.
+    lyukas = meccs([(10.0, 10.0), (10.4, 10.0), None, (30.0, 10.0),
+                    (30.4, 10.0)])
+    assert abs(_avg_ball_speed_ms(lyukas) - 10.0) < 1e-9
+    # Harmad-fps-en ugyanaz a pálya (1,2 m/kocka) ugyanaz a sebesség.
+    ritka = meccs([(10.0 + 1.2 * i, 10.0) for i in range(5)], fps=25.0 / 3.0)
+    assert abs(_avg_ball_speed_ms(ritka) - 10.0) < 1e-9
+    assert compute_tempo(egyenletes).avg_ball_speed_ms == \
+        _avg_ball_speed_ms(egyenletes)
+
+
+def test_avg_ball_speed_keves_labdas_kockanal_nulla():
+    """Labda nélkül, egyetlen labdás kockával vagy csupa magányos
+    (lyukkal elválasztott) labdás kockával nincs lépés: 0,0 — nem osztás
+    nullával; az álló labda sebessége is 0."""
+    from handball.pipeline.tactics import _avg_ball_speed_ms
+
+    def meccs(pontok):
+        return Match(_meta(), [Frame(
+            t=i, players=[], ball=None if p is None
+            else Ball(x=p[0], y=p[1], confidence=1.0))
+            for i, p in enumerate(pontok)])
+
+    assert _avg_ball_speed_ms(meccs([])) == 0.0
+    assert _avg_ball_speed_ms(meccs([None, None])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(10.0, 10.0)])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(10.0, 10.0), None, (30.0, 10.0),
+                                     None])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(20.0, 10.0)] * 10)) == 0.0
