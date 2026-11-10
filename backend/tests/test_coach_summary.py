@@ -824,3 +824,484 @@ def test_a_valodi_osszefoglaloban_nincs_kisbetus_csapatnev():
     ved = torzs["Védekezés"]
     assert ved.startswith("A(z) Szeged ") and "SZABADON állt" in ved
     assert "a(z) Veszprém " in ved
+
+
+# ---- A szakasz-építők közvetlenül (harmadik kör) ----------------------------
+
+def _xg_csapat(lovesek, golok, ertek, atlag):
+    return {"shots": lovesek, "goals": golok, "xg": ertek,
+            "avg_xg_per_shot": atlag, "diff": round(golok - ertek, 2)}
+
+
+def test_xg_section_helyzetminoseg_mondatai(monkeypatch):
+    """Helyzetminőség: a két csapat várható gólja és a tényleges gólok,
+    a helyzet-minőség és a befejezés ítélete csapatonként, a győzelem
+    megérdemeltsége, és a helyzetei felett / alatt teljesítő lövő — a
+    3-nál kevesebb lövésű játékos nem kerül név szerint elő."""
+    from handball.pipeline import xg
+    from handball.pipeline.coach_summary import _xg_section
+
+    eredmeny = {
+        "teams": {"home": _xg_csapat(10, 8, 6.0, 0.5),
+                  "away": _xg_csapat(9, 2, 3.0, 0.25)},
+        "shooters": [
+            {"player_id": 1, "team": "home", "shots": 4, "goals": 4,
+             "xg": 2.0, "diff": 2.0},
+            {"player_id": 11, "team": "away", "shots": 5, "goals": 0,
+             "xg": 1.5, "diff": -1.5},
+            # Két lövésből nincs értelmes kép — akármilyen nagy a többlet.
+            {"player_id": 2, "team": "home", "shots": 2, "goals": 2,
+             "xg": 0.2, "diff": 1.8}]}
+    monkeypatch.setattr(xg, "match_xg", lambda match: eredmeny)
+    monkeypatch.setattr(xg, "finishing_balance", lambda match: {
+        "home": {"verdict": None}, "away": {"verdict": None}})
+    vart = (
+        "A kidolgozott helyzetek értéke (várható gól) Veszprém 6.0 – 3.0 "
+        "Szeged, a tényleges gólok: 8 : 2."
+        " A(z) Veszprém jó helyzeteket alakított ki (átlag 0.50 xG/lövés)."
+        " A(z) Veszprém a helyzeteinél többet ért el (+2.0) — pontos "
+        "befejezés."
+        " A(z) Szeged sok kis esélyű lövést vállalt (átlag 0.25 xG/lövés)."
+        " A(z) Szeged elpuskázott helyzeteket (-1.0) — a befejezésen "
+        "érdemes dolgozni."
+        " A(z) Veszprém győzelme a helyzetek alapján is megérdemelt."
+        " A helyzetei felett teljesített: Veszprém #7 (4 gól, várható 2.0)."
+        " A legtöbb kihagyott nagy helyzet: Szeged #4 (0 gól, várható 1.5).")
+    assert _xg_section(_mezes_meccs(), "Veszprém", "Szeged") == {
+        "title": "Helyzetminőség", "body": vart}
+
+    # A befejezés-mérleg mondata (ha a réteg ítél) a csapat-mondatok után
+    # jön; a réteg hibája nem viszi el a szakaszt.
+    monkeypatch.setattr(xg, "finishing_balance", lambda match: {
+        "home": {"verdict": "szebb", "diff": 2.0, "goals": 8, "xg": 6.0},
+        "away": {"verdict": "kevesebb", "diff": -1.0, "goals": 2, "xg": 3.0}})
+    merleggel = _xg_section(_mezes_meccs(), "Veszprém", "Szeged")["body"]
+    assert (" A(z) Veszprém gólszáma szebb a játékánál (8 gól 6.0 várható "
+            "gólra)") in merleggel
+    assert (" A(z) Szeged a játékánál kevesebbet szerzett (2 gól 3.0 "
+            "várható gólra)") in merleggel
+
+    def bukik(match):
+        raise RuntimeError("nem megy")
+    monkeypatch.setattr(xg, "finishing_balance", bukik)
+    assert _xg_section(_mezes_meccs(), "Veszprém", "Szeged")["body"] == vart
+
+
+def test_xg_section_keves_lovesbol_none_es_kiegyenlitett_meccsen_rovid(
+        monkeypatch):
+    """Kevés minta → None: 4-nél kevesebb lövésből nincs helyzet-kép.
+    Kiegyenlített számoknál csak az alap-mondat marad (nincs ítélet)."""
+    from handball.pipeline import xg
+    from handball.pipeline.coach_summary import _xg_section
+
+    monkeypatch.setattr(xg, "finishing_balance", lambda match: {
+        "home": {"verdict": None}, "away": {"verdict": None}})
+    monkeypatch.setattr(xg, "match_xg", lambda match: {
+        "teams": {"home": _xg_csapat(2, 2, 1.0, 0.5),
+                  "away": _xg_csapat(1, 0, 0.3, 0.3)}, "shooters": []})
+    assert _xg_section(_mezes_meccs(), "Veszprém", "Szeged") is None
+    monkeypatch.setattr(xg, "match_xg", lambda match: {
+        "teams": {"home": _xg_csapat(6, 2, 2.1, 0.35),
+                  "away": _xg_csapat(5, 2, 1.9, 0.38)}, "shooters": []})
+    assert _xg_section(_mezes_meccs(), "Veszprém", "Szeged")["body"] == (
+        "A kidolgozott helyzetek értéke (várható gól) Veszprém 2.1 – 1.9 "
+        "Szeged, a tényleges gólok: 2 : 2.")
+
+
+def test_xg_section_a_valodi_reteg_szamaival():
+    """A VALÓDI úton: a szakasz a match_xg csapat-számaival nyit (a
+    mezőnevek tényleg azok, amiket a mondat olvas); üres meccsen None."""
+    from handball.pipeline.coach_summary import _xg_section
+    from handball.pipeline.xg import match_xg
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=1,
+                              shots_per_min=8)
+    r = match_xg(m)["teams"]
+    assert r["home"]["shots"] + r["away"]["shots"] >= 4
+    sec = _xg_section(m, "Veszprém", "Szeged")
+    assert sec["title"] == "Helyzetminőség"
+    assert sec["body"].startswith(
+        "A kidolgozott helyzetek értéke (várható gól) Veszprém "
+        f"{r['home']['xg']:.1f} – {r['away']['xg']:.1f} Szeged, a "
+        f"tényleges gólok: {r['home']['goals']} : {r['away']['goals']}.")
+    ures = Match(MatchMeta(match_id="u", home_team="H", away_team="A",
+                           fps=25.0), [])
+    assert _xg_section(ures, "H", "A") is None
+
+
+def test_style_section_a_jatekkep_nyito_mondatai(monkeypatch):
+    """Játékkép és tempó: a birtoklás-szakaszok száma és az átlagos
+    támadás-hossz, az átmenetek aránya (25%-tól "fel-le hullámzó"), a
+    leggyakoribb védekezési forma, a végén a labdabirtoklás-arány (ha
+    az 50–50-től legalább 5 ponttal eltér). Birtoklás nélkül None."""
+    import handball.pipeline.coach_summary as cs
+    from handball.pipeline import stats
+
+    ures = Match(MatchMeta(match_id="u", home_team="Veszprém",
+                           away_team="Szeged", fps=25.0), [])
+    assert cs._style_section(ures, "Veszprém", "Szeged") is None
+
+    def profil(atmenet, formak):
+        return {"tempo": {"possessions": 20, "avg_attack_duration_s": 28.4,
+                          "transition_pct": atmenet},
+                "defense_formations": formak}
+
+    monkeypatch.setattr(cs, "team_style_profile", lambda match: profil(
+        30.0, {"home": "6-0", "away": "—"}))
+    monkeypatch.setattr(stats, "possession_share", lambda match: {
+        "home": {"pct": 60.0}, "away": {"pct": 40.0}})
+    sec = cs._style_section(ures, "Veszprém", "Szeged")
+    assert sec["title"] == "Játékkép és tempó"
+    assert sec["body"].startswith(
+        "A felvételen 20 labdabirtoklási szakasz látszik, egy támadás "
+        "átlagosan 28 másodpercig tartott. Az idő 30%-a átmenet "
+        "(visszarendeződés/indítás) volt — gyors, fel-le hullámzó játék. "
+        "Leggyakoribb védekezési forma — Veszprém: 6-0.")
+    assert " Labdabirtoklás: Veszprém 60% – 40% Szeged." in sec["body"]
+    # Kevés átmenet: felállt védelem elleni játék; kiegyenlített
+    # birtoklásnál (52–48) nincs birtoklás-mondat.
+    monkeypatch.setattr(cs, "team_style_profile", lambda match: profil(
+        12.0, {}))
+    monkeypatch.setattr(stats, "possession_share", lambda match: {
+        "home": {"pct": 52.0}, "away": {"pct": 48.0}})
+    lassu = cs._style_section(ures, "Veszprém", "Szeged")["body"]
+    assert lassu.startswith(
+        "A felvételen 20 labdabirtoklási szakasz látszik, egy támadás "
+        "átlagosan 28 másodpercig tartott. Az átmenetek aránya 12% — "
+        "inkább felállt védelem elleni játék.")
+    assert "Labdabirtoklás" not in lassu and "védekezési forma" not in lassu
+
+
+def test_style_section_a_valodi_profil_szamaival():
+    """A VALÓDI úton: a szakasz a team_style_profile tempó-számaival
+    nyit (a mezőnevek élnek)."""
+    from handball.pipeline.coach_summary import _style_section
+    from handball.pipeline.tactics import team_style_profile
+
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3)
+    tempo = team_style_profile(m)["tempo"]
+    assert tempo["possessions"] > 0
+    sec = _style_section(m, "Hazai", "Vendég")
+    assert sec["title"] == "Játékkép és tempó"
+    assert sec["body"].startswith(
+        f"A felvételen {tempo['possessions']} labdabirtoklási szakasz "
+        "látszik, egy támadás átlagosan "
+        f"{tempo['avg_attack_duration_s']:.0f} másodpercig tartott.")
+
+
+def _intenzitas_forrasok(monkeypatch, hazai, vendeg, bevetett=9):
+    """Az intenzitás-szakasz forrásai kézzel: ablakonkénti átlagsebesség
+    csapatonként; a lövőerő és a rotáció semleges (nincs mondatuk)."""
+    import handball.pipeline.coach_summary as cs
+    from handball.pipeline import event_detection, stats
+
+    monkeypatch.setattr(cs, "compute_intensity_timeline", lambda match: [
+        {"home_avg_ms": h, "away_avg_ms": a} for h, a in zip(hazai, vendeg)])
+    monkeypatch.setattr(event_detection, "shot_speed_fade", lambda match: {
+        "home": {"drop_pct": None}, "away": {"drop_pct": None}})
+    monkeypatch.setattr(stats, "rotation_depth", lambda match: {
+        "home": {"used": bevetett, "regulars": 6},
+        "away": {"used": bevetett, "regulars": 6}})
+
+
+def test_intensity_section_eses_felporges_es_kiegyensulyozott(monkeypatch):
+    """Kezdés vs hajrá: az első és az utolsó harmad átlaga csapatonként —
+    12%-nál nagyobb esés (figyelmeztetéssel a "mire nézz rá" listán),
+    ugyanekkora felpörgés, vagy kiegyensúlyozott tempó."""
+    from handball.pipeline.coach_summary import (INTENSITY_DROP_WARN_PCT,
+                                                 _intensity_section)
+
+    assert INTENSITY_DROP_WARN_PCT == 12.0
+    m = Match(MatchMeta(match_id="i", home_team="Veszprém",
+                        away_team="Szeged", fps=25.0), [])
+    _intenzitas_forrasok(monkeypatch,
+                         hazai=[4.0, 4.0, 3.5, 3.5, 3.0, 3.0],
+                         vendeg=[3.0, 3.0, 3.2, 3.2, 3.6, 3.6])
+    sec, kiemelesek = _intensity_section(m, "Veszprém", "Szeged")
+    assert sec == {"title": "Intenzitás", "body": (
+        "Kezdés és hajrá összevetése: a(z) Veszprém intenzitása a hajrára "
+        "25%-kal esett (4.00 → 3.00 m/s); a(z) Szeged a hajrában 20%-kal "
+        "pörgött fel (3.00 → 3.60 m/s).")}
+    assert kiemelesek == [
+        "Veszprém: jelentős intenzitás-esés a meccs végére (25%) — érdemes "
+        "a cserék időzítésére ránézni."]
+    # 10%-os esés még a küszöb alatt: kiegyensúlyozott, kiemelés nélkül.
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 4.0, 3.6],
+                         vendeg=[3.0, 3.1, 3.0])
+    sec, kiemelesek = _intensity_section(m, "Veszprém", "Szeged")
+    assert sec["body"] == (
+        "Kezdés és hajrá összevetése: a(z) Veszprém tempója végig "
+        "kiegyensúlyozott volt (~4.00 m/s); a(z) Szeged tempója végig "
+        "kiegyensúlyozott volt (~3.00 m/s).")
+    assert kiemelesek == []
+    # A rotáció-mondat a szakasz végére kerül (szűk pad: 7 bevetett).
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 4.0, 4.0],
+                         vendeg=[3.0, 3.0, 3.0], bevetett=7)
+    sec, _ = _intensity_section(m, "Veszprém", "Szeged")
+    assert sec["body"].endswith(
+        " A(z) Szeged szűk rotációval játszott (7 bevetett játékos, 6 "
+        "alapember) — a hajrában fáradás jöhet.")
+
+
+def test_intensity_section_keves_ablakbol_none(monkeypatch):
+    """Kevés minta → None: három használható ablak alatt nincs mit
+    összevetni; a csak az egyik csapatra mért ablakokból csak arról a
+    csapatról szól; ha egyik csapatra sincs kezdés ÉS hajrá, None."""
+    from handball.pipeline.coach_summary import _intensity_section
+
+    m = Match(MatchMeta(match_id="i", home_team="Veszprém",
+                        away_team="Szeged", fps=25.0), [])
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 3.0], vendeg=[3.0, 3.0])
+    assert _intensity_section(m, "Veszprém", "Szeged") == (None, [])
+    # A nulla-ablak (senkit nem mértünk) nem számít használhatónak.
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 0.0, 0.0, 3.0],
+                         vendeg=[3.0, 0.0, 0.0, 3.0])
+    assert _intensity_section(m, "Veszprém", "Szeged") == (None, [])
+    # A vendégre nincs mérés: csak a hazairól van mondat.
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 4.0, 4.0],
+                         vendeg=[0.0, 0.0, 0.0])
+    sec, _ = _intensity_section(m, "Veszprém", "Szeged")
+    assert sec["body"] == ("Kezdés és hajrá összevetése: a(z) Veszprém "
+                           "tempója végig kiegyensúlyozott volt (~4.00 m/s).")
+    # A hazaira csak a kezdésre, a vendégre csak a hajrára van mérés.
+    _intenzitas_forrasok(monkeypatch, hazai=[4.0, 4.0, 0.0],
+                         vendeg=[0.0, 3.0, 3.0])
+    assert _intensity_section(m, "Veszprém", "Szeged") == (None, [])
+
+
+def test_intensity_section_a_valodi_idovonalbol():
+    """A VALÓDI úton: szimulált meccsen a szakasz a valódi intenzitás-
+    idővonalból készül, és mindkét csapatról szól."""
+    from handball.pipeline.coach_summary import _intensity_section
+    from handball.pipeline.stats import compute_intensity_timeline
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=1)
+    ablakok = compute_intensity_timeline(m)
+    assert len([w for w in ablakok
+                if w["home_avg_ms"] > 0 or w["away_avg_ms"] > 0]) >= 3
+    sec, kiemelesek = _intensity_section(m, "Veszprém", "Szeged")
+    assert sec["title"] == "Intenzitás"
+    assert sec["body"].startswith("Kezdés és hajrá összevetése: a(z) "
+                                  "Veszprém ")
+    assert "a(z) Szeged " in sec["body"]
+    assert isinstance(kiemelesek, list)
+
+
+def test_players_section_a_kiugro_jatekosok_a_valodi_statisztikabol():
+    """Kiugró játékosok: a legtöbbet futó és a leggyorsabb játékos a
+    VALÓDI játékos-statisztikából (csak a legalább ~10 mp-ig mért
+    játékosok közül), a csapat és a mezszám nevével."""
+    from handball.pipeline.coach_summary import (_jersey_of_track,
+                                                 _player_label,
+                                                 _players_section,
+                                                 _team_of_track)
+    from handball.pipeline.stats import compute_player_stats
+
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3)
+    stat = {t: s for t, s in compute_player_stats(m).items()
+            if s.measured_frames >= 250}
+    assert stat
+    csapat, mez = _team_of_track(m), _jersey_of_track(m)
+
+    def nev(tid):
+        return _player_label(tid, csapat, mez, "Veszprém", "Szeged")
+
+    futo = max(stat.items(), key=lambda kv: kv[1].distance_m)
+    gyors = max(stat.items(), key=lambda kv: kv[1].top_speed_ms)
+    sec = _players_section(m, "Veszprém", "Szeged")
+    assert sec["title"] == "Kiugró játékosok"
+    assert sec["body"].startswith(
+        f"Legtöbbet futott: {nev(futo[0])} ({futo[1].distance_m:.0f} m). "
+        f"Legnagyobb sebesség: {nev(gyors[0])} "
+        f"({gyors[1].top_speed_ms * 3.6:.1f} km/h).")
+
+
+def test_players_section_keves_mert_jelenletbol_none():
+    """Kevés minta → None: ha senki sincs legalább ~10 másodpercig mérve
+    (rövid klip, üres meccs), nincs "kiugró játékos" — ne egy zajos,
+    villanásnyi track vezesse a listát. A küszöb IDŐ: 12,5 fps-en fele
+    annyi kocka elég."""
+    from handball.models.tracking import Frame, PlayerPosition, Team
+    from handball.pipeline.coach_summary import _players_section
+
+    def meccs(kockak, fps):
+        return Match(MatchMeta(match_id="p", home_team="H", away_team="A",
+                               fps=fps), [
+            Frame(t=t, players=[PlayerPosition(
+                track_id=1, team=Team.HOME, x=10.0 + 0.1 * (t % 50),
+                y=10.0, jersey_number=7)], ball=None)
+            for t in range(kockak)])
+
+    assert _players_section(meccs(0, 25.0), "H", "A") is None
+    assert _players_section(meccs(200, 25.0), "H", "A") is None   # 8 mp
+    hosszu = _players_section(meccs(300, 25.0), "H", "A")         # 12 mp
+    assert hosszu["body"].startswith("Legtöbbet futott: H #7 (")
+    # Ugyanaz a 200 kocka 12,5 fps-en már 16 mp: elég.
+    assert _players_section(meccs(200, 12.5), "H", "A") is not None
+
+
+def _tortenet_forrasok(monkeypatch, vegeredmeny, felido=None,
+                       legnagyobb=None, fordulasok=0):
+    from handball.pipeline import halftime, momentum, xg
+
+    monkeypatch.setattr(momentum, "score_progression", lambda match: {
+        "final": vegeredmeny, "biggest_lead": legnagyobb or {},
+        "lead_changes": fordulasok})
+    monkeypatch.setattr(momentum, "halftime_score", lambda match: felido)
+    monkeypatch.setattr(momentum, "win_probability",
+                        lambda match: {"turning_point": None})
+    monkeypatch.setattr(momentum, "opening_profile", lambda match: {
+        "home": {"scores_first": None, "early_goals_seen": 0}})
+    monkeypatch.setattr(halftime, "second_half_start", lambda match: None)
+    monkeypatch.setattr(xg, "match_xg", lambda match: {"shooters": []})
+
+
+def test_story_section_a_meccs_tortenete_egy_bekezdesben(monkeypatch):
+    """A meccs története: a győztes és az eredmény (félidővel), a
+    legnagyobb különbség (3 góltól) és a vezetés-váltások (3-tól) — a
+    vendég győzelménél az ő nevével és az ő góljaival elöl, döntetlennél
+    győztes nélkül."""
+    from handball.pipeline.coach_summary import _story_section
+
+    m = Match(MatchMeta(match_id="s", home_team="Veszprém",
+                        away_team="Szeged", fps=25.0), [])
+    _tortenet_forrasok(monkeypatch, (25, 20), felido={"home": 12, "away": 11},
+                       legnagyobb={"home": 6, "away": 1}, fordulasok=4)
+    assert _story_section(m, "Veszprém", "Szeged") == {
+        "title": "A meccs története", "body": (
+            "A(z) Veszprém nyert 25–20-ra a(z) Szeged ellen (félidőben "
+            "12–11). A legnagyobb különbség 6 gól volt (Veszprém). A "
+            "vezetés 4× cserélt gazdát — végig szoros meccs volt.")}
+    _tortenet_forrasok(monkeypatch, (20, 24),
+                       legnagyobb={"home": 2, "away": 5})
+    assert _story_section(m, "Veszprém", "Szeged")["body"] == (
+        "A(z) Szeged nyert 24–20-ra a(z) Veszprém ellen. A legnagyobb "
+        "különbség 5 gól volt (Szeged).")
+    _tortenet_forrasok(monkeypatch, (22, 22),
+                       legnagyobb={"home": 2, "away": 2}, fordulasok=2)
+    assert _story_section(m, "Veszprém", "Szeged")["body"] == (
+        "Döntetlen: 22–22.")
+
+
+def test_story_section_ket_gol_alatt_none(monkeypatch):
+    """Kevés minta → None: két gólnál kevesebből nincs "történet" (a
+    0–0-s vagy 1–0-s töredék-felvételre ne mondjunk győztest)."""
+    from handball.pipeline.coach_summary import _story_section
+
+    m = Match(MatchMeta(match_id="s", home_team="Veszprém",
+                        away_team="Szeged", fps=25.0), [])
+    for vegeredmeny in ((0, 0), (1, 0), (0, 1)):
+        _tortenet_forrasok(monkeypatch, vegeredmeny)
+        assert _story_section(m, "Veszprém", "Szeged") is None
+    _tortenet_forrasok(monkeypatch, (1, 1))
+    assert _story_section(m, "Veszprém", "Szeged")["body"] == (
+        "Döntetlen: 1–1.")
+
+
+def test_weak_points_section_hol_mivel_miert_sorok(monkeypatch):
+    """Gyenge pontok: csapatonként a védekezés feltörése és a támadás
+    megállítása, tételenként egy sor ("Hol — Mivel (Miért)"), a rangsor
+    sorszámával; a szakasz nem csukható össze. A motortól csapatonként
+    WEAK_POINTS_PER_SIDE tételt kér."""
+    from handball.pipeline import court3d
+    from handball.pipeline.coach_summary import (WEAK_POINTS_PER_SIDE,
+                                                 _weak_points_section)
+
+    keres = {}
+
+    def kulcsok(match, top):
+        keres["top"] = top
+        return {
+            "breakpoints": {
+                "home": [{"hol": "a bal szélen", "mivel": "szélső befutás",
+                          "miert": "5 gól innen"}],
+                "away": []},
+            "stoppers": {
+                "home": [],
+                "away": [{"hol": "a 9-esük", "mivel": "szoros őrzés",
+                          "miert": "a gólok 40%-a"},
+                         {"hol": "a beállójuk", "mivel": "elé lépés",
+                          "miert": "8 lövés a hatosról"}]}}
+
+    monkeypatch.setattr(court3d, "tactical_keys_by_team", kulcsok)
+    m = Match(MatchMeta(match_id="g", home_team="Veszprém",
+                        away_team="Szeged", fps=25.0), [])
+    sec = _weak_points_section(m, "Veszprém", "Szeged")
+    assert keres["top"] == WEAK_POINTS_PER_SIDE == 3
+    assert sec["title"] == "Gyenge pontok" and sec["show_all"] is True
+    assert sec["lines"] == [
+        "Veszprém védekezése így törhető fel / 1. Hol: a bal szélen — "
+        "Mivel: szélső befutás (Miért: 5 gól innen)",
+        "Szeged támadása így állítható meg / 1. Hol: a 9-esük — Mivel: "
+        "szoros őrzés (Miért: a gólok 40%-a)",
+        "Szeged támadása így állítható meg / 2. Hol: a beállójuk — Mivel: "
+        "elé lépés (Miért: 8 lövés a hatosról)"]
+    assert sec["body"] == " ".join(sec["lines"])
+
+
+def test_weak_points_section_minta_nelkul_none(monkeypatch):
+    """Kevés minta → None: ha egyik csapatra sincs tétel (üres vagy
+    hiányzó lista), nincs szakasz — sose 0-ból mondott ítélet."""
+    from handball.pipeline import court3d
+    from handball.pipeline.coach_summary import _weak_points_section
+
+    m = Match(MatchMeta(match_id="g", home_team="H", away_team="A",
+                        fps=25.0), [])
+    monkeypatch.setattr(court3d, "tactical_keys_by_team",
+                        lambda match, top: {
+                            "breakpoints": {"home": [], "away": []},
+                            "stoppers": {"home": [], "away": None}})
+    assert _weak_points_section(m, "H", "A") is None
+    monkeypatch.setattr(court3d, "tactical_keys_by_team",
+                        lambda match, top: {"breakpoints": {},
+                                            "stoppers": {}})
+    assert _weak_points_section(m, "H", "A") is None
+
+
+def test_coach_summary_cached_ugyanaz_a_hatokorben_es_anelkul():
+    """A coach_summary az alap-méréseket gyorsítótárazó hatókörben
+    futtatja a tényleges építőt (_coach_summary_cached): az eredmény
+    ugyanaz, mint a hatókör nélkül — a gyorsítótár csak gyorsít. A
+    válasz alakja: szakaszok (mondatokra bontva is), kiemelések, és a
+    két külön mező (megbízhatóság, klip-jelzés)."""
+    from handball.pipeline.coach_summary import _coach_summary_cached
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    hatokorben = coach_summary(m)
+    nyersen = _coach_summary_cached(m)
+    assert hatokorben == nyersen
+    assert set(nyersen) == {"sections", "highlights", "caveat", "clip_note"}
+    assert nyersen["sections"]
+    for sec in nyersen["sections"]:
+        assert sec["title"] and sec["body"] and sec["lines"]
+        assert all(isinstance(s, str) and s for s in sec["lines"])
+
+
+def test_coach_summary_cached_egy_szakasz_hibaja_nem_viszi_el_a_tobbit(
+        monkeypatch):
+    """Egy szakasz-építő hibája (kivétel) csak azt az egy szakaszt
+    hagyja ki: a többi szakasz és a kiemelések megmaradnak, a hívó nem
+    kap kivételt."""
+    import handball.pipeline.coach_summary as cs
+
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3)
+    teljes = cs.coach_summary(m)       # a hatókörben a _coach_summary_cached
+    cimek = [s["title"] for s in teljes["sections"]]
+    assert "Játékkép és tempó" in cimek and "Intenzitás" in cimek
+
+    def bukik(match, home, away):
+        raise RuntimeError("ez a szakasz most nem megy")
+    monkeypatch.setattr(cs, "_style_section", bukik)
+    monkeypatch.setattr(cs, "_intensity_section", bukik)
+    csonka = cs.coach_summary(m)
+    csonka_cimek = [s["title"] for s in csonka["sections"]]
+    assert "Játékkép és tempó" not in csonka_cimek
+    assert "Intenzitás" not in csonka_cimek
+    # Ami nem ezekből a szakaszokból jön, az érintetlen.
+    megmaradt = {s["title"]: s["body"] for s in teljes["sections"]
+                 if s["title"] not in ("Játékkép és tempó", "Intenzitás",
+                                       "A lényeg")}
+    for sec in csonka["sections"]:
+        if sec["title"] in megmaradt:
+            assert sec["body"] == megmaradt[sec["title"]], sec["title"]
+    assert set(megmaradt) - {"A lényeg"} <= set(csonka_cimek)

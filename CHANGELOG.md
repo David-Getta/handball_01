@@ -24,6 +24,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_upgradable_shot`.
   - `decisions`: őr — a felderítés darabszám-alapú szokása
     (`scouting._sit_habit`) a motor ítéletével egyezik.
+  - `coach_summary`: a szakasz-építők közvetlenül (`_xg_section`,
+    `_style_section`, `_intensity_section`, `_players_section`,
+    `_story_section`, `_weak_points_section`) kézi és valódi forrással,
+    és `_coach_summary_cached` (egy szakasz hibája nem viszi el a
+    többit).
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
