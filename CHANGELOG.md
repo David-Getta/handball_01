@@ -52,6 +52,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `halftime`: `detect_break_span` (rövid megállás, szél-üresjárat →
     None; ritkítva is ugyanott) és `credible_break_span` (végig ritkás
     követésnél None).
+  - `event_detection`: `goal_crossing_y` (a három gól-jel külön),
+    `annotate_assists` (az ablak másodpercben él), `_shooter_before`
+    (None, ha nincs támadó birtokos az ablakban).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés

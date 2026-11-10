@@ -1240,3 +1240,314 @@ def test_a_felvetel_elejen_allo_villanasbol_nincs_eladas():
         t += 1
     evs = detect_possession_changes(Match(_meta(), frames))
     assert [e for e in evs if e.type == EventType.TURNOVER] == []
+
+
+# ---- A gólvonal-átlépés y-ja (goal_crossing_y) -------------------------------
+
+def _labda_match(pontok, fps=25.0):
+    """Kockánként egy labda-pont (None = nem látszik), játékos nélkül."""
+    return Match(_meta(fps), [
+        Frame(t=i, players=[],
+              ball=None if p is None else Ball(x=p[0], y=p[1],
+                                               confidence=1.0))
+        for i, p in enumerate(pontok)])
+
+
+def test_goal_crossing_y_minta_a_golvonal_savjaban():
+    """1. jel: a labda egy mintán a gólvonal 0,7 m-es sávjában, a kapufák
+    (8,5–11,5) között van → az a minta y-ja; mindkét kapura."""
+    from handball.pipeline.event_detection import goal_crossing_y
+
+    plusz = _labda_match([(36.0, 9.5), (38.0, 9.5), (39.6, 9.5)])
+    assert goal_crossing_y(plusz, 0, 40.0) == 9.5
+    minusz = _labda_match([(4.0, 11.0), (2.0, 11.0), (0.5, 11.0)])
+    assert goal_crossing_y(minusz, 0, 0.0) == 11.0
+    # Ugyanaz a labda a MÁSIK kapuhoz nem ért oda.
+    assert goal_crossing_y(plusz, 0, 0.0) is None
+
+
+def test_goal_crossing_y_ket_minta_kozti_atlepes_metszespontja():
+    """2. jel: a sávot átugró labdánál a két minta közti szakasz és a
+    gólvonal METSZÉSPONTJA számít — nem a vonalon túli minta y-ja."""
+    from handball.pipeline.event_detection import goal_crossing_y
+
+    m = _labda_match([(37.6, 8.6), (39.2, 9.0), (40.8, 9.4)])
+    assert abs(goal_crossing_y(m, 1, 40.0) - 9.2) < 1e-9
+    # Ritkított felvételen (harmad-fps) a labda kockánként métereket
+    # lép: a metszéspont ott is a tényleges beérkezési pont.
+    ritka = _labda_match([(32.0, 9.0), (37.0, 9.5), (42.0, 10.0)],
+                         fps=25.0 / 3.0)
+    assert abs(goal_crossing_y(ritka, 1, 40.0) - 9.8) < 1e-9
+
+
+def test_goal_crossing_y_none_ha_melle_megy_vagy_nem_er_oda():
+    """A kapufákon kívüli átlépés, a vonalat el nem érő labda, a
+    detektálási ugrás (45 m/s fölötti "átlépés") és a labda nélküli
+    szakasz nem gól-átlépés: None."""
+    from handball.pipeline.event_detection import goal_crossing_y
+
+    melle = _labda_match([(37.6, 5.0), (39.2, 5.0), (40.8, 5.0)])
+    assert goal_crossing_y(melle, 1, 40.0) is None
+    # A sávba eső, de a kapufán kívüli minta sem az (y = 12 > 11,5).
+    kapufa = _labda_match([(38.0, 12.0), (39.6, 12.0)])
+    assert goal_crossing_y(kapufa, 0, 40.0) is None
+    nem_er_oda = _labda_match([(30.0, 10.0), (31.0, 10.0), (32.0, 10.0)])
+    assert goal_crossing_y(nem_er_oda, 0, 40.0) is None
+    ugras = _labda_match([(30.0, 10.0), (30.5, 10.0), (41.0, 10.0)])
+    assert goal_crossing_y(ugras, 1, 40.0) is None
+    nincs_labda = _labda_match([None, None, None])
+    assert goal_crossing_y(nincs_labda, 0, 40.0) is None
+    # Az ablakon (a meccs végén) túli index: üres ablak → None.
+    assert goal_crossing_y(nem_er_oda, 3, 40.0) is None
+
+
+def test_goal_crossing_y_csak_az_elorenezes_ablakaban_keres():
+    """A góldöntés 0,48 mp-et (25 fps-en 12 kockát) néz előre: a később
+    beérő labda már nem ehhez a lövéshez tartozik."""
+    from handball.pipeline.event_detection import (goal_crossing_y,
+                                                   goal_lookahead_frames)
+
+    m = _labda_match([(30.0, 10.0)] * 20 + [(39.8, 10.0)])
+    assert goal_lookahead_frames(m) == 12
+    assert goal_crossing_y(m, 0, 40.0) is None
+    assert goal_crossing_y(m, 10, 40.0) == 10.0
+
+
+def test_goal_crossing_y_megszakado_kovetesnel_extrapolal_ritkitva():
+    """3. jel (csak ritkított felvételen): a kapu felé tartó labda a
+    vonal előtt egy lépésnyire jár, és a követés megszakad (a háló
+    kitakarja) → az utolsó sebességgel extrapolált metszéspont. Ha a
+    követés folytonosan megy tovább (láttuk volna a gólt), nem szól."""
+    from handball.pipeline.event_detection import (GOAL_EXTRAP_MAX_FPS,
+                                                   goal_crossing_y)
+
+    fps = 25.0 / 3.0
+    megszakad = _labda_match([(33.0, 10.0), (36.5, 10.2), None], fps=fps)
+    assert abs(goal_crossing_y(megszakad, 1, 40.0) - 10.4) < 1e-9
+    # A felvétel vége is követés-szakadás.
+    vege = _labda_match([(33.0, 10.0), (36.5, 10.2)], fps=fps)
+    assert abs(goal_crossing_y(vege, 1, 40.0) - 10.4) < 1e-9
+    # Teleport a középkezdéshez: az is szakadás.
+    teleport = _labda_match([(33.0, 10.0), (36.5, 10.2), (20.0, 10.0)],
+                            fps=fps)
+    assert abs(goal_crossing_y(teleport, 1, 40.0) - 10.4) < 1e-9
+    # Folytonos követés (a labda lelassult — védés): nincs extrapoláció.
+    folytonos = _labda_match([(33.0, 10.0), (36.5, 10.2), (38.0, 10.3)],
+                             fps=fps)
+    assert goal_crossing_y(folytonos, 1, 40.0) is None
+    # Az extrapolált pont a kapufán kívülre esik → nem gól.
+    kivul = _labda_match([(33.0, 10.0), (36.5, 11.4), None], fps=fps)
+    assert goal_crossing_y(kivul, 1, 40.0) is None
+    # Sűrű felvételen (a küszöb fölött) a 3. jel nem él.
+    assert 25.0 >= GOAL_EXTRAP_MAX_FPS
+    suru = _labda_match([(38.0, 10.0), (39.2, 10.0), None], fps=25.0)
+    assert goal_crossing_y(suru, 1, 40.0) is None
+    kozepes = _labda_match([(38.0, 10.0), (39.2, 10.0), None], fps=12.0)
+    assert goal_crossing_y(kozepes, 1, 40.0) == 10.0
+
+
+# ---- Gólpassz (annotate_assists) ----------------------------------------------
+
+def _ev(t, tipus, team=Team.HOME, player=None, detail=None):
+    from handball.pipeline.event_detection import MatchEvent
+    return MatchEvent(t=t, type=tipus, team=team, player_id=player,
+                      detail=detail)
+
+
+def test_annotate_assists_az_utolso_passz_a_lovonek():
+    """A gól előtti 4 mp-ben az UTOLSÓ saját passz, amelynek fogadója a
+    lövő, a gólpassz: a gól detail-jébe kerül, a meglévő mezők mellé."""
+    from handball.pipeline.event_detection import annotate_assists
+
+    m = Match(_meta(), [])
+    events = [
+        _ev(20, EventType.PASS, player=3, detail={"receiver_id": 1}),
+        _ev(60, EventType.PASS, player=2, detail={"receiver_id": 1}),
+        _ev(100, EventType.GOAL, player=1, detail={"outcome": "goal"}),
+    ]
+    ki = annotate_assists(m, events)
+    assert ki is events
+    assert events[2].detail == {"outcome": "goal", "assist_id": 2}
+    # A passz-események változatlanok.
+    assert events[0].detail == {"receiver_id": 1}
+    assert events[1].detail == {"receiver_id": 1}
+
+
+def test_annotate_assists_detail_nelkuli_golra_is_beir():
+    """A detail nélküli (None) gól is megkapja a gólpasszt."""
+    from handball.pipeline.event_detection import annotate_assists
+
+    events = [_ev(60, EventType.PASS, player=2, detail={"receiver_id": 1}),
+              _ev(100, EventType.GOAL, player=1)]
+    annotate_assists(Match(_meta(), []), events)
+    assert events[1].detail == {"assist_id": 2}
+
+
+def test_annotate_assists_nincs_golpassz_ha_nem_illik():
+    """Nincs gólpassz, ha a passz az ablakon kívül esik, az ellenfélé,
+    másnak szólt, a gól UTÁN történt, önmagának szól (track-zaj), vagy
+    a gól lövője ismeretlen; a kihagyott lövés sosem kap gólpasszt."""
+    from handball.pipeline.event_detection import (ASSIST_WINDOW_S,
+                                                   annotate_assists)
+
+    m = Match(_meta(), [])
+    hatar = int(ASSIST_WINDOW_S * 25.0)          # 100 kocka
+
+    def gol_detail(passz, gol=None):
+        gol = gol or _ev(200, EventType.GOAL, player=1)
+        annotate_assists(m, [passz, gol])
+        return gol.detail
+
+    # Pont az ablak szélén még gólpassz, egy kockával korábban már nem.
+    assert gol_detail(_ev(200 - hatar, EventType.PASS, player=2,
+                          detail={"receiver_id": 1})) == {"assist_id": 2}
+    assert gol_detail(_ev(200 - hatar - 1, EventType.PASS, player=2,
+                          detail={"receiver_id": 1})) is None
+    # Az ellenfél passza.
+    assert gol_detail(_ev(190, EventType.PASS, team=Team.AWAY, player=12,
+                          detail={"receiver_id": 1})) is None
+    # Másnak szólt / nincs fogadó.
+    assert gol_detail(_ev(190, EventType.PASS, player=2,
+                          detail={"receiver_id": 5})) is None
+    assert gol_detail(_ev(190, EventType.PASS, player=2)) is None
+    # A gól után.
+    assert gol_detail(_ev(201, EventType.PASS, player=2,
+                          detail={"receiver_id": 1})) is None
+    # Önmagának adott "passz".
+    assert gol_detail(_ev(190, EventType.PASS, player=1,
+                          detail={"receiver_id": 1})) is None
+    # Ismeretlen passzoló.
+    assert gol_detail(_ev(190, EventType.PASS, player=None,
+                          detail={"receiver_id": 1})) is None
+    # Ismeretlen lövő: a gól érintetlen marad.
+    assert gol_detail(_ev(190, EventType.PASS, player=2,
+                          detail={"receiver_id": None}),
+                      _ev(200, EventType.GOAL, player=None)) is None
+    # A kihagyott lövés nem gól.
+    loves = _ev(200, EventType.SHOT, player=1, detail={"outcome": "miss"})
+    annotate_assists(m, [_ev(190, EventType.PASS, player=2,
+                             detail={"receiver_id": 1}), loves])
+    assert loves.detail == {"outcome": "miss"}
+    # Üres eseménylista: üres marad.
+    assert annotate_assists(m, []) == []
+
+
+def test_annotate_assists_az_ablak_masodpercben_el():
+    """Az ablak 4 MÁSODPERC: harmad-fps-en (a termék ritkítása) 33 kocka
+    — a 33 kockával korábbi passz gólpassz, a 34-gyel korábbi nem."""
+    from handball.pipeline.event_detection import annotate_assists
+
+    ritka = Match(_meta(25.0 / 3.0), [])
+
+    def assist(dt):
+        gol = _ev(100, EventType.GOAL, player=1)
+        annotate_assists(ritka, [_ev(100 - dt, EventType.PASS, player=2,
+                                     detail={"receiver_id": 1}), gol])
+        return (gol.detail or {}).get("assist_id")
+
+    assert assist(33) == 2
+    assert assist(34) is None
+    # Ugyanez a 34 kocka sűrű (25 fps) felvételen bőven az ablakban van.
+    gol = _ev(100, EventType.GOAL, player=1)
+    annotate_assists(Match(_meta(), []), [
+        _ev(66, EventType.PASS, player=2, detail={"receiver_id": 1}), gol])
+    assert gol.detail == {"assist_id": 2}
+
+
+def test_detect_events_a_golpasszt_a_valodi_esemenyekbol_irja_be():
+    """A teljes lánc: a 2-es passzol az 1-esnek, aki gólt lő — a
+    detect_events gól-eseményében ott az assist_id (a mezőnevek a VALÓDI
+    passz- és gól-eseményekből jönnek, nem kitalált alakból)."""
+    frames = []
+    t = 0
+    for _ in range(8):                       # a 2-es tartja a labdát
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 26.0, 6.0),
+                                          _pl(1, Team.HOME, 31.0, 10.0)],
+                            ball=Ball(x=26.0, y=6.0, confidence=1.0)))
+        t += 1
+    for _ in range(8):                       # az 1-es megkapta
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 26.0, 6.0),
+                                          _pl(1, Team.HOME, 31.0, 10.0)],
+                            ball=Ball(x=31.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(1, 10):                   # az 1-es lövése a +x kapura
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 26.0, 6.0),
+                                          _pl(1, Team.HOME, 31.0, 10.0)],
+                            ball=Ball(x=min(31.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    events = detect_events(Match(_meta(), frames))
+    golok = [e for e in events if e.type == EventType.GOAL]
+    assert len(golok) == 1
+    assert golok[0].player_id == 1
+    assert golok[0].detail.get("assist_id") == 2
+
+
+# ---- A lövő visszakeresése (_shooter_before) ---------------------------------
+
+def _atlovo_match(lovo_team=Team.HOME, tartas=5):
+    """Átlövés 12 m-ről: a 7-es `tartas` kockán át tartja a labdát
+    (28, 10)-nél, aztán a labda 25 m/s-mal repül a +x kapu felé — a
+    röppálya mellett, a hatoson a 9-es beálló áll."""
+    frames = []
+    t = 0
+    for _ in range(tartas):
+        frames.append(Frame(t=t, players=[_pl(7, lovo_team, 28.0, 10.0),
+                                          _pl(9, Team.HOME, 34.0, 10.5)],
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(1, 8):
+        frames.append(Frame(t=t, players=[_pl(7, lovo_team, 28.0, 10.0),
+                                          _pl(9, Team.HOME, 34.0, 10.5)],
+                            ball=Ball(x=28.0 + i, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_shooter_before_az_elengedo_nem_a_roppalya_mellett_allo():
+    """A lövés-esemény a kapu-megközelítéskor jön, amikor a labda már a
+    beálló mellett repül: a lövő mégis az, aki ELENGEDTE (a 7-es) — a
+    repülő labda melletti játékos nem birtokos."""
+    from handball.pipeline.event_detection import _shooter_before
+    from handball.pipeline.tactics import TacticsConfig
+
+    m = _atlovo_match()
+    cfg = TacticsConfig()
+    # idx = 11: a labda (35, 10)-nél, a beállótól 1,1 m-re repül.
+    assert m.frames[11].ball.x == 35.0
+    assert _shooter_before(m, 11, Team.HOME, cfg, 25.0) == 7
+    # Az elengedés előtti (még kézben tartott) kockán is ő a birtokos.
+    assert _shooter_before(m, 3, Team.HOME, cfg, 25.0) == 7
+
+
+def test_shooter_before_none_ha_nincs_tamado_birtokos_az_ablakban():
+    """"Nem tudjuk" a magabiztosan rossz név helyett: None, ha a
+    visszanézés ablakában (1,2 mp) a labdát csak az ellenfél tartotta,
+    senki sem tartotta, vagy az elengedés régebben volt."""
+    from handball.pipeline.event_detection import (SHOOTER_LOOKBACK_S,
+                                                   _shooter_before)
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    # A labdát a VENDÉG 7-es engedte el: hazai lövőt nem találunk — a
+    # röppálya mellett álló hazai beálló sem lesz az.
+    ellenfel = _atlovo_match(lovo_team=Team.AWAY)
+    assert _shooter_before(ellenfel, 11, Team.HOME, cfg, 25.0) is None
+    assert _shooter_before(ellenfel, 11, Team.AWAY, cfg, 25.0) == 7
+    # Végig gazdátlan (lassú) labda, játékos nélkül.
+    gazdatlan = _labda_match([(30.0 + 0.1 * i, 10.0) for i in range(12)])
+    assert _shooter_before(gazdatlan, 11, Team.HOME, cfg, 25.0) is None
+    # Az elengedés több mint 1,2 mp-cel (30 kockával) a lövés előtt volt:
+    # a labda utána játékostól távol, lassan gurult.
+    ablak = round(SHOOTER_LOOKBACK_S * 25.0)
+    frames = [Frame(t=0, players=[_pl(7, Team.HOME, 20.0, 10.0)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))]
+    for i in range(1, ablak + 3):
+        frames.append(Frame(t=i, players=[_pl(7, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=24.0 + 0.2 * i, y=10.0,
+                                      confidence=1.0)))
+    regi = Match(_meta(), frames)
+    assert _shooter_before(regi, len(frames) - 1, Team.HOME, cfg,
+                           25.0) is None
+    # Ugyanez egy kockával az ablakon belül már megtalálja.
+    assert _shooter_before(regi, ablak, Team.HOME, cfg, 25.0) == 7
