@@ -21,6 +21,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `setplays`: az öt ítélet-mondat segédje (`_forma_itelet`,
     `_allas_itelet`, `_elony_itelet`, `_hajra_itelet`,
     `_hetedik_itelet`), `_figura_kimenetek`, `_copy_side_rows`.
+  - `scouting`: a 73 meccsek közti összefésülő (`_merge_*`) táblázatos
+    teszttel (pontos összeadódás; őr: a VALÓDI felderítés sorain is
+    futnak), és további segédek (`_team_of_track`, `_fast_break_pct`,
+    `_defense_distribution`, `_shot_zones`, `_top_shooter_habit`,
+    `_avg_from_sums`, `_mpl_theme`).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
