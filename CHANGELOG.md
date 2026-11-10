@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Teszt-lefedettség: a pipeline teszt nélküli függvényei** (teszt): a
+  `backend/handball/pipeline` azon függvényei, amelyekre eddig egyetlen
+  teszt sem hivatkozott (vagy a csomag sosem futtatta le őket),
+  közvetlen tesztet kapnak — a pozitív eset mellé a "kevés minta → None
+  / hallgat" esettel. Modulonként, az ábécé végéről:
+  - `training`: a 15) "Játék a … fal ellen" szabály (eddig egyszer sem
+    szólalt meg tesztben) kitalált ÉS valódi forrás-réteggel, a
+    formánkénti 4 lövés küszöbével; a gyorsítótárazott fókusz
+    védő-másolatai (`_tf_copy`, `_ptf_copy`).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés

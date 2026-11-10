@@ -1555,3 +1555,184 @@ def test_ai_edzesterv_az_emberhatrany_fallal():
     assert u[0]["why"].endswith("; P")
     assert next_match_plan("Vendég", emberhatrany=eh, emberhatrany_proba={
         "itelet": "nem", "verdict": "Q"}) == []
+
+
+# ---- 15) Egy védőforma ellen elakadnak ("Játék a … fal ellen") -------------
+
+def test_fal_elleni_fokusz_megszolal_ha_egy_forma_megfogja(monkeypatch):
+    """A 6-0 ellen 5 lövésből 1 gól (20%), az 5-1 ellen 4-ből 3 (75%):
+    a rés 55 pp ≥ 25 → a hazai "Játék a 6-0 fal ellen" tételt kap, a
+    gyengébb forma nevével és százalékával az indoklásban."""
+    from handball.pipeline import tactics as tactics_mod
+    from handball.pipeline import training as training_mod
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    monkeypatch.setattr(
+        tactics_mod, "efficiency_vs_formation",
+        lambda match, config=None: {
+            "home": {"6-0": {"shots": 5, "goals": 1, "goal_pct": 20.0},
+                     "5-1": {"shots": 4, "goals": 3, "goal_pct": 75.0}},
+            "away": {}})
+    tf = training_focus(Match(_meta(), []))
+    tetel = [it for it in tf["home"]
+             if it["title"] == "Játék a 6-0 fal ellen"]
+    assert len(tetel) == 1
+    assert tetel[0]["area"] == "támadás"
+    assert tetel[0]["why"] == "a 6-0 ellen csak 20%-ot konvertáltak"
+    assert tetel[0]["drill"].startswith("6-0 elleni figurák")
+    assert not any("fal ellen" in it["title"] for it in tf["away"])
+
+
+def test_fal_elleni_fokusz_keves_mintanal_vagy_kis_resnel_hallgat(
+        monkeypatch):
+    """Formánként 4 lövés kell, és legalább KÉT ilyen forma (különben
+    nincs mihez mérni); 25 pp alatti résnél sincs tétel — a hallgatás
+    nem hallgatólagos 0%."""
+    from handball.pipeline import tactics as tactics_mod
+    from handball.pipeline import training as training_mod
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    monkeypatch.setattr(
+        tactics_mod, "efficiency_vs_formation",
+        lambda match, config=None: {
+            # 3 lövés a 6-0 ellen: kevés → csak EGY mérhető forma marad.
+            "home": {"6-0": {"shots": 3, "goals": 0, "goal_pct": 0.0},
+                     "5-1": {"shots": 6, "goals": 5, "goal_pct": 83.3}},
+            # Két mérhető forma, de a rés csak 20 pp.
+            "away": {"6-0": {"shots": 5, "goals": 2, "goal_pct": 40.0},
+                     "3-2-1": {"shots": 5, "goals": 3, "goal_pct": 60.0}}})
+    tf = training_focus(Match(_meta(), []))
+    for side in ("home", "away"):
+        assert not any("fal ellen" in it["title"] for it in tf[side]), side
+
+
+def _fal_tamadas(frames, t, fal, gol):
+    """Egy hazai támadás a megadott vendég fal ellen: 20 kocka felépítés
+    (a fal a lövés előtti kockákon is látszik), aztán 7 kocka lövés a
+    +x kapura — gól (y=10) vagy mellé (y=5)."""
+    def vedok():
+        return [_pl(20 + j, Team.AWAY, x, y) for j, (x, y) in enumerate(fal)]
+    for _ in range(20):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)]
+                            + vedok(),
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)]
+                            + vedok(),
+                            ball=Ball(x=34.0 + i, y=10.0 if gol else 5.0,
+                                      confidence=1.0)))
+        t += 1
+    return t
+
+
+_FAL_60 = [(35.0, float(y)) for y in (2, 6, 8, 12, 14, 18)]
+_FAL_51 = [(35.0, float(y)) for y in (2, 6, 10, 14, 18)] + [(30.5, 10.0)]
+
+
+def test_fal_elleni_fokusz_valodi_retegbol_is_megszolal(monkeypatch):
+    """A VALÓDI forrás-réteggel (efficiency_vs_formation) is megszólal:
+    négy kihagyott lövés a 6-0 fal ellen, négy gól az 5-1 ellen → a
+    mezőnevek tényleg azok, amiket a szabály olvas."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.tactics import efficiency_vs_formation
+
+    frames, t = [], 0
+    for _ in range(4):
+        t = _fal_tamadas(frames, t, _FAL_60, gol=False)
+    for _ in range(4):
+        t = _fal_tamadas(frames, t, _FAL_51, gol=True)
+    m = Match(_meta(), frames)
+    ef = efficiency_vs_formation(m)["home"]
+    assert ef["6-0"] == {"shots": 4, "goals": 0, "goal_pct": 0.0}
+    assert ef["5-1"] == {"shots": 4, "goals": 4, "goal_pct": 100.0}
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tf = training_focus(m)
+    tetel = [it for it in tf["home"] if "fal ellen" in it["title"]]
+    assert [it["title"] for it in tetel] == ["Játék a 6-0 fal ellen"]
+    assert tetel[0]["why"] == "a 6-0 ellen csak 0%-ot konvertáltak"
+    assert not any("fal ellen" in it["title"] for it in tf["away"])
+
+
+def test_fal_elleni_fokusz_valodi_retegbol_keves_lovesnel_hallgat(
+        monkeypatch):
+    """Ugyanaz a meccs formánként csak 3-3 lövéssel: a réteg mér, de a
+    szabály hallgat (formánként 4 lövés a küszöb)."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.tactics import efficiency_vs_formation
+
+    frames, t = [], 0
+    for _ in range(3):
+        t = _fal_tamadas(frames, t, _FAL_60, gol=False)
+    for _ in range(3):
+        t = _fal_tamadas(frames, t, _FAL_51, gol=True)
+    m = Match(_meta(), frames)
+    ef = efficiency_vs_formation(m)["home"]
+    assert ef["6-0"]["shots"] == 3 and ef["5-1"]["shots"] == 3
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tf = training_focus(m)
+    assert not any("fal ellen" in it["title"] for it in tf["home"])
+
+
+# ---- A gyorsítótárazott fókusz védő-másolatai (_tf_copy / _ptf_copy) --------
+
+def test_tf_copy_a_tetelek_fuggetlenek():
+    """A csapat-fókusz másolata egyenlő, de tételenként független: a hívó
+    módosítása (pl. rangsor-jelölés) nem látszik az eredetin; üres
+    oldalból üres lista lesz."""
+    from handball.pipeline.training import _tf_copy
+
+    eredeti = {"home": [{"area": "támadás", "title": "A", "why": "x",
+                         "drill": "y"}],
+               "away": []}
+    masolat = _tf_copy(eredeti)
+    assert masolat == eredeti and masolat is not eredeti
+    assert masolat["home"] is not eredeti["home"]
+    assert masolat["home"][0] is not eredeti["home"][0]
+    masolat["home"][0]["title"] = "átírva"
+    masolat["away"].append({"title": "új"})
+    assert eredeti["home"][0]["title"] == "A" and eredeti["away"] == []
+
+
+def test_ptf_copy_a_klip_listaig_masol():
+    """Az egyéni fókusz másolata a játékosig, a tételig ÉS a klip-listáig
+    független; a klip nélküli (vagy None klipű) tétel üres listát kap."""
+    from handball.pipeline.training import _ptf_copy
+
+    eredeti = {"home": {"players": [
+        {"jersey": 9, "items": [
+            {"title": "Lövés", "clips": [{"t": 10}]},
+            {"title": "Passz"},
+            {"title": "Védekezés", "clips": None}]}]},
+        "away": {"players": []}}
+    masolat = _ptf_copy(eredeti)
+    j0, j1 = eredeti["home"]["players"][0], masolat["home"]["players"][0]
+    assert j1["jersey"] == 9 and j1 is not j0
+    assert [i["title"] for i in j1["items"]] == ["Lövés", "Passz",
+                                                 "Védekezés"]
+    assert j1["items"][0]["clips"] == [{"t": 10}]
+    assert j1["items"][1]["clips"] == [] and j1["items"][2]["clips"] == []
+    j1["items"][0]["clips"].append({"t": 99})
+    j1["items"][0]["title"] = "átírva"
+    j1["items"].append({"title": "új"})
+    assert j0["items"][0] == {"title": "Lövés", "clips": [{"t": 10}]}
+    assert len(j0["items"]) == 3
+    assert masolat["away"] == {"players": []}
+
+
+def test_a_fokusz_a_hatokorben_is_fuggetlen_masolat():
+    """Nyitott hatókörben a fókusz egyszer épül fel, de minden hívó saját
+    példányt kap: az egyik módosítása a másik eredményét nem rontja."""
+    from handball.pipeline.primitive_cache import primitive_cache
+
+    m = _shots_match(goal=True, defender_far=True)
+    with primitive_cache(m):
+        elso = training_focus(m)
+        assert elso["away"], "a fixture-ön a vendégnek van fókusza"
+        vart = [dict(it) for it in elso["away"]]
+        elso["away"][0]["title"] = "átírva"
+        elso["away"].clear()
+        masodik = training_focus(m)
+    assert masodik["away"] == vart
