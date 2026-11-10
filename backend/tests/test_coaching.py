@@ -132,20 +132,6 @@ def test_timeline_matches_frame_count():
     assert {"priority", "category", "text"} <= set(tl[0][0].keys())
 
 
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-                print(f"PASS {name}")
-            except AssertionError as e:
-                failures += 1
-                print(f"FAIL {name}: {e}")
-    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
-    raise SystemExit(1 if failures else 0)
-
-
 # ---- Belső segédek közvetlenül (második kör) --------------------------------
 
 def test_field_players_a_kapus_nelkul():
@@ -223,3 +209,17 @@ def test_ball_speed_toward_attack_tamado_iranyu_sebesseg():
                                      25.0) == 0.0
     assert _ball_speed_toward_attack(most, kocka(None), Team.HOME, cfg,
                                      25.0) == 0.0
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as e:
+                failures += 1
+                print(f"FAIL {name}: {e}")
+    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
+    raise SystemExit(1 if failures else 0)

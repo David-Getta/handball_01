@@ -32,6 +32,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     lövés útja a valódi meccsen.
   - `models/events`: `RosterTimeline.has_goalkeeper` (csapatonként
     külön, a létszámtól függetlenül).
+  - A `test_analytics.py` és a `test_coaching.py` "pytest nélkül is
+    futtatható" blokkja újra a fájl végén áll, így script-módban is
+    minden (a második körben hozzáadott) teszt lefut.
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés

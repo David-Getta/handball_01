@@ -92,20 +92,6 @@ def test_team_summary_empty_when_too_few():
     assert s.frames_counted == 0
 
 
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-                print(f"PASS {name}")
-            except AssertionError as e:
-                failures += 1
-                print(f"FAIL {name}: {e}")
-    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
-    raise SystemExit(1 if failures else 0)
-
-
 # ---- Az üres hőtérkép-rács (_empty_grid) ------------------------------------
 
 def test_empty_grid_sorok_es_oszlopok_fuggetlen_nullai():
@@ -122,3 +108,17 @@ def test_empty_grid_sorok_es_oszlopok_fuggetlen_nullai():
     assert sum(v for sor in racs for v in sor) == 5.0
     assert _empty_grid(0, 0) == [] and _empty_grid(3, 0) == []
     assert _empty_grid(0, 2) == [[], []]
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as e:
+                failures += 1
+                print(f"FAIL {name}: {e}")
+    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
+    raise SystemExit(1 if failures else 0)
