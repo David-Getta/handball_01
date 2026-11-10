@@ -1170,3 +1170,140 @@ def test_trend_metrics_table_irany_nyilakkal():
         '<p class="empty">Nincs összevethető mutató.</p>'
     assert _trend_metrics_table({}) == \
         '<p class="empty">Nincs összevethető mutató.</p>'
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+def test_note_diagram_svg_palya_jatekosok_labda():
+    """A jegyzet felülnézeti ábrája: 2:1 arányú pálya (felezővonal, a
+    két 6 m-es vonal tömören, a két 9 m-es szaggatottan, a két kapu), a
+    játékosok csapatszínnel és mezszámmal, a labda kis körrel. Üres
+    jelenetre üres pálya — nem hiba."""
+    from handball.pipeline.report_html import _note_diagram_svg
+
+    ures = _note_diagram_svg({"players": [], "ball": None, "arrows": []})
+    assert ures.startswith('<svg viewBox="0 0 360 180" width="360" '
+                           'height="180"')
+    assert ures.endswith("</svg>")
+    assert ures.count("<path ") == 4                 # 2 × (6 m + 9 m)
+    assert ures.count('stroke-dasharray="4 3"') == 2 # csak a 9 m szaggatott
+    assert ures.count("<line ") == 3                 # felező + két kapu
+    assert "<circle" not in ures and "<polygon" not in ures
+    assert "<text" not in ures
+    # Hiányzó kulcsokkal (régi jegyzet) ugyanez.
+    assert _note_diagram_svg({}) == ures
+
+    abra = _note_diagram_svg({
+        "players": [{"x": 10.0, "y": 5.0, "team": "home", "jersey": 7},
+                    {"x": 30.0, "y": 15.0, "team": "away", "jersey": None},
+                    {"x": 20.0, "y": 10.0, "team": "biro", "jersey": 1}],
+        "ball": (12.0, 6.0), "arrows": []})
+    # 1 m = 9 px (360 px / 40 m).
+    assert '<circle cx="90.0" cy="45.0" r="6" fill="#2f6fb2"/>' in abra
+    assert '<circle cx="270.0" cy="135.0" r="6" fill="#b2453a"/>' in abra
+    assert '<circle cx="180.0" cy="90.0" r="6" fill="#8492A6"/>' in abra
+    assert abra.count("<text ") == 2                 # mezszám nélkül nincs
+    assert ('<text x="90.0" y="47.5" font-size="7" text-anchor="middle" '
+            'fill="#fff">7</text>') in abra
+    assert '<circle cx="108.0" cy="54.0" r="3" fill="#e8a33d"' in abra
+
+
+def test_note_diagram_svg_nyilak_szar_es_hegy_nyomtato_szinnel():
+    """A jegyzettel mentett nyíl szár + hegy: a hegy a nyíl hosszának
+    45%-a, de legfeljebb 0,9 m; a szín a nyomtatásra sötétített három
+    szerep-szín (labda/passz, futás, védő); a szélesség paraméter az
+    egész ábrát arányosan nagyítja."""
+    from handball.pipeline.report_html import (_NOTE_ARROW_PRINT,
+                                               _note_diagram_svg)
+
+    assert _NOTE_ARROW_PRINT == ("#c99a06", "#2f6fb2", "#c0392b")
+    hosszu = _note_diagram_svg({"arrows": [(10.0, 10.0, 20.0, 10.0, 1)]})
+    # 10 m-es nyíl: a hegy 0,9 m → a szár 19,1 m-ig (171,9 px) tart.
+    assert ('<line x1="90.0" y1="90.0" x2="171.9" y2="90.0" '
+            'stroke="#2f6fb2" stroke-width="3"/>') in hosszu
+    assert hosszu.count('<polygon class="nyil"') == 1
+    assert '180.0,90.0" fill="#2f6fb2"/>' in hosszu  # a csúcs a végponton
+    # 1 m-es nyíl: a hegy 0,45 m → a szár 10,55 m-ig (94,9 / 95,0 px).
+    rovid = _note_diagram_svg({"arrows": [(10.0, 10.0, 11.0, 10.0, 0)]})
+    assert 'x2="94.9" y2="90.0" stroke="#c99a06"' in rovid \
+        or 'x2="95.0" y2="90.0" stroke="#c99a06"' in rovid
+    # Három nyíl, három szín; a játékos-körök a nyilak FÖLÖTT (utánuk).
+    harom = _note_diagram_svg({
+        "arrows": [(5.0, 5.0, 9.0, 5.0, 0), (5.0, 8.0, 9.0, 8.0, 1),
+                   (5.0, 11.0, 5.0, 15.0, 2)],
+        "players": [{"x": 5.0, "y": 5.0, "team": "home", "jersey": 9}]})
+    assert harom.count('<polygon class="nyil"') == 3
+    for szin in _NOTE_ARROW_PRINT:
+        assert f'fill="{szin}"/>' in harom
+    assert harom.rindex("<polygon") < harom.index('r="6"')
+    # Dupla szélesség: minden koordináta kétszeres.
+    nagy = _note_diagram_svg({"arrows": [(10.0, 10.0, 20.0, 10.0, 1)]},
+                             width=720)
+    assert nagy.startswith('<svg viewBox="0 0 720 360" width="720" '
+                           'height="360"')
+    assert '<line x1="180.0" y1="180.0" x2="343.8" y2="180.0"' in nagy
+
+
+def test_note_diagram_svg_a_mezszamot_escape_eli():
+    """A mezszám szövegként kerül az ábrába — HTML-escape-pel (a kézzel
+    szerkesztett meccs-fájl sem törheti el a jelentést)."""
+    from handball.pipeline.report_html import _note_diagram_svg
+
+    abra = _note_diagram_svg({"players": [
+        {"x": 10.0, "y": 5.0, "team": "home", "jersey": "<7>"}]})
+    assert "&lt;7&gt;</text>" in abra and "<7>" not in abra
+
+
+def test_note_diagram_svg_a_valodi_jegyzet_abrajabol():
+    """A VALÓDI úton: a court3d.note_diagram adata (a jegyzet kockájának
+    játékosai, labdája és a dekódolt nyilak) — minden játékos egy kör, a
+    labda egy kis kör, nyilanként egy hegy; a túl rövid nyíl már a
+    dekódolásnál kimarad (nulla hosszú nyíl így nem érhet ide)."""
+    from handball.pipeline.court3d import DRAWING_MIN_M, note_diagram
+    from handball.pipeline.report_html import _note_diagram_svg
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=3)
+    d = note_diagram(m, 100, "10,10,20,10,1;5,5,5,9,2;7,7,7,7,0")
+    assert len(d["players"]) > 0
+    assert len(d["arrows"]) == 2 and DRAWING_MIN_M > 0   # a 0 hosszú kimarad
+    abra = _note_diagram_svg(d)
+    assert abra.count('r="6"') == len(d["players"])
+    assert abra.count('r="3"') == (1 if d["ball"] else 0)
+    assert abra.count('<polygon class="nyil"') == 2
+    assert abra.count("<text ") == sum(
+        1 for p in d["players"] if p.get("jersey") is not None)
+
+
+def test_match_report_html_cached_ugyanaz_a_hatokorben_es_anelkul():
+    """A meccs-jelentés az alap-méréseket gyorsítótárazó hatókörben épül
+    (match_report_html → _match_report_html_cached): a HTML bájtra
+    ugyanaz, mint a hatókör nélkül — a gyorsítótár csak gyorsít."""
+    import re
+
+    from handball.pipeline.event_detection import detect_events
+    from handball.pipeline.report_html import (_match_report_html_cached,
+                                               match_report_html)
+    from handball.pipeline.tactics import team_style_profile
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    profil, esemenyek = team_style_profile(m), detect_events(m)
+
+    def kelt_nelkul(html):
+        # A lábléc "Kelt: ÉÉÉÉ-HH-NN ÓÓ:PP" bélyege a két hívás közt
+        # percet válthat — az összevetésből kimarad.
+        return re.sub(r"Kelt: \d{4}-\d\d-\d\d \d\d:\d\d", "Kelt: —", html)
+
+    hatokorben = match_report_html(m, profil, esemenyek, None,
+                                   varakozas=["a jóslat bejött"])
+    nyersen = _match_report_html_cached(m, profil, esemenyek, None,
+                                        varakozas=["a jóslat bejött"])
+    assert "Kelt: —" in kelt_nelkul(nyersen)          # a bélyeg megvan
+    assert kelt_nelkul(hatokorben) == kelt_nelkul(nyersen)
+    assert nyersen.lstrip().lower().startswith("<!doctype html>")
+    assert re.search(r"<h2[^>]*>Várakozás és valóság</h2>", nyersen)
+    assert "<li>a jóslat bejött.</li>" in nyersen
+    # A választható szakasz üres bemenetnél elmarad (nem üres címsor).
+    assert "Várakozás és valóság" not in _match_report_html_cached(
+        m, profil, esemenyek, None)

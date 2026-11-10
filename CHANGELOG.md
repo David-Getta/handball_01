@@ -29,6 +29,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     `_story_section`, `_weak_points_section`) kézi és valódi forrással,
     és `_coach_summary_cached` (egy szakasz hibája nem viszi el a
     többit).
+  - `report_html`: `_note_diagram_svg` (pálya, játékosok, labda, nyilak;
+    a valódi jegyzet-ábrából is), `_match_report_html_cached` (a
+    hatókörben és anélkül ugyanaz a jelentés).
 - **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
   hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
   Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
