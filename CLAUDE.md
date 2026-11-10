@@ -176,6 +176,19 @@ a szabály tényleg megszólal. A `tests/test_player_training.py`
 menet közben el is kapott egy ilyet (a `match_xg` lövő-sorai nem
 tartalmaznak `jersey` mezőt, a `player_fatigue` sorai sem).
 
+Az elavult MEZŐNÉV ellen háló is van: a `tests/test_mezonevek.py` a
+forráskódból (AST) kigyűjti, mely réteg-kimenet mely mezőit olvassa
+szögletes zárójellel az edzés-fókusz, az összefoglaló, a felderítés és a
+meccs-jelentés — a csapat-rekordon, beágyazott szótáron és lista-sorokon
+át —, a VALÓDI réteget lefuttatja egy szimulált meccsen, és megnézi,
+hogy a mező létezik-e. Így azokat a szabályokat is ellenőrzi, amelyek
+egyetlen tesztben sem szólalnak meg (a közel ötszáz edzés-szabályból
+mintegy kétszáz ilyen). Ugyanez a fájl a felderítő jelentés mezőit is
+őrzi (a `rep.` / `own.` / `opp.` után álló név a ScoutingReport létező
+mezője). Amit NEM lát: a `.get()`-tel olvasott mező, és az az ág, ahol a
+szimulált meccsen nincs adat (None, üres lista, `"available": False`) —
+a háló tehát a fenti valódi-réteges tesztet nem váltja ki, csak sűríti.
+
 Az elnyelt KIVÉTEL ellen külön őr van: a `tests/test_nema_kivetelek.py`
 nyomkövetővel lefuttatja az összefoglalót, a felderítést, a meccstervet
 és az edzés-fókuszt, és minden kivételt összegyűjt, ami a handball-kódban

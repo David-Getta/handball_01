@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Mezőnév-őr: a felületek a rétegek létező mezőit olvassák** (teszt):
+  a lefedettség-mérés szerint a közel ötszáz edzés-szabályból mintegy
+  kétszáz egyetlen tesztben sem szólal meg — ezek `try/except` mögött
+  ülnek, ahol az elgépelt vagy elavult mezőnév némán elnémítja a
+  szabályt. Az új őr (`tests/test_mezonevek.py`) a forráskódból
+  kigyűjti, mely réteg mely mezőit olvassa az edzés-fókusz, az
+  összefoglaló, a felderítés és a meccs-jelentés (a csapat-rekordon,
+  beágyazott szótáron és lista-sorokon át), a VALÓDI réteget lefuttatja
+  egy szimulált meccsen, és megnézi, hogy a mező létezik-e — közel
+  négyezer olvasás, a meg nem szólaló szabályoké is. A felderítő
+  jelentés mezőit (`rep.` / `own.` / `opp.`) ugyanez a fájl őrzi.
+  Elavult mezőnév most nincs; a háló a jövőbeli elírást fogja meg. Amit
+  nem lát: a `.get()`-tel olvasott mező és az adat nélküli ág.
 - **Teszt-lefedettség: a backend többi modulja** (teszt): a pipeline, az
   api és a scripts után a `handball` csomag többi, közvetlen teszt
   nélküli függvénye — a pozitív eset mellé a "nincs miből → None" és a
