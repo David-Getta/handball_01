@@ -30,6 +30,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     réteg kezelése, a main három módja (teljes / részleges / jegyzőkönyv).
   - `scripts/simulate_match`: opciók, összefoglaló, fájlba írt Tracking
     (pásztázó kamera / földi igazság), üres meccs.
+  - `scripts/serve`: stream-átirányítás ablak nélküli futásnál, az
+    indulási mérföldkő, a main (tartalék port, végzetes hiba naplója).
 - **Az adatmappa-tesztek sorrend-függetlenek** (teszt): a `test_storage`
   két tesztje arra épített, hogy az előttük futó teszt törli a
   `HANDBALL_DATA_DIR` változót; párhuzamos futtatásnál más tesztek közé
