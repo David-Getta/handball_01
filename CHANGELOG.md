@@ -57,6 +57,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `defense`: `_wall_metrics`, `_wall_zone`, `_wall_verdict`,
     `_wall_signature` (három védő alatt None), `_dgap_tally`, a hajrá-fal
     tanácsa és ítélete.
+  - `decisions`: `_point_segment_distance`, `_ball_holder`,
+    `_from_area_m`, `_jatekos_szorzo` (modell nélkül 1), `_modell_felirat`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
