@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Elnyelt-kivétel őr: kétoldalú és elfajult meccsen is, és statikusan
+  is** (teszt): a `tests/test_nema_kivetelek.py` eddig egy szimulált
+  meccsen nézte a négy nagy felületet, ahol csak a hazai lő gólt — a
+  fordulásos ágak így sosem futottak le (ezért nem vette észre a
+  "Sorozatok" szakasz hibáját). Mellé került: két kis, gólonként
+  felépített kétoldalú meccs; kilenc elfajult meccs (üres, egykockás,
+  labda / játékos / egyik csapat nélküli, nulla képrátájú, hézagos
+  idejű, csupa szünet) — a "kevés minta → None" elv őre az összes
+  rétegre egyszerre: egyetlen kivétel sem születhet; és egy statikus
+  pár, amely a forrásból megfogja, ha egy név használata megelőzi a
+  saját, későbbi helyi importját (ez ürítette ki egyszer némán a
+  felderítés szélső- és poszt-góljait).
 - **Edzés-szabályok: megszólalnak a rétegek saját fixture-jein** (teszt):
   a 494 edzés-szabályból 190 egyetlen tesztben sem szólalt meg — a réteg
   tesztje a réteget nézte, a rá épülő szabályt senki nem futtatta. A
