@@ -319,3 +319,69 @@ def test_credible_break_span_a_kontraszt_kuszobe_a_fele():
                         ("jatek", 60), ("ritka", 60))
     assert detect_break_span(alatta) == (3000, 5249)
     assert credible_break_span(alatta) is None
+
+
+# ---- A darabok közti térfélcsere mint félidő-pont (_segment_swap_halftime) ----
+
+def _szakaszos(szakaszok):
+    m = Match(_meta(), _play_frames(0, 20, home_x=12.0, away_x=26.0))
+    m.meta.source_segments = szakaszok
+    return m
+
+
+def test_segment_swap_halftime_az_egyetlen_fordulo_hatar():
+    """Darabokban felvett meccsnél a félidő-pont az a szakasz-határ, ahol
+    a tükrözés-állapot átvált — a határ a FORDULÓ szakasz kezdő kockája;
+    a félidőn belüli vágás (nincs fordulás) nem félidő."""
+    from handball.pipeline.halftime import _segment_swap_halftime
+
+    harom = _szakaszos([
+        {"t_from": 0, "t_to": 200, "mirrored": False, "mirror_decided": True},
+        {"t_from": 200, "t_to": 300, "mirrored": False,
+         "mirror_decided": True},                    # félidőn belüli vágás
+        {"t_from": 300, "t_to": 500, "mirrored": True,
+         "mirror_decided": True}])
+    assert _segment_swap_halftime(harom) == 300
+    # A detect_halftime ezt adja — nincs felvett szünet, amit mérni lehetne.
+    assert detect_halftime(harom) == 300
+    # Kézi tükrözés (⇄ gomb) után is: a döntött állapot számít.
+    ketto = _szakaszos([
+        {"t_from": 0, "t_to": 250, "mirrored": True, "mirror_decided": True},
+        {"t_from": 250, "t_to": 500, "mirrored": False,
+         "mirror_decided": True}])
+    assert _segment_swap_halftime(ketto) == 250
+
+
+def test_segment_swap_halftime_none_ha_nem_egyertelmu():
+    """Nincs félidő-pont, ha nincs szakasz-lista, egyetlen szakasz van,
+    nincs fordulás, a fordulás nem DÖNTÖTT (kevés minta), vagy több
+    fordulás van (oda-vissza — az nem félidő-alakú, nem tippelünk)."""
+    from handball.pipeline.halftime import _segment_swap_halftime
+
+    assert _segment_swap_halftime(_szakaszos([])) is None
+    assert _segment_swap_halftime(_szakaszos(None)) is None
+    assert _segment_swap_halftime(_szakaszos([
+        {"t_from": 0, "t_to": 500, "mirrored": False,
+         "mirror_decided": True}])) is None
+    nincs_fordulas = [
+        {"t_from": 0, "t_to": 250, "mirrored": False, "mirror_decided": True},
+        {"t_from": 250, "t_to": 500, "mirrored": False,
+         "mirror_decided": True}]
+    assert _segment_swap_halftime(_szakaszos(nincs_fordulas)) is None
+    nem_dontott = [
+        {"t_from": 0, "t_to": 250, "mirrored": False, "mirror_decided": True},
+        {"t_from": 250, "t_to": 500, "mirrored": True,
+         "mirror_decided": False}]
+    assert _segment_swap_halftime(_szakaszos(nem_dontott)) is None
+    oda_vissza = [
+        {"t_from": 0, "t_to": 100, "mirrored": False, "mirror_decided": True},
+        {"t_from": 100, "t_to": 200, "mirrored": True,
+         "mirror_decided": True},
+        {"t_from": 200, "t_to": 300, "mirrored": False,
+         "mirror_decided": True}]
+    assert _segment_swap_halftime(_szakaszos(oda_vissza)) is None
+    # A hiányzó "mirrored" mező hamisnak számít (régi mentés).
+    regi = [{"t_from": 0, "t_to": 250},
+            {"t_from": 250, "t_to": 500, "mirrored": True,
+             "mirror_decided": True}]
+    assert _segment_swap_halftime(_szakaszos(regi)) == 250
