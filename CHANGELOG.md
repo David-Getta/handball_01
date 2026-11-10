@@ -12,6 +12,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `video_io`: `video_fps` / `video_seconds` (valódi videóból; a videó
     mindig elengedődik), `_windows_short_path`, az `open_capture`
     Windows-ága (ékezetes út → rövid alak).
+  - `preflight`: `_sikeres_futasok` (csak a kész, hiánytalan, azonos
+    profilú futások).
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés

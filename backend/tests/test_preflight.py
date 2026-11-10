@@ -137,3 +137,50 @@ def test_profil_nelkul_a_regi_viselkedes():
     kompatibilis: a régi naplósorokban nincs stride/imgsz)."""
     rows = [_futas(600, 1200), _futas(600, 1200)]
     assert speed_from_history(rows) == 2.0
+
+
+# ---- A napló szűrése közvetlenül ---------------------------------------------
+
+def test_sikeres_futasok_csak_a_kesz_teljes_azonos_profilu_sorok():
+    """(videó-mp, munka-mp) párok a naplóból: csak a KÉSZ futások (a
+    megszakított / hibás munka ideje nem a teljes videóé), hiánytalan és
+    pozitív időkkel; profil megadva csak az azonos stride + imgsz."""
+    from handball.preflight import _sikeres_futasok
+
+    sorok = [
+        _futas(600.0, 300.0),                                   # jó
+        _futas(600.0, 300.0, status="error"),                   # hibás
+        _futas(600.0, 300.0, status="cancelled"),               # megszakított
+        {"status": "done", "video_seconds": "1200",             # szövegként
+         "started": "10", "finished": "910.5"},
+        {"status": "done", "video_seconds": None,               # hiányos
+         "started": 0.0, "finished": 50.0},
+        {"status": "done", "video_seconds": 600.0, "started": 0.0},
+        {"status": "done", "video_seconds": "sok", "started": 0.0,
+         "finished": 50.0},
+        _futas(0.0, 300.0),                                     # nulla videó
+        _futas(600.0, 0.0),                                     # nulla munka
+        _futas(600.0, -5.0),                                    # óra-ugrás
+        {"video_seconds": 600.0, "started": 0.0, "finished": 50.0},
+    ]
+    assert _sikeres_futasok(sorok) == [(600.0, 300.0), (1200.0, 900.5)]
+    assert _sikeres_futasok([]) == []
+
+
+def test_sikeres_futasok_a_profil_szuro_kulon_is_el():
+    """A stride és az imgsz külön-külön is szűr; a profil nélküli (régi)
+    naplósor megadott profilnál nem számít, szűrő nélkül igen."""
+    from handball.preflight import _sikeres_futasok
+
+    gyors = dict(_futas(600.0, 200.0), stride=3, imgsz=640)
+    pontos = dict(_futas(600.0, 900.0), stride=1, imgsz=1280)
+    vegyes = dict(_futas(600.0, 500.0), stride=3, imgsz=1280)
+    regi = _futas(600.0, 400.0)
+    sorok = [gyors, pontos, vegyes, regi]
+    assert len(_sikeres_futasok(sorok)) == 4
+    assert _sikeres_futasok(sorok, stride=3) == [(600.0, 200.0),
+                                                 (600.0, 500.0)]
+    assert _sikeres_futasok(sorok, imgsz=1280) == [(600.0, 900.0),
+                                                   (600.0, 500.0)]
+    assert _sikeres_futasok(sorok, stride=3, imgsz=640) == [(600.0, 200.0)]
+    assert _sikeres_futasok(sorok, stride=2, imgsz=640) == []
