@@ -39,6 +39,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `primitive_cache`: a védő-másolatok (`copy_rows`, `copy_by_id`,
     `copy_sides`, `copy_nested`, `copy_deep`) és a kézi hatókör
     (`open_scope` / `close_scope`: újra-belépés, beágyazás).
+  - `play_simulation`: `DefenseModel.vonal_vedok` / `vedo_kettozes`
+    (a saját hajlam, különben a csapaté), `lovo_zaradek`, `figura_nev`.
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
