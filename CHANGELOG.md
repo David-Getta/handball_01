@@ -44,6 +44,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     szakasz-határ; nem egyértelmű esetben None).
   - `game_window`: `_is_game_window` (a játék-jel négy feltétele és a
     küszöbök határai).
+  - `fusion`: `_fuse_players` (átlagolás, szerep megőrzése, a
+    legközelebbi klaszter).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
