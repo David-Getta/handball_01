@@ -49,6 +49,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `pipeline`: a `HandballPipeline.run` vezérlése hamis detektorral
     (bíró-, zóna- és pálya-szűrés, becslés, labda) és a `summarize` —
     eddig sosem futott.
+  - `halftime`: `detect_break_span` (rövid megállás, szél-üresjárat →
+    None; ritkítva is ugyanott) és `credible_break_span` (végig ritkás
+    követésnél None).
 - **AI-próbák: a nem ítélő próbák név szerint** (kezdőlap-csempe): az
   összkép "nem_itelt_nevek" mezője — a csempe tooltipje kiírja, mely
   próbák nem ítélnek még a könyvtár mérete miatt ("Még nem ítél (kevés
