@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **A "Sorozatok" szakasz szoros, oda-vissza meccsen is megszólal**
+  (javítás): ha a vezetés fordult, de egyik csapat sem lőtt három gólt
+  válasz nélkül, az összefoglaló a leghosszabb sorozatot az üres listán
+  kereste — a kivételt a `try/except` elnyelte, és az egész szakasz
+  (fordulások száma, válasz-idő, gólcsend, elengedett vezetés) némán
+  kimaradt. A sorozat-kiemelés mostantól csak sorozat esetén készül, a
+  szakasz többi mondata nélküle is. A hibát a felületek nyomkövetős
+  futtatása találta a rétegek saját teszt-fixture-jein; regressziós
+  teszt valódi rétegekkel (`tests/test_coach_summary.py`).
 - **API-őr: ismeretlen meccsre 404, üres könyvtáron nincs szerver-hiba**
   (teszt): a `tests/test_api_ismeretlen_meccs.py` az alkalmazás minden
   útvonalát bejárja (az új végpont magától bekerül): nem létező

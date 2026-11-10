@@ -1305,3 +1305,89 @@ def test_coach_summary_cached_egy_szakasz_hibaja_nem_viszi_el_a_tobbit(
         if sec["title"] in megmaradt:
             assert sec["body"] == megmaradt[sec["title"]], sec["title"]
     assert set(megmaradt) - {"A lényeg"} <= set(csonka_cimek)
+
+
+# ---- Fordulásos, de sorozat nélküli meccs: a "Sorozatok" szakasz megmarad ---
+
+def _golos_meccs(sorrend):
+    """Gólok a megadott sorrendben: "H" = hazai gól a +x kapuba, "A" =
+    vendég gól a x=0 kapuba; minden gól után középkezdés."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def jatekos(tid, csapat, x):
+        return PlayerPosition(track_id=tid, team=csapat, x=x, y=10.0,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    frames, t = [], 0
+    for ki in sorrend:
+        for i in range(7):
+            if ki == "H":
+                frames.append(Frame(
+                    t=t, players=[jatekos(1, Team.HOME, 33.0)],
+                    ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            else:
+                frames.append(Frame(
+                    t=t, players=[jatekos(11, Team.AWAY, 7.0)],
+                    ball=Ball(x=6.0 - i, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    return Match(MatchMeta(match_id="fordulas", home_team="Veszprém",
+                           away_team="Szeged", fps=25.0), frames)
+
+
+def test_a_sorozatok_szakasz_sorozat_nelkuli_fordulasos_meccsen_is_megszolal():
+    """REGRESSZIÓ a valódi úton: szoros, oda-vissza meccsen (a vezetés
+    többször fordul, de egyik csapat sem lő három gólt válasz nélkül) a
+    szakasz a fordulásokról szól. Korábban az üres sorozat-listán hívott
+    max() kivétele az EGÉSZ szakaszt elvitte — a hívó try/except-je
+    elnyelte, az összefoglalóból a szakasz némán kimaradt."""
+    from handball.pipeline.coach_summary import _momentum_section
+    from handball.pipeline.momentum import (RUN_MIN, annotate_runs,
+                                            score_progression)
+
+    m = _golos_meccs("HAAHH")                 # 1–0, 1–1, 1–2, 2–2, 3–2
+    assert RUN_MIN == 3 and annotate_runs(m) == []
+    allas = score_progression(m)
+    assert allas["final"] == [3, 2] and allas["lead_changes"] == 2
+    sec, kiemelesek = _momentum_section(m, "Veszprém", "Szeged")
+    assert sec["title"] == "Sorozatok"
+    assert sec["body"].startswith(
+        "A meccs 2-szor fordult; a legnagyobb előny Veszprém javára 1 gól.")
+    assert kiemelesek == []        # sorozat nélkül nincs sorozat-kiemelés
+    # A teljes összefoglalóban is megvan a szakasz.
+    torzs = {s["title"]: s["body"] for s in coach_summary(m)["sections"]}
+    assert torzs["Sorozatok"] == sec["body"]
+
+
+def test_a_sorozatok_szakasz_sorozattal_es_fordulassal_vagy_egyik_nelkul():
+    """A szakasz három esete a valódi rétegekkel: sorozat ÉS fordulás (a
+    sorozat-mondat után a fordulás-mondat, kiemeléssel), csak sorozat,
+    és se sorozat, se fordulás (nincs szakasz — sose üres törzs)."""
+    from handball.pipeline.coach_summary import _momentum_section
+
+    # 3–0 után négy vendég gól: két sorozat, egy fordulás.
+    mindketto, kiemelesek = _momentum_section(_golos_meccs("HHHAAAA"),
+                                              "Veszprém", "Szeged")
+    assert mindketto["body"].startswith(
+        "Veszprém 3 gólos sorozata a 0:00–0:02 között (állás utána 3–0); "
+        "Szeged 4 gólos sorozata a ")
+    assert (" A meccs 1-szor fordult; a legnagyobb előny Veszprém javára "
+            "3 gól.") in mindketto["body"]
+    assert kiemelesek[0].startswith("Szeged 4 gólos sorozatot futott")
+    # ...és az elengedett háromgólos előny is kiemelést kap.
+    assert kiemelesek[1].startswith("Veszprém: 3 gólos előny ment el")
+    assert len(kiemelesek) == 2
+    # Csak sorozat (a vezetés nem fordul).
+    csak_sorozat, kiemelesek = _momentum_section(_golos_meccs("HHH"),
+                                                 "Veszprém", "Szeged")
+    assert csak_sorozat["body"].startswith(
+        "Veszprém 3 gólos sorozata a 0:00–0:02 között (állás utána 3–0).")
+    assert "fordult" not in csak_sorozat["body"]
+    assert kiemelesek[0].startswith("Veszprém 3 gólos sorozatot futott")
+    # Felváltva lőtt gólok, a hazai végig vezet vagy döntetlen: nincs mit
+    # mondani.
+    assert _momentum_section(_golos_meccs("HAHAHA"), "Veszprém",
+                             "Szeged") == (None, [])

@@ -7877,13 +7877,17 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         why = f" — {', '.join(r['context'])}" if r.get("context") else ""
         parts.append(f"{name} {r['length']} gólos sorozata a {clock(r['start_frame'])}"
                      f"–{clock(r['end_frame'])} között (állás utána {h}–{a}){why}")
-    # A leghosszabb sorozat külön "mire nézz rá" jelzést kap.
-    top = max(runs, key=lambda r: r["length"])
-    tname = names.get(top["team"], top["team"])
-    highlights.append(
-        f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, mi "
-        "működött, és a másik oldalon hol akadt el a játék (időkérés, "
-        "védekezés-váltás).")
+    # A leghosszabb sorozat külön "mire nézz rá" jelzést kap — HA volt
+    # sorozat. Fordulásos, de sorozat nélküli (szoros, oda-vissza) meccsen
+    # a szakasz a fordulásokról szól: ott az üres listán hívott max()
+    # kivétele az EGÉSZ szakaszt elvitte (a hívó try/except-je elnyelte).
+    if runs:
+        top = max(runs, key=lambda r: r["length"])
+        tname = names.get(top["team"], top["team"])
+        highlights.append(
+            f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, "
+            "mi működött, és a másik oldalon hol akadt el a játék (időkérés, "
+            "védekezés-váltás).")
     body = _nagy_kezdo("; ".join(parts)) + "." if parts else ""
     if prog and prog["lead_changes"] >= 1:
         names = {"home": home, "away": away}
