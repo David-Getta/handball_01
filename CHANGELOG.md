@@ -54,6 +54,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `attack_types`: `_advance_speed` (a támadott kapu felé; labda vagy
     idő nélkül 0).
   - `analytics`: `_empty_grid` (független sorok).
+  - `defense`: `_wall_metrics`, `_wall_zone`, `_wall_verdict`,
+    `_wall_signature` (három védő alatt None), `_dgap_tally`, a hajrá-fal
+    tanácsa és ítélete.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel

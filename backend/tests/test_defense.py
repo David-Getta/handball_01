@@ -5355,3 +5355,234 @@ def test_clutch_wall_summary_keves_mintanal_vagy_azonos_falnal_none():
     ures = {"attacks": 0, "shapes": [], "verdict": None}
     assert clutch_wall_summary([]) == ures
     assert clutch_wall_summary(None) == ures
+
+
+# ---- A fal belső segédei közvetlenül (második kör) ---------------------------
+
+def test_wall_metrics_melyseg_szethuzottsag_es_sulypont():
+    """A fal-alak mérőszámai: mélység a SAJÁT kaputól, oldalirányú
+    széthúzottság és a súlypont y-ja — egy cellánál a cella közepe, két
+    szélső cellánál a kettő közepe nagy széthúzottsággal; csupa nulla
+    alaknál nem oszt nullával."""
+    from handball.pipeline.defense import _wall_metrics
+
+    melyseg, szoras, cy = _wall_metrics(_fal_alak(11))
+    assert abs(melyseg - 40.0 / 12.0) < 1e-9          # 3,33 m a kaputól
+    assert szoras == 0.0 and abs(cy - 10.0) < 1e-9
+    ket_szel = [0.0] * 18
+    ket_szel[5], ket_szel[17] = 0.5, 0.5
+    melyseg, szoras, cy = _wall_metrics(ket_szel)
+    assert abs(melyseg - 40.0 / 12.0) < 1e-9 and abs(cy - 10.0) < 1e-9
+    assert abs(szoras - 20.0 / 3.0) < 1e-9
+    # A súlyozás számít: 3:1 arányban a hatos és a 9-es között.
+    vegyes = [0.0] * 18
+    vegyes[11], vegyes[10] = 0.75, 0.25
+    assert abs(_wall_metrics(vegyes)[0] - (0.75 * 40 / 12 + 0.25 * 10.0)) \
+        < 1e-9
+    assert _wall_metrics([0.0] * 18) == (40.0, 0.0, 0.0)
+
+
+def test_wall_zone_a_melyseg_es_az_oldal_neve():
+    """Az edzői név: a mélység sávja (hatos / 9-es / előrehúzva) méterrel,
+    és az oldal a VÉDŐ szemszögéből (a rács a támadó irányához normált,
+    ezért tükrözve: az iy=0 sor a védő jobb, az iy=2 a bal oldala)."""
+    from handball.pipeline.defense import (DSH_DEEP_M, DSH_MID_M,
+                                           _wall_zone)
+
+    assert (DSH_DEEP_M, DSH_MID_M) == (9.0, 13.0)
+    assert _wall_zone(_fal_alak(11)) == "tömören a hatoson (3.3 m), közép"
+    assert _wall_zone(_fal_alak(10)) == "a 9-es vonalon (10.0 m), közép"
+    assert _wall_zone(_fal_alak(9)) == "előrehúzva (16.7 m), közép"
+    assert _wall_zone(_fal_alak(5)).endswith(", jobb oldal")
+    assert _wall_zone(_fal_alak(17)).endswith(", bal oldal")
+
+
+def _fal_sor(cella, attacks, goals):
+    from handball.pipeline.defense import _wall_zone
+    alak = _fal_alak(cella)
+    return {"shape": alak, "zone": _wall_zone(alak), "attacks": attacks,
+            "goals": goals,
+            "goal_pct": round(100.0 * goals / max(1, attacks), 1)}
+
+
+def test_wall_verdict_ket_fal_hozam_kulonbsege():
+    """Az ítélet a két elég mintás (≥4 támadás) fal-alak hozamát veti
+    össze: előbb a NEKIK jó fal (kevesebb kapott gól), aztán a gyengébb —
+    legalább 20 pp különbségnél; kevés mintánál vagy kis résnél None."""
+    from handball.pipeline.defense import (DSH_GAP_PP, DSH_MIN_ATTACKS,
+                                           _wall_verdict)
+
+    assert (DSH_MIN_ATTACKS, DSH_GAP_PP) == (4, 20.0)
+    itelet = _wall_verdict([_fal_sor(9, 5, 4), _fal_sor(11, 4, 1)])
+    assert itelet.startswith(
+        "kétféle falat állítanak: tömören a hatoson (3.3 m), közép ellen "
+        "25%-ot kapnak (1/4 támadás), előrehúzva (16.7 m), közép ellen "
+        "viszont 80%-ot (4/5)")
+    assert _wall_verdict([]) is None
+    assert _wall_verdict([_fal_sor(11, 9, 1)]) is None             # egy fal
+    assert _wall_verdict([_fal_sor(11, 9, 1),
+                          _fal_sor(9, 3, 3)]) is None              # kevés
+    assert _wall_verdict([_fal_sor(11, 10, 4),
+                          _fal_sor(9, 10, 5)]) is None             # 10 pp
+    assert _wall_verdict([_fal_sor(11, 10, 4),
+                          _fal_sor(9, 10, 6)]) is not None         # 20 pp
+
+
+def test_hajra_fal_tanacs_es_itelet():
+    """A hajrá-fal elleni tanács a fal mélységéhez igazodik (hatos /
+    előrehúzott / 9-es); az ítélet csak akkor szól, ha a hajrában van
+    legalább 4 védekezett támadás, a fő fal a hajrá legalább fele, és
+    legalább 25 pp-tal több, mint a törzsben."""
+    from handball.pipeline.defense import (CDS_GAP_PP, CDS_MIN_ATTACKS,
+                                           CDS_SHARE_PCT, _hajra_fal_itelet,
+                                           _hajra_fal_tanacs)
+
+    assert "távoli befejezés" in _hajra_fal_tanacs(
+        "tömören a hatoson (3.3 m), közép")
+    assert "a kilépő fal mögé" in _hajra_fal_tanacs(
+        "előrehúzva (16.7 m), közép")
+    assert "a 9-esen álló fal két résére" in _hajra_fal_tanacs(
+        "a 9-es vonalon (10.0 m), közép")
+    assert (CDS_MIN_ATTACKS, CDS_SHARE_PCT, CDS_GAP_PP) == (4, 50.0, 25.0)
+
+    def fo(share, rest):
+        return [{"zone": "előrehúzva (16.7 m), közép", "share_pct": share,
+                 "rest_share_pct": rest, "attacks": 5, "goals": 2}]
+
+    itelet = _hajra_fal_itelet(6, fo(83.3, 20.0))
+    assert itelet.startswith("a hajrában másik falat hoznak")
+    assert "83%-a (5/6, 2 kapott gól)" in itelet and "csak 20%" in itelet
+    assert itelet.endswith(_hajra_fal_tanacs("előrehúzva (16.7 m), közép"))
+    assert _hajra_fal_itelet(3, fo(100.0, 0.0)) is None
+    assert _hajra_fal_itelet(6, []) is None
+    assert _hajra_fal_itelet(6, fo(49.0, 0.0)) is None
+    assert _hajra_fal_itelet(6, fo(90.0, 70.0)) is None
+    assert _hajra_fal_itelet(4, fo(75.0, 50.0)) is not None
+
+
+def _vedekezes_szakasz(tamado, vedok_x, kapus_x, tamado_x, n=5,
+                       vedo_ys=(3.0, 6.0, 9.0, 11.0, 14.0, 17.0)):
+    """Támadás-szakasz: a támadó csapat két játékosa a megtámadott
+    térfélen, a védők a faluknál + a kapus a kapujában."""
+    from handball.pipeline.setplays import AttackSequence
+
+    vedo = Team.AWAY if tamado == Team.HOME else Team.HOME
+    frames = []
+    for t in range(n):
+        players = [_pl(1, tamado, tamado_x, 8.0),
+                   _pl(2, tamado, tamado_x, 12.0),
+                   _pl(90, vedo, kapus_x, 10.0, role="kapus")]
+        players += [_pl(20 + j, vedo, vedok_x, y)
+                    for j, y in enumerate(vedo_ys)]
+        frames.append(Frame(t=t, players=players, ball=None))
+    return AttackSequence(team=tamado, start_t=0, end_t=n - 1, frames=frames)
+
+
+def test_wall_signature_a_tamado_iranyahoz_normalt_racs():
+    """A védők rácsa a szakaszban, kapus nélkül, 1-re normálva: hat védő
+    a hatoson három sávban → a három kapu-közeli cella 1/3-1/3. A másik
+    kapunál (a támadás a x=0 felé megy) a tükrözött felállás UGYANAZT az
+    ujjlenyomatot adja — az alak összevethető a két térfél között."""
+    from handball.pipeline.defense import _wall_signature
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    plusz = _wall_signature(
+        _vedekezes_szakasz(Team.HOME, vedok_x=34.0, kapus_x=39.5,
+                           tamado_x=28.0), Team.AWAY, cfg)
+    assert len(plusz) == 18 and abs(sum(plusz) - 1.0) < 1e-9
+    assert [i for i, v in enumerate(plusz) if v > 0] == [5, 11, 17]
+    assert all(abs(plusz[i] - 1.0 / 3.0) < 1e-9 for i in (5, 11, 17))
+    minusz = _wall_signature(
+        _vedekezes_szakasz(Team.AWAY, vedok_x=6.0, kapus_x=0.5,
+                           tamado_x=12.0), Team.HOME, cfg)
+    assert all(abs(a - b) < 1e-9 for a, b in zip(plusz, minusz))
+    # Féloldalas fal: a védők az alacsony y-nál állnak (a támadó bal
+    # oldala a +x kapunál) → csak az iy=0 sor cellája telik.
+    felold = _wall_signature(
+        _vedekezes_szakasz(Team.HOME, 34.0, 39.5, 28.0,
+                           vedo_ys=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)),
+        Team.AWAY, cfg)
+    assert [i for i, v in enumerate(felold) if v > 0] == [5]
+
+
+def test_wall_signature_keves_vedonel_none():
+    """Három mért védő alatt (vagy védő nélkül — csak a kapus látszik)
+    nincs kimondható fal-alak: None; három védővel már van."""
+    from handball.pipeline.defense import DSH_MIN_DEFENDERS, _wall_signature
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    assert DSH_MIN_DEFENDERS == 3
+    ket = _vedekezes_szakasz(Team.HOME, 34.0, 39.5, 28.0,
+                             vedo_ys=(8.0, 12.0))
+    assert _wall_signature(ket, Team.AWAY, cfg) is None
+    csak_kapus = _vedekezes_szakasz(Team.HOME, 34.0, 39.5, 28.0, vedo_ys=())
+    assert _wall_signature(csak_kapus, Team.AWAY, cfg) is None
+    harom = _vedekezes_szakasz(Team.HOME, 34.0, 39.5, 28.0,
+                               vedo_ys=(6.0, 10.0, 14.0))
+    assert _wall_signature(harom, Team.AWAY, cfg) is not None
+    ures = _vedekezes_szakasz(Team.HOME, 34.0, 39.5, 28.0, n=0)
+    assert _wall_signature(ures, Team.AWAY, cfg) is None
+
+
+def _res_kocka(t, vedo_ys, labdas_x=30.0):
+    """Felállt védekezés a +x kapunál: a hazai labdás a vendég térfelén,
+    a vendég fal a megadott y-okon (x=34), a kapus a kapuban."""
+    players = [_pl(1, Team.HOME, labdas_x, 10.0),
+               _pl(90, Team.AWAY, 39.5, 10.0, role="kapus")]
+    players += [_pl(20 + j, Team.AWAY, 34.0, y)
+                for j, y in enumerate(vedo_ys)]
+    return Frame(t=t, players=players,
+                 ball=Ball(x=labdas_x, y=10.0, confidence=1.0))
+
+
+def test_dgap_tally_a_legnagyobb_koz_es_a_savja_kockankent():
+    """Kockánként a fal legnagyobb szomszéd-köze összegződik, és a köz
+    sávja a FAL saját nézőpontjából számlálódik (a +x kapuját védő
+    csapatnak az alacsony y a bal széle); az időablak félig nyitott."""
+    from handball.pipeline.defense import _dgap_tally
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    # A legnagyobb köz 5 m, a közepe y = 4,5 (alsó harmad).
+    reses = (2.0, 7.0, 9.0, 11.0, 13.0, 15.0)
+    frames = [_res_kocka(t, reses) for t in range(10)]
+    m = Match(_meta(), frames)
+    acc, zonak = _dgap_tally(m, cfg)
+    assert acc[Team.AWAY] == [50.0, 10] and acc[Team.HOME] == [0.0, 0]
+    assert zonak[Team.AWAY] == {"bal szél": 10} and zonak[Team.HOME] == {}
+    # Időablak: from_t ≤ t < until_t.
+    acc2, zonak2 = _dgap_tally(m, cfg, from_t=3, until_t=7)
+    assert acc2[Team.AWAY] == [20.0, 4] and zonak2[Team.AWAY] == {
+        "bal szél": 4}
+    assert _dgap_tally(m, cfg, from_t=10)[0][Team.AWAY] == [0.0, 0]
+    # Középen nyíló rés: a közép sáv.
+    kozep = [_res_kocka(t, (3.0, 5.0, 7.0, 13.0, 15.0, 17.0))
+             for t in range(4)]
+    assert _dgap_tally(Match(_meta(), kozep), cfg)[1][Team.AWAY] == {
+        "közép": 4}
+
+
+def test_dgap_tally_nem_felallt_vedekezesnel_es_keves_vedonel_ures():
+    """Nem számít a kocka, ha nincs labdás, ha a labdás még a SAJÁT
+    térfelén van (nem felállt védekezés), vagy ha a falban 4-nél kevesebb
+    mezőnyvédő látszik — üres meccsen is üres a gyűjtés."""
+    from handball.pipeline.defense import DGAP_MIN_DEFENDERS, _dgap_tally
+    from handball.pipeline.tactics import TacticsConfig
+
+    cfg = TacticsConfig()
+    assert DGAP_MIN_DEFENDERS == 4
+    ures = ({Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]},
+            {Team.HOME: {}, Team.AWAY: {}})
+    assert _dgap_tally(Match(_meta(), []), cfg) == ures
+    keves = [_res_kocka(t, (5.0, 10.0, 15.0)) for t in range(5)]
+    assert _dgap_tally(Match(_meta(), keves), cfg) == ures
+    sajat_terfel = [_res_kocka(t, (2.0, 7.0, 9.0, 11.0, 13.0, 15.0),
+                               labdas_x=10.0) for t in range(5)]
+    assert _dgap_tally(Match(_meta(), sajat_terfel), cfg) == ures
+    labda_nelkul = [_res_kocka(t, (2.0, 7.0, 9.0, 11.0, 13.0, 15.0))
+                    for t in range(5)]
+    for f in labda_nelkul:
+        f.ball = None
+    assert _dgap_tally(Match(_meta(), labda_nelkul), cfg) == ures
