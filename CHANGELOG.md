@@ -22,6 +22,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `annotations`: `_text`, `_num`, `_now_iso`, `_norm_event`,
     `_norm_token`, `_norm_arrow`, `_norm_scene` (a javító és az eldobó
     ágak külön-külön).
+  - `accounts`: `terms_text`, `accounts_path` / `load_accounts` /
+    `save_accounts` (sérült fájlnál üres lista), `normalize_email`,
+    `_hash_password`, `_public` (titok nélkül), `_find`, `_new_token`
+    (lejárat, takarítás, plafon), `account_for_token`,
+    `accounts_status`.
 - **Teszt-lefedettség, harmadik kör: a legbelső segédek** (teszt): azok
   a belső függvények, amelyek neve az első két kör után sem szerepelt
   egyetlen tesztben sem — közvetlen teszt a pozitív esettel és a "kevés
