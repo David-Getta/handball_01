@@ -632,3 +632,84 @@ def test_open_scope_masik_meccsre_beagyazva_visszaall_a_kulso():
         close_scope(ta)
     assert calls == ["pc", "masik"]      # a külső mérés nem futott újra
     assert active_match() is None
+
+
+# ---- A kapus-jelölés lépése közvetlenül (_mark_goalkeepers) ------------------
+
+def test_mark_goalkeepers_megjeloli_es_ismetelve_nem_valtoztat():
+    """A jelölés a hatókör nélkül is megjelöli a kapust, és idempotens:
+    másodszorra ugyanaz a szerep-kép marad."""
+    from handball.pipeline.primitive_cache import _mark_goalkeepers
+
+    m = _gk_match()
+    assert not any(p.role == "kapus" for f in m.frames for p in f.players)
+    _mark_goalkeepers(m)
+    elso = [(p.track_id, p.role) for f in m.frames for p in f.players]
+    assert any(szerep == "kapus" for _, szerep in elso)
+    _mark_goalkeepers(m)
+    assert [(p.track_id, p.role) for f in m.frames for p in f.players] == elso
+
+
+def test_mark_goalkeepers_a_felismeres_hibajara_nem_esik_szet(monkeypatch):
+    """Ha a kapus-felismerés elszáll, a jelölés lenyeli (egy réteg hibája
+    nem viheti el a többit): a hatókör attól még megnyílik, és a mérések
+    futnak benne."""
+    from handball.pipeline import goalkeeper
+    from handball.pipeline.primitive_cache import _mark_goalkeepers
+
+    def elszall(match, *a, **k):
+        raise RuntimeError("a felismerés elszállt")
+
+    monkeypatch.setattr(goalkeeper, "detect_goalkeepers", elszall)
+    m = _gk_match()
+    _mark_goalkeepers(m)                         # nem dobhat
+    assert not any(p.role == "kapus" for f in m.frames for p in f.players)
+
+    calls = []
+
+    @memoize_primitive("teszt_hibas_jeloles")
+    def measure(match, config=None):
+        calls.append(1)
+        return [1]
+
+    with primitive_cache(m):
+        assert active_match() is m
+        assert measure(m) == measure(m) == [1]
+    assert len(calls) == 1
+
+
+def test_mark_goalkeepers_ures_meccsen_nem_hibazik():
+    """Kocka nélküli meccsen nincs kit jelölni — a jelölés és a hatókör
+    nyitása kivétel nélkül lefut."""
+    from handball.pipeline.primitive_cache import (_mark_goalkeepers,
+                                                   mark_goalkeepers)
+
+    ures = Match(_meta(), [])
+    _mark_goalkeepers(ures)
+    mark_goalkeepers(ures)
+    with primitive_cache(ures):
+        assert active_match() is ures
+
+
+def test_a_masik_meccs_jelolese_nem_ervenyteleniti_a_nyitott_hatokort():
+    """A nyilvános mark_goalkeepers MÁSIK meccsre (pl. egy réteg a
+    könyvtár másik meccsét tölti vissza) hatókör nélkül jelöl: a nyitott
+    hatókör kész mérései érvényben maradnak, a másik meccs pedig
+    megkapja a kapus-jelölést."""
+    from handball.pipeline.primitive_cache import mark_goalkeepers
+
+    calls = []
+
+    @memoize_primitive("teszt_masik_meccs_jelolese")
+    def measure(match, config=None):
+        calls.append(1)
+        return [1]
+
+    a, b = _gk_match(), _gk_match()
+    with primitive_cache(a):
+        measure(a)
+        mark_goalkeepers(b)                      # a b szerepei változnak
+        assert any(p.role == "kapus" for f in b.frames for p in f.players)
+        assert active_match() is a
+        measure(a)
+    assert len(calls) == 1, "a másik meccs jelölése újraszámoltatta a mérést"

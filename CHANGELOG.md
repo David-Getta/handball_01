@@ -31,6 +31,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     passz-párok, trend-tábla (üres adatnál tájékoztató vagy nincs rajz).
   - `priorities`: `_prf_copy`, `_copy_fatigue` (független másolat) és
     `_cpl_words` (hat karakteres szótövek).
+  - `primitive_cache`: `_mark_goalkeepers` (idempotens, a felismerés
+    hibáját lenyeli; a másik meccs jelölése nem érvénytelenít).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
