@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Az edzői összefoglaló nem kisbetűsíti a csapatneveket** (javítás):
+  hat szakasz (Védekezés, Kapusok, Sorozatok, Támadás-hatékonyság,
+  Cserék, Kiállítások és hétméteresek) a felsorolásból összefűzött
+  törzset `str.capitalize()`-zal kezdte nagybetűvel, ami a szöveg többi
+  részét kisbetűsíti — az edző "a(z) szeged 40 lövést kapott; a(z)
+  veszprém lazán védekezett" alakot látott, a kiemelt "SZABADON" pedig
+  "szabadon" lett. Mostantól csak az első betű nagy, a többi változatlan
+  (a számok és a mondatok nem változnak). A szakasz-építők közvetlen
+  tesztje találta; regressziós teszt mind a hat szakaszra és őr a valódi
+  összefoglalóra (`tests/test_coach_summary.py`).
 - **Teszt-lefedettség, második kör: a pipeline belső segédei** (teszt):
   az aláhúzásos segéd-függvények, amelyekre eddig csak a hívójukon át,
   közvetve futott teszt, közvetlen tesztet kapnak — a pozitív eset

@@ -661,3 +661,166 @@ def test_quality_caveat_ures_meccsen_none_es_a_csaladok_hibajat_turi(
     assert _quality_caveat(m) == ("A feldolgozás minősége 20/100 — az "
                                   "alábbi megállapítások ennyire "
                                   "megbízhatóak.")
+
+
+# ---- A szakasz-törzs nagy kezdőbetűje nem kisbetűsíti a neveket -------------
+
+def test_nagy_kezdo_csak_az_elso_betut_emeli():
+    """A felsorolásból összefűzött törzs nagybetűvel kezdődik, a TÖBBI
+    változatlan: a csapatnév, az "xG" és a kiemelt szó megmarad (a
+    str.capitalize() ezeket kisbetűsítette)."""
+    from handball.pipeline.coach_summary import _nagy_kezdo
+
+    assert _nagy_kezdo("a(z) Szeged 40 lövést kapott; a(z) Veszprém "
+                       "SZABADON hagyta (xG 5.1).") == (
+        "A(z) Szeged 40 lövést kapott; a(z) Veszprém SZABADON hagyta "
+        "(xG 5.1).")
+    assert _nagy_kezdo("érték") == "Érték"              # ékezetes kezdőbetű
+    assert _nagy_kezdo("Már nagy KEZDŐ") == "Már nagy KEZDŐ"
+    assert _nagy_kezdo("7 a 6 ellen a Szeged") == "7 a 6 ellen a Szeged"
+    assert _nagy_kezdo("") == ""
+
+
+def _ures_meccs(home="Veszprém", away="Szeged"):
+    return Match(MatchMeta(match_id="nk", home_team=home, away_team=away,
+                           fps=25.0), [])
+
+
+def test_a_vedekezes_szakasz_megtartja_a_csapatnevet_es_a_kiemelest(
+        monkeypatch):
+    """REGRESSZIÓ: a "Védekezés" törzsében a második csapat neve
+    "a(z) szeged" lett, a kiemelt "SZABADON" pedig "szabadon"."""
+    from handball.pipeline import defense
+    from handball.pipeline.coach_summary import _defense_section
+
+    def sor(lovesek, golok, szabad):
+        return {"shots_against": lovesek, "goals_against": golok,
+                "xg_against": 5.2, "free_pct": szabad, "worst_zone": None,
+                "zones": {}}
+
+    monkeypatch.setattr(defense, "defense_analysis", lambda match: {
+        "home": sor(10, 6, 60.0), "away": sor(8, 3, 10.0)})
+    sec, kiemelesek = _defense_section(_ures_meccs(), "Veszprém", "Szeged")
+    assert sec["title"] == "Védekezés"
+    assert sec["body"].startswith(
+        "A(z) Veszprém 10 lövést kapott (6 gól, engedett helyzet-érték "
+        "5.2); a lövők 60%-a SZABADON állt a lövésnél; a(z) Szeged 8 "
+        "lövést kapott (3 gól, engedett helyzet-érték 5.2)")
+    assert kiemelesek[0].startswith("Veszprém: a kapott lövések 60%-ánál")
+    # Kevés kapott lövés (4 alatt) mindkét oldalon: nincs szakasz.
+    monkeypatch.setattr(defense, "defense_analysis", lambda match: {
+        "home": sor(3, 3, 100.0), "away": sor(0, 0, None)})
+    assert _defense_section(_ures_meccs(), "Veszprém", "Szeged") == (None, [])
+
+
+def test_a_kapusok_szakasz_megtartja_a_csapatnevet(monkeypatch):
+    """REGRESSZIÓ: a "Kapusok" törzsében a csapatnevek kisbetűsek
+    lettek ("a(z) szeged kapusára")."""
+    from handball.pipeline import goalkeeper
+    from handball.pipeline.coach_summary import _goalkeepers_section
+
+    monkeypatch.setattr(goalkeeper, "goalkeeper_stats", lambda match: {
+        "home": {"on_target": 10, "saves": 4, "save_pct": 40.0},
+        "away": {"on_target": 8, "saves": 6, "save_pct": 75.0}})
+    sec = _goalkeepers_section(_ures_meccs(), "Veszprém", "Szeged")
+    assert sec["title"] == "Kapusok"
+    assert sec["body"].startswith(
+        "A(z) Veszprém kapusára 10 kapura tartó lövés érkezett, ebből 4 "
+        "védés (40%)")
+    assert ("a(z) Szeged kapusára 8 kapura tartó lövés érkezett, ebből 6 "
+            "védés (75%)") in sec["body"]
+    assert sec["body"].endswith(".")
+    # Kaputra tartó lövés nélkül nincs szakasz (sose 0-ból mondott arány).
+    monkeypatch.setattr(goalkeeper, "goalkeeper_stats", lambda match: {
+        "home": {"on_target": 0, "saves": 0, "save_pct": 0.0}, "away": None})
+    assert _goalkeepers_section(_ures_meccs(), "Veszprém", "Szeged") is None
+
+
+def test_a_sorozatok_szakasz_megtartja_a_masodik_csapat_nevet(monkeypatch):
+    """REGRESSZIÓ: több sorozatnál a második csapat neve kisbetűs lett
+    ("; szeged 3 gólos sorozata")."""
+    from handball.pipeline import momentum
+    from handball.pipeline.coach_summary import _momentum_section
+
+    monkeypatch.setattr(momentum, "annotate_runs", lambda match: [
+        {"team": "home", "length": 4, "start_frame": 0, "end_frame": 1500,
+         "score_after": (4, 0), "context": ["emberelőnyben"]},
+        {"team": "away", "length": 3, "start_frame": 3000,
+         "end_frame": 4500, "score_after": (4, 3)}])
+    sec, kiemelesek = _momentum_section(_ures_meccs(), "Veszprém", "Szeged")
+    assert sec["title"] == "Sorozatok"
+    assert sec["body"].startswith(
+        "Veszprém 4 gólos sorozata a 0:00–1:00 között (állás utána 4–0) — "
+        "emberelőnyben; Szeged 3 gólos sorozata a 2:00–3:00 között (állás "
+        "utána 4–3).")
+    assert kiemelesek == [
+        "Veszprém 4 gólos sorozatot futott — nézd vissza, mi működött, és "
+        "a másik oldalon hol akadt el a játék (időkérés, "
+        "védekezés-váltás)."]
+    # Sorozat és fordulás nélkül nincs szakasz.
+    monkeypatch.setattr(momentum, "annotate_runs", lambda match: [])
+    assert _momentum_section(_ures_meccs(), "Veszprém", "Szeged") == (
+        None, [])
+
+
+def test_az_osszefoglalo_belso_szakaszai_megtartjak_a_csapatnevet(
+        monkeypatch):
+    """REGRESSZIÓ az összefoglalóban helyben épülő három szakaszra
+    (Támadás-hatékonyság, Cserék, Kiállítások és hétméteresek): a
+    második csapat neve nem lesz kisbetűs."""
+    from handball.pipeline import attack_types, rules, substitutions
+
+    monkeypatch.setattr(attack_types, "attack_efficiency", lambda match: {
+        "home": {"gyors indítás": {"attacks": 4, "goals": 3,
+                                   "goal_pct": 75.0}},
+        "away": {"felállt támadás": {"attacks": 5, "goals": 2,
+                                     "goal_pct": 40.0},
+                 "gyors indítás": {"attacks": 2, "goals": 2,
+                                   "goal_pct": 100.0}}})
+    monkeypatch.setattr(substitutions, "substitution_impact", lambda match: {
+        "teams": {"home": {"rotations": 3, "goals_for_after": 2,
+                           "goals_against_after": 1},
+                  "away": {"rotations": 2, "goals_for_after": 0,
+                           "goals_against_after": 4}}})
+    monkeypatch.setattr(rules, "powerplay_efficiency", lambda match: {
+        "home": {"pp_goals": 3, "pp_shots": 5, "pp_eff_pct": 60.0,
+                 "eq_shots": 0, "eq_eff_pct": 0.0},
+        "away": {"pp_goals": 1, "pp_shots": 4, "pp_eff_pct": 25.0,
+                 "eq_shots": 0, "eq_eff_pct": 0.0}})
+    torzs = {s["title"]: s["body"]
+             for s in coach_summary(_ures_meccs())["sections"]}
+    # A 2 támadásos típus (kevés minta) nem lehet a "leghatékonyabb".
+    assert torzs["Támadás-hatékonyság"] == (
+        "Veszprém leghatékonyabb támadás-típusa a gyors indítás (3/4 gól, "
+        "75%); Szeged leghatékonyabb támadás-típusa a felállt támadás "
+        "(2/5 gól, 40%).")
+    assert torzs["Cserék"] == (
+        "A(z) Veszprém 3 cserehullámot futott; a cseréket követő másfél "
+        "percben 2 dobott és 1 kapott gól; a(z) Szeged 2 cserehullámot "
+        "futott; a cseréket követő másfél percben 0 dobott és 4 kapott "
+        "gól.")
+    assert torzs["Kiállítások és hétméteresek"] == (
+        "A(z) Veszprém emberelőnyben 3 gólt dobott 5 kapura tartó "
+        "lövésből (60%) · a(z) Szeged emberelőnyben 1 gólt dobott 4 "
+        "kapura tartó lövésből (25%).")
+
+
+def test_a_valodi_osszefoglaloban_nincs_kisbetus_csapatnev():
+    """ŐR a valódi láncon: szimulált meccs összefoglalójában egyetlen
+    szakasz és kiemelés sem írja kisbetűvel a csapatnevet, a "Védekezés"
+    megtartja a kiemelt szót, és minden törzs nagybetűvel (vagy
+    számmal) kezdődik."""
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=1,
+                              shots_per_min=8)
+    m.meta.home_team, m.meta.away_team = "Veszprém", "Szeged"
+    adat = coach_summary(m)
+    torzs = {s["title"]: s["body"] for s in adat["sections"]}
+    assert {"Védekezés", "Kapusok", "Sorozatok"} <= set(torzs)
+    for cim, szoveg in torzs.items():
+        assert "veszprém" not in szoveg and "szeged" not in szoveg, cim
+        assert szoveg[:1] == szoveg[:1].upper(), cim
+    for sor in adat["highlights"]:
+        assert "veszprém" not in sor and "szeged" not in sor, sor
+    ved = torzs["Védekezés"]
+    assert ved.startswith("A(z) Szeged ") and "SZABADON állt" in ved
+    assert "a(z) Veszprém " in ved
