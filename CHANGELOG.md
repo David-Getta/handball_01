@@ -26,6 +26,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
     futnak), és további segédek (`_team_of_track`, `_fast_break_pct`,
     `_defense_distribution`, `_shot_zones`, `_top_shooter_habit`,
     `_avg_from_sums`, `_mpl_theme`).
+  - `report_html`: a jelentés építőelemei — sávok, Hol / Mivel / Miért
+    blokkok, figura- és hőtérkép-SVG, lövéstérkép, tempó-vonal,
+    passz-párok, trend-tábla (üres adatnál tájékoztató vagy nincs rajz).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
