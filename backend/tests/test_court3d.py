@@ -1018,3 +1018,33 @@ def test_a_jegyzet_abra_a_legkozelebbi_kocka_jatekosaival():
     assert note_diagram(Match(MatchMeta(match_id="ures", home_team="A",
                                         away_team="B", fps=25.0), []),
                         0) is None
+
+
+# ---- A megbeszélés-felvétel neve (shared3d_felvetel_nev) ---------------------
+
+def test_shared3d_felvetel_nev_megtisztitja_es_levagja():
+    """A felvétel neve: csak kiírható jelek, a szélein szóköz nélkül,
+    legfeljebb SHARED3D_REC_NAME_MAX jel — az ékezet és a belső szóköz
+    megmarad."""
+    from handball.pipeline.court3d import (SHARED3D_REC_NAME_MAX,
+                                           shared3d_felvetel_nev)
+
+    assert shared3d_felvetel_nev("  Keddi videózás — védekezés \n") == \
+        "Keddi videózás — védekezés"
+    assert shared3d_felvetel_nev("Fal\x00-vál\ttás\x1b") == "Fal-váltás"
+    assert shared3d_felvetel_nev("Árvíztűrő tükörfúrógép") == \
+        "Árvíztűrő tükörfúrógép"
+    hosszu = "m" * 300
+    assert shared3d_felvetel_nev(hosszu) == "m" * SHARED3D_REC_NAME_MAX
+    assert len(shared3d_felvetel_nev("  " + hosszu)) == SHARED3D_REC_NAME_MAX
+    # A szám is név lehet (szöveggé válik).
+    assert shared3d_felvetel_nev(2026) == "2026"
+
+
+def test_shared3d_felvetel_nev_ures_ha_nincs_nev():
+    """None, üres, csupa szóköz vagy csupa vezérlőjel → üres szöveg: a
+    hívó (a mentés végpontja) tesz alapnevet ("Megbeszélés")."""
+    from handball.pipeline.court3d import shared3d_felvetel_nev
+
+    for semmi in (None, "", "   ", "\n\t ", "\x00\x1b\x7f", 0, [], {}):
+        assert shared3d_felvetel_nev(semmi) == "", repr(semmi)
