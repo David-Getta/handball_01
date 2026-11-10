@@ -188,6 +188,25 @@ def test_benchmark_noise_robustness_seed_nelkul_nulla_nem_kivetel():
     assert elteres.value == 0.0 and csucs.value == 0.0
 
 
+def test_project_court_to_image_a_sarkok_a_trapezra_kepzodnek():
+    """A benchmark "oldalkamerája" valódi homográfia: a pálya négy sarka
+    a kép trapézának sarkaira képződik (a túloldal rövidebb), a pálya
+    közepe pedig a trapéz belsejébe."""
+    from handball.pipeline._homography import apply_homography
+    from handball.pipeline.benchmark import _project_court_to_image
+
+    h, palya, kep = _project_court_to_image()
+    assert palya == [(0.0, 0.0), (40.0, 0.0), (40.0, 20.0), (0.0, 20.0)]
+    for (mx, my), (px, py) in zip(palya, kep):
+        x, y = apply_homography(h, mx, my)
+        assert abs(x - px) < 1e-6 and abs(y - py) < 1e-6
+    # A túloldali (felső) él rövidebb, mint a közeli (alsó).
+    assert kep[1][0] - kep[0][0] < kep[2][0] - kep[3][0]
+    kx, ky = apply_homography(h, 20.0, 10.0)
+    assert 100.0 < kx < 1820.0 and 180.0 < ky < 980.0
+    assert abs(kx - 960.0) < 1e-6                 # a trapéz szimmetrikus
+
+
 if __name__ == "__main__":
     test_all_benchmarks_pass_thresholds()
     test_report_markdown_contains_all_metrics()

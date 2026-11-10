@@ -68,6 +68,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `calib_overlay`: `_sign_normalized`, `_region_center`.
   - `broadcast_lines`: `_erode`, `_dilate`, `_thin_line_mask`,
     `_auto_color`.
+  - `benchmark`: `_project_court_to_image`.
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
