@@ -16,6 +16,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   - `tactics`: `_formation_label`, `_avg_attack_duration_s`,
     `_avg_ball_speed_ms` (másodpercben mérnek; minta nélkül 0).
   - `substitutions`: `_in_sub_zone` (a cserezóna határai).
+  - `stats`: `_speed_segments` (lyuk, ugrás, becsült pozíció kimarad;
+    másodpercben mér) és `_sprint_and_zones` (a villanás nem sprint).
 - **Teszt-lefedettség: az API és a parancssori eszközök** (teszt): a
   pipeline után az `api` és a `scripts` soha le nem futó részei is
   tesztet kapnak — a pozitív eset mellé a "nincs miből" esettel
