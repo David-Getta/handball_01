@@ -1857,6 +1857,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 498) Centis lövő: a saját sarok-kereső lövőnk egyéni feladata —
+    # a kihagyásai a kapufát súrolják, a célzás biztonsági ráhagyással.
+    _szabaly = 498
+    try:
+        from .xg import NM_MARGIN_M, narrow_miss_shooters
+        nms498 = narrow_miss_shooters(match, config)
+        for side in ("home", "away"):
+            sk498 = (nms498.get(side) or {}).get("corner_seeker")
+            if not sk498:
+                continue
+            who498 = (f"a(z) {sk498['jersey']}. számú"
+                      if sk498["jersey"] is not None else "egyik lövőnk")
+            add(side, "támadás", "Egyéni célzás: ráhagyás a kapufától",
+                f"{who498} a sarkokat keresi: {sk498['narrow']} a "
+                f"{sk498['misses']} mellé lövéséből a kapufát súrolja",
+                "egyéni lövéssorozat a saját posztjáról, célpont fél "
+                "méterrel a kapufán belül — előbb állóhelyzetből, aztán "
+                "felugrásból és kapussal; mérés: a kapufa mellé "
+                f"{NM_MARGIN_M:.1f} m-en belül menő lövésből kaput érő")
+    except Exception:
+        pass
+
     # 497) Centis kihagyás: a saját mellé lövések zöme a kapufát súrolja
     # (a sarkokat túl élesen célozzák) — célzás biztonsági ráhagyással;
     # ha messze mennek mellé, a lövés-választás és a nyugodt befejezés.

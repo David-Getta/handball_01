@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **523 réteg**, modulonként csoportosítva; a
+Összesen **524 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -609,7 +609,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `player_training_focus` | Egyéni edzés-fókusz: KINEK MIT kell gyakorolnia. |
 | `training` | Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}). |
 
-## xg (30)
+## xg (31)
 
 | Réteg | Mit mér |
 |---|---|
@@ -630,6 +630,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `missed_big_chances` | A kihagyott nagy helyzetek: xG >= BIG_CHANCE_XG, de nem gól. |
 | `missed_chance_players` | Ziccerhagyó emberek: KI hagyja ki a ziccereket. |
 | `missed_chance_roles` | Ziccerhagyó-poszt: MELYIK POSZTJUK hagyja ki a ziccereket. |
+| `narrow_miss_shooters` | Centis lövők: KINEK a kihagyásai centisek, és ki lő messze mellé. |
 | `narrow_misses` | Centis kihagyás: HAJSZÁLLAL vagy MESSZE mennek mellé a lövéseik. |
 | `shot_accuracy` | Célzás-pontosság: a lövés-kísérletekből mennyi tart kapura. |
 | `shot_concentration` | Lövő-koncentráció: mennyire egy emberre épül a lövés-terhelés. |

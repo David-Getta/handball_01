@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Centis lövők: KINEK a kihagyásai súrolják a kapufát** (új réteg,
+  `xg.narrow_miss_shooters`): a centis kihagyás lövőre bontva — a
+  gólvonalig érő mellé lövéseiből mennyi megy el a kapufa mellett
+  0,6 m-en belül. Lövőnként 4 mellé lövéstől ítél: legalább 3 centis
+  és 60% felett „sarok-kereső”, 25% alatt „vaktában lövő”. Edzői
+  olvasat: a sarok-kereső ellen a kapus maradjon középen, ne nyúljon
+  korán a sarokba; a saját sarok-keresőnk egyéni célzás-feladatot kap.
+  Felületek: `/analyze` és a meccs-csomag, edzői összefoglaló, felderítés
+  (lövőnkénti darabszám-szótárak, pontos összegzés meccsek közt,
+  névre szóló edzői kulcs), meccsterv 478) (az ő sarok-keresőjük × a ti
+  33% feletti kapusotok), edzés-fókusz 498) (egyéni célzás: ráhagyás a
+  kapufától), kliens-csempe „Centis lövő”. A csapat- és a lövő-réteg
+  ugyanazt a mérést használja (`_measured_misses`), a felderítés és a
+  meccsterv a motorral közös döntéssel (`narrow_miss_seeker`).
 - **Centis kihagyás: HAJSZÁLLAL vagy MESSZE mennek mellé a lövéseik**
   (új réteg, `xg.narrow_misses`): a célzás-pontosság azt mondja meg,
   mennyi lövés tart kapura — ez azt, hogy a kaput elkerülő lövés

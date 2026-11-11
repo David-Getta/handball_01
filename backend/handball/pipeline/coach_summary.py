@@ -7606,6 +7606,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                           f"{nmr[side]['verdict']}.")
     except Exception:
         pass
+    # Centis lövők: kinek a kihagyásai súrolják a kapufát
+    # (xg.narrow_miss_shooters — a küszöbök a motoréi: NMS_MIN_MISSES,
+    # NMS_MIN_NARROW, NM_NARROW_PCT).
+    try:
+        from .xg import narrow_miss_shooters
+        nms = narrow_miss_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            sk = nms[side]["corner_seeker"]
+            if sk is None:
+                continue
+            who = (f"a(z) {sk['jersey']}. számú"
+                   if sk["jersey"] is not None else "egyik lövőjük")
+            pass_line += (f" A(z) {name} csapatában {who} a sarkokat "
+                          f"keresi: {sk['narrow']} a {sk['misses']} "
+                          "mellé lövéséből a kapufát súrolja.")
+    except Exception:
+        pass
     # Kiállítás-sokk: a hátrány elején vagy a végén kapják-e a gólt
     # (rules.shorthanded_onset) — csak ha van minta (a küszöbök a
     # motoréi: SHO_MIN_PART_S, SHO_MIN_GOALS, SHO_RATIO).

@@ -299,6 +299,34 @@ def _miss_line_y(match: Match, idx: int, goal_x: float, fps: float):
     return None
 
 
+def _measured_misses(match: Match, config: Optional[TacticsConfig] = None):
+    """A gólvonalig érő mellé lövések: (csapat, lövő id, a kapufán
+    kívüli távolság méterben) hármasok időrendben — a centis-kihagyás
+    csapat- és lövő-szintű rétegének közös mérése."""
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    centre = COURT_WIDTH_M / 2.0
+    out = []
+    for e in detect_shots(match, config):
+        if e.type != EventType.SHOT \
+                or (e.detail or {}).get("outcome") != "miss":
+            continue
+        i = idx_of.get(e.t)
+        if i is None:
+            continue
+        y = _miss_line_y(match, i, config.attacks_toward_x(e.team), fps)
+        if y is None:
+            continue
+        off = abs(y - centre) - 1.5      # a kapufán kívüli távolság
+        if off < 0:
+            continue      # a kapufák közé érő "mellé" lövés: nem mérhető
+        out.append((e.team.value, e.player_id, off))
+    return out
+
+
 def narrow_misses_kind(misses: int, narrow: int):
     """A centis-kihagyás döntése a két darabszámból — a motor, a
     felderítés és a meccsterv közös ítélete (meccsek közt a darabszámok
@@ -336,30 +364,10 @@ def narrow_misses(match: Match,
     mellé lövések száma; pattern "centis" / "messzi" / None, és None,
     ha kevés (NM_MIN_MISSES alatti) a minta.
     """
-    from .event_detection import EventType, detect_shots
-
-    config = config or TacticsConfig()
-    fps = match.meta.fps if match.meta.fps > 0 else 25.0
-    idx_of = {f.t: i for i, f in enumerate(match.frames)}
-    half_goal = 1.5
-    centre = COURT_WIDTH_M / 2.0
     counts = {"home": {"misses": 0, "narrow": 0},
               "away": {"misses": 0, "narrow": 0}}
-    for e in detect_shots(match, config):
-        if e.type != EventType.SHOT \
-                or (e.detail or {}).get("outcome") != "miss":
-            continue
-        i = idx_of.get(e.t)
-        if i is None:
-            continue
-        goal_x = config.attacks_toward_x(e.team)
-        y = _miss_line_y(match, i, goal_x, fps)
-        if y is None:
-            continue
-        off = abs(y - centre) - half_goal
-        if off < 0:
-            continue          # a kapufák közé érő "mellé" lövés: nem mérhető
-        rec = counts[e.team.value]
+    for team, _pid, off in _measured_misses(match, config):
+        rec = counts[team]
         rec["misses"] += 1
         rec["narrow"] += int(off <= NM_MARGIN_M)
 
@@ -382,6 +390,84 @@ def narrow_misses(match: Match,
         out[side] = {"misses": n, "narrow": k, "wide": n - k,
                      "narrow_pct": pct, "pattern": pattern,
                      "verdict": verdict}
+    return out
+
+
+# Centis lövők: lövőnként ennyi gólvonalig érő mellé lövéstől ítélünk;
+# a "sarok-kereső" kihagyásainak legalább NM_NARROW_PCT-a centis (és
+# legalább NMS_MIN_NARROW darab), a "vaktában lövőé" legfeljebb
+# NM_WIDE_PCT-a.
+NMS_MIN_MISSES = 4
+NMS_MIN_NARROW = 3
+
+
+def narrow_miss_seeker(misses_by: dict, narrow_by: dict):
+    """A sarok-kereső lövő a lövőnkénti darabszámokból (meccsek közt
+    összeadva) — a felderítés és a meccsterv ugyanazzal a döntéssel
+    dolgozik, mint a motor. Visszatérés: (kulcs, mellé, centis) vagy
+    None."""
+    rows = sorted(((k, int(m), int(narrow_by.get(k, 0)))
+                   for k, m in misses_by.items()),
+                  key=lambda r: (-r[2], -r[1], str(r[0])))
+    for k, m, c in rows:
+        if m >= NMS_MIN_MISSES and c >= NMS_MIN_NARROW \
+                and 100.0 * c / m >= NM_NARROW_PCT:
+            return k, m, c
+    return None
+
+
+def narrow_miss_shooters(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Centis lövők: KINEK a kihagyásai centisek, és ki lő messze mellé.
+
+    A centis kihagyás (narrow_misses) csapat-szinten mondja meg, hogy a
+    mellé lövéseik hajszállal vagy messze mennek el — ez lövőnként
+    bontja: a gólvonalig érő mellé lövéseiből mennyi súrolja a kapufát
+    (NM_MARGIN_M-en belül).
+
+    Edzőileg: a "sarok-kereső" lövő a legszélső sarkot célozza — a
+    kapus ellene maradhat középen, a pontatlansága neki dolgozik
+    ellenetek; a "vaktában lövő" kapkod — rá a korai kilépés és a
+    sietetés működik. Saját csapatnál a sarok-kereső egyéni
+    célzás-feladatot kap (biztonsági ráhagyás a kapufától).
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "misses", "narrow"}], "corner_seeker", "wild"} — a lista a centis
+    kihagyás szerint csökkenő; a két kiemelt sor None, ha nincs
+    NMS_MIN_MISSES mellé lövésű, a feltételnek megfelelő lövő.
+    """
+    jersey: dict = {}
+    for fr in match.frames:
+        for pl in fr.players:
+            if pl.jersey_number is not None:
+                jersey.setdefault(pl.track_id, pl.jersey_number)
+    tally: dict = {"home": {}, "away": {}}
+    for team, pid, off in _measured_misses(match, config):
+        if pid is None:
+            continue
+        rec = tally[team].setdefault(pid, {"misses": 0, "narrow": 0})
+        rec["misses"] += 1
+        rec["narrow"] += int(off <= NM_MARGIN_M)
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": r["misses"], "narrow": r["narrow"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: (-kv[1]["narrow"],
+                                                     -kv[1]["misses"],
+                                                     kv[0]))]
+        seeker = wild = None
+        for row in rows:
+            if row["misses"] < NMS_MIN_MISSES:
+                continue
+            pct = 100.0 * row["narrow"] / row["misses"]
+            if seeker is None and row["narrow"] >= NMS_MIN_NARROW \
+                    and pct >= NM_NARROW_PCT:
+                seeker = row
+            if wild is None and pct <= NM_WIDE_PCT:
+                wild = row
+        out[side] = {"players": rows, "corner_seeker": seeker,
+                     "wild": wild}
     return out
 
 

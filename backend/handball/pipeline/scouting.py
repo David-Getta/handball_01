@@ -547,6 +547,10 @@ class ScoutingReport:
     # súrolók (NM_MARGIN_M-en belül) — darabszámok, összegződnek.
     nm_misses: int = 0
     nm_narrow: int = 0
+    # Centis lövők: lövőnként (mezszám, különben track id) a gólvonalig
+    # érő mellé lövések és ebből a centisek — darabszámok, összegződnek.
+    nms_misses_by_player: dict = field(default_factory=dict)
+    nms_narrow_by_player: dict = field(default_factory=dict)
     # Oldal-részrehajlás: lövések a támadás bal/közép/jobb sávjából —
     # darabszámok, összegződnek.
     sb_left: int = 0
@@ -3517,6 +3521,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.nm_misses} gólvonalig érő mellé lövésből méterekkel "
                 "kerüli el a kaput) — kapkodnak: a korai kilépés és a "
                 "sietetés működik, a rossz szögű lövést engedjétek.")
+    except Exception:
+        pass
+
+    # Centis lövő: kinél maradjon középen a kapus (a motorral közös
+    # döntés: xg.narrow_miss_seeker).
+    try:
+        from .xg import narrow_miss_seeker
+        _nms = narrow_miss_seeker(rep.nms_misses_by_player,
+                                  rep.nms_narrow_by_player)
+        if _nms:
+            keys.append(
+                f"A(z) {_nms[0]}. a sarkokat keresi: {_nms[2]} a "
+                f"{_nms[1]} mellé lövéséből a kapufát súrolja — ellene a "
+                "kapusotok maradjon középen, a legszélső sarkot hagyja "
+                "a pontatlanságára.")
     except Exception:
         pass
 
@@ -11330,6 +11349,16 @@ def _scout_team_cached(match: Match, team: Team,
         nmrec = _nmi(match, config)[team.value]
         rep.nm_misses = int(nmrec["misses"])
         rep.nm_narrow = int(nmrec["narrow"])
+        from .xg import narrow_miss_shooters as _nms
+        nmsrec = _nms(match, config)[team.value]
+        rep.nms_misses_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["misses"]
+            for r in nmsrec["players"]}
+        rep.nms_narrow_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["narrow"]
+            for r in nmsrec["players"]}
         from .attack_types import attack_side_bias
         sbrec = attack_side_bias(match, config)[team.value]
         rep.sb_left = sbrec["left"]
@@ -15783,6 +15812,24 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 478) Centis lövő: az ő sarok-kereső lövőjük × a TI kapusotok jó
+    # formája (legalább 15 kaput érő lövésből 33% feletti védés) — a
+    # névre szóló feladat: ennél a lövőnél a kapus maradjon középen.
+    try:
+        from .xg import narrow_miss_seeker
+        _s478 = narrow_miss_seeker(opp.nms_misses_by_player,
+                                   opp.nms_narrow_by_player)
+        if (_s478 and own.gk_on_target >= 15
+                and own.gk_saves / own.gk_on_target >= 0.33):
+            plan.append(
+                f"Centis lövő: a(z) {_s478[0]}. a sarkokat keresi "
+                f"({_s478[2]} a {_s478[1]} mellé lövéséből a kapufát "
+                "súrolja), a kapusotok "
+                f"{100.0 * own.gk_saves / own.gk_on_target:.0f}%-ot véd — "
+                "ellene maradjon középen, ne nyúljon korán a sarokba.")
     except Exception:
         pass
 
@@ -23669,6 +23716,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ac_on_target=sum(r.ac_on_target for r in reports),
         nm_misses=sum(r.nm_misses for r in reports),
         nm_narrow=sum(r.nm_narrow for r in reports),
+        nms_misses_by_player=_merge_count_dicts(
+            r.nms_misses_by_player for r in reports),
+        nms_narrow_by_player=_merge_count_dicts(
+            r.nms_narrow_by_player for r in reports),
         sb_left=sum(r.sb_left for r in reports),
         sb_center=sum(r.sb_center for r in reports),
         sb_right=sum(r.sb_right for r in reports),

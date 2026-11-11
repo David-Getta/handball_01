@@ -2535,6 +2535,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Centis lövő: lövőnként 4 gólvonalig érő mellé lövéstől, legalább 3
+  // centis és 60% felett a sarok-kereső (a backenddel azonos küszöbök:
+  // NMS_MIN_MISSES, NMS_MIN_NARROW, NM_NARROW_PCT; holtversenyben a
+  // több centis, aztán a több mellé lövés, aztán a kulcs dönt).
+  String? _narrowMissSeeker(Map<String, dynamic> r) {
+    final misses = (r["nms_misses_by_player"] as Map?) ?? const {};
+    final narrow = (r["nms_narrow_by_player"] as Map?) ?? const {};
+    final rows = misses.entries
+        .map((e) => [e.key.toString(), (e.value as num).toInt(),
+                     ((narrow[e.key] as num?) ?? 0).toInt()])
+        .toList()
+      ..sort((a, b) {
+        final c = (b[2] as int).compareTo(a[2] as int);
+        if (c != 0) return c;
+        final d = (b[1] as int).compareTo(a[1] as int);
+        if (d != 0) return d;
+        return (a[0] as String).compareTo(b[0] as String);
+      });
+    for (final row in rows) {
+      final m = row[1] as int, c = row[2] as int;
+      if (m >= 4 && c >= 3 && 100.0 * c / m >= 60.0) {
+        return "a(z) ${row[0]}. a sarkokat keresi: $c a $m mellé "
+            "lövéséből a kapufát súrolja · ellene a kapus maradjon középen";
+      }
+    }
+    return null;
+  }
+
   // Kiállítás-sokk: a hátrány ELEJÉN (első 40 mp) vagy a VÉGÉN kapják-e
   // a gólt — mindkét szakaszból 60 mp, összesen 3 gól, a hangsúlyos
   // szakaszban 2 gól és 1,5-szörös ütem kell (a backenddel azonos
@@ -12724,6 +12752,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kiállítás-sokk", _shorthandedOnset(r)!],
       if (_narrowMisses(r) != null)
         ["Centis kihagyás", _narrowMisses(r)!],
+      if (_narrowMissSeeker(r) != null)
+        ["Centis lövő", _narrowMissSeeker(r)!],
       if (_keyPlayer(r) != null)
         ["Kulcs-ember", _keyPlayer(r)!],
       if (_powerplayTurnoverPlayer(r) != null)
