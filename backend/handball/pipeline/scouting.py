@@ -543,6 +543,10 @@ class ScoutingReport:
     # darabszámok, összegződnek.
     ac_attempts: int = 0
     ac_on_target: int = 0
+    # Centis kihagyás: gólvonalig érő mellé lövések + ebből a kapufát
+    # súrolók (NM_MARGIN_M-en belül) — darabszámok, összegződnek.
+    nm_misses: int = 0
+    nm_narrow: int = 0
     # Oldal-részrehajlás: lövések a támadás bal/közép/jobb sávjából —
     # darabszámok, összegződnek.
     sb_left: int = 0
@@ -3494,6 +3498,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A lövéseik {_ac_pct:.0f}%-a kaput ér — a kapusotok "
                 "egyedül nem marad meg ellenük: a blokk-munka kötelező, "
                 "a fal és a kapus sáv-felosztását előre tisztázzátok.")
+
+    # Centis kihagyás: hajszállal vagy messze mennek mellé (a motorral
+    # közös döntés: xg.narrow_misses_kind).
+    try:
+        from .xg import narrow_misses_kind
+        _nm_k, _nm_pct = narrow_misses_kind(rep.nm_misses, rep.nm_narrow)
+        if _nm_k == "centis":
+            keys.append(
+                f"A kihagyásaik centisek ({rep.nm_narrow} a "
+                f"{rep.nm_misses} gólvonalig érő mellé lövésből a kapufát "
+                "súrolja) — a sarkokat keresik: a kapusotok maradjon "
+                "középen, a legszélső sarkot hagyja a lövő "
+                "pontatlanságára.")
+        elif _nm_k == "messzi":
+            keys.append(
+                f"Messze lőnek mellé ({rep.nm_misses - rep.nm_narrow} a "
+                f"{rep.nm_misses} gólvonalig érő mellé lövésből méterekkel "
+                "kerüli el a kaput) — kapkodnak: a korai kilépés és a "
+                "sietetés működik, a rossz szögű lövést engedjétek.")
+    except Exception:
+        pass
 
     # Oldal-részrehajlás: fél-oldalas támadás ellen a fal eltolható.
     _sb_wings = rep.sb_left + rep.sb_right
@@ -11301,6 +11326,10 @@ def _scout_team_cached(match: Match, team: Team,
         sarec = shot_accuracy(match, config)[team.value]
         rep.ac_attempts = sarec["attempts"]
         rep.ac_on_target = sarec["on_target"]
+        from .xg import narrow_misses as _nmi
+        nmrec = _nmi(match, config)[team.value]
+        rep.nm_misses = int(nmrec["misses"])
+        rep.nm_narrow = int(nmrec["narrow"])
         from .attack_types import attack_side_bias
         sbrec = attack_side_bias(match, config)[team.value]
         rep.sb_left = sbrec["left"]
@@ -15754,6 +15783,32 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 477) Centis kihagyás: az ő lövőik a sarkokat keresik (a kihagyásaik
+    # zöme a kapufát súrolja) × a TI kapusotok jó formája (legalább 15
+    # kaput érő lövésből 33% feletti védés) — a kapus maradjon középen;
+    # ha MESSZE lőnek mellé × a ti gyors indításotok (fast_break_pct),
+    # a sietetés és a mellé lövés utáni azonnali indítás a terv.
+    try:
+        from .xg import narrow_misses_kind
+        _k477, _p477 = narrow_misses_kind(opp.nm_misses, opp.nm_narrow)
+        if (_k477 == "centis" and own.gk_on_target >= 15
+                and own.gk_saves / own.gk_on_target >= 0.33):
+            plan.append(
+                f"Centis kihagyás: a mellé lövéseik {_p477:.0f}%-a a kapufát "
+                f"súrolja — a sarkokat keresik; a kapusotok "
+                f"{100.0 * own.gk_saves / own.gk_on_target:.0f}%-ot véd: "
+                "maradjon középen, a legszélső sarkot hagyja a lövő "
+                "pontatlanságára.")
+        elif _k477 == "messzi" and own.fast_break_pct >= 15.0:
+            plan.append(
+                f"Messzi kihagyás: a mellé lövéseik {100 - _p477:.0f}%-a "
+                "méterekkel kerüli el a kaput — kapkodnak; a ti gyors "
+                f"indításotok ({own.fast_break_pct:.0f}%) a fegyver: "
+                "sietessétek a lövőjüket, és a mellé lövés pillanatában "
+                "induljanak a szélsők.")
     except Exception:
         pass
 
@@ -23612,6 +23667,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ff_sh_goals=sum(r.ff_sh_goals for r in reports),
         ac_attempts=sum(r.ac_attempts for r in reports),
         ac_on_target=sum(r.ac_on_target for r in reports),
+        nm_misses=sum(r.nm_misses for r in reports),
+        nm_narrow=sum(r.nm_narrow for r in reports),
         sb_left=sum(r.sb_left for r in reports),
         sb_center=sum(r.sb_center for r in reports),
         sb_right=sum(r.sb_right for r in reports),

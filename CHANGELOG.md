@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Centis kihagyás: HAJSZÁLLAL vagy MESSZE mennek mellé a lövéseik**
+  (új réteg, `xg.narrow_misses`): a célzás-pontosság azt mondja meg,
+  mennyi lövés tart kapura — ez azt, hogy a kaput elkerülő lövés
+  MENNYIVEL megy mellé. A gólvonalig érő mellé lövéseknél megnézzük,
+  hol lépi át a labda a vonalat: a kapufán kívül 0,6 m-en belül
+  „centis”, azon túl „messzi”. 6 mellé lövéstől ítél: 60% felett (és
+  legalább 3 centis) a sarkokat keresik, 25% alatt kapkodnak. Edzői
+  olvasat: a centis csapat ellen a kapus maradhat középen, a legszélső
+  sarkot a lövő pontatlansága fedezi; a messzi ellen a korai kilépés és
+  a sietetés működik. Felületek: `/analyze` és a meccs-csomag, edzői
+  összefoglaló (játékstílus-szakasz), felderítés (két darabszám-mező,
+  pontos összegzés meccsek közt, edzői kulcs), meccsterv 477) (centis
+  lövők × a ti 33% feletti kapusotok / messzi lövők × a ti gyors
+  indításotok), edzés-fókusz 497) (célzás biztonsági ráhagyással /
+  nyugodt befejezés jó szögből), kliens-csempe „Centis kihagyás”. A
+  gólvonalig érés ideje másodpercben él: a ritkított meccsen ugyanaz.
 - **Kiállítás-sokk: a kiállítás ELEJÉN vagy a VÉGÉN kapják a gólt**
   (új réteg, `rules.shorthanded_onset`): a kétperc ára azt mondja meg,
   mennyi gólba kerül egy kiállításuk — ez azt, MIKOR fáj a hátrány. A

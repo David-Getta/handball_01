@@ -2514,6 +2514,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Centis kihagyás: a gólvonalig érő mellé lövéseik hajszállal (a
+  // kapufán kívül 0,6 m-en belül) vagy messze mennek-e mellé — 6 mellé
+  // lövéstől, 60% felett centis (legalább 3), 25% alatt messzi (a
+  // backenddel azonos küszöbök: NM_MIN_MISSES, NM_MIN_NARROW,
+  // NM_NARROW_PCT, NM_WIDE_PCT).
+  String? _narrowMisses(Map<String, dynamic> r) {
+    final n = (r["nm_misses"] as num?)?.toInt() ?? 0;
+    final k = (r["nm_narrow"] as num?)?.toInt() ?? 0;
+    if (n < 6) return null;
+    final pct = 100.0 * k / n;
+    if (k >= 3 && pct >= 60.0) {
+      return "a kihagyásaik centisek ($k a $n mellé lövésből a kapufát "
+          "súrolja) · a kapusotok maradjon középen";
+    }
+    if (pct <= 25.0) {
+      return "messze lőnek mellé (${n - k} a $n mellé lövésből) · "
+          "kapkodnak: a sietetés és a korai kilépés működik";
+    }
+    return null;
+  }
+
   // Kiállítás-sokk: a hátrány ELEJÉN (első 40 mp) vagy a VÉGÉN kapják-e
   // a gólt — mindkét szakaszból 60 mp, összesen 3 gól, a hangsúlyos
   // szakaszban 2 gól és 1,5-szörös ütem kell (a backenddel azonos
@@ -12701,6 +12722,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kétperc ára", _suspensionCost(r)!],
       if (_shorthandedOnset(r) != null)
         ["Kiállítás-sokk", _shorthandedOnset(r)!],
+      if (_narrowMisses(r) != null)
+        ["Centis kihagyás", _narrowMisses(r)!],
       if (_keyPlayer(r) != null)
         ["Kulcs-ember", _keyPlayer(r)!],
       if (_powerplayTurnoverPlayer(r) != null)

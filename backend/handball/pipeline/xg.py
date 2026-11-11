@@ -264,6 +264,127 @@ def shot_accuracy(match: Match,
     return out
 
 
+# Centis kihagyás: a mellé lövés hol lépi át a gólvonalat. A kapufán
+# kívül ennyi méteren belül HAJSZÁLLAL ment mellé; ennyi idő alatt kell
+# a labdának a gólvonalig érnie (a blokkolt / rövid lövés kimarad);
+# ennyi gólvonalig érő mellé lövés és ennyi "centis" kell az ítélethez;
+# e részarány felett a csapat a sarkokat keresi, alatta messze lő mellé.
+NM_MARGIN_M = 0.6
+NM_LOOK_S = 0.6
+NM_LINE_M = 0.7
+NM_MIN_MISSES = 6
+NM_MIN_NARROW = 3
+NM_NARROW_PCT = 60.0
+NM_WIDE_PCT = 25.0
+
+
+def _miss_line_y(match: Match, idx: int, goal_x: float, fps: float):
+    """A mellé lövés gólvonal-átlépésének y-ja (None, ha a labda
+    NM_LOOK_S alatt nem éri el a vonalat — blokkolt / rövid lövés)."""
+    frames = match.frames
+    t_end = frames[idx].t + NM_LOOK_S * fps
+    prev = None
+    for f in frames[idx:]:
+        if f.t > t_end:
+            break
+        b = f.ball
+        if b is None:
+            continue
+        if abs(b.x - goal_x) <= NM_LINE_M:
+            return b.y
+        if prev is not None and (prev[0] - goal_x) * (b.x - goal_x) < 0:
+            u = (goal_x - prev[0]) / (b.x - prev[0])
+            return prev[1] + u * (b.y - prev[1])
+        prev = (b.x, b.y)
+    return None
+
+
+def narrow_misses_kind(misses: int, narrow: int):
+    """A centis-kihagyás döntése a két darabszámból — a motor, a
+    felderítés és a meccsterv közös ítélete (meccsek közt a darabszámok
+    adódnak össze). Visszatérés: (minta, centis %) — a minta "centis" /
+    "messzi" / None; a % None, ha nincs gólvonalig érő mellé lövés."""
+    pct = round(100.0 * narrow / misses, 1) if misses else None
+    if misses < NM_MIN_MISSES:
+        return None, pct
+    if narrow >= NM_MIN_NARROW and pct >= NM_NARROW_PCT:
+        return "centis", pct
+    if pct <= NM_WIDE_PCT:
+        return "messzi", pct
+    return None, pct
+
+
+def narrow_misses(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Centis kihagyás: HAJSZÁLLAL vagy MESSZE mennek mellé a lövéseik.
+
+    A célzás-pontosság (shot_accuracy) azt mondja meg, MENNYI lövés tart
+    kapura — ez azt, hogy a kaput elkerülő lövés MENNYIVEL megy mellé:
+    a gólvonalig érő mellé lövéseknél megnézzük, hol lépi át a labda a
+    vonalat, és a kapufán kívül NM_MARGIN_M-en belül "centis" (a
+    kapufát súroló), azon túl "messzi" a kihagyás.
+
+    Edzőileg: ha a kihagyásaik zöme CENTIS, a sarkokat keresik, minden
+    lövés a kapufa mellé megy — a kapus nyugodtan maradhat középen, a
+    legszélső sarkot a lövő pontatlansága fedezi; saját csapatnál a
+    célzás biztonsági ráhagyással (fél méterrel a kapufán belül) az
+    edzés-téma. Ha a zöme MESSZI, kapkodnak vagy rossz szögből lőnek —
+    a korai kilépés és a sietetés működik ellenük.
+
+    Visszatérés csapatonként: {"misses", "narrow", "wide",
+    "narrow_pct", "pattern", "verdict"} — a "misses" a gólvonalig érő
+    mellé lövések száma; pattern "centis" / "messzi" / None, és None,
+    ha kevés (NM_MIN_MISSES alatti) a minta.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    half_goal = 1.5
+    centre = COURT_WIDTH_M / 2.0
+    counts = {"home": {"misses": 0, "narrow": 0},
+              "away": {"misses": 0, "narrow": 0}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.SHOT \
+                or (e.detail or {}).get("outcome") != "miss":
+            continue
+        i = idx_of.get(e.t)
+        if i is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        y = _miss_line_y(match, i, goal_x, fps)
+        if y is None:
+            continue
+        off = abs(y - centre) - half_goal
+        if off < 0:
+            continue          # a kapufák közé érő "mellé" lövés: nem mérhető
+        rec = counts[e.team.value]
+        rec["misses"] += 1
+        rec["narrow"] += int(off <= NM_MARGIN_M)
+
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        n, k = rec["misses"], rec["narrow"]
+        pattern, pct = narrow_misses_kind(n, k)
+        verdict = None
+        if pattern == "centis":
+            verdict = (f"a kihagyásaik centisek ({k} a {n} gólvonalig "
+                       f"érő mellé lövésből a kapufát súrolja, {pct:.0f}%) "
+                       "— a sarkokat keresik: a kapus maradhat középen, a "
+                       "legszélső sarkot a lövő pontatlansága fedezi")
+        elif pattern == "messzi":
+            verdict = (f"messze lőnek mellé ({n - k} a {n} gólvonalig érő "
+                       f"mellé lövésből méterekkel kerüli el a kaput) — "
+                       "kapkodnak vagy rossz szögből lőnek: a korai "
+                       "kilépés és a sietetés működik ellenük")
+        out[side] = {"misses": n, "narrow": k, "wide": n - k,
+                     "narrow_pct": pct, "pattern": pattern,
+                     "verdict": verdict}
+    return out
+
+
 # Lövő-koncentráció: ennyi azonosított lövőjű lövéstől ítélünk, és e
 # részarány felett számít egy emberre épülőnek a lövés-terhelés.
 CONC_MIN_SHOTS = 12

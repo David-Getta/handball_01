@@ -1857,6 +1857,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 497) Centis kihagyás: a saját mellé lövések zöme a kapufát súrolja
+    # (a sarkokat túl élesen célozzák) — célzás biztonsági ráhagyással;
+    # ha messze mennek mellé, a lövés-választás és a nyugodt befejezés.
+    _szabaly = 497
+    try:
+        from .xg import NM_MARGIN_M, narrow_misses
+        nm497 = narrow_misses(match, config)
+        for side in ("home", "away"):
+            r497 = nm497.get(side) or {}
+            if r497.get("pattern") == "centis":
+                add(side, "támadás", "Célzás biztonsági ráhagyással",
+                    r497["verdict"],
+                    "lövés célpontokra a kapufától fél méterrel befelé "
+                    "(kapura akasztott jelölők), előbb állóhelyzetből, aztán "
+                    "védővel és fáradtan — a cél: a kapufa mellé "
+                    f"{NM_MARGIN_M:.1f} m-en belül menő lövésből kaput érő "
+                    "legyen")
+            elif r497.get("pattern") == "messzi":
+                add(side, "támadás", "Nyugodt befejezés, jó szögből",
+                    r497["verdict"],
+                    "befejezés nyomás alatt: két passz után lövés csak "
+                    "szabad szögből, különben tovább — a lövés-választás "
+                    "jelzésre, időre mért sorozatokban")
+    except Exception:
+        pass
+
     # 496) Kiállítás-sokk: a hátrányban kapott gólok a kiállítás ELEJÉN
     # (lassú átrendeződés öt emberre) vagy a VÉGÉN (elfogynak) esnek —
     # az előbbit a kiállítás utáni első védekezés forgatókönyve, az

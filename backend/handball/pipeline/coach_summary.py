@@ -7593,6 +7593,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                               f"szerint: {p['verdict']}.")
     except Exception:
         pass
+    # Centis kihagyás: hajszállal vagy messze mennek-e mellé a lövések
+    # (xg.narrow_misses) — csak ha van minta (a küszöbök a motoréi:
+    # NM_MIN_MISSES, NM_NARROW_PCT, NM_WIDE_PCT).
+    try:
+        from .xg import narrow_misses
+        nmr = narrow_misses(match)
+        for side, name in (("home", home), ("away", away)):
+            if nmr[side]["verdict"] is None:
+                continue
+            pass_line += (f" A(z) {name} lövései: "
+                          f"{nmr[side]['verdict']}.")
+    except Exception:
+        pass
     # Kiállítás-sokk: a hátrány elején vagy a végén kapják-e a gólt
     # (rules.shorthanded_onset) — csak ha van minta (a küszöbök a
     # motoréi: SHO_MIN_PART_S, SHO_MIN_GOALS, SHO_RATIO).

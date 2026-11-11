@@ -1529,3 +1529,109 @@ def test_xg_meri_az_elengedes_helyet_nem_a_kapu_kozeliteset():
     # Az elengedés helyéről (28 m) mérünk, nem a besétált hatosról.
     assert sh["x"] <= 28.5, sh
     assert sh["xg"] == xg_of_position(28.0, 10.0, 40.0), sh
+
+
+# ---- Centis kihagyás (hajszállal vagy messze mennek mellé) -----------------
+
+def _nm_match(ys, fps=25.0):
+    """Hazai mellé lövések a +x kapura: a labda a megadott y-on éri el a
+    gólvonalat (kapus nincs a közelben → "miss" kimenetel). A lövés a
+    képrátától függetlenül 25 m/s, a szünet 1 másodperc."""
+    frames = []
+    t = 0
+    lepes = 25.0 / fps
+    for y in ys:
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(5, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        n = max(3, round(0.36 * fps))
+        for i in range(n):
+            x = min(34.0 + (i + 1) * lepes, 40.4)
+            u = min(1.0, (x - 34.0) / 6.0)
+            frames.append(Frame(t=t, players=[_pl(5, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=x, y=10.0 + (y - 10.0) * u,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(1.0 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_narrow_misses_flags_the_corner_seekers():
+    """A mellé lövések zöme a kapufát súrolja → a sarkokat keresik."""
+    from handball.pipeline.xg import NM_MARGIN_M, narrow_misses
+
+    rec = narrow_misses(_nm_match([8.2] * 5 + [6.0] * 2))["home"]
+    assert (rec["misses"], rec["narrow"], rec["wide"]) == (7, 5, 2), rec
+    assert 8.5 - 8.2 <= NM_MARGIN_M
+    assert rec["pattern"] == "centis", rec
+    assert "kapus maradhat középen" in rec["verdict"]
+    # a vendégnek nincs lövése: nincs mit mondani
+    away = narrow_misses(_nm_match([8.2] * 7))["away"]
+    assert away["misses"] == 0 and away["verdict"] is None
+
+
+def test_narrow_misses_flags_the_wild_shooters():
+    """A mellé lövések zöme méterekkel kerüli el a kaput → kapkodnak."""
+    from handball.pipeline.xg import narrow_misses
+
+    rec = narrow_misses(_nm_match([6.0] * 4 + [13.8] * 2 + [11.9]))["home"]
+    assert (rec["misses"], rec["narrow"]) == (7, 1), rec
+    assert rec["pattern"] == "messzi", rec
+    assert "sietetés" in rec["verdict"]
+
+
+def test_narrow_misses_silent_with_little_evidence():
+    """Kevés minta → None: öt mellé lövésből nincs ítélet; a vegyes kép
+    sem minta; a kapura tartó (gól) lövés nem kihagyás."""
+    from handball.pipeline.xg import narrow_misses
+
+    keves = narrow_misses(_nm_match([8.2] * 5))["home"]
+    assert keves["misses"] == 5 and keves["pattern"] is None
+    assert keves["verdict"] is None
+    vegyes = narrow_misses(_nm_match([8.2] * 4 + [6.0] * 4))["home"]
+    assert vegyes["narrow_pct"] == 50.0 and vegyes["pattern"] is None
+    golok = narrow_misses(_nm_match([10.0] * 8))["home"]
+    assert golok["misses"] == 0 and golok["pattern"] is None
+
+
+def test_narrow_misses_a_ritkitott_meccsen_is_ugyanaz():
+    """A gólvonalig érés ideje MÁSODPERC: a termék ritkításánál (fps/3)
+    ugyanaz az ítélet, mint sűrűn."""
+    from handball.pipeline.xg import narrow_misses
+
+    ys = [8.2] * 5 + [6.0] * 2
+    suru = narrow_misses(_nm_match(ys))["home"]
+    ritka = narrow_misses(_nm_match(ys, fps=25.0 / 3))["home"]
+    for kulcs in ("misses", "narrow", "pattern"):
+        assert suru[kulcs] == ritka[kulcs], (kulcs, suru, ritka)
+
+
+def test_narrow_misses_a_feluleteken_valodi_retegbol(monkeypatch):
+    """A felderítés (mezők, összegzés, edzői kulcs), a meccsterv (477)
+    és az edzés-fókusz (497) a VALÓDI rétegből szólal meg."""
+    import handball.pipeline.training as _tr
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    m = _nm_match([8.2] * 5 + [6.0] * 2)
+    opp = scout_team(m, Team.HOME)
+    assert (opp.nm_misses, opp.nm_narrow) == (7, 5), opp
+    assert any("kihagyásaik centisek" in k for k in _coach_keys(opp)[2])
+    both = combine_reports([opp, opp])
+    assert (both.nm_misses, both.nm_narrow) == (14, 10)
+    own = scout_team(m, Team.AWAY)
+    own.gk_on_target, own.gk_saves = 20, 8
+    assert any(p.startswith("Centis kihagyás:")
+               for p in matchup_plan(own, opp))
+    own.gk_saves = 4            # gyenge kapusformával nincs páros
+    assert not any(p.startswith("Centis kihagyás:")
+                   for p in matchup_plan(own, opp))
+    monkeypatch.setattr(_tr, "MAX_ITEMS", 10_000)
+    tf = training_focus(m)["home"]
+    assert any(i["title"] == "Célzás biztonsági ráhagyással" for i in tf), \
+        [i["title"] for i in tf]

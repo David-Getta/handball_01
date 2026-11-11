@@ -10389,6 +10389,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import narrow_misses
+            res["narrow_misses"] = narrow_misses(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import attack_side_bias
             res["attack_side_bias"] = attack_side_bias(match)
         except Exception:
@@ -12906,6 +12911,8 @@ def create_app():
                        lambda: finishing_balance(match))
                 from ..pipeline.xg import shot_accuracy
                 _layer("shot_accuracy", lambda: shot_accuracy(match))
+                from ..pipeline.xg import narrow_misses
+                _layer("narrow_misses", lambda: narrow_misses(match))
                 from ..pipeline.attack_types import attack_side_bias
                 _layer("attack_side_bias",
                        lambda: attack_side_bias(match))

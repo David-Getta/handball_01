@@ -58,13 +58,13 @@ extra hardware and fully on-premise processing.
   coaching keys reappear in the next match. The dashboard sums it up in
   one line ("8 of 11 checks proven"), and every live alert carries the
   verdict of the check behind it.
-- 522 analysis layers over a shared tracking data model; outputs
+- 523 analysis layers over a shared tracking data model; outputs
   phrased automatically in coach language.
 
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 3,636 automated tests,
+- Evidence infrastructure already in place: 3,641 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement
