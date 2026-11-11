@@ -2922,3 +2922,32 @@ def test_a_szuper_csere_probaja_a_vegpontokon(tmp_path, monkeypatch):
     assert c.get("/library/forecast?home=" + h + "&away="
                  + meccsek[0].meta.away_team).json()["szuper_csere"][
         "home"] == super_sub_choice([minta(m, "home") for m in meccsek])
+
+
+def test_a_centis_minta_probaja_a_vegponton(tmp_path, monkeypatch):
+    """/library/player-model-check "centis_proba": a valódi láncon
+    ugyanaz, mint a motor (narrow_miss_backtest) a könyvtár időrendjében."""
+    import json
+
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (narrow_miss_backtest,
+                                                   narrow_miss_sample)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    app = _app(tmp_path, monkeypatch)
+    for seed in (1, 2, 3):
+        m = simulate_ground_truth(duration_s=240, fps=25.0, seed=seed,
+                                  shots_per_min=8)
+        m.meta.match_id = f"gt{seed}"
+        m.meta.date = f"2026-10-0{seed}"
+        app.state.put_match(m)
+    mind = sorted(app.state.store.values(),
+                  key=lambda m: ((m.meta.date or ""), m.meta.match_id))
+    lista = [{"match_id": m.meta.match_id, "home": m.meta.home_team,
+              "away": m.meta.away_team,
+              "minta": {s_: json.loads(json.dumps(
+                  narrow_miss_sample(m, Team(s_)))) for s_ in ("home", "away")}}
+             for m in mind]
+    c = TestClient(app)
+    assert c.get("/library/player-model-check").json()[
+        "centis_proba"] == narrow_miss_backtest(lista)

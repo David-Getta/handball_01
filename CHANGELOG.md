@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **AI-próba: a centis-minta jósolható-e** (új próba,
+  `play_simulation.narrow_miss_backtest`): a könyvtár időrendjében a
+  KORÁBBI meccsek összegzett mellé lövéseiből kimondott „centis /
+  messzi” minta (`xg.narrow_misses_kind`) a következő meccsen bejött-e —
+  a meccs centis részaránya a két küszöb felezőjéhez képest a jósolt
+  oldalon áll-e (legalább 2 mérhető mellé lövésnél). 6 jósolt meccstől
+  ítél; a véletlen (50%) fölött 15 százalékponttal „jósolható”. Edzői
+  olvasat: a kapus a könyvtár mintájára állhat-e fel (centis lövőnél
+  középen marad, messzi lövőnél korán kilép), vagy a napi lövésképre
+  figyeljen. Felületek: `/library/player-model-check` „centis_proba”,
+  a meccs-előzetes `centis_proba`, a csapat-felderítés modell-próbája,
+  az AI-próbák összképe új sora („centis-minta”, 17 próba), szezon-
+  képernyő sor.
+
 - **Centis lövők: KINEK a kihagyásai súrolják a kapufát** (új réteg,
   `xg.narrow_miss_shooters`): a centis kihagyás lövőre bontva — a
   gólvonalig érő mellé lövéseiből mennyi megy el a kapufa mellett

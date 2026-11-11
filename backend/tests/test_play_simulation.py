@@ -1423,10 +1423,11 @@ def test_az_ai_probak_osszkepe():
           "hetes_irany_proba": {"itelet": "josolhato"},
           "emberhatrany_proba": {"itelet": "igazolt"},
           "utolso_labda_proba": {"itelet": "igazolt"},
-          "szuper_csere_proba": {"itelet": "igazolt"}}
+          "szuper_csere_proba": {"itelet": "igazolt"},
+          "centis_proba": {"itelet": "josolhato"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (15, 12)
-    # Az "élő esély" None → 15 ítél a 16-ból; mindennel 16 (MC_PROBAK).
+    assert (o["itelt"], o["bizonyitott"]) == (16, 13)
+    # Az "élő esély" None → 16 ítél a 17-ből; mindennel 17 (MC_PROBAK).
     from handball.pipeline.play_simulation import MC_PROBA_NEVEK, MC_PROBAK
     assert (o["osszes"], o["nem_itelt"], o["nem_itelt_nevek"]) == \
         (MC_PROBAK, 1, ["élő esély"])
@@ -1439,10 +1440,11 @@ def test_az_ai_probak_osszkepe():
     # Üres könyvtár: egyik sem ítél → None (a csempe nem mutat semmit).
     assert model_checks_overview({}) is None
     assert o["verdict"] == (
-        "15 próbából 12 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "16 próbából 13 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
         "figura-felderítés, felderítés, hetes-dobó, hetes-irány, "
-        "emberhátrány-fal, utolsó labda, szuper-csere; még nem: kapus-sávok, "
+        "emberhátrány-fal, utolsó labda, szuper-csere, centis-minta; még "
+        "nem: kapus-sávok, "
         "védő-modell, gólszerzők")
     # A kapus-választás, a hetes-dobó, az emberhátrány-fal és az utolsó
     # labda csak az "igazolt", a felderítés csak az "atviheto", a
@@ -1453,8 +1455,9 @@ def test_az_ai_probak_osszkepe():
         "hetes_irany_proba": {"itelet": "nem"},
         "emberhatrany_proba": {"itelet": "nem"},
         "utolso_labda_proba": {"itelet": "nem"},
-        "szuper_csere_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (15, 5)
+        "szuper_csere_proba": {"itelet": "nem"},
+        "centis_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (16, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -4223,3 +4226,49 @@ def test_review_until_csak_az_addigi_kockakbol_es_ha_mar_odaert_a_meccs():
     from handball.models.tracking import Match as _Match
     ures = _review_until(_Match(m.meta, []), 1.0, nevek, varakozas)
     assert ures["t"] is None and ures["sorok"] == []
+
+
+def test_a_centis_minta_probaja():
+    """narrow_miss_backtest: a KORÁBBI meccsek összegéből kimondott centis /
+    messzi minta a meccsen bejött-e (a centis részarány a két küszöb
+    felezője felett / alatt); kevés jósolt meccsnél None."""
+    from handball.pipeline.play_simulation import narrow_miss_backtest
+
+    def m(i, h, a):
+        return {"match_id": f"m{i}", "home": "A", "away": "B",
+                "minta": {"home": h, "away": a}}
+
+    centis = {"kihagyott": 6, "centis": 5}
+    messzi = {"kihagyott": 6, "centis": 0}
+    # A mindig centis, B mindig messzi: minden jóslat bejön.
+    meccsek = [m(i, centis, messzi) for i in range(5)]
+    p = narrow_miss_backtest(meccsek)
+    # Az első meccs előtt nincs könyvtár: 4 meccs × 2 csapat = 8 jóslat.
+    assert (p["meccsek"], p["talalt"], p["itelet"]) == (8, 8, "josolhato")
+    assert p["sorok"][0]["josolt"] == "centis"
+    assert "véletlen: 50%" in p["verdict"]
+    # Csak az A csapat: 4 jóslat — kevés (NMP_PROBA_MIN = 6) → None.
+    assert narrow_miss_backtest(meccsek, "A") is None
+    # Váltakozó célzás: a minta nem áll a következő meccsre.
+    vegyes = [m(i, centis if i % 2 == 0 else messzi,
+                messzi if i % 2 == 0 else centis) for i in range(8)]
+    v = narrow_miss_backtest(vegyes)
+    assert v is None or v["itelet"] == "nem"
+    # Kevés mellé lövés a meccsen (NMP_MIN_KIHAGYAS alatt): nem jósol.
+    keves = meccsek[:1] + [m(i, {"kihagyott": 1, "centis": 1},
+                             {"kihagyott": 1, "centis": 0}) for i in range(1, 9)]
+    assert narrow_miss_backtest(keves) is None
+
+
+def test_a_centis_minta_valodi_retegbol():
+    """narrow_miss_sample a VALÓDI xg.narrow_misses mezőit olvassa."""
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import narrow_miss_sample
+    from handball.pipeline.xg import narrow_misses
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    mt = simulate_ground_truth(duration_s=240, fps=25.0, seed=3,
+                               shots_per_min=8)
+    s = narrow_miss_sample(mt, Team.HOME)
+    r = narrow_misses(mt)["home"]
+    assert s == {"kihagyott": r["misses"], "centis": r["narrow"]}

@@ -3171,7 +3171,7 @@ MC_PROBA_NEVEK = ("lövő-szorzók", "kapus-sávok", "döntés-tanácsok",
                   "élő esély", "fal-becslés", "kapus-választás",
                   "figura-felderítés", "felderítés", "hetes-dobó",
                   "hetes-irány", "emberhátrány-fal", "utolsó labda",
-                  "szuper-csere")
+                  "szuper-csere", "centis-minta")
 MC_PROBAK = len(MC_PROBA_NEVEK)
 
 
@@ -3192,7 +3192,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     kevesebbet kap (shorthanded_defense_backtest), az utolsó labda, ha az
     ajánlott lövő a hajrában jobban fejez be (last_shot_backtest), a
     szuper-csere, ha a könyvtár beállója a padról többet termel a többinél
-    (super_sub_backtest). Mit jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
+    (super_sub_backtest), a centis-minta, ha a mellé lövések centis /
+    messzi mintája a következő meccsre is áll (narrow_miss_backtest). Mit
+    jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
     sem ítélt; "osszes" a próbák száma (MC_PROBAK), "nem_itelt" ebből
@@ -3249,6 +3251,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     sc = mc.get("szuper_csere_proba")
     if sc:
         add("szuper-csere", sc.get("itelet") == "igazolt")
+    cm = mc.get("centis_proba")
+    if cm:
+        add("centis-minta", cm.get("itelet") == "josolhato")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -7161,3 +7166,83 @@ def live_super_sub_alerts(match: Match, javaslatok: dict | None = None,
                                 f"be {mezszam_nevelovel(j['mez'])}t: "
                                 f"{j['verdict']}")})
     return {"alerts": alerts}
+
+
+# ---- Centis-minta: jósolható-e, hogyan lőnek mellé -------------------------
+# A felderítés "centis / messzi" mintája (xg.narrow_misses_kind) a kapus
+# felkészítését állítja (középen maradhat, vagy korán kiléphet). A próba a
+# könyvtár időrendjében: a KORÁBBI meccsek összegzett darabszámaiból
+# kimondott minta a meccsen bejött-e — a meccs mellé lövéseiből a centis
+# részarány a jósolt oldalon van-e a két küszöb (NM_NARROW_PCT és
+# NM_WIDE_PCT) felezőjéhez képest. Két kimenet: a véletlen 50%.
+NMP_MIN_KIHAGYAS = 2       # ennyi gólvonalig érő mellé lövés kell a meccsen
+NMP_PROBA_MIN = 6          # ennyi jósolt meccs kell az ítélethez
+NMP_ITELET_PP = 15.0       # ennyivel a véletlen (50%) fölött jósolható
+
+
+def narrow_miss_sample(match: Match, team: Team,
+                       config: TacticsConfig | None = None) -> dict:
+    """A centis-minta NYERS, JSON-barát meccs-mintája: a `team` gólvonalig
+    érő mellé lövései — {"kihagyott": n, "centis": a kapufán kívül
+    NM_MARGIN_M-en belül} (xg.narrow_misses). Meccsek közt összeadható."""
+    from .xg import narrow_misses
+    r = narrow_misses(match, config)[team.value]
+    return {"kihagyott": int(r["misses"]), "centis": int(r["narrow"])}
+
+
+def narrow_miss_backtest(meccsek: list,
+                         csapat: str | None = None) -> dict | None:
+    """A centis-minta próbája: `meccsek` = [{"match_id", "home", "away",
+    "minta": {"home", "away"} (narrow_miss_sample)}] időrendben. Minden
+    meccsre és oldalra a KORÁBBI meccsek összegéből a minta
+    (xg.narrow_misses_kind: "centis" / "messzi"); ahol van, és a meccsen
+    legalább NMP_MIN_KIHAGYAS mellé lövés mérhető, bejött-e: a centis
+    részarány a jósolt oldalon áll a két küszöb felezőjéhez képest. A
+    `csapat` megadásával csak az ő meccsei. Mit jelent edzőileg: a kapus
+    a könyvtár mintájára állhat-e (centis lövőnél középen marad, messzi
+    lövőnél korán kilép), vagy a lövők célzása meccsről meccsre változik.
+    Visszatérés: {"meccsek", "talalt", "talalat_pct", "sorok", "itelet"
+    ("josolhato" / "nem"), "verdict"} — None, ha NMP_PROBA_MIN-nél
+    kevesebb a jósolt meccs."""
+    from .xg import NM_NARROW_PCT, NM_WIDE_PCT, narrow_misses_kind
+    felezo = (NM_NARROW_PCT + NM_WIDE_PCT) / 2.0
+    talalt = 0
+    sorok: list = []
+    for i, m in enumerate(meccsek or []):
+        nevek = {"home": m.get("home"), "away": m.get("away")}
+        for side in ("home", "away"):
+            nev = nevek[side]
+            if not nev or (csapat is not None and nev != csapat):
+                continue
+            korabbi = [(x.get("minta") or {}).get(s) or {} for x in meccsek[:i]
+                       for s in ("home", "away") if x.get(s) == nev]
+            n = sum(int(k.get("kihagyott", 0)) for k in korabbi)
+            c = sum(int(k.get("centis", 0)) for k in korabbi)
+            minta, _pct = narrow_misses_kind(n, c)
+            if minta is None:
+                continue
+            most = (m.get("minta") or {}).get(side) or {}
+            mn = int(most.get("kihagyott", 0))
+            if mn < NMP_MIN_KIHAGYAS:
+                continue
+            pct = 100.0 * int(most.get("centis", 0)) / mn
+            jott = pct >= felezo if minta == "centis" else pct < felezo
+            talalt += int(jott)
+            sorok.append({"match_id": m.get("match_id"), "team": nev,
+                          "josolt": minta, "kihagyott": mn,
+                          "centis_pct": round(pct, 1), "bejott": jott})
+    if len(sorok) < NMP_PROBA_MIN:
+        return None
+    tp = 100.0 * talalt / len(sorok)
+    josolhato = tp - 50.0 >= NMP_ITELET_PP
+    return {"meccsek": len(sorok), "talalt": talalt,
+            "talalat_pct": round(tp, 1), "sorok": sorok,
+            "itelet": "josolhato" if josolhato else "nem",
+            "verdict": (f"a könyvtár centis / messzi mintája {len(sorok)} "
+                        f"meccsből {talalt} alkalommal jött be ({tp:.0f}%; "
+                        "véletlen: 50%) — "
+                        + ("a kapus a minta szerint állhat fel (centis "
+                           "lövőnél középen, messzi lövőnél korai kilépés)"
+                           if josolhato else
+                           "a célzásuk meccsről meccsre változik: a kapus "
+                           "a napi lövésképre figyeljen, ne a könyvtárra"))}
