@@ -43,6 +43,14 @@ Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
 ArchitecturesInstallIn64BitMode=x64
+; A telepítő ablakának és a Programok listájának ikonja a Sport Machine
+; JELKÉPE (packaging/icons/sportmachine.ico) — ugyanaz a rajz, amit az app
+; a fejlécében mutat, és amit a .exe is visel. Ha a fájl hiányzik (régi
+; munkamásolat), az Inno az alap-ikonnal fordít tovább.
+#if FileExists(AddBackslash(SourcePath) + "icons\sportmachine.ico")
+  SetupIconFile=icons\sportmachine.ico
+#endif
+UninstallDisplayIcon={app}\{#AppExe}
 
 [Languages]
 Name: "hu"; MessagesFile: "compiler:Languages\Hungarian.isl"

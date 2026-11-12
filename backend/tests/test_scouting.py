@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 import sys
+
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from handball.models.tracking import (
@@ -1824,6 +1826,32 @@ def test_match_key_players_seven_earner_role():
     assert role["player_id"] == 9
 
 
+def test_matchup_plan_theme_order():
+    """A meccsterv téma szerint rendeződik (kapus → védekezés →
+    támadás → fegyelem → hajrá → egyéb), a témán belül a szabályok
+    eredeti sorrendjében."""
+    from handball.pipeline.scouting import _mpl_order
+
+    nyers = [
+        "A hajrában rájuk kell vinni a tempót.",          # hajrá
+        "A falukat a bal oldalon kell megjáratni.",       # védekezés
+        "A kapusuk lassan ér haza a 7 a 6 után.",         # kapus
+        "Semleges mondat mindenféle kulcsszó nélkül.",    # egyéb
+        "A kétperceiket egy ember gyűjti.",               # fegyelem
+        "A kontrát az ő oldalukra kell vezetni.",         # támadás
+        "A falukat a jobb oldalon is meg lehet járatni.",  # védekezés
+    ]
+    rendezett = _mpl_order(nyers)
+    assert rendezett[0].startswith("A kapusuk")
+    assert rendezett[1].startswith("A falukat a bal")
+    assert rendezett[2].startswith("A falukat a jobb")   # stabil sorrend
+    assert rendezett[3].startswith("A kontrát")
+    assert rendezett[4].startswith("A kétperceiket")
+    assert rendezett[5].startswith("A hajrában")
+    assert rendezett[-1].startswith("Semleges")
+    assert sorted(rendezett) == sorted(nyers)            # nincs veszteség
+
+
 def test_matchup_plan_crosses_both_profiles():
     """A meccsterv-illesztés csak akkor ad mondatot, ha MINDKÉT oldal
     feltétele teljesül."""
@@ -2346,3 +2374,1593 @@ def test_transition_offense_merge_and_key():
                           trans_steals=10, trans_quick_goals=2)
     _, _, k2 = _coach_keys(weak)
     assert not any("gyorsan gólra váltják" in k for k in k2)
+
+
+def _trend_rep(matches, shots_by_role, dist_sum, kmh_shots=None,
+               kmh_sum=None):
+    """Minimális jelentés a származtatott trend-mutatók teszteléséhez."""
+    from handball.pipeline.scouting import ScoutingReport
+    return ScoutingReport(
+        team="home", team_name="Mi", matches=matches,
+        attack_share_pct=60.0, fast_break_pct=10.0, avg_ball_speed_ms=4.0,
+        avg_attack_duration_s=8.0, defense_main="6-0",
+        defense_distribution={"6-0": 100.0},
+        attack_centroid_x=30.0, attack_centroid_y=10.0, num_figures=0,
+        attacks=10, shots=10, goals=5, turnovers=2,
+        shot_efficiency_pct=50.0, key_players=[], strengths=[],
+        weaknesses=[], keys_to_game=[],
+        rsd_shots_by_role=shots_by_role, rsd_dist_sum_by_role=dist_sum,
+        rsp_shots_by_role=kmh_shots or {}, rsp_kmh_sum_by_role=kmh_sum or {})
+
+
+def test_trend_kozelebbi_befejezes_javulas():
+    """A befejezés-távolság csökkenése JAVULÁS — közelebbről lőni jobb."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(3, {"irányító": 10}, {"irányító": 120.0})   # 12,0 m
+    newer = _trend_rep(3, {"irányító": 10}, {"irányító": 90.0})    # 9,0 m
+    tr = trend_report(older, newer)
+    rec = next(m for m in tr["metrics"] if m["metric"] == "shot_distance_m")
+    assert rec["older"] == 12.0 and rec["newer"] == 9.0
+    assert rec["better"] is True, rec
+    assert any("befejezés-távolság" in s_ for s_ in tr["summary"]), tr
+
+
+def test_trend_kimarad_ha_keves_a_loves():
+    """Kevés mért lövésnél a mutató KIMARAD — nem látszik nulla-esésnek."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(1, {"irányító": 3}, {"irányító": 36.0})
+    newer = _trend_rep(1, {"irányító": 10}, {"irányító": 90.0})
+    tr = trend_report(older, newer)
+    assert not [m for m in tr["metrics"]
+                if m["metric"] == "shot_distance_m"], tr["metrics"]
+
+
+def test_trend_loveserobol_is_lesz_mutato():
+    """A lövéserő növekedése javulás."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(3, {}, {}, {"átlövő": 10}, {"átlövő": 900.0})
+    newer = _trend_rep(3, {}, {}, {"átlövő": 10}, {"átlövő": 1100.0})
+    tr = trend_report(older, newer)
+    rec = next(m for m in tr["metrics"] if m["metric"] == "shot_power_kmh")
+    assert rec["older"] == 90.0 and rec["newer"] == 110.0
+    assert rec["better"] is True, rec
+
+
+def test_combine_merges_every_by_role_field():
+    """ŐR: minden *_by_role mező összegződik a combine_reports-ban.
+
+    A réteg-recept 4. lépésének gyakori hibája, hogy az új
+    posztonkénti mező kimarad az összevonásból — ilyenkor a több
+    meccses felderítés csendben elveszíti a mintát. Ez a teszt
+    minden posztonkénti számláló-mezőt kitölt, és megköveteli, hogy
+    két meccs összevonása után pontosan duplázódjon.
+    """
+    import dataclasses
+
+    role_fields = [f.name for f in dataclasses.fields(ScoutingReport)
+                   if f.name.endswith("_by_role")]
+    assert len(role_fields) >= 50, role_fields  # az olvasás elromlott
+
+    r1 = ScoutingReport(team="home", team_name="Teszt")
+    r2 = ScoutingReport(team="home", team_name="Teszt")
+    for name in role_fields:
+        setattr(r1, name, {"beálló": 1})
+        setattr(r2, name, {"beálló": 1})
+    comb = combine_reports([r1, r2])
+    rossz = [name for name in role_fields
+             if getattr(comb, name).get("beálló") != 2]
+    assert not rossz, f"nem összegzett posztonkénti mezők: {rossz}"
+
+
+def test_minden_posztonkenti_mezo_eljut_edzoi_feluletre():
+    """ŐR: minden *_by_role mező jusson el edzői felületre — vagy az
+    edzői kulcsok (_coach_keys), vagy a meccsterv (matchup_plan)
+    olvassa. Egy csak eltárolt, de sehol nem olvasott posztonkénti
+    mező holt adat: a réteg-recept 4. lépése fél-kész maradt."""
+    import dataclasses
+    import inspect
+
+    from handball.pipeline import scouting
+
+    fields = [f.name for f in dataclasses.fields(scouting.ScoutingReport)
+              if f.name.endswith("_by_role")]
+    assert len(fields) >= 60, fields   # az olvasás elromlott
+    src = (inspect.getsource(scouting._coach_keys)
+           + inspect.getsource(scouting.matchup_plan))
+    arva = [f for f in fields if f not in src]
+    assert not arva, f"edzői felület nélküli posztonkénti mezők: {arva}"
+
+
+def _sty_rep(**kw):
+    """Stílus-teszt felderítés: csak a stílus-tengelyek mezői."""
+    from handball.models.tracking import Team
+    from handball.pipeline.scouting import ScoutingReport
+
+    rep = ScoutingReport(team=Team.HOME, team_name="X")
+    alap = dict(shots=20, sr_close_shots=5, sr_mid_shots=5,
+                sr_far_shots=10, pace_minutes=30.0, pace_attacks=60,
+                fast_break_pct=20.0, scy_screened_shots=6,
+                scy_clean_shots=6, pivot_total_attacks=20,
+                pivot_attacks=10, agr_susp=3, svy_attempts=3,
+                matches=1)
+    alap.update(kw)
+    for k, v in alap.items():
+        setattr(rep, k, v)
+    return rep
+
+
+def test_style_distance_mirror_and_axes():
+    """Azonos profilú csapatoknál tükör-meccs, és minden közös
+    tengely bekerül a listába."""
+    from handball.pipeline.scouting import (STY_MIRROR_PCT,
+                                            style_distance)
+
+    rec = style_distance(_sty_rep(), _sty_rep())
+    assert rec["score_pct"] == 100.0, rec
+    assert rec["score_pct"] >= STY_MIRROR_PCT
+    assert len(rec["axes"]) >= 4, rec
+    assert rec["verdict"] and "tükör-meccs" in rec["verdict"], rec
+
+
+def test_style_distance_names_the_biggest_gap():
+    """Eltérő profilnál a legnagyobb szakadékot nevezi meg."""
+    from handball.pipeline.scouting import style_distance
+
+    lassu = _sty_rep(sr_close_shots=15, sr_mid_shots=4, sr_far_shots=1,
+                     pace_attacks=20, fast_break_pct=3.0,
+                     scy_screened_shots=1, scy_clean_shots=11,
+                     pivot_attacks=19, agr_susp=0, svy_attempts=0)
+    rec = style_distance(_sty_rep(), lassu)
+    assert rec["score_pct"] is not None and rec["score_pct"] < 100.0
+    assert rec["farthest"] in {a["axis"] for a in rec["axes"]}
+    assert rec["axes"][-1]["axis"] == rec["farthest"]
+    assert rec["verdict"], rec
+
+
+def test_style_distance_silent_with_few_axes():
+    """Kevés közös tengelynél nincs ítélet (nem találgatunk)."""
+    from handball.models.tracking import Team
+    from handball.pipeline.scouting import (ScoutingReport,
+                                            style_distance)
+
+    ures = ScoutingReport(team=Team.HOME, team_name="Y")
+    rec = style_distance(ures, ures)
+    assert rec["score_pct"] is None and rec["verdict"] is None, rec
+
+
+def test_matchup_plan_starts_with_match_character():
+    """A meccs jellege (tükör-/ellentétes stílus) a lap élére kerül."""
+    from handball.pipeline.scouting import matchup_plan
+
+    plan = matchup_plan(_sty_rep(), _sty_rep())
+    assert plan, plan
+    assert plan[0].startswith("Tükör-meccs"), plan[0]
+
+
+def test_a_meccsterv_kimondja_ha_gyenge_az_alapanyag():
+    """A meccsterv az, ami alapján az edző dönt.
+
+    Ha a mögötte lévő feldolgozás gyenge volt, a terv nem a másik
+    csapatról szól, hanem a mérés zajáról — és ezt nem szabad
+    elhallgatni, mert a jelentés minden mondata magabiztosan fogalmaz.
+    """
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    rep = ScoutingReport(team="home", team_name="A")
+    rep.q_matches = 1
+    rep.q_score_sum = 31.0
+    rep.q_weak_matches = 1
+    cav = scouting_caveat(rep)
+    assert cav is not None
+    assert "31/100" in cav
+    assert "zaj" in cav
+
+
+def test_tobb_meccsnel_a_gyengek_szamat_is_kimondja():
+    """5 meccsből 1 gyenge más helyzet, mint 5-ből 5 — a számot is
+    meg kell mondani, hogy az edző mérlegelhessen."""
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    rep = ScoutingReport(team="home", team_name="A", matches=5)
+    rep.q_matches = 5
+    rep.q_score_sum = 5 * 40.0
+    rep.q_weak_matches = 2
+    cav = scouting_caveat(rep)
+    assert cav is not None
+    assert "5 meccsből" in cav and "2 feldolgozása" in cav
+
+
+def test_jo_feldolgozasnal_es_regi_jelentesnel_nincs_figyelmeztetes():
+    """Jó feldolgozásnál nincs miről szólni; adat nélküli (régi)
+    jelentésről pedig nem állítunk semmit."""
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    jo = ScoutingReport(team="home", team_name="A")
+    jo.q_matches = 3
+    jo.q_score_sum = 3 * 85.0
+    jo.q_weak_matches = 0
+    assert scouting_caveat(jo) is None
+
+    regi = ScoutingReport(team="home", team_name="A")
+    assert scouting_caveat(regi) is None
+
+
+def test_a_figyelmeztetes_a_kliensnek_kuldott_szotarban_is_ott_van():
+    """A kliens ebből rajzolja a dobozt — enélkül a mondat a motorban
+    ragadna."""
+    from handball.pipeline.scouting import ScoutingReport, report_to_dict
+
+    rep = ScoutingReport(team="home", team_name="A")
+    rep.q_matches = 1
+    rep.q_score_sum = 20.0
+    rep.q_weak_matches = 1
+    d = report_to_dict(rep)
+    assert d["caveat"] and "FIGYELEM" in d["caveat"]
+    assert report_to_dict(ScoutingReport(team="home",
+                                         team_name="A"))["caveat"] is None
+
+
+def _hajra_opp():
+    """Ellenfél-jelentés, amiben MINDEN hajrá-jel megszólal."""
+    from handball.pipeline.scouting import ScoutingReport
+
+    opp = ScoutingReport(team="away", team_name="Ellen")
+    opp.lhf_fh_sum_m, opp.lhf_fh_n = 850.0, 100     # fal 8,5 → 6,5 m
+    opp.lhf_sh_sum_m, opp.lhf_sh_n = 650.0, 100
+    opp.rtf_fh_sum_s, opp.rtf_fh_n = 16.0, 4        # hazaérés 4 → 10 mp
+    opp.rtf_sh_sum_s, opp.rtf_sh_n = 40.0, 4
+    opp.wif_fh_wing, opp.wif_fh_n = 6, 8            # szél 75% → 12%
+    opp.wif_sh_wing, opp.wif_sh_n = 1, 8
+    opp.puf_fh_pivot, opp.puf_fh_n = 6, 8           # beálló 75% → 12%
+    opp.puf_sh_pivot, opp.puf_sh_n = 1, 8
+    opp.fpr_signals, opp.fpr_matches = 4, 1         # 4 jel egy meccsen
+    return opp
+
+
+def test_a_hajra_retegek_edzoi_kulcsai_tenyleg_megszolalnak():
+    """A réteg + a felület megléte nem elég: a kulcsnak MEG IS kell
+    szólalnia a megfelelő adatra.
+
+    Egy elgépelt mezőnév vagy egy rossz irányú összehasonlítás néma
+    kulcsot ad — semmi nem hasal el, a felhasználó pedig sosem tudja
+    meg, hogy az elemzés létezik. (Az edzés-fókusz oldalán pontosan
+    ez történt öt szabállyal.)
+    """
+    from handball.pipeline.scouting import _coach_keys
+
+    _s, _w, keys = _coach_keys(_hajra_opp())
+    vart = ("faluk a 2. félidőre visszahúzódik",
+            "visszaállásuk a 2. félidőre lassul",
+            "támadásuk a 2. félidőre beszűkül",
+            "beállójuk a 2. félidőre elfogy",
+            "fáradás-jel szólal meg náluk")
+    nema = [v for v in vart if not any(v in k for k in keys)]
+    assert not nema, f"néma edzői kulcsok: {nema}"
+
+
+def test_a_hajra_retegek_meccsterv_szabalyai_tenyleg_megszolalnak():
+    """A párosított szabályok ugyanígy: a saját oldal erősségével
+    együtt meg kell szólalniuk."""
+    from handball.pipeline.scouting import ScoutingReport, matchup_plan
+
+    opp = _hajra_opp()
+    own = ScoutingReport(team="home", team_name="Mi")
+    own.sr_far_shots, own.sr_far_goals = 12, 5        # 450: távoli lövés
+    own.fbc_breaks = 5                                # 451: kontra
+    own.defense_main = "6-0"                          # 452: tömör fal
+    own.clutch_matches = 2                            # 453: hajrá-erő
+    own.clutch_goals_for, own.clutch_goals_against = 9, 4
+    plan = matchup_plan(own, opp) or []
+    vart = ("faluk a 2. félidőre visszahúzódik",
+            "visszaállásuk a 2. félidőre lassul",
+            "támadásuk a 2. félidőre beszűkül",
+            "fáradás-jel szólal meg náluk")
+    nema = [v for v in vart if not any(v in p for p in plan)]
+    assert not nema, f"néma meccsterv-szabályok: {nema}"
+
+    # A beálló-szabály KILÉPŐS falat kíván (a tömör 6-0 a szélső-szabályé):
+    # a kettő szándékosan más falformára szól.
+    own.defense_main = "3-2-1"
+    plan2 = matchup_plan(own, opp) or []
+    assert any("beállójuk a 2. félidőre elfogy" in p for p in plan2)
+
+
+def test_a_felderites_probaja():
+    """scouting_backtest: a csapat korábbi meccseinek egyesített kulcsai
+    visszaköszönnek-e a meccs saját jelentésében — a liga általános
+    kulcsaihoz mérve; a kulcsok számok nélkül egyeznek; kevés meccsnél
+    None; a csapat-szűrő."""
+    from handball.pipeline.scouting import (SC_ITELET_PP, SC_MIN_KORABBI,
+                                            SC_PROBA_MIN, ScoutingReport,
+                                            _kulcs_alak, coach_key_set,
+                                            combine_reports,
+                                            scouting_backtest)
+
+    assert _kulcs_alak("Gyors indítás (14%) — 2,5 s") == \
+        "Gyors indítás (#%) — # s"
+    # "A": mély 6-0, gyors indítás, erős befejezés; "B": 5-1, lassú, gyenge
+    # befejezés, sok eladott labda — a két profil kulcsai nem fedik egymást.
+    a = ScoutingReport(team="home", team_name="A", defense_main="6-0",
+                       defense_distribution={"6-0": 80.0, "5-1": 20.0},
+                       fast_break_pct=20.0, shots=10, goals=6, xg=4.0,
+                       xg_diff=2.0, turnovers=2)
+    b = ScoutingReport(team="away", team_name="B", defense_main="5-1",
+                       defense_distribution={"5-1": 90.0, "6-0": 10.0},
+                       fast_break_pct=2.0, shots=10, goals=2, xg=4.0,
+                       xg_diff=-2.0, turnovers=12)
+    ka, kb = coach_key_set(a), coach_key_set(b)
+    assert "Mély #-# faluk ellen: # m-es lövés és beúszó, csald ki a védőt." \
+        in ka and "#-#-ük ellen: az előretolt védő kicselezése, gyors " \
+        "lefordulás." in kb
+    kozos = len(ka & kb)        # a két profil közös kulcsai (kevés)
+    assert kozos < min(len(ka), len(kb)) / 2
+    ms = [{"match_id": f"m{i}", "home": "A", "away": "B",
+           "reports": {"home": a, "away": b}} for i in range(8)]
+    p = scouting_backtest(ms)
+    # Az első SC_MIN_KORABBI meccs a tanuláshoz: 6 meccs × 2 csapat; a
+    # stabil profil kulcsai mind visszaköszönnek, a "ligáé" (a másik
+    # csapat) csak a közös kulcsokban.
+    assert (p["meccsek"], p["itelet"]) == (12, "atviheto")
+    # Az egyesített jelentés kulcsai nem pont az egy meccsé (az összegzett
+    # számok más küszöböket érnek el) — a többségük így is visszaköszön,
+    # a ligáé csak a közös kulcsokban.
+    assert 80.0 <= p["talalat_pct"] <= 100.0
+    assert p["talalat_pct"] - p["liga_pct"] >= p["kulonbseg_pp"] - 0.1 >= \
+        SC_ITELET_PP
+    e0 = p["sorok"][0]
+    assert e0["match_id"] == f"m{SC_MIN_KORABBI}" and e0["team"] == "A"
+    ketto = coach_key_set(combine_reports([a, a]))
+    assert (e0["kulcsok"], e0["talalt"]) == (len(ketto), len(ketto & ka))
+    assert e0["liga_talalt"] == len(coach_key_set(combine_reports([b, b])) & ka)
+    assert p["verdict"].startswith(
+        f"a felderítés kulcsai 12 meccsen átlag {p['talalat_pct']:.0f}%-ban "
+        "visszaköszöntek a következő meccsen (a liga általános kulcsai: ")
+    assert p["verdict"].endswith("a felderítésre lehet építeni: a szokásaik "
+                                 "meccsről meccsre megmaradnak")
+    assert scouting_backtest(ms, "B")["meccsek"] == 6
+    assert scouting_backtest(ms[:SC_MIN_KORABBI + SC_PROBA_MIN // 2]) is None
+    # Ha a csapat meccsről meccsre más profilt mutat (az "A" felváltva a
+    # két profil), a kulcsai nem stabilabbak a ligánál: "nem".
+    v = [{"match_id": f"v{i}", "home": "A", "away": "B",
+          "reports": {"home": a if i % 2 else ScoutingReport(
+              **{**b.__dict__, "team": "home", "team_name": "A"}),
+                      "away": b}} for i in range(8)]
+    q = scouting_backtest(v, "A")
+    assert q is not None and q["itelet"] == "nem"
+    assert q["verdict"].endswith(
+        "a meccstervet a friss meccsekre és a közös mintákra súlyozd")
+
+
+def test_a_felderites_hatokoron_belul_csapatonkent_egyszer_epul():
+    """A felderítő jelentés memoizált a primitive_cache hatókörben: az
+    edzői összefoglaló (taktikai kulcsok), az angol kártyák és a csomag
+    felderítés-rétege ugyanazt kéri — a sebesség-profil szerint ez volt
+    a csomag idejének ötöde. Minden hívó SAJÁT másolatot kap, a
+    módosítás nem szivárog vissza; az alapértelmezett beállítás és a
+    None ugyanazt a bejegyzést olvassa; hatókör nélkül a nyers
+    felépítés fut."""
+    from dataclasses import asdict
+
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.scouting import _scout_team_cached, scout_team
+    from handball.pipeline.tactics import TacticsConfig
+
+    assert hasattr(_scout_team_cached, "uncached")
+    m = _shots_match()
+    nyers = asdict(_scout_team_cached.uncached(m, Team.HOME))
+    with primitive_cache(m):
+        elso = scout_team(m, Team.HOME)
+        masodik = scout_team(m, Team.HOME)
+        alap = scout_team(m, Team.HOME, TacticsConfig())
+        assert asdict(elso) == asdict(masodik) == asdict(alap) == nyers
+        assert elso is not masodik and masodik is not alap   # védő-másolat
+        elso.matches = 99
+        assert scout_team(m, Team.HOME).matches == 1
+        # A másik csapat külön bejegyzés — nem keveredik.
+        assert scout_team(m, Team.AWAY).team != elso.team
+
+
+def test_rep_earn_count_osszeadja_a_kiharcolt_kiallitasokat():
+    """A riport kiharcolt kiállításainak összege a susp_earners listából;
+    üres (vagy None) lista → 0, hiányzó "earned" mező → 0."""
+    from handball.pipeline.scouting import rep_earn_count
+
+    rep = ScoutingReport(team="home", team_name="Mi",
+                         susp_earners=[{"player_id": 7, "earned": 2},
+                                       {"player_id": 9, "earned": 1},
+                                       {"player_id": 4}])
+    assert rep_earn_count(rep) == 3
+    assert rep_earn_count(ScoutingReport(team="home", team_name="Mi")) == 0
+    ures = ScoutingReport(team="home", team_name="Mi")
+    ures.susp_earners = None
+    assert rep_earn_count(ures) == 0
+
+
+def test_rep_earn_count_a_kettos_hatrany_szabalyt_kapuzza():
+    """A 248) páros szabály: az ő végzetes kettős hátrányuk × a ti
+    kiharcolt kiállításaitok — 2 kiharcolásnál szól, 1-nél hallgat."""
+    from handball.pipeline.scouting import matchup_plan
+
+    opp = ScoutingReport(team="away", team_name="Ok", dsh_conceded=3)
+    sok = ScoutingReport(team="home", team_name="Mi",
+                         susp_earners=[{"player_id": 7, "earned": 1},
+                                       {"player_id": 9, "earned": 1}])
+    keves = ScoutingReport(team="home", team_name="Mi",
+                           susp_earners=[{"player_id": 7, "earned": 1}])
+    jel = "A kettős emberhátrány végzetes nekik"
+    assert any(jel in p_ for p_ in matchup_plan(sok, opp))
+    assert not any(jel in p_ for p_ in matchup_plan(keves, opp))
+
+
+# ---- 241) Szünet utáni oldal-váltás × a ti falat váltó védekezésetek ---------
+
+def _oldalvalto_ellenfel(fh_frames=120, sh_frames=120):
+    """Az ellenfél az első félidőben balra (50%), a másodikban jobbra
+    (58%) súlypontoz — kocka-darabszámokkal, ahogy a riport tárolja."""
+    return ScoutingReport(
+        team="away", team_name="Ok",
+        sds_fh_frames=fh_frames, sds_sh_frames=sh_frames,
+        sds_fh_counts={"bal": 60, "közép": 30, "jobb": 30},
+        sds_sh_counts={"bal": 20, "közép": 30, "jobb": 70})
+
+
+def _falvalto_sajat(fh=("6-0", 5, 6), sh=("5-1", 6, 8)):
+    """A saját csapat félidőnként stabil, kimondható formát játszik:
+    (forma, ennyi támadás ellen, az összesből)."""
+    return ScoutingReport(
+        team="home", team_name="Mi",
+        dfs_fh_labels={fh[0]: fh[1]}, dfs_fh_attacks=fh[2],
+        dfs_sh_labels={sh[0]: sh[1]}, dfs_sh_attacks=sh[2])
+
+
+def test_meccsterv_241_oldalvaltas_ellen_a_tukrozest_keri():
+    """Ha ők a szünet után oldalt váltanak (bal → jobb), és a ti falatok
+    mindkét félidőben stabil formát játszik (≥60%, ≥5 támadás), a terv a
+    szünetbeli tükrözést kéri — a két oldal nevével."""
+    from handball.pipeline.scouting import matchup_plan
+
+    plan = matchup_plan(_falvalto_sajat(), _oldalvalto_ellenfel())
+    sor = [p_ for p_ in plan if "A szünet után oldalt váltanak" in p_]
+    assert len(sor) == 1
+    assert "(bal → jobb)" in sor[0]
+    assert "készítsétek elő a tükrözést" in sor[0]
+
+
+def test_meccsterv_241_keves_mintanal_vagy_valtas_nelkul_hallgat():
+    """Hallgat, ha (a) az ellenfélnek félidőnként 100 kockánál kevesebb a
+    mintája, (b) nem váltanak oldalt, (c) nincs uralkodó oldaluk (40%
+    alatt), (d) a saját falról kevés a minta (5 támadás alatt) vagy
+    (e) nem stabil (60% alatt), vagy (f) nincs is forma-adat."""
+    from handball.pipeline.scouting import matchup_plan
+
+    jel = "A szünet után oldalt váltanak"
+
+    def szol(own, opp):
+        return any(jel in p_ for p_ in matchup_plan(own, opp))
+
+    assert szol(_falvalto_sajat(), _oldalvalto_ellenfel())
+    # (a) kevés ellenfél-kocka az egyik félidőben
+    assert not szol(_falvalto_sajat(), _oldalvalto_ellenfel(fh_frames=99))
+    assert not szol(_falvalto_sajat(), _oldalvalto_ellenfel(sh_frames=99))
+    # (b) mindkét félidőben ugyanaz az oldal
+    ugyanaz = _oldalvalto_ellenfel()
+    ugyanaz.sds_sh_counts = {"bal": 70, "közép": 30, "jobb": 20}
+    assert not szol(_falvalto_sajat(), ugyanaz)
+    # (c) nincs uralkodó oldal (a legnagyobb is csak 39%)
+    szort = _oldalvalto_ellenfel()
+    szort.sds_fh_counts = {"bal": 47, "közép": 37, "jobb": 36}
+    assert not szol(_falvalto_sajat(), szort)
+    # (d) a saját falról kevés a minta az első félidőben
+    assert not szol(_falvalto_sajat(fh=("6-0", 4, 4)),
+                    _oldalvalto_ellenfel())
+    # (e) a saját fal nem stabil a második félidőben (50%)
+    assert not szol(_falvalto_sajat(sh=("5-1", 4, 8)),
+                    _oldalvalto_ellenfel())
+    # (f) nincs forma-adat / üres riportok
+    assert not szol(ScoutingReport(team="home", team_name="Mi"),
+                    _oldalvalto_ellenfel())
+    assert not szol(_falvalto_sajat(),
+                    ScoutingReport(team="away", team_name="Ok"))
+
+
+# ---- A meccsek közti összefésülők (_merge_*) táblázatosan -------------------
+#
+# A felderítés darabszám-alapú sorai meccsek közt PONTOSAN összeadódnak
+# (arány sosem tárolódik). Minden összefésülőre ugyanazt nézzük: két
+# meccs sorai kulcsonként összeadódnak, a mezszám megmarad, az üres
+# bemenet üres eredményt ad — és a VALÓDI felderítés sorain is lefutnak
+# (a mezőnevek tényleg azok, amiket az összefésülő olvas).
+
+# (függvény, riport-mező, kulcs-mezők, összegzett mezők, rendező mező)
+_JATEKOS_SOROK = [
+    ("_merge_seven_earners", "seven_earners", ("player_id",), ("earned",), "earned"),
+    ("_merge_cbc_players", "cbc_players", ("player_id",), ("trailing", "rest"), "trailing"),
+    ("_merge_fdd_players", "fdd_players", ("player_id",), ("fh", "sh"), "fh"),
+    ("_merge_fdr_players", "fdr_players", ("player_id",), ("fh", "sh"), "fh"),
+    ("_merge_susp_earners", "susp_earners", ("player_id",), ("earned",), "earned"),
+    ("_merge_susp_players", "susp_players", ("player_id",), ("suspensions",), "suspensions"),
+    ("_merge_markers", "markers", ("player_id",), ("frames", "dist_sum"), "frames"),
+    ("_merge_ball_winners", "ball_winners", ("player_id",), ("steals",), "steals"),
+    ("_merge_turnover_players", "turnover_players", ("player_id",), ("losses",), "losses"),
+    ("_merge_plus_minus", "player_plus_minus", ("player_id",), ("frames", "for", "against"), None),
+    ("_merge_clutch_losers", "clutch_losers", ("player_id",), ("turnovers",), "turnovers"),
+    ("_merge_pp_shooters", "pp_shooters", ("player_id",), ("shots", "goals"), "shots"),
+    ("_merge_breakthrough_players", "breakthrough_players", ("player_id",), ("entries", "goals"), "entries"),
+    ("_merge_covered_shooters", "covered_shooters", ("player_id",), ("shots", "covered"), "covered"),
+    ("_merge_pdq_players", "pdq_players", ("player_id",), ("press", "press_best"), "press"),
+    ("_merge_pressure_players", "pressure_players", ("player_id",), ("press_events", "press_to"), "press_to"),
+    ("_merge_high_stealers", "high_stealers", ("player_id",), ("steals", "high"), "high"),
+    ("_merge_wasteful_shooters", "wasteful_shooters", ("player_id",), ("shots", "off_target"), "off_target"),
+    ("_merge_clutch_players", "clutch_players", ("player_id",), ("frames",), "frames"),
+    ("_merge_rebounders", "rebounders", ("player_id",), ("rebounds",), "rebounds"),
+    ("_merge_pivot_feeders", "pivot_feeders", ("player_id",), ("feeds",), "feeds"),
+    ("_merge_seven_conceders", "seven_conceders", ("player_id",), ("conceded",), "conceded"),
+    ("_merge_starters", "starters", ("player_id",), ("starts",), "starts"),
+    ("_merge_hold_players", "hold_players", ("player_id",), ("holds", "frames"), None),
+    ("_merge_carry_players", "carry_players", ("player_id",), ("holds", "meters"), None),
+    ("_merge_targeted_defenders", "targeted_defenders", ("player_id",), ("shots", "goals"), "shots"),
+    ("_merge_costly_turnovers", "costly_turnover_players", ("player_id",), ("turnovers", "punished"), "punished"),
+    ("_merge_clutch_scorers", "clutch_scorers", ("player_id",), ("goals",), "goals"),
+    ("_merge_scorer_goals", "scorer_goals", ("player_id",), ("goals",), "goals"),
+    ("_merge_fb_finishers", "fb_finishers", ("player_id",), ("goals",), "goals"),
+    ("_merge_risky_passers", "risky_passers", ("player_id",), ("tries", "turnovers"), "turnovers"),
+    ("_merge_screen_setters", "screen_setters", ("player_id",), ("screens",), "screens"),
+    ("_merge_outlet_targets", "gk_outlet_targets", ("player_id",), ("n",), "n"),
+    ("_merge_blockers", "blockers", ("player_id",), ("blocks",), "blocks"),
+    ("_merge_shooter_overperf", "shooter_overperf", ("player_id",), ("diff",), "diff"),
+    ("_merge_bcf_players", "bcf_players", ("player_id",), ("chances", "goals"), "chances"),
+    ("_merge_drb_players", "drb_players", ("player_id",), ("breaks",), "breaks"),
+    ("_merge_cbh_players", "cbh_players", ("player_id",), ("frames",), "frames"),
+    ("_merge_pivot_guards", "pvg_guards", ("player_id",), ("frames",), "frames"),
+    ("_merge_phase_players", "phs_players", ("player_id",), ("frames", "def_frames"), "frames"),
+    ("_merge_sprint_threats", "spt_players", ("player_id",), ("sprints", "sprint_m"), "sprints"),
+    ("_merge_adv_players", "adv_players", ("player_id",), ("frames", "depth_sum_m"), "frames"),
+    ("_merge_restart_targets", "rst_players", ("player_id",), ("takes",), "takes"),
+    ("_merge_shooter_fades", "shooter_fades", ("player_id",), ("drop_sum_pct", "n"), None),
+    ("_merge_shooter_placement", "shooter_placement", ("player_id",), ("goals", "bal", "közép", "jobb"), "goals"),
+    ("_merge_screen_pairs", "scp_pairs", ("setter_id", "shooter_id"), ("shots",), "shots"),
+    ("_merge_swap_pairs", "swp_pairs", ("out_id", "in_id"), ("count",), "count"),
+    ("_merge_assist_pairs", "assist_pairs", ("from", "to"), ("goals",), "goals"),
+    ("_merge_shooter_zones", "shooter_zones", ("player_id", "zone"), ("shots",), "shots"),
+]
+
+# A lebegőpontos (összeg-) mezők: fél egységekkel próbáljuk, hogy a
+# kerekítés ne takarjon el semmit.
+_TORT_MEZOK = {"dist_sum", "meters", "diff", "sprint_m", "depth_sum_m",
+               "drop_sum_pct"}
+
+# Három "játékos" (pár-kulcsnál három pár); az 1. csak az A meccsen, a
+# 3. csak a B-n játszott, a 2. mindkettőn.
+_KULCSOK = {1: (7, 8), 2: (9, 10), 3: (11, 12)}
+_MEZEK = {1: 17, 2: 19, 3: 21}
+
+
+def _proba_sor(kulcs_mezok, osszeg_mezok, ki, alap, mez):
+    sor = {}
+    for i, k in enumerate(kulcs_mezok):
+        ertek = _KULCSOK[ki][i]
+        sor[k] = f"zóna-{ertek}" if k == "zone" else ertek
+    for j, m in enumerate(osszeg_mezok):
+        sor[m] = (alap + j + 0.5) if m in _TORT_MEZOK else alap + j
+    sor["jersey"] = mez
+    return sor
+
+
+def _ket_meccs(mezo, kulcs_mezok, osszeg_mezok):
+    """A (csak 1. és 2. játékos) és B (2. és 3.) meccs riportja. A 2.
+    játékos mezszáma az A meccsen még ismeretlen (None), a B-n 19."""
+    a = ScoutingReport(team="home", team_name="Mi")
+    b = ScoutingReport(team="home", team_name="Mi")
+    setattr(a, mezo, [_proba_sor(kulcs_mezok, osszeg_mezok, 1, 3, 17),
+                      _proba_sor(kulcs_mezok, osszeg_mezok, 2, 5, None)])
+    setattr(b, mezo, [_proba_sor(kulcs_mezok, osszeg_mezok, 2, 2, 19),
+                      _proba_sor(kulcs_mezok, osszeg_mezok, 3, 4, 21)])
+    return a, b
+
+
+def _kulcs_szerint(sorok, kulcs_mezok):
+    return {tuple(s[k] for k in kulcs_mezok): s for s in sorok}
+
+
+@pytest.mark.parametrize("fn_nev, mezo, kulcs_mezok, osszeg_mezok, rendezo",
+                         _JATEKOS_SOROK, ids=[s[0] for s in _JATEKOS_SOROK])
+def test_merge_jatekos_sorok_ket_meccs_pontosan_osszeadodik(
+        fn_nev, mezo, kulcs_mezok, osszeg_mezok, rendezo):
+    """Két meccs sorai kulcsonként összeadódnak: aki csak az egyiken
+    játszott, a saját számait viszi; aki mindkettőn, az összeget — a
+    mezszám (ahol a sor viszi) az első ISMERT érték."""
+    from handball.pipeline import scouting
+
+    assert mezo in {f.name for f in __import__("dataclasses").fields(
+        ScoutingReport)}, f"nincs ilyen riport-mező: {mezo}"
+    fn = getattr(scouting, fn_nev)
+    a, b = _ket_meccs(mezo, kulcs_mezok, osszeg_mezok)
+    ki = fn([a, b])
+    sorok = _kulcs_szerint(ki, kulcs_mezok)
+
+    def kulcs(i):
+        return tuple(f"zóna-{v}" if k == "zone" else v
+                     for k, v in zip(kulcs_mezok, _KULCSOK[i]))
+
+    assert set(sorok) == {kulcs(1), kulcs(2), kulcs(3)}
+    for j, m in enumerate(osszeg_mezok):
+        fel = 0.5 if m in _TORT_MEZOK else 0
+        assert sorok[kulcs(1)][m] == 3 + j + fel, (fn_nev, m)
+        assert sorok[kulcs(2)][m] == (5 + j + fel) + (2 + j + fel), (fn_nev, m)
+        assert sorok[kulcs(3)][m] == 4 + j + fel, (fn_nev, m)
+    if "jersey" in next(iter(sorok.values())):
+        assert [sorok[kulcs(i)]["jersey"] for i in (1, 2, 3)] == [17, 19, 21]
+    if rendezo is not None:
+        ertekek = [s[rendezo] for s in ki]
+        assert ertekek == sorted(ertekek, reverse=True), (fn_nev, ertekek)
+    # A meccsek sorrendje nem számít az összegben.
+    forditva = _kulcs_szerint(fn([b, a]), kulcs_mezok)
+    for k, s in sorok.items():
+        assert {m: forditva[k][m] for m in osszeg_mezok} == \
+            {m: s[m] for m in osszeg_mezok}
+
+
+@pytest.mark.parametrize("fn_nev, mezo, kulcs_mezok, osszeg_mezok, rendezo",
+                         _JATEKOS_SOROK, ids=[s[0] for s in _JATEKOS_SOROK])
+def test_merge_jatekos_sorok_ures_bemenetre_ures(
+        fn_nev, mezo, kulcs_mezok, osszeg_mezok, rendezo):
+    """Riport nélkül, üres riporttal vagy hiányzó (None) mezővel az
+    összefésülő üres listát ad — nem kivételt, nem kitalált nullás sort;
+    egyetlen meccsből a saját sorai jönnek vissza."""
+    from handball.pipeline import scouting
+
+    fn = getattr(scouting, fn_nev)
+    ures = ScoutingReport(team="home", team_name="Mi")
+    assert fn([]) == []
+    assert fn([ures]) == [] and fn([ures, ures]) == []
+    hianyzik = ScoutingReport(team="home", team_name="Mi")
+    setattr(hianyzik, mezo, None)
+    assert fn([hianyzik]) == []
+    a, _ = _ket_meccs(mezo, kulcs_mezok, osszeg_mezok)
+    egy = _kulcs_szerint(fn([a, ures, hianyzik]), kulcs_mezok)
+    assert len(egy) == 2
+    for s in getattr(a, mezo):
+        k = tuple(s[m] for m in kulcs_mezok)
+        assert {m: egy[k][m] for m in osszeg_mezok} == \
+            {m: s[m] for m in osszeg_mezok}
+
+
+def _riport(**mezok):
+    r = ScoutingReport(team="home", team_name="Mi")
+    for k, v in mezok.items():
+        assert hasattr(r, k), f"nincs ilyen riport-mező: {k}"
+        setattr(r, k, v)
+    return r
+
+
+def test_merge_kulonleges_sorok_max_irany_es_arany_szerinti_rend():
+    """Az összegtől eltérő összefésülők: a csúcs-sebesség a MAXIMUM (nem
+    összeg), a hetes-dobó irányai irányonként adódnak össze, a páros
+    mérlegnél a két játékos sorrendje nem számít, és az arány szerint
+    rendezők az összegekből számolt aránnyal rendeznek (a nulla nevezőjű
+    sor kimarad)."""
+    from handball.pipeline import scouting
+
+    ero = scouting._merge_shooter_power([
+        _riport(shooter_power=[{"player_id": 7, "shots": 2, "sum_kmh": 160.5,
+                                "max_kmh": 84.0}]),
+        _riport(shooter_power=[{"player_id": 7, "shots": 3, "sum_kmh": 270.0,
+                                "max_kmh": 97.5},
+                               {"player_id": 9, "shots": 1, "sum_kmh": 70.0,
+                                "max_kmh": 70.0}])])
+    assert ero == [
+        {"player_id": 7, "shots": 5, "sum_kmh": 430.5, "max_kmh": 97.5},
+        {"player_id": 9, "shots": 1, "sum_kmh": 70.0, "max_kmh": 70.0}]
+
+    hetes = scouting._merge_seven_takers([
+        _riport(seven_takers=[{"player_id": 7, "attempts": 2, "goals": 1,
+                               "dirs": {"bal": 2}}]),
+        _riport(seven_takers=[{"player_id": 7, "attempts": 3, "goals": 3,
+                               "dirs": {"bal": 1, "jobb": 2}},
+                              {"player_id": 9, "attempts": 1, "goals": 0}])])
+    assert hetes == [
+        {"player_id": 7, "attempts": 5, "goals": 4,
+         "dirs": {"bal": 3, "jobb": 2}},
+        {"player_id": 9, "attempts": 1, "goals": 0, "dirs": {}}]
+
+    paros = scouting._merge_pair_plus_minus([
+        _riport(pair_plus_minus=[{"players": [9, 7], "frames": 100,
+                                  "for": 3, "against": 1}]),
+        _riport(pair_plus_minus=[{"players": [7, 9], "frames": 50,
+                                  "for": 1, "against": 2},
+                                 {"players": [7, 11], "frames": 80,
+                                  "for": 4, "against": 0}])])
+    assert paros == [
+        {"players": [7, 11], "frames": 80, "for": 4, "against": 0},
+        {"players": [7, 9], "frames": 150, "for": 4, "against": 3}]
+
+    # Átlagtávolság szerint csökkenő; a lövés nélküli sor kimarad.
+    tav = scouting._merge_shooter_ranges([
+        _riport(shooter_ranges=[
+            {"player_id": 7, "jersey": 17, "shots": 2, "sum_dist_m": 14.0},
+            {"player_id": 9, "jersey": 19, "shots": 0, "sum_dist_m": 0.0}]),
+        _riport(shooter_ranges=[
+            {"player_id": 7, "jersey": 17, "shots": 2, "sum_dist_m": 18.0},
+            {"player_id": 11, "jersey": 21, "shots": 1, "sum_dist_m": 10.5}])])
+    assert tav == [
+        {"player_id": 11, "jersey": 21, "shots": 1, "sum_dist_m": 10.5},
+        {"player_id": 7, "jersey": 17, "shots": 4, "sum_dist_m": 32.0}]
+
+    # A saját térfélen töltött arány szerint NÖVEKVŐ (a leglassabban
+    # visszarendeződő elöl); kocka nélkül nincs sor.
+    vissza = scouting._merge_recovery_players([
+        _riport(recovery_players=[
+            {"player_id": 7, "jersey": 17, "frames": 10, "home_frames": 8},
+            {"player_id": 9, "jersey": 19, "frames": 10, "home_frames": 2}]),
+        _riport(recovery_players=[
+            {"player_id": 9, "jersey": 19, "frames": 10, "home_frames": 4},
+            {"player_id": 11, "jersey": 21, "frames": 0, "home_frames": 0}])])
+    assert vissza == [
+        {"player_id": 9, "jersey": 19, "frames": 20, "home_frames": 6},
+        {"player_id": 7, "jersey": 17, "frames": 10, "home_frames": 8}]
+
+    # Átlagsebesség szerint NÖVEKVŐ (a legállóbb támadó elöl).
+    allo = scouting._merge_static_attackers([
+        _riport(static_attackers=[
+            {"player_id": 7, "jersey": 17, "seconds": 10.0, "dist_m": 30.0},
+            {"player_id": 9, "jersey": 19, "seconds": 10.0, "dist_m": 5.0}]),
+        _riport(static_attackers=[
+            {"player_id": 9, "jersey": 19, "seconds": 10.5, "dist_m": 6.5},
+            {"player_id": 11, "jersey": 21, "seconds": 0.0, "dist_m": 0.0}])])
+    assert allo == [
+        {"player_id": 9, "jersey": 19, "seconds": 20.5, "dist_m": 11.5},
+        {"player_id": 7, "jersey": 17, "seconds": 10.0, "dist_m": 30.0}]
+    for fn in (scouting._merge_shooter_power, scouting._merge_seven_takers,
+               scouting._merge_pair_plus_minus, scouting._merge_shooter_ranges,
+               scouting._merge_recovery_players,
+               scouting._merge_static_attackers):
+        assert fn([]) == [] and fn([_riport()]) == []
+
+
+def test_merge_mezonevvel_hivott_valtozatok():
+    """A mezőnévvel hívott közös összefésülők (emberhátrány-lövők, kezdő
+    és hajrá-emberek, irány- és darabszám-szótárak) ugyanúgy összeadnak;
+    a darabszám-összegző a nem szám értéket átugorja."""
+    from handball.pipeline import scouting
+
+    a = _riport(sh_shooters=[{"player_id": 7, "jersey": None, "shots": 3,
+                              "goals": 1}],
+                pp_shooters=[{"player_id": 9, "jersey": 19, "shots": 9,
+                              "goals": 9}])
+    b = _riport(sh_shooters=[{"player_id": 7, "jersey": 17, "shots": 2,
+                              "goals": 2},
+                             {"player_id": 11, "jersey": 21, "shots": 4,
+                              "goals": 0}])
+    assert scouting._merge_pp_shooters_rows([a, b], "sh_shooters") == [
+        {"player_id": 7, "jersey": 17, "shots": 5, "goals": 3},
+        {"player_id": 11, "jersey": 21, "shots": 4, "goals": 0}]
+    assert scouting._merge_pp_shooters_rows([a, b], "pp_shooters") == [
+        {"player_id": 9, "jersey": 19, "shots": 9, "goals": 9}]
+    assert scouting._merge_pp_shooters_rows([a, b], "nincs_ilyen_mezo") == []
+
+    c = _riport(clutch_players=[{"player_id": 7, "jersey": 17,
+                                 "frames": 100}])
+    d = _riport(clutch_players=[{"player_id": 7, "jersey": 17, "frames": 50},
+                                {"player_id": 9, "jersey": 19,
+                                 "frames": 300}])
+    assert scouting._merge_clutch_players_rows([c, d], "clutch_players") == [
+        {"player_id": 9, "jersey": 19, "frames": 300},
+        {"player_id": 7, "jersey": 17, "frames": 150}]
+    assert scouting._merge_clutch_players_rows([c, d], "nincs_ilyen") == []
+
+    e = _riport(sh_shape={"5-0": 100, "4-1": 20})
+    f = _riport(sh_shape={"4-1": 200, "3-2": 7})
+    assert scouting._merge_dir_counts([e, f], "sh_shape") == {
+        "5-0": 100, "4-1": 220, "3-2": 7}
+    assert scouting._merge_dir_counts([e, f], "nincs_ilyen") == {}
+    assert scouting._merge_counts([e, f], "sh_shape") == {
+        "5-0": 100, "4-1": 220, "3-2": 7}
+    vegyes = _riport(sh_shape={"5-0": "7", "4-1": None, "3-2": "sok"})
+    assert scouting._merge_counts([e, vegyes], "sh_shape") == {
+        "5-0": 107, "4-1": 20}
+    assert scouting._merge_counts([], "sh_shape") == {}
+
+
+# (függvény, riport-mező, összegzett al-mezők vagy None = sima darabszám,
+#  rendezett-e csökkenőre)
+_SZOTAR_OSSZEFESULOK = [
+    ("_merge_break_lanes", "break_lanes", ("entries", "goals"), True),
+    ("_merge_pass_buckets", "pass_buckets", ("attacks", "goals"), False),
+    ("_merge_attack_origins", "attack_origins", ("attacks", "goals"), False),
+    ("_merge_gk_role_saves", "gk_role_saves", ("faced", "saves"), True),
+    ("_merge_conceded_types", "conceded_types", None, True),
+    ("_merge_sh_shape", "sh_shape", None, True),
+    ("_merge_attack_outcomes", "attack_outcomes", None, True),
+    ("_merge_conceded_roles", "conceded_roles", None, True),
+    ("_merge_role_goals", "role_goals", None, True),
+    ("_merge_assist_zones", "assist_zones", None, True),
+    ("_merge_fsw_labels", "fsw_labels", None, True),
+    ("_merge_earner_roles", "seven_earner_roles", None, True),
+]
+
+
+@pytest.mark.parametrize("fn_nev, mezo, al_mezok, rendezett",
+                         _SZOTAR_OSSZEFESULOK,
+                         ids=[s[0] for s in _SZOTAR_OSSZEFESULOK])
+def test_merge_szotarak_kulcsonkent_osszeadodnak(fn_nev, mezo, al_mezok,
+                                                 rendezett):
+    """A kulcsonkénti (sáv, típus, poszt, forma …) darabszámok két
+    meccsből kulcsonként összeadódnak; ahol a kimenet rendezett, a
+    legnagyobb elöl; üres / hiányzó mezőre üres szótár."""
+    from handball.pipeline import scouting
+
+    fn = getattr(scouting, fn_nev)
+
+    def ertek(n):
+        if al_mezok is None:
+            return n
+        return {m: n + j for j, m in enumerate(al_mezok)}
+
+    a = _riport(**{mezo: {"bal": ertek(3), "közép": ertek(5)}})
+    b = _riport(**{mezo: {"közép": ertek(2), "jobb": ertek(9)}})
+    ki = fn([a, b])
+    if al_mezok is None:
+        assert ki == {"bal": 3, "közép": 7, "jobb": 9}
+        if rendezett:
+            assert list(ki) == ["jobb", "közép", "bal"]
+    else:
+        assert ki == {
+            "bal": {m: 3 + j for j, m in enumerate(al_mezok)},
+            "közép": {m: 7 + 2 * j for j, m in enumerate(al_mezok)},
+            "jobb": {m: 9 + j for j, m in enumerate(al_mezok)}}
+        if rendezett:
+            assert list(ki) == ["jobb", "közép", "bal"]
+    assert fn([]) == {} and fn([_riport()]) == {}
+    assert fn([_riport(**{mezo: None})]) == {}
+    assert fn([b, a]) == ki
+
+
+def test_merge_role_counts_es_count_dicts_szotar_listabol():
+    """A szótár-listát összeadó két segéd: a poszt-darabszámok csökkenő
+    sorrendben, a sima darabszám-szótár sorrend nélkül; a None elem
+    kimarad, üres listára üres szótár."""
+    from handball.pipeline.scouting import (_merge_count_dicts,
+                                            _merge_role_counts)
+
+    dicts = [{"szélső": 2, "beálló": 5}, None, {"szélső": 4, "irányító": 1}]
+    assert _merge_role_counts(dicts) == {"szélső": 6, "beálló": 5,
+                                         "irányító": 1}
+    assert list(_merge_role_counts(dicts)) == ["szélső", "beálló",
+                                               "irányító"]
+    assert _merge_count_dicts(dicts) == {"szélső": 6, "beálló": 5,
+                                         "irányító": 1}
+    assert _merge_role_counts([]) == {} and _merge_count_dicts([]) == {}
+    assert _merge_count_dicts([None, {}]) == {}
+
+
+def test_merge_osszefesulok_a_valodi_felderites_sorain_is_futnak():
+    """ŐR a néma mezőnév ellen: minden összefésülő a VALÓDI felderítés
+    (scout_team) sorain fut — a sor-kulcsok tényleg azok, amiket olvas —,
+    és egy meccset önmagával összefésülve ugyanannyi sort ad, mint
+    egyből (a kulcsok nem sokszorozódnak)."""
+    from handball.pipeline import scouting
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    rep = scout_team(m, Team.HOME)
+    nem_ures = 0
+    for (fn_nev, mezo, _k, _o, _r) in _JATEKOS_SOROK:
+        fn = getattr(scouting, fn_nev)
+        egy, ketto = fn([rep]), fn([rep, rep])
+        assert len(egy) == len(ketto), fn_nev
+        assert len(egy) <= len(getattr(rep, mezo) or []), fn_nev
+        nem_ures += bool(egy)
+    for (fn_nev, mezo, _a, _r) in _SZOTAR_OSSZEFESULOK:
+        fn = getattr(scouting, fn_nev)
+        assert set(fn([rep])) == set(getattr(rep, mezo) or {}), fn_nev
+        assert set(fn([rep, rep])) == set(fn([rep])), fn_nev
+        nem_ures += bool(fn([rep]))
+    for fn in (scouting._merge_shooter_power, scouting._merge_seven_takers,
+               scouting._merge_pair_plus_minus, scouting._merge_shooter_ranges,
+               scouting._merge_recovery_players,
+               scouting._merge_static_attackers):
+        assert len(fn([rep, rep])) == len(fn([rep])), fn.__name__
+    # A próba-meccs elég gazdag ahhoz, hogy a teszt ne üres sorokon fusson.
+    assert nem_ures >= 15, nem_ures
+    # Az összevont riport a darabszámokat tényleg megduplázza.
+    ossz = combine_reports([rep, rep])
+    assert ossz.matches == 2
+    egyszer = {s["player_id"]: s["goals"] for s in rep.scorer_goals}
+    assert egyszer, "a próba-meccsen nincs gólszerző"
+    assert {s["player_id"]: s["goals"] for s in ossz.scorer_goals} == \
+        {pid: 2 * g for pid, g in egyszer.items()}
+
+
+# ---- További belső segédek közvetlenül ----------------------------------------
+
+from handball.pipeline.tactics import TacticsConfig  # noqa: E402
+
+def test_team_of_track_a_leggyakrabban_latott_csapat():
+    """Egy track csapata a leggyakrabban látott címkéje — egy-két
+    kockányi téves szín-besorolás (villanás) nem viszi át a játékost a
+    másik csapatba; üres meccsen üres szótár."""
+    from handball.pipeline.scouting import _team_of_track
+
+    frames = []
+    for t in range(10):
+        csapat = Team.AWAY if t in (3, 7) else Team.HOME      # két villanás
+        frames.append(Frame(t=t, players=[_pl(1, csapat, 20.0, 10.0),
+                                          _pl(11, Team.AWAY, 25.0, 10.0)],
+                            ball=None))
+    assert _team_of_track(Match(_meta(), frames)) == {1: Team.HOME,
+                                                      11: Team.AWAY}
+    assert _team_of_track(Match(_meta(), [])) == {}
+
+
+def _labdas_kockak(xs, team=Team.HOME):
+    """A csapat labdás kockái a megadott labda-x sorozattal."""
+    tid = 1 if team == Team.HOME else 11
+    return [Frame(t=i, players=[_pl(tid, team, x, 10.0)],
+                  ball=Ball(x=x, y=10.0, confidence=1.0))
+            for i, x in enumerate(xs)]
+
+
+def test_fast_break_pct_a_tamado_iranyu_gyors_labda_aranya():
+    """A labdás kockák közül azok aránya, ahol a labda legalább 6 m/s-mal
+    halad a TÁMADOTT kapu felé: a hazainál a +x irány számít, a
+    visszafelé (saját kapu felé) repülő labda nem gyors indítás."""
+    from handball.pipeline.scouting import _fast_break_pct
+
+    cfg = TacticsConfig()
+    # 10 kocka állás (x=10), aztán 10 kocka 0,4 m/kocka = 10 m/s előre.
+    xs = [10.0] * 10 + [10.0 + 0.4 * i for i in range(1, 11)]
+    elore = Match(_meta(), _labdas_kockak(xs))
+    assert _fast_break_pct(elore, Team.HOME, cfg) == 50.0
+    # Ugyanez visszafelé: a hazainak nem gyors indítás.
+    hatra = Match(_meta(), _labdas_kockak(list(reversed(xs))))
+    assert _fast_break_pct(hatra, Team.HOME, cfg) == 0.0
+    # A vendég a x=0 kapura támad: neki a csökkenő x a gyors indítás.
+    vendeg = Match(_meta(), _labdas_kockak(list(reversed(xs)), Team.AWAY))
+    assert _fast_break_pct(vendeg, Team.AWAY, cfg) == 50.0
+    # Lassú (2,5 m/s) előrejátszás nem gyors indítás.
+    lassu = Match(_meta(), _labdas_kockak([10.0 + 0.1 * i
+                                           for i in range(20)]))
+    assert _fast_break_pct(lassu, Team.HOME, cfg) == 0.0
+
+
+def test_fast_break_pct_labda_nelkul_nulla():
+    """Ha a csapatnak nincs labdás kockája (üres meccs, vagy végig az
+    ellenfélnél a labda), az arány 0,0 — nem osztás nullával."""
+    from handball.pipeline.scouting import _fast_break_pct
+
+    cfg = TacticsConfig()
+    assert _fast_break_pct(Match(_meta(), []), Team.HOME, cfg) == 0.0
+    csak_vendeg = Match(_meta(), _labdas_kockak([30.0] * 10, Team.AWAY))
+    assert _fast_break_pct(csak_vendeg, Team.HOME, cfg) == 0.0
+
+
+def test_defense_distribution_forma_megoszlas_amikor_vedekezik():
+    """A forma-megoszlás (%) csak azokból a kockákból jön, amikor a
+    csapat VÉDEKEZIK (az ellenfél szervezetten támad): 30 kocka 6-0 és
+    10 kocka 5-1 → 75% / 25%, a gyakoribb elöl."""
+    from handball.pipeline.scouting import _defense_distribution
+
+    def kocka(t, fal):
+        players = [_pl(1, Team.HOME, 28.0, 10.0)]
+        players += [_pl(20 + j, Team.AWAY, x, y)
+                    for j, (x, y) in enumerate(fal)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=28.0, y=10.0, confidence=1.0))
+
+    hat_null = [(35.0, float(y)) for y in (2, 6, 8, 12, 14, 18)]
+    ot_egy = [(35.0, float(y)) for y in (2, 6, 10, 14, 18)] + [(30.5, 10.0)]
+    frames = [kocka(t, hat_null) for t in range(30)]
+    frames += [kocka(30 + t, ot_egy) for t in range(10)]
+    m = Match(_meta(), frames)
+    megoszlas = _defense_distribution(m, Team.AWAY, TacticsConfig())
+    assert megoszlas == {"6-0": 75.0, "5-1": 25.0}
+    assert list(megoszlas) == ["6-0", "5-1"]
+    # A TÁMADÓ csapat ezen a meccsen egyszer sem védekezett → üres.
+    assert _defense_distribution(m, Team.HOME, TacticsConfig()) == {}
+    assert _defense_distribution(Match(_meta(), []), Team.AWAY,
+                                 TacticsConfig()) == {}
+
+
+def test_shot_zones_az_elengedes_helyebol_zonankent():
+    """A lövések zónánként (lövés + gól), a leggyakoribb zóna elöl; a
+    zóna az ELENGEDÉS helyéből jön, nem a kapu előtti kockából; a másik
+    csapat lövései nem keverednek bele."""
+    from handball.pipeline.scouting import _shot_zones
+
+    frames, t = [], 0
+
+    def loves(y_elenged, gol):
+        nonlocal t
+        for _ in range(8):                       # a lövő tartja a labdát
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.0,
+                                                  y_elenged)],
+                                ball=Ball(x=29.0, y=y_elenged,
+                                          confidence=1.0)))
+            t += 1
+        cel_y = 10.0 if gol else 5.0
+        for i in range(1, 12):                   # a labda a kapura repül
+            a = i / 11.0
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.0,
+                                                  y_elenged)],
+                                ball=Ball(x=29.0 + 11.0 * a,
+                                          y=y_elenged + (cel_y - y_elenged) * a,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):                      # szünet a lövések közt
+            frames.append(Frame(t=t, players=[], ball=Ball(
+                x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    loves(10.0, gol=True)
+    loves(10.0, gol=False)
+    loves(3.0, gol=True)
+    m = Match(_meta(), frames)
+    zonak = _shot_zones(m, Team.HOME, TacticsConfig())
+    assert zonak == {"átlövés közép": {"shots": 2, "goals": 1},
+                     "átlövés bal": {"shots": 1, "goals": 1}}
+    assert list(zonak) == ["átlövés közép", "átlövés bal"]
+    assert _shot_zones(m, Team.AWAY, TacticsConfig()) == {}
+    assert _shot_zones(Match(_meta(), []), Team.HOME, TacticsConfig()) == {}
+
+
+def test_top_shooter_habit_a_legkoncentraltabb_fo_lovo():
+    """A fő lövő "szokása": akinek 4+ lövéséből legalább 60% egy zónából
+    jön — több ilyen közül az, akinek abból a zónából a legtöbb lövése
+    van; (játékos, zóna, lövés a zónából, összes lövés)."""
+    from handball.pipeline.scouting import _top_shooter_habit
+
+    rep = ScoutingReport(team="home", team_name="Mi", shooter_zones=[
+        {"player_id": 7, "zone": "átlövés bal", "shots": 4},
+        {"player_id": 7, "zone": "beálló (6 m)", "shots": 2},     # 4/6 = 67%
+        {"player_id": 9, "zone": "jobbszél", "shots": 5},
+        {"player_id": 9, "zone": "átlövés közép", "shots": 1},    # 5/6 = 83%
+        {"player_id": 11, "zone": "balszél", "shots": 3},         # csak 3
+    ])
+    assert _top_shooter_habit(rep) == (9, "jobbszél", 5, 6)
+    # Ugyanaz a zóna két sorban (két meccs) összeadódik.
+    ket_sor = ScoutingReport(team="home", team_name="Mi", shooter_zones=[
+        {"player_id": 7, "zone": "átlövés bal", "shots": 2},
+        {"player_id": 7, "zone": "átlövés bal", "shots": 2}])
+    assert _top_shooter_habit(ket_sor) == (7, "átlövés bal", 4, 4)
+
+
+def test_top_shooter_habit_keves_loves_vagy_szort_loves_none():
+    """4 lövés alatt, vagy ha a lövések szétszórtak (a fő zóna 60% alatt
+    van), nincs kimondható szokás: None; üres / hiányzó lista is None."""
+    from handball.pipeline.scouting import _top_shooter_habit
+
+    keves = ScoutingReport(team="home", team_name="Mi", shooter_zones=[
+        {"player_id": 7, "zone": "balszél", "shots": 3}])
+    assert _top_shooter_habit(keves) is None
+    szort = ScoutingReport(team="home", team_name="Mi", shooter_zones=[
+        {"player_id": 7, "zone": "balszél", "shots": 3},
+        {"player_id": 7, "zone": "jobbszél", "shots": 3}])
+    assert _top_shooter_habit(szort) is None
+    assert _top_shooter_habit(ScoutingReport(team="home",
+                                             team_name="Mi")) is None
+    ures = ScoutingReport(team="home", team_name="Mi")
+    ures.shooter_zones = None
+    assert _top_shooter_habit(ures) is None
+
+
+def test_avg_from_sums_sulyozott_atlag_vagy_none():
+    """A poszt-lencse darabszám/összeg szótáraiból a súlyozott átlag; 8
+    mért lövés alatt None (nem hallgatólagos 0) — üres / None szótárra
+    is."""
+    from handball.pipeline.scouting import (TREND_DERIVED_MIN_SHOTS,
+                                            _avg_from_sums)
+
+    assert TREND_DERIVED_MIN_SHOTS == 8
+    darab = {"szélső": 3, "átlövő": 5}
+    osszeg = {"szélső": 24.0, "átlövő": 60.0}
+    assert _avg_from_sums(darab, osszeg) == 84.0 / 8
+    assert _avg_from_sums({"szélső": 7}, {"szélső": 70.0}) is None
+    assert _avg_from_sums({}, {}) is None
+    assert _avg_from_sums(None, None) is None
+    # Összeg nélkül (de elég darabbal) az átlag 0 — a darab a kapu.
+    assert _avg_from_sums({"szélső": 8}, None) == 0.0
+
+
+def test_mpl_theme_a_meccsterv_mondat_temaja():
+    """A meccsterv-mondat téma-indexe (kisebb = előbbre kerül): az első
+    illeszkedő téma dönt, kis- és nagybetűtől függetlenül; ami egyik
+    témába sem illik, a lista végére megy — a rendezés a témán belül
+    megtartja az eredeti sorrendet."""
+    from handball.pipeline.scouting import (MPL_THEMES, _mpl_order,
+                                            _mpl_theme)
+
+    nevek = [n for n, _ in MPL_THEMES]
+    assert _mpl_theme("Tükör-meccs lesz, hasonló a tempótok") == \
+        nevek.index("jelleg")
+    assert _mpl_theme("A KAPUSUK a bal alsót gyengén védi") == \
+        nevek.index("kapus")
+    assert _mpl_theme("A faluk a jobb oldalon réses") == \
+        nevek.index("védekezés")
+    assert _mpl_theme("A szélső befutására építsetek figurát") == \
+        nevek.index("támadás")
+    assert _mpl_theme("Sok kétpercet szednek össze") == \
+        nevek.index("fegyelem")
+    assert _mpl_theme("Semmi említésre méltó") == len(MPL_THEMES)
+    assert _mpl_theme("") == len(MPL_THEMES)
+    # Az első illeszkedő téma dönt: a kapus megelőzi a védekezést.
+    assert _mpl_theme("A kapus és a fal közti rés") == nevek.index("kapus")
+    terv = ["Sok kétpercet szednek össze", "A faluk réses (1)",
+            "Egyéb megjegyzés", "A kapusuk gyenge", "A faluk réses (2)"]
+    assert _mpl_order(terv) == [
+        "A kapusuk gyenge", "A faluk réses (1)", "A faluk réses (2)",
+        "Sok kétpercet szednek össze", "Egyéb megjegyzés"]
+    assert _mpl_order([]) == []
+
+
+def test_az_osszefesult_figura_es_fal_kepek_a_sorokbol_szamolodnak():
+    """A meccsek közti figura- és fal-képek (7a6, emberelőny, hajrá,
+    állás, hajrá-fal, fal-alak, figura × forma) a riportok lapos SORAIBÓL
+    számolódnak újra: a két meccs sorait együtt adják az összegzőnek;
+    sorok nélkül az üres kép jön (ítélet nélkül)."""
+    from handball.pipeline import defense, scouting, setplays
+
+    alak = [0.0] * 18
+    alak[11] = 1.0
+    sor = {"shape": alak, "attacks": 2, "goals": 1, "rest_attacks": 1}
+    a = _riport(empty_net_figure_rows=[sor], powerplay_figure_rows=[sor],
+                clutch_figure_rows=[sor], clutch_wall_rows=[sor],
+                defense_shape_rows=[sor])
+    b = _riport(empty_net_figure_rows=[sor], powerplay_figure_rows=[sor],
+                clutch_figure_rows=[sor], clutch_wall_rows=[sor],
+                defense_shape_rows=[sor])
+    parok = [
+        (scouting._empty_net_figures_of, setplays.empty_net_figures_summary),
+        (scouting._powerplay_figures_of, setplays.powerplay_figures_summary),
+        (scouting._clutch_figures_of, setplays.clutch_figures_summary),
+        (scouting._clutch_wall_of, defense.clutch_wall_summary),
+        (scouting._defense_shapes_of, defense.defense_shape_summary),
+    ]
+    for of, osszegzo in parok:
+        assert of([a, b]) == osszegzo([sor, sor]), of.__name__
+        assert of([a]) == osszegzo([sor]), of.__name__
+        assert of([]) == osszegzo([]), of.__name__
+        assert of([_riport()]) == osszegzo([]), of.__name__
+    # Két meccs együtt 4 támadás → már ítél; egy meccs 2 támadása kevés.
+    assert scouting._powerplay_figures_of([a])["verdict"] is None
+    assert scouting._powerplay_figures_of([a, b])["verdict"] is not None
+
+    allas = {"shape": alak, "state": "leading", "attacks": 3, "goals": 1}
+    forma = {"shape": alak, "formation": "6-0", "attacks": 2, "goals": 0}
+    c = _riport(setplay_score_rows=[allas], setplay_formation_rows=[forma])
+    assert scouting._setplay_score_of([c, c]) == \
+        setplays.setplay_score_summary([allas, allas])
+    assert scouting._figure_formation_of([c, c]) == \
+        setplays.figure_formation_summary([forma, forma])
+    assert scouting._setplay_score_of([_riport()])["verdict"] is None
+    assert scouting._figure_formation_of([]) == {"figures": [],
+                                                 "verdict": None}
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+import functools  # noqa: E402
+
+
+@functools.lru_cache(maxsize=1)
+def _valodi_jelentesek():
+    """Egy szimulált meccs két felderítő jelentése: (hazai — a lövő
+    csapat, vendég — a védekező). A felderítés drága, ezért EGYSZER
+    számoljuk; a tesztek a jelentéseket NEM módosítják."""
+    from handball.pipeline.scouting import scout_team
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=1,
+                              shots_per_min=8, halftime_break_s=30)
+    return scout_team(m, Team.HOME), scout_team(m, Team.AWAY)
+
+
+def _mintas_jelentes():
+    """Kézi minta a származtatott képekhez: a 7-es távolról erős (10
+    lövés, 7 gól, 3,0 xG), a 10-es távolról gyenge (1 gól), közelről erős
+    (8-ból 8); a 3-asnak csak 2 lövése van (a tanulási küszöb alatt)."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC")
+    rep.lsp_lovo_minta = {"7": {"far": [10, 7, 3.0]},
+                          "10": {"far": [10, 1, 3.0], "close": [8, 8, 5.0]},
+                          "3": {"mid": [2, 2, 1.0]}}
+    rep.kk_lovo_savok = {"7": [1, 6, 2], "10": [5, 3, 1]}
+    rep.kapusok_minta = {"16": {"far": [20, 14], "close": [2, 0]},
+                         "1": {"mid": [10, 2]},
+                         "12": {"far": [2, 2]}}
+    return rep
+
+
+def test_a_szarmaztatott_kepek_ures_jelentesbol_uresek():
+    """Kevés minta → None / üres lista (sose hallgatólagos 0): minta
+    nélküli jelentésből nincs utolsó labda, veszélyes vagy engedett
+    lövő, lövés-elosztás, kapus-kép és kit-kinek páros sem."""
+    from handball.pipeline.scouting import (_el_lovok_of, _kc_kapusok_of,
+                                            _kk_lovok_of, _kk_parok_of,
+                                            _le_kep_of, _lsp_pick_of)
+
+    ures = ScoutingReport(team="away", team_name="X")
+    assert _lsp_pick_of(ures) is None
+    assert _kk_lovok_of(ures) == []
+    assert _el_lovok_of(ures) == []
+    assert _le_kep_of(ures) is None
+    assert _le_kep_of(ures, {"far": 1.2}) is None
+    assert _kc_kapusok_of(ures) == []
+    assert _kk_parok_of(ures, ures) == []
+    # None-ra állított (régi JSON-ból jövő) mezőkkel is.
+    ures.lsp_lovo_minta = ures.kk_lovo_savok = ures.kapusok_minta = None
+    ures.fal_vedok_minta = None
+    assert _lsp_pick_of(ures) is None and _kk_lovok_of(ures) == []
+    assert _el_lovok_of(ures) == [] and _le_kep_of(ures) is None
+    assert _kc_kapusok_of(ures) == [] and _kk_parok_of(ures, ures) == []
+
+
+def test_lsp_pick_of_az_utolso_labda_a_lovo_mintabol():
+    """Utolsó labdájuk az (összegzett) lövő-mintából, ÁTLAGOS kapus
+    ellen: a legnagyobb értékű tanult lövő × sáv páros (a 10-es
+    közelről), a kerülendő a leggyengébb (a 10-es távolról); a küszöb
+    alatti lövő (a 3-as) nem jelölt. A str mezszám-kulcs (JSON) mellett
+    a kép egész mezszámot ad."""
+    from handball.pipeline.play_simulation import AttackModel, last_shot_choice
+    from handball.pipeline.scouting import _lsp_pick_of
+
+    rep = _mintas_jelentes()
+    p = _lsp_pick_of(rep)
+    assert (p["mez"], p["sav"], p["jeloltek"]) == (10, "close", 3)
+    assert p["kapus_szorzo"] == 1.0                   # átlagos kapus
+    assert p["lovo_szorzo"] == 1.3
+    assert (p["kerulendo"]["mez"], p["kerulendo"]["sav"]) == (10, "far")
+    assert p["verdict"].startswith("a 10-esé közelről")
+    assert p == last_shot_choice(AttackModel(lovok={
+        7: {"far": 1.3}, 10: {"far": 0.7, "close": 1.3}}))
+    # Csak a lövő-mintából dolgozik: a 10-es közeli sávja nélkül a 7-es
+    # távoli lövése a legjobb.
+    del rep.lsp_lovo_minta["10"]["close"]
+    assert (_lsp_pick_of(rep)["mez"], _lsp_pick_of(rep)["sav"]) == (7, "far")
+
+
+def test_kk_lovok_of_a_veszelyes_tavoli_lovo_es_a_savja():
+    """A veszélyes távoli lövőik és a sávjuk — a fal nélkül (védő-mezők
+    nincsenek a képben): a 7-es távolról 1,3×, a középső sávból (6
+    lövés); a gyenge távoli lövő (a 10-es) nincs a listán."""
+    from handball.pipeline.scouting import _kk_lovok_of
+
+    rep = _mintas_jelentes()
+    assert _kk_lovok_of(rep) == [{"lovo_mez": 7, "sav": 1,
+                                  "sav_nev": "középső", "band": "far",
+                                  "szorzo": 1.3, "lovesek": 6}]
+    # Sáv-minta nélkül (nem tudjuk, honnan lő) nincs kép.
+    rep.kk_lovo_savok = {}
+    assert _kk_lovok_of(rep) == []
+
+
+def test_el_lovok_of_az_engedett_lovo_a_betores_zaradekaval():
+    """Az engedett lövő: akinek minden tanult távoli sávja gyenge (a
+    10-es távolról 0,7×: 10 lövés, 1 gól) — közelről viszont veszélyes,
+    ezt a mondat külön kimondja; az erős távoli lövő (a 7-es) nincs a
+    listán."""
+    from handball.pipeline.scouting import _el_lovok_of
+
+    sorok = _el_lovok_of(_mintas_jelentes())
+    assert len(sorok) == 1
+    s = sorok[0]
+    assert (s["mez"], s["sav"], s["szorzo"], s["lovesek"], s["gol"]) == (
+        10, "far", 0.7, 10, 1)
+    assert s["kozel"] == 1.3 and s["betores"] is True
+    assert s["verdict"].startswith("a 10-es ellen nem kell kilépni: "
+                                   "távolról 0,7× annyit lő be")
+    assert "(10 lövés, 1 gól)" in s["verdict"]
+    assert "a betörését viszont zárni kell" in s["verdict"]
+
+
+def test_le_kep_of_a_loves_elosztas_atlagos_es_a_mi_kapusunk_ellen():
+    """A lövés-elosztás a lövő-mintából: a párosok érték szerint
+    csökkenőben, a részesedés a 30 mezszámos lövésből; `kapus` nélkül
+    átlagos kapus ellen (a jelentés képe), a MI kapusunk sávjaival az
+    értékek a kapus szorzójával változnak (a meccsterv párosa)."""
+    from handball.pipeline.scouting import _le_kep_of
+
+    rep = _mintas_jelentes()
+    kep = _le_kep_of(rep)
+    assert [(p["mez"], p["sav"]) for p in kep["parosok"]] == [
+        (10, "close"), (7, "far"), (10, "far")]
+    # A 3-as 2 lövése is lövés (a részesedés nevezőjében), de nem páros.
+    assert kep["lovesek"] == 30
+    assert [p["lovesek"] for p in kep["parosok"]] == [8, 10, 10]
+    assert [p["arany_pct"] for p in kep["parosok"]] == [26.7, 33.3, 33.3]
+    ertekek = [p["ertek"] for p in kep["parosok"]]
+    assert ertekek == sorted(ertekek, reverse=True)
+    # A mi kapusunk távolról erős (0,7×), közelről gyenge (1,3×).
+    mienk = _le_kep_of(rep, {"far": 0.7, "close": 1.3})
+    par = {(p["mez"], p["sav"]): p["ertek"] for p in mienk["parosok"]}
+    alap = {(p["mez"], p["sav"]): p["ertek"] for p in kep["parosok"]}
+    assert abs(par[(10, "close")] - 1.3 * alap[(10, "close")]) < 2e-3
+    assert abs(par[(7, "far")] - 0.7 * alap[(7, "far")]) < 2e-3
+    # Kevés lövés (10 alatt) vagy egyetlen páros: nincs kép.
+    keves = ScoutingReport(team="away", team_name="X")
+    keves.lsp_lovo_minta = {"7": {"far": [4, 3, 1.2], "mid": [4, 1, 1.6]}}
+    assert _le_kep_of(keves) is None
+    egy = ScoutingReport(team="away", team_name="X")
+    egy.lsp_lovo_minta = {"7": {"far": [12, 6, 4.0]}}
+    assert _le_kep_of(egy) is None
+
+
+def test_kc_kapusok_of_kapusonkent_a_tanult_savok_mezszam_szerint():
+    """A kapusaik tanult sáv-szorzói: csak a tanult sávval bíró kapusok
+    (a 12-esnek 2 lövésből nincs), mezszám szerint rendezve (számként:
+    az 1-es a 16-os előtt), a lövésszám a kapus ÖSSZES kaputra érkezett
+    lövése (a küszöb alatti sávé is)."""
+    from handball.pipeline.play_simulation import _kapus_szorzo
+    from handball.pipeline.scouting import _kc_kapusok_of
+
+    rep = _mintas_jelentes()
+    sorok = _kc_kapusok_of(rep)
+    assert [s["mez"] for s in sorok] == [1, 16]
+    assert sorok[0] == {"mez": 1, "lovesek": 10,
+                        "szorzok": _kapus_szorzo({"mid": [10, 2]})}
+    assert sorok[1]["lovesek"] == 22                  # 20 távoli + 2 közeli
+    assert set(sorok[1]["szorzok"]) == {"far"}        # a közeli sáv kevés
+    # A 16-os távolról 20-ból 14-et véd (jó), az 1-es közepesről 10-ből
+    # 2-t (gyenge): a szorzó ennek megfelelően 1 alatt, illetve fölött.
+    assert sorok[1]["szorzok"]["far"] < 1.0 < sorok[0]["szorzok"]["mid"]
+
+
+def test_kk_parok_of_az_o_lovojuk_es_a_mi_falunk_vedoje():
+    """Kit kinek a két jelentésből: az Ő lövőjük (a 7-es, a középső
+    sávból) × a MI falunk ott álló védője; a ritkán kilépő védő (a 4-es)
+    helyett a falból a legjobban kilépőt (az 5-öst) javasolja. Tanult
+    védő nélkül (üres fal-minta, vagy túl kevés kocka) üres lista — a
+    lövő-kép ilyenkor a kk_lovok-ban él."""
+    from handball.pipeline.scouting import _kk_parok_of
+
+    opp = _mintas_jelentes()
+    own = ScoutingReport(team="home", team_name="Mi")
+    own.fal_kockak = 1000
+
+    def vedo(n, y, ralepett):
+        return {"n": n, "y_osszeg": n * y, "kozel": 40, "ralepett": ralepett,
+                "masodik": 0, "kettozott": 0}
+
+    own.fal_vedok_minta = {"4": vedo(900, 9.0, 4),      # ritkán lép ki
+                           "5": vedo(900, 12.0, 30),    # jól lép ki
+                           "6": vedo(100, 5.0, 30)}     # alig volt a falban
+    parok = _kk_parok_of(own, opp)
+    assert len(parok) == 1
+    p = parok[0]
+    assert (p["lovo_mez"], p["sav"], p["band"], p["lovesek"]) == (
+        7, 1, "far", 6)
+    assert (p["vedo_mez"], p["vedo_kilepes"]) == (4, 0.1)
+    assert (p["javasolt_mez"], p["javasolt_kilepes"]) == (5, 0.75)
+    assert p["verdict"].startswith("a 7-es (távolról 1,3× annyit lő be")
+    # A szerepek nem cserélhetők: fordítva a MI lövő-mintánk üres.
+    assert _kk_parok_of(opp, own) == []
+    # Tanult védő nélkül nincs páros.
+    own.fal_vedok_minta = {"6": vedo(100, 5.0, 30)}
+    assert _kk_parok_of(own, opp) == []
+    own.fal_vedok_minta = {}
+    assert _kk_parok_of(own, opp) == []
+
+
+def test_a_szarmaztatott_kepek_a_valodi_jelentesben_ujraszamolhatok():
+    """ŐR a valódi láncon: a scout_team és a combine_reports végén a
+    képek (lsp_pick, kk_lovok, el_lovok, le_kep, kc_kapusok) PONTOSAN a
+    tárolt mintákból számolódnak — a segédek a kész jelentésen ugyanazt
+    adják, és a mintákat egy üres jelentésbe másolva is."""
+    from handball.pipeline.scouting import (_el_lovok_of, _kc_kapusok_of,
+                                            _kk_lovok_of, _kk_parok_of,
+                                            _le_kep_of, _lsp_pick_of,
+                                            combine_reports)
+
+    tamado, vedo = _valodi_jelentesek()
+    assert tamado.lsp_lovo_minta and tamado.lsp_pick      # nem üres fixture
+    assert vedo.kapusok_minta and vedo.kc_kapusok
+    for rep in (tamado, vedo, combine_reports([tamado, tamado]),
+                combine_reports([vedo, vedo])):
+        assert rep.lsp_pick == _lsp_pick_of(rep)
+        assert rep.kk_lovok == _kk_lovok_of(rep)
+        assert rep.el_lovok == _el_lovok_of(rep)
+        assert rep.le_kep == _le_kep_of(rep)
+        assert rep.kc_kapusok == _kc_kapusok_of(rep)
+    # A képek csak a mintáktól függnek.
+    masolat = ScoutingReport(team="home", team_name="Másolat")
+    masolat.lsp_lovo_minta = tamado.lsp_lovo_minta
+    masolat.kk_lovo_savok = tamado.kk_lovo_savok
+    assert _lsp_pick_of(masolat) == tamado.lsp_pick
+    assert _kk_lovok_of(masolat) == tamado.kk_lovok
+    assert _el_lovok_of(masolat) == tamado.el_lovok
+    assert _le_kep_of(masolat) == tamado.le_kep
+    # Kit kinek: a párosok lövői a veszélyes távoli lövők (kk_lovok) —
+    # ugyanazok a sorok, a védő-mezőkkel kiegészítve.
+    parok = _kk_parok_of(vedo, tamado)
+    assert vedo.fal_vedok_minta and tamado.kk_lovok and parok
+    kozos = ("lovo_mez", "sav", "sav_nev", "band", "szorzo", "lovesek")
+    assert [{k: p[k] for k in kozos} for p in parok] == tamado.kk_lovok
+    assert all("vedo_mez" in p and p["verdict"] for p in parok)
+    # A szerepek nem cserélhetők: a védekező csapatnak nincs lövő-mintája.
+    assert _kk_parok_of(tamado, vedo) == []
+
+
+def _sit_jelentes(dontes, egyezes, valasztasok, legjobbak):
+    """Jelentés a helyzet-döntés darabszámaival: `dontes` / `egyezes`
+    helyzetenként, a `valasztasok` / `legjobbak` (helyzet, választás) →
+    darabszám."""
+    rep = ScoutingReport(team="away", team_name="X")
+    rep.sit_decisions = dict(dontes)
+    rep.sit_match = dict(egyezes)
+    rep.sit_counts = {f"{s}|{a}": n for (s, a), n in valasztasok.items()}
+    rep.sit_best = {f"{s}|{a}": n for (s, a), n in legjobbak.items()}
+    return rep
+
+
+def test_sit_habit_a_rossz_szokas_a_darabszamokbol():
+    """Helyzet-döntés a felderítés darabszámaiból: (helyzet, szokás,
+    legjobb opció, a szokás %-a, a legjobb-opció %-a, döntésszám) — több
+    rossz szokás közül a legrosszabb egyezésű helyzet."""
+    from handball.pipeline.scouting import _sit_habit
+
+    K, L = "kilépnek rá", "szabad lőhely"
+    rep = _sit_jelentes(
+        {K: 10, L: 12}, {K: 3, L: 2},
+        {(K, "lövés"): 7, (K, "passz a szélre"): 3,
+         (L, "átadás"): 9, (L, "lövés"): 3},
+        {(K, "passz a szélre"): 8, (K, "lövés"): 2, (L, "lövés"): 12})
+    h = _sit_habit(rep)
+    assert h[:3] == (L, "átadás", "lövés")
+    assert h[3] == 75.0 and abs(h[4] - 100.0 * 2 / 12) < 1e-9 and h[5] == 12
+    # Ha csak az egyik helyzet rossz szokás, az jön.
+    rep.sit_match[L] = 11                 # ott többnyire a legjobbat választják
+    assert _sit_habit(rep) == (K, "lövés", "passz a szélre", 70.0, 30.0, 10)
+
+
+def test_sit_habit_none_ha_keves_a_dontes_vagy_nincs_rossz_szokas():
+    """None, ha a helyzetben kevés a döntés (8 alatt), ha a szokás maga
+    a legjobb opció, ha a szokás nem elég erős (50% alatt), vagy ha a
+    legjobbat elég gyakran választják (40% fölött) — a motor küszöbeivel;
+    üres jelentésre is None."""
+    from handball.pipeline.decisions import (SIT_HABIT_PCT,
+                                             SIT_MATCH_LOW_PCT, SIT_MIN)
+    from handball.pipeline.scouting import _sit_habit
+
+    assert (SIT_MIN, SIT_HABIT_PCT, SIT_MATCH_LOW_PCT) == (8, 50.0, 40.0)
+    K = "kilépnek rá"
+
+    def egy(n, egyezes, szokas_db, legjobb="passz a szélre"):
+        return _sit_habit(_sit_jelentes(
+            {K: n}, {K: egyezes},
+            {(K, "lövés"): szokas_db, (K, "átadás"): n - szokas_db},
+            {(K, legjobb): n}))
+
+    assert egy(10, 3, 7) == (K, "lövés", "passz a szélre", 70.0, 30.0, 10)
+    assert egy(7, 2, 6) is None                    # kevés döntés
+    assert egy(8, 2, 6) is not None                # a küszöbön már szól
+    assert egy(10, 3, 7, legjobb="lövés") is None  # a szokás a legjobb
+    assert egy(10, 5, 7) is None                   # 50% egyezés: elég jó
+    assert egy(10, 4, 7) is not None               # 40%: még rossz szokás
+    # A szokás 50% alatt: három felé oszló választások.
+    szort = _sit_jelentes(
+        {K: 10}, {K: 2},
+        {(K, "lövés"): 4, (K, "átadás"): 3, (K, "visszajátszás"): 3},
+        {(K, "passz a szélre"): 10})
+    assert _sit_habit(szort) is None
+    assert _sit_habit(ScoutingReport(team="away", team_name="X")) is None
+
+
+def test_sit_habit_holtversenyben_a_valasztasok_rogzitett_sorrendje():
+    """Holtversenyben (ugyanannyi választás) a választások rögzített
+    sorrendje dönt — a motorral azonos renddel, így a felderítés és a
+    meccs-elemzés ugyanazt a szokást nevezi meg."""
+    from handball.pipeline.decisions import SIT_ACTIONS
+    from handball.pipeline.scouting import _sit_habit
+
+    assert SIT_ACTIONS.index("lövés") < SIT_ACTIONS.index("átadás")
+    K = "kilépnek rá"
+    rep = _sit_jelentes(
+        {K: 10}, {K: 0},
+        {(K, "átadás"): 5, (K, "lövés"): 5},
+        {(K, "passz a 6 m-re"): 5, (K, "passz a szélre"): 5})
+    assert _sit_habit(rep) == (K, "lövés", "passz a 6 m-re", 50.0, 0.0, 10)
+
+
+def _ismetles_jelentes(gol, gol_ua, kimaradt, kimaradt_ua):
+    rep = ScoutingReport(team="away", team_name="X")
+    rep.setplay_repeat_after_goal = gol
+    rep.setplay_repeat_after_goal_same = gol_ua
+    rep.setplay_repeat_after_miss = kimaradt
+    rep.setplay_repeat_after_miss_same = kimaradt_ua
+    return rep
+
+
+def test_figure_dossier_of_a_figura_ismetles_mondata_a_darabszamokbol():
+    """A figura-ismétlés a jelentésben darabszám, a dosszié mondatot vár
+    — a motor küszöbeivel: a bejött figurát újra hozzák (gól után 20+
+    százalékponttal többször), váltanak utána (fordítva), vagy
+    kiszámítható a sorrendjük (mindkettő 60% fölött)."""
+    from handball.pipeline.scouting import _figure_dossier_of
+    from handball.pipeline.setplays import (SRC_GAP_PP, SRC_HIGH_PCT,
+                                            SRC_MIN_ATTACKS)
+
+    assert (SRC_MIN_ATTACKS, SRC_GAP_PP, SRC_HIGH_PCT) == (4, 20.0, 60.0)
+    ujra = _figure_dossier_of(_ismetles_jelentes(10, 7, 10, 3))
+    assert ujra["repeat"] == ("a bejött figurát rögtön újra hozzák (gól "
+                              "után 70%, gól nélkül 30% ismétlés)")
+    valt = _figure_dossier_of(_ismetles_jelentes(10, 3, 10, 7))
+    assert valt["repeat"] == ("a bejött figura után váltanak (gól után "
+                              "30%, gól nélkül 70% ismétlés)")
+    kiszamithato = _figure_dossier_of(_ismetles_jelentes(10, 7, 20, 13))
+    assert kiszamithato["repeat"] == (
+        "kiszámítható a sorrendjük: a következő támadásban ugyanazt "
+        "hozzák (gól után 70%, gól nélkül 65%)")
+    # Pont a 20 százalékpontos határon már "újra hozzák".
+    assert _figure_dossier_of(_ismetles_jelentes(10, 6, 10, 4))[
+        "repeat"].startswith("a bejött figurát rögtön újra hozzák")
+    # Figura-könyvtár nélkül a figura-lista üres (nem kitalált sor).
+    assert ujra["figures"] == []
+
+
+def test_figure_dossier_of_keves_tamadasnal_nincs_ismetles_mondat():
+    """Kevés minta → None: ha bármelyik ágon 4-nél kevesebb a támadás,
+    vagy a két arány közel van és egyik sem magas, nincs ismétlés-mondat
+    (sose hallgatólagos 0%); üres jelentésre üres dosszié."""
+    from handball.pipeline.scouting import _figure_dossier_of
+
+    assert _figure_dossier_of(_ismetles_jelentes(3, 3, 10, 0))["repeat"] \
+        is None
+    assert _figure_dossier_of(_ismetles_jelentes(10, 10, 3, 0))["repeat"] \
+        is None
+    assert _figure_dossier_of(_ismetles_jelentes(10, 4, 10, 3))["repeat"] \
+        is None                                       # 40% / 30%: se-se
+    ures = _figure_dossier_of(ScoutingReport(team="away", team_name="X"))
+    assert ures == {"figures": [], "repeat": None}
+
+
+def test_figure_dossier_of_a_valodi_jelentes_figuraibol():
+    """A VALÓDI láncon: a felderítés figura-mezőiből (könyvtár, figura ×
+    védőforma, emberelőny, állás) a dosszié ugyanaz, mint a motor
+    (setplays.figure_dossier) a jelentés mezőivel hívva — és a jelentés
+    saját dossziéja (ha tárolja) is ebből jön."""
+    from handball.pipeline.scouting import _figure_dossier_of
+    from handball.pipeline.setplays import figure_dossier
+
+    rep, _ = _valodi_jelentesek()
+    dosszie = _figure_dossier_of(rep)
+    assert set(dosszie) == {"figures", "repeat"}
+    motor = figure_dossier(library=rep.setplay_library,
+                           formation=rep.figure_formation,
+                           powerplay=rep.powerplay_figures,
+                           by_score=rep.setplay_score,
+                           repeat={"verdict": dosszie["repeat"]})
+    assert dosszie == motor
+    assert dosszie["figures"]                      # a fixture-ben van figura
+    for f in dosszie["figures"]:
+        assert {"shape", "attacks", "goals", "when", "verdict"} <= set(f)
+    tamadasok = [f["attacks"] for f in dosszie["figures"]]
+    assert tamadasok == sorted(tamadasok, reverse=True)
+
+
+def test_setplay_library_of_az_osszefesult_alak_sorokbol():
+    """A figura-könyvtár meccsek közt az ALAK-SOROKBÓL számolódik újra
+    (nem a meccsenkénti könyvtárak átlagából): a segéd a jelentések
+    sorait összefűzve hívja a motort; sor nélkül a motor üres
+    könyvtára."""
+    from handball.pipeline.scouting import (_setplay_library_of,
+                                            combine_reports)
+    from handball.pipeline.setplays import setplay_library
+
+    ures = ScoutingReport(team="away", team_name="X")
+    assert _setplay_library_of([]) == setplay_library([])
+    assert _setplay_library_of([ures, ures]) == setplay_library([])
+    ures.setplay_shapes = None                     # régi JSON-ból
+    assert _setplay_library_of([ures]) == setplay_library([])
+
+    rep, _ = _valodi_jelentesek()
+    sorok = list(rep.setplay_shapes or [])
+    assert sorok and rep.setplay_library.get("figures")
+    assert _setplay_library_of([rep]) == rep.setplay_library
+    assert _setplay_library_of([rep]) == setplay_library(sorok)
+    assert _setplay_library_of([rep, ures, rep]) == setplay_library(
+        sorok + sorok)
+    # A combine_reports könyvtára ugyanez az újraszámolás.
+    assert combine_reports([rep, rep]).setplay_library == \
+        _setplay_library_of([rep, rep])

@@ -106,6 +106,18 @@ class MatchMeta {
   final int startFrame;
   final int stride;
 
+  /// A VALÓDI (jegyzőkönyvi) végeredmény, ha az edző megadta — a
+  /// felismerés ehhez méri magát (pontosság-tükör).
+  final int? realGoalsHome;
+  final int? realGoalsAway;
+
+  /// A pásztázás-követés horgonyzás-aránya (%) és a feldolgozás alatt
+  /// mért kalibráció-illeszkedés ({mean_fit, min_fit, worst_t, points})
+  /// — a Kalibráció ellenőrzése ablak ebből mond számokat kérés nélkül.
+  /// Régi mentésen null.
+  final double? panAnchorPct;
+  final Map<String, dynamic>? calibFit;
+
   MatchMeta({
     required this.matchId,
     required this.homeTeam,
@@ -117,6 +129,10 @@ class MatchMeta {
     this.videoPath,
     this.startFrame = 0,
     this.stride = 1,
+    this.realGoalsHome,
+    this.realGoalsAway,
+    this.panAnchorPct,
+    this.calibFit,
   });
 
   factory MatchMeta.fromJson(Map<String, dynamic> j) => MatchMeta(
@@ -130,6 +146,12 @@ class MatchMeta {
         videoPath: j["video_path"] as String?,
         startFrame: (j["start_frame"] as num?)?.toInt() ?? 0,
         stride: (j["stride"] as num?)?.toInt() ?? 1,
+        realGoalsHome: (j["real_goals_home"] as num?)?.toInt(),
+        realGoalsAway: (j["real_goals_away"] as num?)?.toInt(),
+        panAnchorPct: (j["pan_anchor_pct"] as num?)?.toDouble(),
+        calibFit: (j["calib_fit"] is Map)
+            ? Map<String, dynamic>.from(j["calib_fit"] as Map)
+            : null,
       );
 
   /// Az i. tracking-frame ideje az EREDETI videóban, másodpercben.

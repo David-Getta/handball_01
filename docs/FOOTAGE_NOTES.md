@@ -58,6 +58,29 @@
 3. **ROI** finomhangolás: az előtéri kosárállvány kizárási zónája + a kispad
    tűréssáv hangolása.
 4. **Sárga 6 m-es zóna** mint orientációs/kalibrációs támpont (későbbi automatika).
+   - KÉSZ: a festett mezők (sárga kapuelőtér, színes játékfelület) SZÉLE
+     vonalként is számít (`broadcast_lines.field_edge_mask`, vonalszín
+     "festett mezők széle"); az "auto" a négyszögért sorban próbálja a
+     színeket, végül ezt (`detect_court_quad`). A kalibráló képernyőn a
+     vonalszín választható, és a gép által látott vonalak rózsaszínnel a
+     képen vannak.
+   - KÍSÉRLET, ELVETVE: a fél pálya kalibrálása a kapuelőtér ALAKJÁBÓL
+     (a D-alak illesztése a sárga foltra). A gólvonal két vége ~3 px-re
+     pontos, de a 6 m mély D a pálya mélységi irányát rosszul köti: a
+     felezővonal két vége szintetikus képen 200–600 px-re csúszott.
+     Két látható kapuelőtérrel (teljes pálya) a feladat jól kondicionált
+     — ha a felvétel ilyen, ez a következő lépés.
+   - VALÓDI KOCKÁN (grazi csarnok, THW Kiel vs BT Füchse, a felhasználó
+     képernyőképe): a felismert vonalak zöme a LELÁTÓRÓL jött (ülősorok,
+     üveg-korlát, LED-tábla, mennyezet). Most a vonalakat csak a becsült
+     PADLÓN keressük (`floor_mask`: a padló uralkodó színe + a festett
+     felületek, a folt kitöltött körvonala — nem a konvex burka, mert
+     elöl a kispad és a reklámtábla belóg). A festett mezők széle előbb
+     ZÁRÁST kap (a rajtuk futó fehér röplabda-vonalak rései bezárulnak).
+     Ami ezen a kockán így is nehéz: a piros kötélkorlát a padló előtt
+     fut (a legerősebb "piros vonal"), a pálya fehér vonalai halványak,
+     a közeli oldalvonalat a padok takarják — itt a kézi sarok-jelölés
+     marad, a rózsaszín "látott vonalak" segítségével.
 
 ## Bevezető (fade-in) képkockák — futási megfigyelés
 - A felvétel **eleje sötét** (Filmora-átúszás, csak a vízjel látszik). A 0–14.
@@ -71,10 +94,14 @@
    --stride 1 --max 20 --start 180 --calib calib.json`
 
 ## Pásztázás-követés (pan tracking) — használat
-- Kalibrációval (`--calib`) a feldolgozó mostantól **kompenzálja a kamera
-  pásztázását**: képkockánként megbecsüli a kamera mozgását (Shi–Tomasi +
-  Lucas–Kanade + RANSAC), és a detektált pontokat előbb visszaforgatja az
-  alap-képkockába, csak utána vetíti a pályára.
+- Kalibrációval (`--calib`) a feldolgozó **kompenzálja a kamera
+  pásztázását**: a detektált pontokat előbb visszaforgatja az
+  alap-képkockába, csak utána vetíti a pályára. Két becslő dolgozik
+  együtt (részletek: `docs/PASZTAZAS.md`): a **horgony** a futó kockát
+  közvetlenül a KALIBRÁLT kocka jellemzőpontjaihoz illeszti (ORB +
+  RANSAC — abszolút mérés, nem halmozódik), a **lánc** (Shi–Tomasi +
+  Lucas–Kanade) a köztes kockákat hidalja át. A mozgó embereket mindkettő
+  kimaszkolja. Minden bekalibrált kocka kötelező horgony.
 - **FONTOS**: a 4 sarkot ahhoz a képkockához kell felvenni, AMELYIKTŐL a
   feldolgozás indul (`--start N`) — a kalibráló képernyő alapból a 180-as
   képkockát tölti be, a teszt-recept is `--start 180`-nal fut. Így a kettő

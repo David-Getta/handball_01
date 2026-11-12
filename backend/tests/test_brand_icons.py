@@ -1,0 +1,240 @@
+"""A Sport Machine JELKÉP (logó) őrei.
+
+Egy jelkép, sok helyen: az appban a kliens RAJZOLJA
+(`client/lib/ui/logo.dart`), a gépen látszó ikonokat a
+`packaging/make_icons.py` állítja elő ugyanazzal a geometriával. Ha a
+kettő szétcsúszik — vagy az ikon-fájlok kimaradnak a kiadásból —, a
+felhasználó két különböző "logót" lát: egyet a tálcán, egyet az appban.
+
+Futtatás:
+    python -m pytest tests/test_brand_icons.py
+"""
+
+from __future__ import annotations
+
+import struct
+from pathlib import Path
+
+import pytest
+
+GYOKER = Path(__file__).resolve().parent.parent.parent
+IKONOK = GYOKER / "packaging" / "icons"
+
+
+def test_a_windows_ikon_letezik_es_ervenyes():
+    """A .ico a telepítő, az .exe és az ablak ikonja — ha hiányzik vagy
+    sérült, a felhasználó a Flutter alap-ikonját kapja vissza."""
+    f = IKONOK / "sportmachine.ico"
+    assert f.exists(), "hiányzik a Windows-ikon (packaging/make_icons.py)"
+    d = f.read_bytes()
+    rez, tipus, db = struct.unpack("<HHH", d[:6])
+    assert (rez, tipus) == (0, 1), "nem ICO-fejléc"
+    assert db >= 5, "túl kevés méret az ikonban"
+    meretek = set()
+    for i in range(db):
+        w, h, _sz, _r, _p, _b, hossz, eltolas = struct.unpack(
+            "<BBBBHHII", d[6 + 16 * i:22 + 16 * i])
+        meretek.add(w or 256)
+        assert eltolas + hossz <= len(d), "csonka ikon-bejegyzés"
+        assert hossz > 0
+    # A kis méretek KLASSZIKUS (DIB) alakban: a PNG-be ágyazott ikont a
+    # régi eszközök nem értik, és pont a 16/32-es jelenik meg a tálcán.
+    for i in range(db):
+        w, *_x, hossz, eltolas = struct.unpack(
+            "<BBBBHHII", d[6 + 16 * i:22 + 16 * i])
+        png = d[eltolas:eltolas + 4] == b"\x89PNG"
+        if (w or 256) <= 64:
+            assert not png, f"a {w}x{w} ikon PNG-be ágyazott"
+    assert {16, 32, 48, 256} <= meretek, f"hiányzó méretek: {meretek}"
+
+
+def test_a_macos_ikonkeszlet_teljes():
+    """A macOS AppIcon.appiconset a `flutter create` neveit várja — a
+    kiadási munkafolyamat ezekre a nevekre másol."""
+    for m in (16, 32, 64, 128, 256, 512, 1024):
+        f = IKONOK / f"app_icon_{m}.png"
+        assert f.exists(), f"hiányzik: {f.name}"
+        d = f.read_bytes()
+        assert d[:4] == b"\x89PNG", f"{f.name}: nem PNG"
+        # A PNG IHDR-je a 16. bájttól: szélesség/magasság.
+        w, h = struct.unpack(">II", d[16:24])
+        assert (w, h) == (m, m), f"{f.name}: {w}x{h} a várt {m}x{m} helyett"
+
+
+def test_a_jelkep_ujragenerálhato(tmp_path):
+    """A rajz forrása KÓD, nem egy elveszíthető képfájl: bármikor
+    újragenerálható (más méretben is), és a kimenet érvényes marad."""
+    pytest.importorskip("cv2")
+    import sys
+    sys.path.insert(0, str(GYOKER / "packaging"))
+    import make_icons
+
+    kep = make_icons.draw(64)
+    assert kep.shape == (64, 64, 4)
+    # A sarok átlátszó (lekerekített ikon-alak), a közép nem.
+    assert kep[0, 0, 3] < 40 and kep[32, 32, 3] == 255
+    # A jel rajta van: a teal ékek pixelei megjelennek (csak csempe nem elég).
+    teal = ((kep[:, :, 0] > 150) & (kep[:, :, 1] > 150) & (kep[:, :, 2] < 120)
+            & (kep[:, :, 3] > 200)).sum()
+    assert teal > 200, f"a jel nem látszik a csempén ({teal} teal pixel)"
+    # Háttér nélkül csak a jel marad (a csempe nem festi be a sarkokat).
+    csupasz = make_icons.draw(64, background=False)
+    assert csupasz[32, 4, 3] == 0
+    ki = make_icons.main(tmp_path)
+    assert (ki / "sportmachine.ico").stat().st_size > 1000
+
+
+def test_a_kliens_a_valodi_jelkepet_rajzolja():
+    """A fejlécben és a nyitóképernyőn a JELKÉP legyen, ne egy általános
+    Material-ikon (korábban egy háromszög-ikon állt mindkét helyen)."""
+    ui = GYOKER / "client" / "lib" / "ui"
+    logo = (ui / "logo.dart").read_text(encoding="utf-8")
+    assert "class SportMachineLogo" in logo
+    # A geometria a Python-rajzoló konstansaival egyezik.
+    py = (GYOKER / "packaging" / "make_icons.py").read_text(encoding="utf-8")
+    for nev, dart in (("CORNER_R", "cornerR"), ("MARK_BOX", "markBox"),
+                      ("MARK_INSET", "markInset")):
+        ertek = [s for s in py.split("\n") if s.startswith(f"{nev} = ")]
+        assert ertek, f"{nev} eltűnt a rajzolóból"
+        szam = ertek[0].split("=")[1].split("#")[0].strip()
+        assert f"{dart} = {szam}" in logo, (
+            f"a kliens {dart} értéke nem a motoré ({nev} = {szam})")
+    # A jel NÉGY ÉKE: ugyanazok a pontok a rajzdobozban (a márka
+    # vektoros forrásából). Ha az egyik oldalon elcsúszik egy pont, a
+    # tálcán és az appban két különböző jel látszik — ezért a számokat
+    # SORRENDBEN vetjük össze.
+    import ast
+    import re
+
+    py_mark = ast.literal_eval(
+        re.search(r"^MARK = (\(.*?^\))", py, re.S | re.M).group(1))
+    py_szamok = [int(v) for ek in py_mark for pont in ek for v in pont]
+    dart_blokk = re.search(
+        r"mark = \[(.*?)\n  \];", logo, re.S).group(1)
+    dart_szamok = [int(v) for v in re.findall(r"-?\d+", dart_blokk)]
+    assert dart_szamok == py_szamok, (
+        "a kliens jele és az ikon-rajzoló jele eltér "
+        f"({len(dart_szamok)} vs {len(py_szamok)} szám)")
+    assert len(py_mark) == 4 and all(len(ek) == 5 for ek in py_mark)
+    # A márka vektoros forrása is ugyanez (packaging/brand): ha a
+    # dizájner új SVG-t ad, a rajzolóknak követniük kell.
+    svg = (GYOKER / "packaging" / "brand"
+           / "sportmachine-mark-teal.svg").read_text(encoding="utf-8")
+    svg_szamok = [int(v) for d in re.findall(r'<path d="([^"]+)"', svg)
+                  for v in re.findall(r"-?\d+", d)]
+    assert svg_szamok == py_szamok, (
+        "a rajzolók geometriája eltér a márka SVG-jétől")
+    for f in ("shell/app_shell.dart", "bootstrap_screen.dart"):
+        src = (ui / f).read_text(encoding="utf-8")
+        assert "SportMachineLogo" in src, f"{f}: nincs benne a jelkép"
+        assert "Icons.change_history_rounded" not in src, (
+            f"{f}: még mindig az általános helyettesítő ikon van ott")
+
+
+def test_a_nyitokepernyon_osszeall_a_jel():
+    """A motor indítása alatt a jel ÖSSZEÁLL (a négy ék beúszik, majd
+    fénysáv fut végig rajta) — a várakozás ne üres képernyő legyen. A
+    fejlécben viszont a STATIKUS jel marad: egy folyton mozgó logó a
+    munkaképernyőn zavarna."""
+    ui = GYOKER / "client" / "lib" / "ui"
+    logo = (ui / "logo.dart").read_text(encoding="utf-8")
+    assert "class SportMachineLogoAnimated" in logo
+    assert "AnimationController" in logo and "repeat()" in logo
+    boot = (ui / "bootstrap_screen.dart").read_text(encoding="utf-8")
+    assert "SportMachineLogoAnimated" in boot, "a nyitóképernyő nem animál"
+    shell = (ui / "shell" / "app_shell.dart").read_text(encoding="utf-8")
+    assert "SportMachineLogoAnimated" not in shell, (
+        "a fejlécben ne mozogjon a jel")
+
+
+def test_a_kiadas_beteszi_az_ikonokat():
+    """A platform-mappák a kiadáskor generálódnak (`flutter create`), és
+    a Flutter az ALAP-ikonját teszi beléjük — a munkafolyamatnak tehát
+    felül kell írnia mindkét platformon."""
+    wf = (GYOKER / ".github" / "workflows"
+          / "release.yml").read_text(encoding="utf-8")
+    assert "packaging\\icons\\sportmachine.ico" in wf, "Windows-ikon nincs bemásolva"
+    assert "app_icon_*.png" in wf, "macOS-ikonok nincsenek bemásolva"
+    iss = (GYOKER / "packaging"
+           / "installer_windows.iss").read_text(encoding="utf-8")
+    assert "SetupIconFile" in iss, "a telepítő ikonja nincs beállítva"
+
+
+def test_a_nyomtathato_jelentes_is_viseli_a_jelkepet():
+    """A kinyomtatott / továbbküldött lapon is ott a márka. INLINE SVG,
+    mert a jelentés ÖNÁLLÓ fájl: külső képre hivatkozva üres keret
+    maradna a nyomtatásban."""
+    from handball.pipeline.report_html import brand_svg
+
+    svg = brand_svg(20)
+    assert svg.startswith("<svg") and 'width="20"' in svg
+    assert "<img" not in svg and "src=" not in svg, "külső kép a jelentésben"
+    # A márka színei a fejlécben: kétszínű jel sötét csempén.
+    for szin in ("#2FD9C4", "#D8B36B", "#06121F"):
+        assert szin in svg, f"hiányzó márka-szín: {szin}"
+    src = (GYOKER / "backend" / "handball" / "pipeline"
+           / "report_html.py").read_text(encoding="utf-8")
+    # Minden fejléc a márka LOCKUPJÁT viseli (jel + rajzolt szókép).
+    assert src.count('class="brand"') == src.count("{lockup_svg(18)}"), (
+        "van olyan jelentés-fejléc, ami nem viseli a jelképet")
+
+
+def test_a_szokep_rajzolt_es_egyezik_a_marka_forrasaval():
+    """A SPORTMACHINE szókép RAJZOLT betű, nem font: a jelentés önálló
+    fájl, és betűtípus nélkül is ugyanígy kell kinéznie. A betűk
+    geometriája a márka SVG-jéből való — ha a dizájner újat ad, a
+    rajzolóknak követniük kell."""
+    import re
+
+    from handball.pipeline.report_html import (WORDMARK_LETTERS,
+                                               wordmark_svg)
+
+    svg = (GYOKER / "packaging" / "brand"
+           / "sportmachine-wordmark-ink.svg").read_text(encoding="utf-8")
+    svg_betuk = re.findall(
+        r'<path d="([^"]+)"\s+transform="translate\(([-\d.]+)[^)]*\)"'
+        r'[^>]*stroke-width="([^"]+)"', svg)
+    assert len(svg_betuk) == 12, "a szókép 12 betűből áll (SPORTMACHINE)"
+    sajat = [(d, float(dx), float(sw)) for d, dx, sw in WORDMARK_LETTERS]
+    forras = [(d, float(dx), float(sw)) for d, dx, sw in svg_betuk]
+    assert sajat == forras, "a rajzolt szókép eltér a márka SVG-jétől"
+    # A SPORT vastag, a MACHINE vékony — a két súly a márka lényege.
+    assert [sw for _d, _dx, sw in sajat][:5] == [14] * 5
+    assert [sw for _d, _dx, sw in sajat][5:] == [6] * 7
+    ki = wordmark_svg(20)
+    assert ki.startswith("<svg") and 'height="20"' in ki
+    assert "<img" not in ki and "src=" not in ki, "külső kép a jelentésben"
+    # Világos háttéren tinta, sötéten papír-fehér.
+    assert "#06121F" in ki and "#EAEEF5" in wordmark_svg(20, dark=True)
+
+
+def test_a_kliens_a_rajzolt_szokepet_hasznalja():
+    """A SPORTMACHINE név a felületen is RAJZOLT betű, nem rendszer-font:
+    a nyitóképernyőn, a fiók-lapon és az oldalsávban. A betűk geometriája
+    ugyanaz, mint a nyomtatható jelentésekben — sorrendben összevetve."""
+    import re
+
+    from handball.pipeline.report_html import WORDMARK_LETTERS
+
+    ui = GYOKER / "client" / "lib" / "ui"
+    logo = (ui / "logo.dart").read_text(encoding="utf-8")
+    assert "class SportMachineWordmark" in logo
+    blokk = logo.split("letters = [")[1].split("\n  ];")[0]
+    # A Dart a hosszú útvonalat két idézőjeles darabra tördeli (szomszédos
+    # sztringek összefűzése) — előbb összevonjuk, majd SORRENDBEN vetjük
+    # össze a motor betűivel.
+    blokk = re.sub(r'"\s*\n\s*"', "", blokk)
+    dart_utak = re.findall(r'"((?:M|L)[^"]*)"', blokk)
+    py_utak = [d for d, _dx, _sw in WORDMARK_LETTERS]
+    assert len(dart_utak) == len(py_utak) == 12
+    for d_, p_ in zip(dart_utak, py_utak):
+        assert d_.replace(" ", "") == p_.replace(" ", ""), (d_, p_)
+    for f in ("bootstrap_screen.dart", "account_screen.dart",
+              "shell/app_shell.dart"):
+        src = (ui / f).read_text(encoding="utf-8")
+        assert "SportMachineWordmark" in src, f"{f}: nincs benne a szókép"
+        assert 'Text("SPORT MACHINE"' not in src, (
+            f"{f}: még mindig gépelt névvel írja a márkát")
+    # Az oldalsávban egy súllyal (a vékony szár kis méretben eltűnne).
+    shell = (ui / "shell" / "app_shell.dart").read_text(encoding="utf-8")
+    assert "singleWeight: true" in shell

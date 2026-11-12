@@ -4,6 +4,9 @@ __pycache__/
 *.egg-info/
 .eggs/
 build/
+# A 3D oldal three.js-e (handball/vendor/three/build/three.module.js) nem
+# építési termék, hanem a csomag része — a fenti build/ szabály alól kivétel.
+!backend/handball/vendor/three/build/
 dist/
 .venv/
 venv/
@@ -27,6 +30,9 @@ weights/
 
 # Flutter / Dart (kliens)
 .dart_tool/
+# A kliens csomag-zára: a kiadás (release.yml) mindig frissen old fel,
+# a helyi `flutter analyze`/`flutter test` által írt zár ne kerüljön be.
+client/pubspec.lock
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
@@ -38,3 +44,6 @@ client/build/
 .idea/
 *.iml
 .DS_Store
+# A motor összeomlás-naplója (a felhasználói adatmappában; fejlesztés
+# közben a munkakönyvtárban is keletkezhet)
+engine-crash.log

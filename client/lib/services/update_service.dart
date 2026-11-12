@@ -185,6 +185,29 @@ class UpdateService {
     return null; // van újabb címke, de ehhez a platformhoz nincs csomag
   }
 
+  /// EGY ADOTT kiadás leírása (GET /releases/tags/v{version}) — az
+  /// "Újdonságok" ablakhoz a frissítés UTÁN: a felhasználó a most
+  /// telepített verzió változásait látja. Hibánál üres szöveg (a
+  /// kezdőlap enélkül is él).
+  Future<String> notesFor(String version) async {
+    try {
+      final token = await loadToken();
+      final resp = await http.get(
+        Uri.parse(
+            "https://api.github.com/repos/$owner/$repo/releases/tags/v$version"),
+        headers: {
+          "Accept": "application/vnd.github+json",
+          if (token != null) "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return "";
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      return ((body["body"] as String?) ?? "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
   /// Letölti és telepíti a frissítést, majd újraindítja az appot.
   /// `onProgress`: 0.0–1.0 a letöltés alatt (ismeretlen méretnél null).
   Future<void> downloadAndInstall(

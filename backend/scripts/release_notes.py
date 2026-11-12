@@ -57,17 +57,42 @@ def section(changelog: str, version: str) -> str | None:
     return m.group(1).strip()
 
 
+def unreleased_section(changelog: str) -> str | None:
+    """A "## Kiadatlan (…)" szakasz törzse — a KIADÁS PILLANATÁBAN ez a
+    frissen kiadott verzió tartalma.
+
+    A munkarend: a fejlesztés a "Kiadatlan" szakaszba ír, a kiadás
+    lefut, és a szakasz CSAK UTÁNA kap verzió-fejlécet (miután mindkét
+    telepítő fent van). A verzió saját szakasza tehát a kiadás
+    készítésekor még nem létezik — e nélkül a tartalék nélkül minden
+    kiadás leírása sablonszöveg volt, pedig az app pont ezt mutatja
+    meg a frissítés előtt ("Mi változik?").
+    """
+    m = re.search(r"^## Kiadatlan\b[^\n]*\n(.*?)(?=^## |\Z)", changelog,
+                  re.S | re.M)
+    if m is None:
+        return None
+    return m.group(1).strip() or None
+
+
 def build(version: str, changelog: str | None = None) -> str:
     """A kiadás teljes leírása: telepítés + a verzió változásai.
 
-    Ha a verzió szakasza nem található, a telepítési rész akkor is
-    kimegy, a változás-lista helyett pedig a CHANGELOG-ra mutatunk —
-    egy hiányzó szakasz miatt nem maradhat el a kiadás.
+    Sorrend: a verzió SAJÁT szakasza (újra-kiadásnál), ha nincs, a
+    "Kiadatlan" szakasz (a rendes kiadási út — lásd unreleased_section);
+    ha az sincs, a telepítési rész akkor is kimegy, a változás-lista
+    helyett a CHANGELOG-ra mutatunk — egy hiányzó szakasz miatt nem
+    maradhat el a kiadás.
     """
     if changelog is None:
         changelog = (_CHANGELOG.read_text(encoding="utf-8")
                      if _CHANGELOG.exists() else "")
     body = section(changelog, version)
+    if not body:
+        body = unreleased_section(changelog)
+        if body:
+            body += ("\n\n*(A korábbi kiadások változásai: CHANGELOG.md a "
+                     "repó gyökerében.)*")
     if not body:
         return (_INSTALL + "\nÚjdonságok e kiadásban: lásd a CHANGELOG.md-t "
                 "a repó gyökerében.\n")

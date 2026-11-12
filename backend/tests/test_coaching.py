@@ -132,6 +132,85 @@ def test_timeline_matches_frame_count():
     assert {"priority", "category", "text"} <= set(tl[0][0].keys())
 
 
+# ---- Belső segédek közvetlenül (második kör) --------------------------------
+
+def test_field_players_a_kapus_nelkul():
+    """A csapat mezőnyjátékosai: a saját kaputól 2 m-en belül álló
+    játékos kapusnak számít és kimarad (szerep-jelölés nélkül is); a
+    másik csapat nem keveredik bele."""
+    from handball.pipeline.coaching import _field_players
+
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[
+        _pl(1, Team.AWAY, 39.0, 10.0),      # kapus (1 m a x=40 kaputól)
+        _pl(2, Team.AWAY, 38.0, 10.0),      # pont 2 m: még kapus
+        _pl(3, Team.AWAY, 34.0, 8.0), _pl(4, Team.AWAY, 34.0, 12.0),
+        _pl(11, Team.HOME, 30.0, 10.0),
+        _pl(12, Team.HOME, 1.0, 10.0),      # a hazai kapus
+    ], ball=None)
+    assert [p.track_id for p in _field_players(frame, Team.AWAY, cfg)] == [3, 4]
+    assert [p.track_id for p in _field_players(frame, Team.HOME, cfg)] == [11]
+    assert _field_players(Frame(t=0, players=[], ball=None), Team.HOME,
+                          cfg) == []
+
+
+def test_side_label_a_palya_szelessege_menten():
+    """A pálya szélessége (0..20 m) mentén: az alsó harmad "bal oldalon",
+    a felső "jobb oldalon", köztük "középen"."""
+    from handball.pipeline.coaching import _side_label
+
+    assert _side_label(2.0) == "bal oldalon"
+    assert _side_label(10.0) == "középen"
+    assert _side_label(18.0) == "jobb oldalon"
+    assert _side_label(6.5) == "bal oldalon" and _side_label(6.7) == "középen"
+    assert _side_label(13.1) == "középen" and _side_label(13.3) == "jobb oldalon"
+
+
+def test_formation_suggestion_formahoz_illo_tanacs():
+    """Minden ismert védőformához saját támadó tanács jár (3-as
+    prioritással); ismeretlen / nem tipikus formánál általános tanács a
+    forma nevével, alacsonyabb prioritással."""
+    from handball.pipeline.coaching import _formation_suggestion
+
+    for forma, kulcsszo in (("6-0", "9 m-es lövést"), ("5-1", "előretolt"),
+                            ("4-2", "középső rés"), ("3-2-1", "beállót"),
+                            ("3-3", "széles járatás")):
+        s = _formation_suggestion(forma)
+        assert (s.priority, s.category) == (3, "forma"), forma
+        assert s.text.startswith(forma) or forma in s.text
+        assert kulcsszo in s.text, forma
+    egyeb = _formation_suggestion("4-1-0 (hátsó-közép-előre)")
+    assert (egyeb.priority, egyeb.category) == (2, "forma")
+    assert egyeb.text == ("Védőforma: 4-1-0 (hátsó-közép-előre) — keresd a "
+                          "legüresebb sávot.")
+
+
+def test_ball_speed_toward_attack_tamado_iranyu_sebesseg():
+    """A labda sebessége a TÁMADOTT kapu felé (m/s): a hazainál a +x a
+    pozitív, a vendégnél a −x; visszafelé negatív; előző kocka vagy labda
+    nélkül 0."""
+    from handball.pipeline.coaching import _ball_speed_toward_attack
+
+    cfg = TacticsConfig()
+
+    def kocka(x):
+        return Frame(t=0, players=[], ball=None if x is None
+                     else Ball(x=x, y=10.0, confidence=1.0))
+
+    elott, most = kocka(20.0), kocka(20.4)
+    assert abs(_ball_speed_toward_attack(most, elott, Team.HOME, cfg, 25.0)
+               - 10.0) < 1e-9
+    assert abs(_ball_speed_toward_attack(most, elott, Team.AWAY, cfg, 25.0)
+               + 10.0) < 1e-9
+    assert abs(_ball_speed_toward_attack(elott, most, Team.AWAY, cfg, 25.0)
+               - 10.0) < 1e-9
+    assert _ball_speed_toward_attack(most, None, Team.HOME, cfg, 25.0) == 0.0
+    assert _ball_speed_toward_attack(kocka(None), elott, Team.HOME, cfg,
+                                     25.0) == 0.0
+    assert _ball_speed_toward_attack(most, kocka(None), Team.HOME, cfg,
+                                     25.0) == 0.0
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
