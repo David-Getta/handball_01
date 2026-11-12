@@ -1424,10 +1424,11 @@ def test_az_ai_probak_osszkepe():
           "emberhatrany_proba": {"itelet": "igazolt"},
           "utolso_labda_proba": {"itelet": "igazolt"},
           "szuper_csere_proba": {"itelet": "igazolt"},
-          "centis_proba": {"itelet": "josolhato"}}
+          "centis_proba": {"itelet": "josolhato"},
+          "rovid_sarok_proba": {"itelet": "josolhato"}}
     o = model_checks_overview(mc)
-    assert (o["itelt"], o["bizonyitott"]) == (16, 13)
-    # Az "élő esély" None → 16 ítél a 17-ből; mindennel 17 (MC_PROBAK).
+    assert (o["itelt"], o["bizonyitott"]) == (17, 14)
+    # Az "élő esély" None → 17 ítél a 18-ból; mindennel 18 (MC_PROBAK).
     from handball.pipeline.play_simulation import MC_PROBA_NEVEK, MC_PROBAK
     assert (o["osszes"], o["nem_itelt"], o["nem_itelt_nevek"]) == \
         (MC_PROBAK, 1, ["élő esély"])
@@ -1440,11 +1441,11 @@ def test_az_ai_probak_osszkepe():
     # Üres könyvtár: egyik sem ítél → None (a csempe nem mutat semmit).
     assert model_checks_overview({}) is None
     assert o["verdict"] == (
-        "16 próbából 13 bizonyított: lövő-szorzók, döntés-tanácsok, "
+        "17 próbából 14 bizonyított: lövő-szorzók, döntés-tanácsok, "
         "eredmény-előrejelzés, fal-becslés, kapus-választás, "
         "figura-felderítés, felderítés, hetes-dobó, hetes-irány, "
-        "emberhátrány-fal, utolsó labda, szuper-csere, centis-minta; még "
-        "nem: kapus-sávok, "
+        "emberhátrány-fal, utolsó labda, szuper-csere, centis-minta, "
+        "rövid-sarok-minta; még nem: kapus-sávok, "
         "védő-modell, gólszerzők")
     # A kapus-választás, a hetes-dobó, az emberhátrány-fal és az utolsó
     # labda csak az "igazolt", a felderítés csak az "atviheto", a
@@ -1456,8 +1457,9 @@ def test_az_ai_probak_osszkepe():
         "emberhatrany_proba": {"itelet": "nem"},
         "utolso_labda_proba": {"itelet": "nem"},
         "szuper_csere_proba": {"itelet": "nem"},
-        "centis_proba": {"itelet": "nem"}})
-    assert (o2["itelt"], o2["bizonyitott"]) == (16, 5)
+        "centis_proba": {"itelet": "nem"},
+        "rovid_sarok_proba": {"itelet": "nem"}})
+    assert (o2["itelt"], o2["bizonyitott"]) == (17, 5)
 
 
 def test_a_proba_szintjei_es_az_elo_jelzesek_onkalibralasa():
@@ -4272,3 +4274,45 @@ def test_a_centis_minta_valodi_retegbol():
     s = narrow_miss_sample(mt, Team.HOME)
     r = narrow_misses(mt)["home"]
     assert s == {"kihagyott": r["misses"], "centis": r["narrow"]}
+
+
+def test_a_rovid_sarok_minta_probaja():
+    """short_side_backtest: a KORÁBBI meccsek összegéből kimondott rövid /
+    hosszú sarok-minta a meccsen bejött-e; kevés jósolt meccsnél és kevés
+    oldalról lőtt gólnál None."""
+    from handball.pipeline.play_simulation import short_side_backtest
+
+    def m(i, h, a):
+        return {"match_id": f"m{i}", "home": "A", "away": "B",
+                "minta": {"home": h, "away": a}}
+
+    rovid = {"golok": 6, "rovid": 5}
+    hosszu = {"golok": 6, "rovid": 0}
+    meccsek = [m(i, rovid, hosszu) for i in range(5)]
+    p = short_side_backtest(meccsek)
+    assert (p["meccsek"], p["talalt"], p["itelet"]) == (8, 8, "josolhato")
+    assert {r["josolt"] for r in p["sorok"]} == {"rövid", "hosszú"}
+    assert "sarok-mintája" in p["verdict"]
+    assert short_side_backtest(meccsek, "A") is None
+    vegyes = [m(i, rovid if i % 2 == 0 else hosszu,
+                hosszu if i % 2 == 0 else rovid) for i in range(8)]
+    v = short_side_backtest(vegyes)
+    assert v is None or v["itelet"] == "nem"
+    keves = meccsek[:1] + [m(i, {"golok": 1, "rovid": 1},
+                             {"golok": 1, "rovid": 0}) for i in range(1, 9)]
+    assert short_side_backtest(keves) is None
+
+
+def test_a_rovid_sarok_minta_valodi_retegbol():
+    """short_side_sample a VALÓDI attack_types.short_side_goals mezőit
+    olvassa."""
+    from handball.models.tracking import Team
+    from handball.pipeline.attack_types import short_side_goals
+    from handball.pipeline.play_simulation import short_side_sample
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    mt = simulate_ground_truth(duration_s=240, fps=25.0, seed=3,
+                               shots_per_min=8)
+    r = short_side_goals(mt)["away"]
+    assert short_side_sample(mt, Team.AWAY) == {"golok": r["goals"],
+                                                "rovid": r["short"]}

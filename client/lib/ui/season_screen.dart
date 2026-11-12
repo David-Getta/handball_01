@@ -195,6 +195,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
     final ulSzoveg = (_modelCheck["utolso_labda_proba"] as Map?)?["verdict"];
     final scSzoveg = (_modelCheck["szuper_csere_proba"] as Map?)?["verdict"];
     final cmSzoveg = (_modelCheck["centis_proba"] as Map?)?["verdict"];
+    final rsSzoveg = (_modelCheck["rovid_sarok_proba"] as Map?)?["verdict"];
     if (teams.isEmpty && kapusok.isEmpty && dontesek.isEmpty &&
         vedok.isEmpty &&
         eloreSzoveg is! String && golSzoveg is! String &&
@@ -205,7 +206,8 @@ class _SeasonScreenState extends State<SeasonScreen> {
         hetesSzoveg is! String && hiSzoveg is! String &&
         hhSzoveg is! String && fvSzoveg is! String &&
         ehSzoveg is! String && ulSzoveg is! String &&
-        scSzoveg is! String && cmSzoveg is! String) {
+        scSzoveg is! String && cmSzoveg is! String &&
+        rsSzoveg is! String) {
       return const [];
     }
     final dOsszes =
@@ -381,6 +383,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
       if (cmSzoveg is String) ...[
         const SizedBox(height: AppSpacing.sm),
         Text("Centis-minta: $cmSzoveg.",
+            style: AppText.value.copyWith(fontSize: 13)),
+      ],
+      // A rövid-sarok-minta próbája: a gólok rövid / hosszú sarok-mintája
+      // a következő meccsre is áll-e (play_simulation.short_side_backtest).
+      if (rsSzoveg is String) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text("Rövid-sarok-minta: $rsSzoveg.",
             style: AppText.value.copyWith(fontSize: 13)),
       ],
       // A figuráik próbája: visszatérnek-e a felderítés figurái.

@@ -3171,7 +3171,7 @@ MC_PROBA_NEVEK = ("lövő-szorzók", "kapus-sávok", "döntés-tanácsok",
                   "élő esély", "fal-becslés", "kapus-választás",
                   "figura-felderítés", "felderítés", "hetes-dobó",
                   "hetes-irány", "emberhátrány-fal", "utolsó labda",
-                  "szuper-csere", "centis-minta")
+                  "szuper-csere", "centis-minta", "rövid-sarok-minta")
 MC_PROBAK = len(MC_PROBA_NEVEK)
 
 
@@ -3193,7 +3193,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     ajánlott lövő a hajrában jobban fejez be (last_shot_backtest), a
     szuper-csere, ha a könyvtár beállója a padról többet termel a többinél
     (super_sub_backtest), a centis-minta, ha a mellé lövések centis /
-    messzi mintája a következő meccsre is áll (narrow_miss_backtest). Mit
+    messzi mintája a következő meccsre is áll (narrow_miss_backtest), a
+    rövid-sarok-minta, ha a gólok rövid / hosszú sarok-mintája is
+    (short_side_backtest). Mit
     jelent edzőileg: egy pillantásra, mennyire lehet a klub saját
     könyvtárán az AI-ra építeni. Visszatérés: {"itelt", "bizonyitott",
     "sorok": [{"nev", "bizonyitott"}], "verdict"} — None, ha egyik próba
@@ -3254,6 +3256,9 @@ def model_checks_overview(mc: dict) -> dict | None:
     cm = mc.get("centis_proba")
     if cm:
         add("centis-minta", cm.get("itelet") == "josolhato")
+    rs = mc.get("rovid_sarok_proba")
+    if rs:
+        add("rövid-sarok-minta", rs.get("itelet") == "josolhato")
     if not sorok:
         return None
     k = sum(1 for r in sorok if r["bizonyitott"])
@@ -7205,7 +7210,29 @@ def narrow_miss_backtest(meccsek: list,
     ("josolhato" / "nem"), "verdict"} — None, ha NMP_PROBA_MIN-nél
     kevesebb a jósolt meccs."""
     from .xg import NM_NARROW_PCT, NM_WIDE_PCT, narrow_misses_kind
-    felezo = (NM_NARROW_PCT + NM_WIDE_PCT) / 2.0
+    return _minta_backtest(
+        meccsek, csapat, narrow_misses_kind, "kihagyott", "centis",
+        (NM_NARROW_PCT + NM_WIDE_PCT) / 2.0, "centis", NMP_MIN_KIHAGYAS,
+        lambda n, t, tp, ok: (
+            f"a könyvtár centis / messzi mintája {n} meccsből {t} "
+            f"alkalommal jött be ({tp:.0f}%; véletlen: 50%) — "
+            + ("a kapus a minta szerint állhat fel (centis lövőnél "
+               "középen, messzi lövőnél korai kilépés)" if ok else
+               "a célzásuk meccsről meccsre változik: a kapus a napi "
+               "lövésképre figyeljen, ne a könyvtárra")))
+
+
+def _minta_backtest(meccsek: list, csapat: str | None, kind_fn,
+                    n_kulcs: str, k_kulcs: str, felezo: float,
+                    felso_minta: str, min_most: int, szoveg) -> dict | None:
+    """Kétkimenetes darabszám-minta próbája (a centis- és a rövid-sarok
+    minta közös motorja): minden meccsre és oldalra a KORÁBBI meccsek
+    összegéből a minta (`kind_fn(n, k)` → (minta, %)); ahol van, és a
+    meccsen legalább `min_most` eset mérhető, bejött-e — a meccs
+    részaránya (k / n) a jósolt oldalon áll-e a `felezo`-höz képest (a
+    `felso_minta` a felező fölötti oldal). Visszatérés: {"meccsek",
+    "talalt", "talalat_pct", "sorok", "itelet" ("josolhato" / "nem"),
+    "verdict"} — None, ha NMP_PROBA_MIN-nél kevesebb a jósolt meccs."""
     talalt = 0
     sorok: list = []
     for i, m in enumerate(meccsek or []):
@@ -7216,21 +7243,21 @@ def narrow_miss_backtest(meccsek: list,
                 continue
             korabbi = [(x.get("minta") or {}).get(s) or {} for x in meccsek[:i]
                        for s in ("home", "away") if x.get(s) == nev]
-            n = sum(int(k.get("kihagyott", 0)) for k in korabbi)
-            c = sum(int(k.get("centis", 0)) for k in korabbi)
-            minta, _pct = narrow_misses_kind(n, c)
+            n = sum(int(k.get(n_kulcs, 0)) for k in korabbi)
+            c = sum(int(k.get(k_kulcs, 0)) for k in korabbi)
+            minta, _pct = kind_fn(n, c)
             if minta is None:
                 continue
             most = (m.get("minta") or {}).get(side) or {}
-            mn = int(most.get("kihagyott", 0))
-            if mn < NMP_MIN_KIHAGYAS:
+            mn = int(most.get(n_kulcs, 0))
+            if mn < min_most:
                 continue
-            pct = 100.0 * int(most.get("centis", 0)) / mn
-            jott = pct >= felezo if minta == "centis" else pct < felezo
+            pct = 100.0 * int(most.get(k_kulcs, 0)) / mn
+            jott = pct >= felezo if minta == felso_minta else pct < felezo
             talalt += int(jott)
             sorok.append({"match_id": m.get("match_id"), "team": nev,
-                          "josolt": minta, "kihagyott": mn,
-                          "centis_pct": round(pct, 1), "bejott": jott})
+                          "josolt": minta, n_kulcs: mn,
+                          f"{k_kulcs}_pct": round(pct, 1), "bejott": jott})
     if len(sorok) < NMP_PROBA_MIN:
         return None
     tp = 100.0 * talalt / len(sorok)
@@ -7238,11 +7265,50 @@ def narrow_miss_backtest(meccsek: list,
     return {"meccsek": len(sorok), "talalt": talalt,
             "talalat_pct": round(tp, 1), "sorok": sorok,
             "itelet": "josolhato" if josolhato else "nem",
-            "verdict": (f"a könyvtár centis / messzi mintája {len(sorok)} "
-                        f"meccsből {talalt} alkalommal jött be ({tp:.0f}%; "
-                        "véletlen: 50%) — "
-                        + ("a kapus a minta szerint állhat fel (centis "
-                           "lövőnél középen, messzi lövőnél korai kilépés)"
-                           if josolhato else
-                           "a célzásuk meccsről meccsre változik: a kapus "
-                           "a napi lövésképre figyeljen, ne a könyvtárra"))}
+            "verdict": szoveg(len(sorok), talalt, tp, josolhato)}
+
+
+# ---- Rövid-sarok-minta: jósolható-e, hova lőnek oldalról ------------------
+# A felderítés "rövid / hosszú" sarok-mintája (attack_types.short_side_kind)
+# a kapus felállását állítja. A próba ugyanaz, mint a centis-mintáé: a
+# KORÁBBI meccsek összegéből kimondott minta a meccsen bejött-e (a rövid
+# sarok részaránya a két küszöb felezőjéhez képest a jósolt oldalon).
+RSP_MIN_GOL = 2            # ennyi oldalról lőtt gól kell a meccsen
+
+
+def short_side_sample(match: Match, team: Team,
+                      config: TacticsConfig | None = None) -> dict:
+    """A rövid-sarok-minta NYERS, JSON-barát meccs-mintája: a `team`
+    oldalról lőtt (nem középre ment) góljai — {"golok": n, "rovid": a
+    lövő felőli sarokba menők} (attack_types.short_side_goals). Meccsek
+    közt összeadható."""
+    from .attack_types import short_side_goals
+    r = short_side_goals(match, config)[team.value]
+    return {"golok": int(r["goals"]), "rovid": int(r["short"])}
+
+
+def short_side_backtest(meccsek: list,
+                        csapat: str | None = None) -> dict | None:
+    """A rövid-sarok-minta próbája: `meccsek` = [{"match_id", "home",
+    "away", "minta": {"home", "away"} (short_side_sample)}] időrendben.
+    Minden meccsre és oldalra a KORÁBBI meccsek összegéből a minta
+    (attack_types.short_side_kind: "rövid" / "hosszú"); ahol van, és a
+    meccsen legalább RSP_MIN_GOL oldalról lőtt gól mérhető, bejött-e: a
+    rövid sarok részaránya a jósolt oldalon áll a két küszöb (SS_SHORT_PCT
+    és SS_LONG_PCT) felezőjéhez képest. A `csapat` megadásával csak az ő
+    meccsei. Mit jelent edzőileg: a kapus a könyvtár mintájára zárhatja-e
+    a rövid sarkot (vagy várhat ki a hosszúra), vagy a lövőik meccsről
+    meccsre máshova lőnek. Visszatérés: {"meccsek", "talalt",
+    "talalat_pct", "sorok", "itelet" ("josolhato" / "nem"), "verdict"} —
+    None, ha NMP_PROBA_MIN-nél kevesebb a jósolt meccs."""
+    from .attack_types import SS_LONG_PCT, SS_SHORT_PCT, short_side_kind
+    return _minta_backtest(
+        meccsek, csapat, short_side_kind, "golok", "rovid",
+        (SS_SHORT_PCT + SS_LONG_PCT) / 2.0, "rövid", RSP_MIN_GOL,
+        lambda n, t, tp, ok: (
+            f"a könyvtár rövid / hosszú sarok-mintája {n} meccsből {t} "
+            f"alkalommal jött be ({tp:.0f}%; véletlen: 50%) — "
+            + ("a kapus a minta szerint állhat fel (rövid mintánál a "
+               "rövid kapufához lép, hosszúnál kivár)" if ok else
+               "a lövőik meccsről meccsre máshova lőnek: a kapus a "
+               "lövő kezét figyelje, ne a könyvtárat")))

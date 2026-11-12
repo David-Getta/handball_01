@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **AI-próba: a rövid-sarok-minta jósolható-e** (új próba,
+  `play_simulation.short_side_backtest`): a könyvtár időrendjében a
+  KORÁBBI meccsek összegzett oldalról lőtt góljaiból kimondott „rövid /
+  hosszú sarok” minta (`attack_types.short_side_kind`) a következő
+  meccsen bejött-e — legalább 2 oldalról lőtt gólnál a rövid sarok
+  részaránya a két küszöb felezőjéhez képest a jósolt oldalon áll-e.
+  6 jósolt meccstől ítél, 15 százalékponttal a véletlen (50%) fölött
+  „jósolható”. A centis-minta próbájával közös motoron fut
+  (`_minta_backtest`). Edzői olvasat: a kapus a könyvtár mintájára
+  zárhatja-e a rövid sarkot, vagy a lövő kezét figyelje. Felületek:
+  `/library/player-model-check` „rovid_sarok_proba”, a meccs-előzetes,
+  a csapat-felderítés modell-próbája, az AI-próbák összképe új sora
+  („rövid-sarok-minta”, 18 próba), szezon-képernyő sor.
+
 - **Rövid vagy hosszú sarok: a lövő FELŐLI vagy a keresztbe sarokba
   mennek-e a gólok** (új réteg, `attack_types.short_side_goals`): a
   kapu-sarok réteg a kapu bal / jobb oldalát nézi, ez a lövő helyéhez

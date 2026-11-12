@@ -8174,6 +8174,14 @@ def create_app():
                                 "szuper_csere_verdict": sc_["verdict"]}
         except Exception:
             pass
+        # A rövid / hosszú sarok-mintájuk próbája — hibatűrően.
+        try:
+            rs_ = _rovidsarok_proba(csapat=team)
+            if rs_:
+                modell_proba = {**(modell_proba or {}), "rovid_sarok": rs_,
+                                "rovid_sarok_verdict": rs_["verdict"]}
+        except Exception:
+            pass
         # A centis / messzi mintájuk próbája — hibatűrően.
         try:
             cm_ = _centis_proba(csapat=team)
@@ -8994,6 +9002,27 @@ def create_app():
             for m_ in _idorendben(_season_matches())
             if m_.meta.match_id != kiveve], csapat)
 
+    def _rovidsarok_minta_of(m_, side: str) -> dict:
+        """EGY meccs rövid-sarok-mintája az adott oldalra (play_simulation.
+        short_side_sample) — a lemezes eredmény-tárból."""
+        from ..pipeline.play_simulation import short_side_sample
+        return _cached_result(m_.meta.match_id, f"rovidsarok-minta-v1-{side}",
+                              lambda: short_side_sample(m_, Team(side)))
+
+    def _rovidsarok_proba(csapat: str | None = None,
+                          kiveve: str | None = None):
+        """A rövid / hosszú sarok-minta próbája a könyvtár időrendjében
+        (play_simulation.short_side_backtest; a `kiveve` meccs nélkül, a
+        `csapat` megadásával csak az ő meccsei)."""
+        from ..pipeline.play_simulation import short_side_backtest
+        return short_side_backtest([
+            {"match_id": m_.meta.match_id, "home": m_.meta.home_team,
+             "away": m_.meta.away_team,
+             "minta": {"home": _rovidsarok_minta_of(m_, "home"),
+                       "away": _rovidsarok_minta_of(m_, "away")}}
+            for m_ in _idorendben(_season_matches())
+            if m_.meta.match_id != kiveve], csapat)
+
     def _hetesirany_minta_of(m_, side: str) -> dict:
         """EGY meccs hetes-irány mintája az adott oldalra (play_simulation.
         seven_direction_sample) — a lemezes eredmény-tárból."""
@@ -9521,6 +9550,7 @@ def create_app():
                 "hetes_irany_proba": _hetes_irany_proba(),
                 "szuper_csere_proba": _szupercsere_proba(),
                 "centis_proba": _centis_proba(),
+                "rovid_sarok_proba": _rovidsarok_proba(),
                 "het_a_hat_proba": _het_a_hat_proba(),
                 "falvaltas_proba": _falvaltas_proba(),
                 "emberhatrany_proba": _emberhatrany_proba(),
@@ -9619,6 +9649,7 @@ def create_app():
                                  "away": _szupercsere_javaslat(away)},
                 "szuper_csere_proba": _szupercsere_proba(),
                 "centis_proba": _centis_proba(),
+                "rovid_sarok_proba": _rovidsarok_proba(),
                 "kulcs_hiany": {
                     k: key_player_absence(gsz[k], (f or {}).get(
                         "home_goals" if k == "home" else "away_goals"))
