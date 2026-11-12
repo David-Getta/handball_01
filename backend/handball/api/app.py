@@ -10430,6 +10430,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import short_side_goals
+            res["short_side_goals"] = short_side_goals(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import attack_side_bias
             res["attack_side_bias"] = attack_side_bias(match)
         except Exception:
@@ -12952,6 +12957,8 @@ def create_app():
                 from ..pipeline.xg import narrow_miss_shooters
                 _layer("narrow_miss_shooters",
                        lambda: narrow_miss_shooters(match))
+                from ..pipeline.attack_types import short_side_goals
+                _layer("short_side_goals", lambda: short_side_goals(match))
                 from ..pipeline.attack_types import attack_side_bias
                 _layer("attack_side_bias",
                        lambda: attack_side_bias(match))

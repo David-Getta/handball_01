@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **524 réteg**, modulonként csoportosítva; a
+Összesen **525 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (98)
+## attack_types (99)
 
 | Réteg | Mit mér |
 |---|---|
@@ -93,6 +93,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `second_wave_roles` | Befutó poszt: MELYIK POSZT a második hullám a kontráikban. |
 | `shooter_placement` | Lövő-kapuoldal: ki melyik sarokba lő. |
 | `shooter_ranges` | Lövő-távolság profil: KI LŐ TÁVOLRÓL és ki közelről. |
+| `short_side_goals` | Rövid vagy hosszú sarok: az oldalról lőtt gólok a lövő FELŐLI |
 | `shot_distance_fade` | Lövés-távolság esése: KIFELÉ SZORULNAK-E a hajrára. |
 | `shot_ranges` | Lövés-távolság profil: honnan lő és honnan szerez gólt a csapat. |
 | `shot_timing` | Lövés-időzítés: MIKOR lőnek a támadáson belül — első hullámban |

@@ -1857,6 +1857,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 499) Rövid sarok: a MI kapusunk ellen az oldalról lőtt gólok zöme a
+    # lövő felőli (rövid) sarokba megy — a kapus túl korán engedi a
+    # hosszúra; ha keresztbe (hosszú) mennek, túl korán zár a rövidre.
+    # A mérés az ellenfél góljain fut (attack_types.short_side_goals).
+    _szabaly = 499
+    try:
+        from .attack_types import short_side_goals
+        ssg499 = short_side_goals(match, config)
+        for side, opp in (("home", "away"), ("away", "home")):
+            r499 = ssg499.get(opp) or {}
+            if r499.get("pattern") == "rövid":
+                add(side, "kapus", "A rövid sarok zárása",
+                    f"a kapott gólok: {r499['verdict']}",
+                    "szélső- és átlövő-sorozat a rövid sarokra: a kapus a "
+                    "lövő felőli kapufához lép, a test és a kar zárja a "
+                    "rövid oldalt; mérés: oldalról lőtt lövésből hány megy "
+                    "be a rövid sarokba")
+            elif r499.get("pattern") == "hosszú":
+                add(side, "kapus", "Kivárás a hosszú sarokra",
+                    f"a kapott gólok: {r499['verdict']}",
+                    "oldalról lőtt sorozat, a lövő hol rövidre, hol "
+                    "keresztbe lő jelzésre: a kapus a szög felezőjén áll, "
+                    "és csak a kéz indulására mozdul — a hosszú sarokba "
+                    "kapott gólok aránya a mérce")
+    except Exception:
+        pass
+
     # 498) Centis lövő: a saját sarok-kereső lövőnk egyéni feladata —
     # a kihagyásai a kapufát súrolják, a célzás biztonsági ráhagyással.
     _szabaly = 498

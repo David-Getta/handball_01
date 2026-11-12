@@ -547,6 +547,10 @@ class ScoutingReport:
     # súrolók (NM_MARGIN_M-en belül) — darabszámok, összegződnek.
     nm_misses: int = 0
     nm_narrow: int = 0
+    # Rövid vagy hosszú sarok: oldalról lőtt (nem középre ment) gólok +
+    # ebből a lövő felőli sarokba menők — darabszámok, összegződnek.
+    ss_goals: int = 0
+    ss_short: int = 0
     # Centis lövők: lövőnként (mezszám, különben track id) a gólvonalig
     # érő mellé lövések és ebből a centisek — darabszámok, összegződnek.
     nms_misses_by_player: dict = field(default_factory=dict)
@@ -3521,6 +3525,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.nm_misses} gólvonalig érő mellé lövésből méterekkel "
                 "kerüli el a kaput) — kapkodnak: a korai kilépés és a "
                 "sietetés működik, a rossz szögű lövést engedjétek.")
+    except Exception:
+        pass
+
+    # Rövid vagy hosszú sarok: hova mennek az oldalról lőtt góljaik (a
+    # motorral közös döntés: attack_types.short_side_kind).
+    try:
+        from .attack_types import short_side_kind
+        _ss_k, _ss_pct = short_side_kind(rep.ss_goals, rep.ss_short)
+        if _ss_k == "rövid":
+            keys.append(
+                f"A rövid sarkot verik ({rep.ss_goals} oldalról lőtt "
+                f"gólból {rep.ss_short} a lövő felőli sarokba megy) — a "
+                "kapusotok zárja a rövid oldalt, a hosszú sarkot a "
+                "szélen álló védő szögszűkítése fedezze.")
+        elif _ss_k == "hosszú":
+            keys.append(
+                f"Keresztbe lőnek ({rep.ss_goals} oldalról lőtt gólból "
+                f"{rep.ss_goals - rep.ss_short} a hosszú sarokba megy) — a "
+                "kapusotok ne zárjon túl korán a rövidre, maradjon a "
+                "szög felezőjén.")
     except Exception:
         pass
 
@@ -11349,6 +11373,10 @@ def _scout_team_cached(match: Match, team: Team,
         nmrec = _nmi(match, config)[team.value]
         rep.nm_misses = int(nmrec["misses"])
         rep.nm_narrow = int(nmrec["narrow"])
+        from .attack_types import short_side_goals as _ssg
+        ssgrec = _ssg(match, config)[team.value]
+        rep.ss_goals = int(ssgrec["goals"])
+        rep.ss_short = int(ssgrec["short"])
         from .xg import narrow_miss_shooters as _nms
         nmsrec = _nms(match, config)[team.value]
         rep.nms_misses_by_player = {
@@ -15812,6 +15840,32 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 479) Rövid vagy hosszú sarok: az ő oldalról lőtt góljaik mintája
+    # × a TI szélső-védekezésetek / kapusotok — a "rövid" mintánál a
+    # kapus zárja a rövid oldalt, ha a kapusotok formában van (legalább
+    # 15 kaput érő lövésből 33% feletti védés); a "hosszú" mintánál a
+    # szélen álló védő szűkítse a szöget, a kapus kivár.
+    try:
+        from .attack_types import short_side_kind
+        _k479, _p479 = short_side_kind(opp.ss_goals, opp.ss_short)
+        if (_k479 and own.gk_on_target >= 15
+                and own.gk_saves / own.gk_on_target >= 0.33):
+            _sv479 = 100.0 * own.gk_saves / own.gk_on_target
+            if _k479 == "rövid":
+                plan.append(
+                    f"Rövid sarok: az oldalról lőtt góljaik {_p479:.0f}%-a "
+                    f"a lövő felőli sarokba megy — a kapusotok "
+                    f"({_sv479:.0f}% védés) lépjen a rövid kapufához, a "
+                    "hosszút a szélen álló védő szögszűkítése fedezze.")
+            else:
+                plan.append(
+                    f"Hosszú sarok: az oldalról lőtt góljaik "
+                    f"{100 - _p479:.0f}%-a keresztbe megy — a kapusotok "
+                    f"({_sv479:.0f}% védés) ne zárjon túl korán a rövidre, "
+                    "a szög felezőjén várja ki a kéz indulását.")
     except Exception:
         pass
 
@@ -23716,6 +23770,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ac_on_target=sum(r.ac_on_target for r in reports),
         nm_misses=sum(r.nm_misses for r in reports),
         nm_narrow=sum(r.nm_narrow for r in reports),
+        ss_goals=sum(r.ss_goals for r in reports),
+        ss_short=sum(r.ss_short for r in reports),
         nms_misses_by_player=_merge_count_dicts(
             r.nms_misses_by_player for r in reports),
         nms_narrow_by_player=_merge_count_dicts(

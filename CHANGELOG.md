@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Rövid vagy hosszú sarok: a lövő FELŐLI vagy a keresztbe sarokba
+  mennek-e a gólok** (új réteg, `attack_types.short_side_goals`): a
+  kapu-sarok réteg a kapu bal / jobb oldalát nézi, ez a lövő helyéhez
+  viszonyít — a kapu-középtől legalább 2 m-re oldalt álló lövő gólja a
+  lövő oldalán (rövid sarok) vagy keresztben (hosszú sarok) lépi át a
+  gólvonalat; a kapu közepére ment gól kimarad. 6 góltól ítél: 55%
+  felett „rövid”, 20% alatt „hosszú”. Edzői olvasat: a rövid sarkot
+  verő csapat ellen a kapus zárja a rövid oldalt, a hosszút a szélen
+  álló védő szögszűkítése fedezi; a keresztbe lövő ellen a kapus ne
+  zárjon túl korán. Felületek: `/analyze` és meccs-csomag
+  (`short_side_goals`), edzői összefoglaló-mondat, felderítés (mezők
+  `ss_goals`, `ss_short`, edzői kulcs, 479-es páros szabály: × a saját
+  kapus formája), edzés-fókusz 499 („A rövid sarok zárása” /
+  „Kivárás a hosszú sarokra” — a saját kapus a kapott gólok alapján),
+  kliens-csempe „Rövid vagy hosszú kapu-sarok”.
+
 - **AI-próba: a centis-minta jósolható-e** (új próba,
   `play_simulation.narrow_miss_backtest`): a könyvtár időrendjében a
   KORÁBBI meccsek összegzett mellé lövéseiből kimondott „centis /

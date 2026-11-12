@@ -5250,3 +5250,98 @@ def test_advance_speed_labda_vagy_ido_nelkul_nulla():
     assert _advance_speed(_szakasz_labdaval([]), 40.0, 25.0) == 0.0
     # Álló labda: 0 előrehaladás.
     assert _advance_speed(_szakasz_labdaval([20.0] * 10), 40.0, 25.0) == 0.0
+
+
+# ---- Rövid vagy hosszú sarok (short_side_goals) ---------------------------
+
+def _ss_match(pairs, fps=25.0, team=Team.HOME):
+    """Oldalról lőtt gólok: a `pairs` elemei (lövő y, beérkezés y) — a
+    lövő a 33 m-es vonalon áll, a labda a +x kapu gólvonalán a megadott
+    y-on lép át (kapus nincs → gól). A lövés a képrátától függetlenül
+    25 m/s, a szünet 1 másodperc."""
+    from handball.models.tracking import Ball, Frame, Match
+    frames = []
+    t = 0
+    lepes = 25.0 / fps
+    for sy, yc in pairs:
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(5, team, 33.0, sy)],
+                                ball=Ball(x=33.0, y=sy, confidence=1.0)))
+            t += 1
+        for i in range(max(3, round(0.36 * fps))):
+            x = min(34.0 + (i + 1) * lepes, 40.4)
+            u = min(1.0, (x - 34.0) / 6.0)
+            frames.append(Frame(t=t, players=[_pl(5, team, 33.0, sy)],
+                                ball=Ball(x=x, y=sy + (yc - sy) * u,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(1.0 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_short_side_goals_a_rovid_sarok():
+    """Az oldalról lőtt gólok zöme a lövő felőli sarokba megy → "rövid";
+    a két oldalról lőtt gól ugyanúgy számít (tükrözés-invariáns); a
+    ritkított felvétel ugyanazt adja."""
+    from handball.pipeline.attack_types import short_side_goals
+
+    pairs = [(4.0, 8.9)] * 3 + [(16.0, 11.1)] * 2 + [(4.0, 11.1)] * 2
+    for fps in (25.0, 25.0 / 3):
+        rec = short_side_goals(_ss_match(pairs, fps))["home"]
+        assert (rec["goals"], rec["short"], rec["long"]) == (7, 5, 2), rec
+        assert rec["pattern"] == "rövid", rec
+        assert "zárja a rövid oldalt" in rec["verdict"]
+    away = short_side_goals(_ss_match(pairs))["away"]
+    assert away["goals"] == 0 and away["verdict"] is None
+
+
+def test_short_side_goals_a_hosszu_sarok_es_a_keves_minta():
+    """Keresztbe ment gólok zöme → "hosszú"; kevés gól, vegyes kép, a
+    középről lőtt és a kapu közepére ment gól → nincs ítélet."""
+    from handball.pipeline.attack_types import short_side_goals
+
+    hosszu = short_side_goals(_ss_match(
+        [(4.0, 11.1)] * 6 + [(4.0, 8.9)]))["home"]
+    assert (hosszu["goals"], hosszu["short"]) == (7, 1), hosszu
+    assert hosszu["pattern"] == "hosszú"
+    assert "ne zárjon" in hosszu["verdict"]
+    keves = short_side_goals(_ss_match([(4.0, 8.9)] * 5))["home"]
+    assert keves["goals"] == 5 and keves["pattern"] is None
+    vegyes = short_side_goals(_ss_match(
+        [(4.0, 8.9)] * 4 + [(4.0, 11.1)] * 4))["home"]
+    assert vegyes["short_pct"] == 50.0 and vegyes["pattern"] is None
+    kozep = short_side_goals(_ss_match(
+        [(10.5, 8.9)] * 4 + [(4.0, 10.1)] * 4))["home"]
+    assert kozep["goals"] == 0 and kozep["short_pct"] is None
+
+
+def test_short_side_goals_a_feluleteken_valodi_retegbol(monkeypatch):
+    """A felderítés (mezők, edzői kulcs, összegzés, 479-es páros szabály),
+    az összefoglaló és az edzés-fókusz 499-es szabálya a VALÓDI rétegből
+    szólal meg."""
+    import handball.pipeline.training as _tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    m = _ss_match([(4.0, 8.9)] * 5 + [(4.0, 11.1)] * 2)
+    opp = scout_team(m, Team.HOME)
+    assert (opp.ss_goals, opp.ss_short) == (7, 5), opp
+    assert any("rövid sarkot verik" in k for k in _coach_keys(opp)[2])
+    both = combine_reports([opp, opp])
+    assert (both.ss_goals, both.ss_short) == (14, 10)
+    own = scout_team(m, Team.AWAY)
+    own.gk_on_target, own.gk_saves = 20, 8
+    assert any(p.startswith("Rövid sarok:") for p in matchup_plan(own, opp))
+    own.gk_saves = 4            # gyenge kapusformával nincs páros
+    assert not any(p.startswith("Rövid sarok:")
+                   for p in matchup_plan(own, opp))
+    assert "a rövid sarkot verik" in str(coach_summary(m))
+    monkeypatch.setattr(_tr, "MAX_ITEMS", 10_000)
+    tf = training_focus(m)["away"]         # a hazai gólok a vendég kapusán
+    assert any(i["title"] == "A rövid sarok zárása" for i in tf), \
+        [i["title"] for i in tf]

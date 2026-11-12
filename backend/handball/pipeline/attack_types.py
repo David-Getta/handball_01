@@ -945,6 +945,103 @@ def goal_placement(match: Match, config: Optional[TacticsConfig] = None) -> dict
     return out
 
 
+# Rövid vagy hosszú sarok: a lövő a kapu-középtől legalább SS_SIDE_M-re
+# oldalt áll (a középről lőtt gólnak nincs rövid oldala), és a labda a
+# kapu-középtől legalább SS_MID_M-re lép át a gólvonalon. A "rövid" a
+# lövő oldali sarok, a "hosszú" a keresztbe lőtt. Mintát SS_MIN_GOALS
+# ilyen góltól mondunk; "rövid" a minta, ha a rövid sarok aránya
+# legalább SS_SHORT_PCT, "hosszú", ha legfeljebb SS_LONG_PCT.
+SS_SIDE_M = 2.0
+SS_MID_M = 0.5
+SS_MIN_GOALS = 6
+SS_SHORT_PCT = 55.0
+SS_LONG_PCT = 20.0
+
+
+def short_side_kind(goals: int, short: int):
+    """A rövid-sarok döntése a két darabszámból — a motor, a felderítés,
+    a meccsterv és az edzés-fókusz közös ítélete (meccsek közt a
+    darabszámok adódnak össze). Visszatérés: (minta, rövid %) — a minta
+    "rövid" / "hosszú" / None; a % None, ha nincs oldalról lőtt gól."""
+    pct = round(100.0 * short / goals, 1) if goals else None
+    if goals < SS_MIN_GOALS:
+        return None, pct
+    if pct >= SS_SHORT_PCT:
+        return "rövid", pct
+    if pct <= SS_LONG_PCT:
+        return "hosszú", pct
+    return None, pct
+
+
+def short_side_goals(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Rövid vagy hosszú sarok: az oldalról lőtt gólok a lövő FELŐLI
+    (rövid) vagy a keresztbe (hosszú) sarokba mennek.
+
+    A kapu-sarok réteg (goal_placement) a kapu bal / jobb oldalát nézi; ez
+    a lövő helyéhez viszonyít: a kapu-középtől legalább SS_SIDE_M-re
+    oldalt álló lövő gólja hol lépi át a gólvonalat (goal_crossing_y) —
+    a lövő oldalán (rövid sarok) vagy keresztben (hosszú sarok). A kapu
+    közepére (SS_MID_M-en belül) ment gól kimarad. Edzőileg: a kapus a
+    rövid sarkot zárja — akinek a góljai mégis a rövid sarokba mennek,
+    azt a kapus túl korán engedi a hosszúra; a hosszú sarokba lövő csapat
+    ellen a kapus ne zárjon túl korán, a szöget a védő szűkítse. A
+    darabszámok tükrözésre invariánsak (a lövő és a beérkezés ugyanabban
+    a keretben).
+
+    Visszatérés csapatonként: {"goals", "short", "long", "short_pct",
+    "pattern", "verdict"} — a "goals" az oldalról lőtt, nem középre ment
+    gólok száma; pattern "rövid" / "hosszú" / None, és None, ha kevés
+    (SS_MIN_GOALS alatti) a minta.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .event_detection import goal_crossing_y
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {"home": {"goals": 0, "short": 0},
+              "away": {"goals": 0, "short": 0}}
+    for sh in match_xg(match, config)["shots"]:
+        if sh.get("outcome") != "goal" or sh.get("team") not in counts:
+            continue
+        off = float(sh["y"]) - cy
+        if abs(off) < SS_SIDE_M:
+            continue
+        i0 = idx_of.get(sh["t"])
+        if i0 is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(sh["team"]))
+        yc = goal_crossing_y(match, i0, goal_x)
+        if yc is None or abs(yc - cy) < SS_MID_M:
+            continue
+        rec = counts[sh["team"]]
+        rec["goals"] += 1
+        rec["short"] += int((yc - cy) * off > 0)
+
+    out = {}
+    for side in ("home", "away"):
+        n, k = counts[side]["goals"], counts[side]["short"]
+        pattern, pct = short_side_kind(n, k)
+        verdict = None
+        if pattern == "rövid":
+            verdict = (f"a rövid sarkot verik ({n} oldalról lőtt gólból "
+                       f"{k} a lövő felőli sarokba megy, {pct:.0f}%) — "
+                       "a kapus zárja a rövid oldalt, a hosszú sarkot a "
+                       "védő szögszűkítése fedezze")
+        elif pattern == "hosszú":
+            verdict = (f"keresztbe, a hosszú sarokba lőnek ({n} oldalról "
+                       f"lőtt gólból {n - k} keresztben) — a kapus ne zárjon "
+                       "túl korán a rövidre, maradjon a kapu közepéhez "
+                       "közelebb")
+        out[side] = {"goals": n, "short": k, "long": n - k,
+                     "short_pct": pct, "pattern": pattern,
+                     "verdict": verdict}
+    return out
+
+
 # Szélső-lövés: a kapu-középtől oldalra legalább ennyivel (éles szög) ÉS a
 # kaputól legfeljebb ennyire (a szélső a 6-os környékéről fejez be).
 WING_LATERAL_M = 6.0

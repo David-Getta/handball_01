@@ -2535,6 +2535,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Rövid vagy hosszú sarok: az oldalról lőtt (nem középre ment) góljaik
+  // a lövő felőli vagy a keresztbe sarokba mennek — 6 góltól, 55% felett
+  // rövid, 20% alatt hosszú (a backenddel azonos küszöbök: SS_MIN_GOALS,
+  // SS_SHORT_PCT, SS_LONG_PCT).
+  String? _shortSide(Map<String, dynamic> r) {
+    final n = (r["ss_goals"] as num?)?.toInt() ?? 0;
+    final k = (r["ss_short"] as num?)?.toInt() ?? 0;
+    if (n < 6) return null;
+    final pct = 100.0 * k / n;
+    if (pct >= 55.0) {
+      return "a rövid sarkot verik ($n oldalról lőtt gólból $k) · a "
+          "kapusotok zárja a rövid oldalt";
+    }
+    if (pct <= 20.0) {
+      return "keresztbe lőnek ($n oldalról lőtt gólból ${n - k} a hosszú "
+          "sarokba) · a kapus ne zárjon túl korán";
+    }
+    return null;
+  }
+
   // Centis lövő: lövőnként 4 gólvonalig érő mellé lövéstől, legalább 3
   // centis és 60% felett a sarok-kereső (a backenddel azonos küszöbök:
   // NMS_MIN_MISSES, NMS_MIN_NARROW, NM_NARROW_PCT; holtversenyben a
@@ -12754,6 +12774,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Centis kihagyás", _narrowMisses(r)!],
       if (_narrowMissSeeker(r) != null)
         ["Centis lövő", _narrowMissSeeker(r)!],
+      if (_shortSide(r) != null)
+        ["Rövid vagy hosszú kapu-sarok", _shortSide(r)!],
       if (_keyPlayer(r) != null)
         ["Kulcs-ember", _keyPlayer(r)!],
       if (_powerplayTurnoverPlayer(r) != null)

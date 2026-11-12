@@ -7623,6 +7623,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                           "mellé lövéséből a kapufát súrolja.")
     except Exception:
         pass
+    # Rövid vagy hosszú sarok: az oldalról lőtt gólok a lövő felőli vagy a
+    # keresztbe sarokba mennek (attack_types.short_side_goals — a küszöbök
+    # a motoréi: SS_MIN_GOALS, SS_SHORT_PCT, SS_LONG_PCT).
+    try:
+        from .attack_types import short_side_goals
+        ssg = short_side_goals(match)
+        for side, name in (("home", home), ("away", away)):
+            v = ssg[side]["verdict"]
+            if v:
+                pass_line += f" A(z) {name} góljai: {v}."
+    except Exception:
+        pass
     # Kiállítás-sokk: a hátrány elején vagy a végén kapják-e a gólt
     # (rules.shorthanded_onset) — csak ha van minta (a küszöbök a
     # motoréi: SHO_MIN_PART_S, SHO_MIN_GOALS, SHO_RATIO).
