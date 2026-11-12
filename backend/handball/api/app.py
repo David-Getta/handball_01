@@ -10822,6 +10822,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_depth_saves
+            res["gk_depth_saves"] = gk_depth_saves(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import recovery_discipline
             res["recovery_discipline"] = recovery_discipline(match)
         except Exception:
@@ -13176,6 +13181,8 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_saves_by_speed
                 _layer("gk_saves_by_speed",
                        lambda: gk_saves_by_speed(match))
+                from ..pipeline.goalkeeper import gk_depth_saves
+                _layer("gk_depth_saves", lambda: gk_depth_saves(match))
                 from ..pipeline.defense import recovery_discipline
                 _layer("recovery_discipline",
                        lambda: recovery_discipline(match))

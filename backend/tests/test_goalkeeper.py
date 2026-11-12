@@ -2862,3 +2862,104 @@ def test_gk_saves_by_hand_silent_without_enough_shots():
     # sorolódnak be. Ez a szándék: bizonytalan kéz → nincs adat.
     assert rec["hands"]["jobb"]["faced"] == 0, rec
     assert rec["weak_hand"] is None and rec["gap_pp"] is None, rec
+
+
+# ---- Kapus-kilépés a lövésnél (gk_depth_saves) -------------------------------
+
+def _gkd_match(shots, fps=25.0):
+    """HAZAI lövések a +x (vendég) kapura: a `shots` elemei (kapus x, védés?)
+    párok — a vendég kapus a lövés alatt végig a megadott x-en áll (40 a
+    gólvonal); védésnél a labda a kapus előtt 0,6 m-rel áll meg. A lövés
+    a képrátától függetlenül 25 m/s, a szünet 1 másodperc."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    lepes = 25.0 / fps
+
+    def pls(gx):
+        return [PlayerPosition(track_id=1, team=Team.HOME, x=30.0, y=10.0,
+                               source=PositionSource.MEASURED, confidence=1.0),
+                PlayerPosition(track_id=99, team=Team.AWAY, x=gx, y=10.0,
+                               source=PositionSource.MEASURED, confidence=1.0,
+                               role="kapus")]
+    for gx, save in shots:
+        for _ in range(3):
+            frames.append(Frame(t=t, players=pls(gx),
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        target = gx - 0.6 if save else 40.4
+        x = 30.0
+        for _ in range(int((target - 30.0) / lepes) + 3):
+            x = min(x + lepes, target)
+            frames.append(Frame(t=t, players=pls(gx),
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(1.0 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="gkd", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_depth_saves_kilepve_gyengebb():
+    """Kilépve (2 m-re a vonaltól) nem véd, a vonalon (0,6 m) igen →
+    kilépve gyengébb; a ritkított felvétel ugyanazt adja."""
+    from handball.pipeline.goalkeeper import gk_depth_saves
+
+    shots = [(38.0, False)] * 5 + [(39.4, True)] * 4 + [(39.4, False)]
+    for fps in (25.0, 25.0 / 3):
+        rec = gk_depth_saves(_gkd_match(shots, fps))["away"]
+        assert (rec["out"]["faced"], rec["out"]["saves"]) == (5, 0), rec
+        assert (rec["line"]["faced"], rec["line"]["saves"]) == (5, 4), rec
+        assert rec["weak"] == "kilépve"
+        assert "emeljetek" in rec["verdict"]
+    assert gk_depth_saves(_gkd_match(shots))["home"]["on_target"] == 0
+
+
+def test_gk_depth_saves_keves_minta_es_vonalon_gyengebb():
+    """Kevés lövés egy sávban → nincs ítélet; a vonalon gyengébb kapusnál
+    a távoli, helyezett lövés a terv."""
+    from handball.pipeline.goalkeeper import gk_depth_saves
+
+    keves = gk_depth_saves(_gkd_match([(38.0, False)] * 4
+                                      + [(39.4, True)] * 5))["away"]
+    assert keves["out"]["faced"] == 4 and keves["weak"] is None
+    assert keves["verdict"] is None
+    vonal = gk_depth_saves(_gkd_match([(38.0, True)] * 4 + [(38.0, False)]
+                                      + [(39.4, False)] * 5))["away"]
+    assert vonal["weak"] == "vonalon", vonal
+    assert "sarokba helyezett" in vonal["verdict"]
+
+
+def test_gk_depth_saves_a_feluleteken_valodi_retegbol(monkeypatch):
+    """A felderítés (mezők, edzői kulcs, összegzés, 480-as páros szabály),
+    az összefoglaló és az edzés-fókusz 500-as szabálya a VALÓDI rétegből
+    szólal meg."""
+    import handball.pipeline.training as _tr
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+    from handball.pipeline.training import training_focus
+
+    m = _gkd_match([(38.0, False)] * 5 + [(39.4, True)] * 4
+                   + [(39.4, False)])
+    opp = scout_team(m, Team.AWAY)        # a vendég kapusa véd
+    assert (opp.gkd_out_faced, opp.gkd_out_saves) == (5, 0), opp
+    assert (opp.gkd_line_faced, opp.gkd_line_saves) == (5, 4), opp
+    assert any("kilépve gyengébb" in k for k in _coach_keys(opp)[2])
+    both = combine_reports([opp, opp])
+    assert (both.gkd_out_faced, both.gkd_line_saves) == (10, 8)
+    own = scout_team(m, Team.HOME)
+    own.ac_attempts, own.ac_on_target = 30, 21
+    assert any(p.startswith("Kapus-kilépés:")
+               for p in matchup_plan(own, opp))
+    own.ac_on_target = 12              # pontatlan lövőkkel nincs páros
+    assert not any(p.startswith("Kapus-kilépés:")
+                   for p in matchup_plan(own, opp))
+    assert "kilépve volt gyengébb" in str(coach_summary(m))
+    monkeypatch.setattr(_tr, "MAX_ITEMS", 10_000)
+    tf = training_focus(m)["away"]
+    assert any(i["title"] == "Kilépés és visszalépés a lövésre"
+               for i in tf), [i["title"] for i in tf]

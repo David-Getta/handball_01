@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.194 óta)
 
+- **Kapus-kilépés a lövésnél: KILÉPVE vagy a VONALON véd-e jobban a
+  kapus** (új réteg, `goalkeeper.gk_depth_saves`): a kapus-kimozdulás
+  réteg az átlagos mélységet méri — ez azt, hogy a lövés elengedésekor
+  hol állt a kapus (a gólvonaltól legalább 1 m-re: „kilépve”), és onnan
+  mennyit védett. Sávonként 5 kaput érő lövéstől, 15 százalékpontos
+  eltéréstől ítél. Edzői olvasat: a kilépve gyenge kapust átemelik,
+  megkerülik; a vonalon gyenge ellen a távoli, sarokba helyezett lövés a
+  terv. Felületek: `/analyze` és meccs-csomag (`gk_depth_saves`), edzői
+  összefoglaló-mondat, felderítés (mezők `gkd_out_faced`,
+  `gkd_out_saves`, `gkd_line_faced`, `gkd_line_saves`, edzői kulcs,
+  480-as páros szabály: × a saját lövők pontossága), edzés-fókusz 500
+  („Kilépés és visszalépés a lövésre” / „Szögszűkítés: kilépés a
+  lövőre”), kliens-csempe „Kapus-kilépés”.
+
 - **AI-próba: a rövid-sarok-minta jósolható-e** (új próba,
   `play_simulation.short_side_backtest`): a könyvtár időrendjében a
   KORÁBBI meccsek összegzett oldalról lőtt góljaiból kimondott „rövid /

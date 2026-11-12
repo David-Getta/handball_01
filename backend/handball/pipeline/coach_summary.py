@@ -5960,6 +5960,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"sávban {gsp[side][other]['save_pct']:.0f}%-ot.")
     except Exception:
         pass
+    # Kapus-kilépés a lövésnél: kilépve vagy a vonalon véd-e jobban
+    # (goalkeeper.gk_depth_saves — a küszöbök a motoréi: GKD_OUT_M,
+    # GKD_MIN_FACED, GKD_GAP_PP).
+    try:
+        from .goalkeeper import gk_depth_saves
+        gkd = gk_depth_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            r = gkd[side]
+            if r["weak"]:
+                body += (f" A(z) {name} kapusa {r['weak']} volt gyengébb: "
+                         f"kilépve {r['out']['save_pct']:.0f}%-ot, a vonalon "
+                         f"{r['line']['save_pct']:.0f}%-ot védett.")
+    except Exception:
+        pass
     # Álló támadók: ki mozgott labda nélkül a legkevesebbet.
     try:
         from .tactics import static_attackers

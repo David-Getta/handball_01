@@ -1826,6 +1826,100 @@ def gk_saves_by_speed(match: Match, config=None) -> dict:
     return out
 
 
+# Kapus-kilépés a lövésnél: a kapus a gólvonaltól legalább GKD_OUT_M-re áll
+# a lövés elengedésekor → "kilépve", különben "vonalon". Sávonként legalább
+# GKD_MIN_FACED kaput érő lövés kell, és GKD_GAP_PP százalékpontos eltérés,
+# hogy a gyengébb sávot kimondjuk.
+GKD_OUT_M = 1.0
+GKD_MIN_FACED = 5
+GKD_GAP_PP = 15.0
+
+
+def gk_depth_kind(out_faced: int, out_saves: int,
+                  line_faced: int, line_saves: int):
+    """A kapus-kilépés döntése a négy darabszámból — a motor, a
+    felderítés, a meccsterv és az edzés-fókusz közös ítélete (meccsek
+    közt a darabszámok adódnak össze). Visszatérés: (gyenge sáv
+    "kilépve" / "vonalon" / None, kilépve védés %, vonalon védés %)."""
+    op = 100.0 * out_saves / out_faced if out_faced else None
+    lp = 100.0 * line_saves / line_faced if line_faced else None
+    if out_faced < GKD_MIN_FACED or line_faced < GKD_MIN_FACED:
+        return None, op, lp
+    if op - lp >= GKD_GAP_PP:
+        return "vonalon", op, lp
+    if lp - op >= GKD_GAP_PP:
+        return "kilépve", op, lp
+    return None, op, lp
+
+
+def gk_depth_saves(match: Match, config=None) -> dict:
+    """Kapus-kilépés a lövésnél: KILÉPVE vagy a VONALON véd-e jobban a
+    kapus.
+
+    A kapus-kimozdulás réteg (gk_positioning) az átlagos mélységet méri
+    a meccs minden kockáján — ez azt, hogy a LÖVÉS PILLANATÁBAN (az
+    elengedés kockáján) hol állt a kapus, és onnan mennyit védett: a
+    gólvonaltól legalább GKD_OUT_M-re kilépett kapus szögszűkítése vagy
+    a vonalon maradó reflexe a hatékonyabb. Edzőileg: a kilépve gyenge
+    kapust átemelik, megkerülik — maradjon a vonalon, az ellenfél
+    lövői pedig ilyenkor emeljenek; a vonalon gyenge kapus a
+    szögszűkítést gyakorolja, ellene a távoli, sarokba helyezett lövés
+    a terv.
+
+    Visszatérés csapatonként (a VÉDŐ oldal = akinek a kapusa a kapuban
+    van): {"out"/"line": {"faced", "saves", "save_pct"}, "on_target",
+    "weak", "verdict"} — a weak ("kilépve" / "vonalon") és a verdict
+    None, ha valamelyik sávban GKD_MIN_FACED-nél kevesebb a kaput érő
+    lövés, vagy a két védés-arány GKD_GAP_PP-nél kevésbé tér el.
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    xg = match_xg(match, config)
+    out: dict = {}
+    for side in ("home", "away"):
+        team = Team(side)
+        own_x = config.own_goal_x(team)
+        bands = {"out": {"faced": 0, "saves": 0},
+                 "line": {"faced": 0, "saves": 0}}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side or sh["outcome"] not in ("goal", "save"):
+                continue
+            i0 = idx_of.get(sh.get("release_t") or sh["t"])
+            if i0 is None:
+                continue
+            gk = [p for p in match.frames[i0].players
+                  if p.team == team and p.role == "kapus"]
+            if not gk:
+                continue
+            band = "out" if abs(gk[0].x - own_x) >= GKD_OUT_M else "line"
+            bands[band]["faced"] += 1
+            bands[band]["saves"] += int(sh["outcome"] == "save")
+        for b in bands.values():
+            b["save_pct"] = (round(100.0 * b["saves"] / b["faced"], 1)
+                             if b["faced"] else None)
+        weak, op, lp = gk_depth_kind(
+            bands["out"]["faced"], bands["out"]["saves"],
+            bands["line"]["faced"], bands["line"]["saves"])
+        verdict = None
+        if weak == "kilépve":
+            verdict = (f"kilépve gyengébb a kapusuk ({op:.0f}% védés, a "
+                       f"vonalon {lp:.0f}%) — ha kilép, emeljetek át "
+                       "rajta vagy kerüljétek meg")
+        elif weak == "vonalon":
+            verdict = (f"a vonalon gyengébb a kapusuk ({lp:.0f}% védés, "
+                       f"kilépve {op:.0f}%) — ha a vonalon marad, a távoli, "
+                       "sarokba helyezett lövés veri")
+        out[side] = {**bands,
+                     "on_target": sum(b["faced"] for b in bands.values()),
+                     "weak": weak, "verdict": verdict}
+    return out
+
+
 # Kapus emberhátrányban: helyzetenként ennyi kapura tartó lövés kell, és
 # ekkora (százalékpontos) különbség számít érdemi eltérésnek.
 GKSH_MIN_FACED = 4

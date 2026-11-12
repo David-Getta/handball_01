@@ -2073,6 +2073,12 @@ class ScoutingReport:
     # Kapusuk védései lövés-tempó szerint: sávonként (kemény /
     # helyezett) a kapura tartó lövések és a fogások — darabszámok,
     # meccsek közt pontosan összegződnek (védés-arány = saves / faced).
+    # Kapus-kilépés a lövésnél: kaput érő lövések és védések a kapus
+    # mélysége szerint (kilépve / a vonalon) — darabszámok, összegződnek.
+    gkd_out_faced: int = 0
+    gkd_out_saves: int = 0
+    gkd_line_faced: int = 0
+    gkd_line_saves: int = 0
     gsp_hard_faced: int = 0
     gsp_hard_saves: int = 0
     gsp_placed_faced: int = 0
@@ -8558,6 +8564,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "indítása azonnal helyzetet ér.")
 
     # Kapus-védés lövés-tempó szerint: erővel vagy helyezéssel kell lőni.
+    # Kapus-kilépés: kilépve vagy a vonalon gyengébb a kapusuk (a
+    # motorral közös döntés: goalkeeper.gk_depth_kind).
+    try:
+        from .goalkeeper import gk_depth_kind
+        _gkd_w, _gkd_o, _gkd_l = gk_depth_kind(
+            rep.gkd_out_faced, rep.gkd_out_saves,
+            rep.gkd_line_faced, rep.gkd_line_saves)
+        if _gkd_w == "kilépve":
+            keys.append(
+                f"A kapusuk kilépve gyengébb ({_gkd_o:.0f}% védés, a "
+                f"vonalon {_gkd_l:.0f}%) — amikor kilép, emeljetek át "
+                "rajta, vagy kerüljétek meg egy cselel.")
+        elif _gkd_w == "vonalon":
+            keys.append(
+                f"A kapusuk a vonalon gyengébb ({_gkd_l:.0f}% védés, "
+                f"kilépve {_gkd_o:.0f}%) — ha bent marad, távolról, a "
+                "sarokba helyezve lőjetek.")
+    except Exception:
+        pass
     if rep.gsp_hard_faced >= 4 and rep.gsp_placed_faced >= 4:
         _gsp_h = 100.0 * rep.gsp_hard_saves / rep.gsp_hard_faced
         _gsp_p = 100.0 * rep.gsp_placed_saves / rep.gsp_placed_faced
@@ -13073,6 +13098,12 @@ def _scout_team_cached(match: Match, team: Team,
             {"player_id": p["player_id"], "jersey": p["jersey"],
              "frames": p["frames"], "home_frames": p["home_frames"]}
             for p in _rcd(match, config)[team.value]["players"]]
+        from .goalkeeper import gk_depth_saves as _gkd
+        gkdrec = _gkd(match, config)[team.value]
+        rep.gkd_out_faced = gkdrec["out"]["faced"]
+        rep.gkd_out_saves = gkdrec["out"]["saves"]
+        rep.gkd_line_faced = gkdrec["line"]["faced"]
+        rep.gkd_line_saves = gkdrec["line"]["saves"]
         from .goalkeeper import gk_saves_by_speed as _gsp
         gsprec = _gsp(match, config)[team.value]
         rep.gsp_hard_faced = gsprec["hard"]["faced"]
@@ -15840,6 +15871,33 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 480) Kapus-kilépés: az ő kapusuk kilépve vagy a vonalon gyengébb
+    # (a motorral közös döntés) × a TI lövőitek pontossága (legalább 20
+    # lövés-kísérletből 60% kaput ér) — a pontos lövő kilépésnél emel,
+    # vonalon maradásnál távolról a sarokba helyez.
+    try:
+        from .goalkeeper import gk_depth_kind
+        _w480, _o480, _l480 = gk_depth_kind(
+            opp.gkd_out_faced, opp.gkd_out_saves,
+            opp.gkd_line_faced, opp.gkd_line_saves)
+        if (_w480 and own.ac_attempts >= 20
+                and own.ac_on_target / own.ac_attempts >= 0.60):
+            _acc480 = 100.0 * own.ac_on_target / own.ac_attempts
+            if _w480 == "kilépve":
+                plan.append(
+                    f"Kapus-kilépés: a kapusuk kilépve csak {_o480:.0f}%-ot "
+                    f"véd (a vonalon {_l480:.0f}%-ot) — a lövéseitek "
+                    f"{_acc480:.0f}%-a kaput ér: amikor kilép, emeljetek "
+                    "át rajta.")
+            else:
+                plan.append(
+                    f"Kapus-vonal: a kapusuk a vonalon csak {_l480:.0f}%-ot "
+                    f"véd (kilépve {_o480:.0f}%-ot) — a lövéseitek "
+                    f"{_acc480:.0f}%-a kaput ér: távolról, a sarokba "
+                    "helyezve lőjetek.")
     except Exception:
         pass
 
@@ -24654,6 +24712,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         agr_sevens=sum(r.agr_sevens for r in reports),
         agr_susp=sum(r.agr_susp for r in reports),
         recovery_players=_merge_recovery_players(reports),
+        gkd_out_faced=sum(r.gkd_out_faced for r in reports),
+        gkd_out_saves=sum(r.gkd_out_saves for r in reports),
+        gkd_line_faced=sum(r.gkd_line_faced for r in reports),
+        gkd_line_saves=sum(r.gkd_line_saves for r in reports),
         gsp_hard_faced=sum(r.gsp_hard_faced for r in reports),
         gsp_hard_saves=sum(r.gsp_hard_saves for r in reports),
         gsp_placed_faced=sum(r.gsp_placed_faced for r in reports),

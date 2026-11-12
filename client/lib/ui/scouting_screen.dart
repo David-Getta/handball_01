@@ -2535,6 +2535,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-kilépés: kilépve vagy a vonalon gyengébb a kapusuk — sávonként
+  // 5 kaput érő lövéstől, 15 százalékpontos eltéréstől (a backenddel
+  // azonos küszöbök: GKD_MIN_FACED, GKD_GAP_PP).
+  String? _keeperDepth(Map<String, dynamic> r) {
+    final of = (r["gkd_out_faced"] as num?)?.toInt() ?? 0;
+    final os = (r["gkd_out_saves"] as num?)?.toInt() ?? 0;
+    final lf = (r["gkd_line_faced"] as num?)?.toInt() ?? 0;
+    final ls = (r["gkd_line_saves"] as num?)?.toInt() ?? 0;
+    if (of < 5 || lf < 5) return null;
+    final op = 100.0 * os / of;
+    final lp = 100.0 * ls / lf;
+    if (lp - op >= 15.0) {
+      return "kilépve gyengébb (${op.toStringAsFixed(0)}% védés, a vonalon "
+          "${lp.toStringAsFixed(0)}%) · ha kilép, emeljetek át rajta";
+    }
+    if (op - lp >= 15.0) {
+      return "a vonalon gyengébb (${lp.toStringAsFixed(0)}% védés, kilépve "
+          "${op.toStringAsFixed(0)}%) · távolról, a sarokba helyezve";
+    }
+    return null;
+  }
+
   // Rövid vagy hosszú sarok: az oldalról lőtt (nem középre ment) góljaik
   // a lövő felőli vagy a keresztbe sarokba mennek — 6 góltól, 55% felett
   // rövid, 20% alatt hosszú (a backenddel azonos küszöbök: SS_MIN_GOALS,
@@ -12774,6 +12796,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Centis kihagyás", _narrowMisses(r)!],
       if (_narrowMissSeeker(r) != null)
         ["Centis lövő", _narrowMissSeeker(r)!],
+      if (_keeperDepth(r) != null)
+        ["Kapus-kilépés", _keeperDepth(r)!],
       if (_shortSide(r) != null)
         ["Rövid vagy hosszú kapu-sarok", _shortSide(r)!],
       if (_keyPlayer(r) != null)

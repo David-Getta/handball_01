@@ -1857,6 +1857,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 500) Kapus-kilépés: a SAJÁT kapusunk kilépve vagy a vonalon véd
+    # rosszabbul — a gyengébb helyzet a heti kapus-feladat.
+    _szabaly = 500
+    try:
+        from .goalkeeper import GKD_OUT_M, gk_depth_saves
+        gkd500 = gk_depth_saves(match, config)
+        for side in ("home", "away"):
+            r500 = gkd500.get(side) or {}
+            if r500.get("weak") == "kilépve":
+                add(side, "kapus", "Kilépés és visszalépés a lövésre",
+                    f"a kapusunk kilépve {r500['out']['save_pct']:.0f}%-ot "
+                    f"véd, a vonalon {r500['line']['save_pct']:.0f}%-ot",
+                    "kilépés a lövő felé, majd megállás a lövés előtt "
+                    "(stabil alapállás, kezek fent) — átemelés és cselezés "
+                    "elleni sorozat; mérés: a kilépve védett lövések aránya")
+            elif r500.get("weak") == "vonalon":
+                add(side, "kapus", "Szögszűkítés: kilépés a lövőre",
+                    f"a kapusunk a vonalon {r500['line']['save_pct']:.0f}%-ot "
+                    f"véd, kilépve {r500['out']['save_pct']:.0f}%-ot",
+                    f"a lövő felé legalább {GKD_OUT_M:.0f} m kilépés a "
+                    "lövés pillanatára, a szög felezőjén — távoli és "
+                    "szélső lövések sorozatban; mérés: a vonalon kapott "
+                    "gólok aránya")
+    except Exception:
+        pass
+
     # 499) Rövid sarok: a MI kapusunk ellen az oldalról lőtt gólok zöme a
     # lövő felőli (rövid) sarokba megy — a kapus túl korán engedi a
     # hosszúra; ha keresztbe (hosszú) mennek, túl korán zár a rövidre.
