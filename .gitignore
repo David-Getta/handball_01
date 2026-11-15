@@ -47,3 +47,11 @@ client/build/
 # A motor összeomlás-naplója (a felhasználói adatmappában; fejlesztés
 # közben a munkakönyvtárban is keletkezhet)
 engine-crash.log
+
+# ml/ kimenetek (testpontok, modellek, adathalmaz) — nem a repóba valók
+ml/out/
+*.npz
+*.joblib
+*_cache/
+handball_s/
+uniri-hbd.zip
