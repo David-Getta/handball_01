@@ -87,6 +87,12 @@ legend { font-family: var(--font-display); font-weight: 700; font-size: 19px; le
 details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
 summary { cursor: pointer; font-weight: 600; }
 details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.modes a { text-decoration: none; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-weight: 500; }
+.modes a[aria-current="page"] { color: var(--court-ink); background: var(--court); border-color: var(--court); }
+.modes a:focus-visible { outline: 3px solid var(--court); outline-offset: 2px; }
+.arm2 .seg button { min-height: 56px; font-size: 16px; }
+.arm2 .seg button small { display: block; font-size: 12px; color: inherit; opacity: .8; font-weight: 400; }
 @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
 
@@ -95,6 +101,10 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
     <h1>Lövésjelölő</h1>
     <div class="progress" id="progress">Betöltés…</div>
   </header>
+  <nav class="modes" aria-label="Jelölési kör">
+    <a href="#teljes" id="tab1">1. kör: teljes jelölés</a>
+    <a href="#kartartas" id="tab2">2. kör: hol jön ki a labda</a>
+  </nav>
   <div class="bar" aria-hidden="true"><i id="bar"></i></div>
   <div class="notice" id="notice" hidden></div>
 
@@ -115,7 +125,21 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
     <button class="release-btn" id="release">Itt engedi el<kbd>E</kbd></button>
   </div>
 
-  <div class="questions">
+  <fieldset class="arm2" id="arm2" hidden>
+    <legend>Hol jön ki a labda?</legend>
+    <p class="hint">A videó az 1. körben jelölt elengedésnél áll meg. Azt jelöld, amit a kapus lát: hol van a labda (a kéz) ebben a pillanatban — a karformától függetlenül. Lógó könyökkel, de fej fölül dobott labda is „Fent”. A gomb ment és továbblép.</p>
+    <div class="seg" id="arm2btns">
+      <button data-v="fent">Fent<kbd>1</kbd><small>a labda a fej fölött</small></button>
+      <button data-v="fej_mellett">Fej mellett<kbd>2</kbd><small>a fej magasságában, mellette</small></button>
+      <button data-v="oldalt">Oldalt<kbd>3</kbd><small>váll magasságában vagy lejjebb</small></button>
+    </div>
+    <div class="extra" style="margin-top:12px">
+      <label><input type="checkbox" id="kezdo"> Kezdő lövő (gyerek, még kialakulatlan dobómozdulat)<kbd>K</kbd></label>
+      <button id="skip2">Nem látszik, kihagyom<kbd>X</kbd></button>
+    </div>
+  </fieldset>
+
+  <div class="questions" id="questions">
     <fieldset>
       <legend>Kartartás az elengedéskor</legend>
       <p class="hint">Hol a dobókéz, amikor a labda elhagyja.</p>
@@ -155,7 +179,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
 
     <fieldset>
       <legend>Kimenet</legend>
-      <p class="hint">Ha nem látszik a kapu, jelöld így, és a zónát hagyd üresen.</p>
+      <p class="hint">Ebben az adathalmazban a felvétel a lövésnél véget ér, ezért alapból „Nem látszik”. Csak akkor változtasd, ha tényleg látod.</p>
       <div class="seg" data-field="kimenet">
         <button data-v="gol" aria-pressed="false">Gól</button>
         <button data-v="vedes" aria-pressed="false">Védés</button>
@@ -165,7 +189,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
     </fieldset>
   </div>
 
-  <div class="extra">
+  <div class="extra" id="extra1">
     <label><input type="checkbox" id="rossz"> Rossz klip (nem lövés, vagy a kivágás másik játékoson van)</label>
   </div>
 
@@ -185,7 +209,7 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
       <li>Nézd végig egyszer (szóköz), aztán a ◀ ▶ nyilakkal lépkedj kockánként oda, ahol a labda elhagyja a kezet, és nyomd meg az <b>E</b>-t.</li>
       <li>A kockaszám a videó bal felső sarkában is látszik; a „(utana)” kockák már a klip utáni rész, a labda útjához.</li>
       <li>Kartartás <b>1/2/3</b>, lövőkéz <b>J/B</b>, kimenet <b>N</b> = nem látszik. <b>Enter</b> ment és továbblép.</li>
-      <li>A kötelező: elengedés, kartartás, lövőkéz. A zóna és a kimenet akkor, ha látszik.</li>
+      <li>A kötelező: elengedés, kartartás, lövőkéz. A zóna és a kimenet csak akkor, ha látszik — a legtöbb klip a lövésnél véget ér, ezért a kapu-rész általában üres marad.</li>
       <li>Ha bizonytalan vagy, inkább hagyd ki (Következő): kevesebb, de jó jelölés többet ér.</li>
     </ul>
   </details>
@@ -200,12 +224,21 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
   let labels = {};          // klip-id → jelölés (az adatbázisból, élőben)
   let form = {};            // az aktuális klip szerkesztés alatti állapota
   let db = null, userId = null, canSave = false;
+  // 2. kör: "hol jön ki a labda" — külön gyűjtemény, az 1. kör jelölései érintetlenek
+  let labels2 = {};
+  let mode2 = false;
+  let loaded1 = false, loaded2 = false, jumped = false;
+  function eligible(c) { const l = labels[c.id]; return !!l && !l.rossz && Number.isInteger(l.elengedes); }
+  function isDone(c) { return mode2 ? !!labels2[c.id] : !!labels[c.id]; }
 
   function status(msg, cls) { const s = $("status"); s.textContent = msg; s.className = "status" + (cls ? " " + cls : ""); }
   function clip() { return clips[idx]; }
   function fps() { return clip() ? clip().fps : 30; }
 
-  function curFrame() { return Math.max(0, Math.floor(video.currentTime * fps() + 1e-3)); }
+  function curFrame() {
+    const c = clip(); const last = c ? c.frames - 1 : 0;
+    return Math.max(0, Math.min(last, Math.floor(video.currentTime * fps() + 1e-3)));
+  }
   function seekFrame(k) {
     const c = clip(); if (!c) return;
     k = Math.max(0, Math.min(c.frames - 1, k));
@@ -221,9 +254,37 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
   }
 
   function renderProgress() {
-    const done = clips.filter((c) => labels[c.id]).length;
-    $("progress").innerHTML = "<b>" + done + "</b> / " + clips.length + " lövés jelölve";
-    $("bar").style.width = clips.length ? (100 * done / clips.length) + "%" : "0";
+    const pool = mode2 ? clips.filter(eligible) : clips;
+    const done = pool.filter(isDone).length;
+    $("progress").innerHTML = "<b>" + done + "</b> / " + pool.length + (mode2 ? " lövés a 2. körben" : " lövés jelölve");
+    $("bar").style.width = pool.length ? (100 * done / pool.length) + "%" : "0";
+  }
+
+  function renderTag() {
+    const c = clip(); if (!c) return;
+    const tag = $("cliptag");
+    tag.textContent = isDone(c) ? "jelölve" : "nincs jelölve";
+    tag.classList.toggle("done", isDone(c));
+  }
+
+  function renderArm2() {
+    const c = clip(); const s = c && labels2[c.id];
+    $("arm2btns").querySelectorAll("button").forEach((b) =>
+      b.setAttribute("aria-pressed", String(!!s && s.kartartas2 === b.dataset.v)));
+    $("kezdo").checked = !!form.kezdo;
+  }
+
+  function applyMode() {
+    mode2 = location.hash === "#kartartas";
+    $("tab1").setAttribute("aria-current", mode2 ? "false" : "page");
+    $("tab2").setAttribute("aria-current", mode2 ? "page" : "false");
+    $("arm2").hidden = !mode2;
+    $("questions").hidden = mode2;
+    $("extra1").hidden = mode2;
+    $("save").hidden = mode2;
+    $("release").hidden = mode2;
+    renderProgress();
+    if (clips.length) { const i = firstOpen(0); loadClip(i >= 0 ? i : idx); }
   }
 
   function renderForm() {
@@ -242,24 +303,62 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
     idx = (i + clips.length) % clips.length;
     const c = clip();
     const saved = labels[c.id];
-    form = saved ? { ...saved } : {};
+    // Az UNIRI-HBD jelenetei a klip végén véget érnek: a labda útja szinte sosem látszik.
+    form = saved ? { ...saved } : { kimenet: "nem_latszik" };
+    if (mode2) {
+      const s2 = labels2[c.id];
+      // a "kezdő" jelölés jelenetenként jellemző: új klipnél az előzőét visszük tovább
+      form = { kezdo: s2 ? !!s2.kezdo : !!form2Carry };
+    }
     $("clipname").textContent = (idx + 1) + ". " + c.id;
-    const tag = $("cliptag");
-    tag.textContent = saved ? "jelölve" : "nincs jelölve";
-    tag.classList.toggle("done", !!saved);
+    renderTag();
     video.src = c.src;
     video.load();
     showFrame(0);
-    renderForm();
-    status("");
+    if (mode2 && eligible(c)) {
+      const r = labels[c.id].elengedes;
+      video.addEventListener("loadeddata", () => seekFrame(r), { once: true });
+      renderArm2();
+    } else {
+      renderForm();
+    }
+    status(mode2 && loaded1 && !eligible(c) ? "Ezt a lövést az 1. körben rossz klipnek jelölted." : "");
   }
+  let form2Carry = false;
 
   function firstOpen(from = 0) {
     for (let j = 0; j < clips.length; j++) {
       const i = (from + j) % clips.length;
-      if (!labels[clips[i].id]) return i;
+      const c = clips[i];
+      if (mode2 ? (eligible(c) && !labels2[c.id]) : !labels[c.id]) return i;
     }
     return -1;
+  }
+
+  function nextEligible(step) {
+    for (let j = 1; j <= clips.length; j++) {
+      const i = (idx + step * j + clips.length * j) % clips.length;
+      if (!mode2 || eligible(clips[i])) return i;
+    }
+    return idx;
+  }
+
+  async function save2(value) {
+    const c = clip(); if (!c || !eligible(c)) return;
+    if (!canSave) { status("A mentéshez bejelentkezés és szerkesztési jog kell.", "err"); return; }
+    const doc = { klip: c.id, kartartas2: value, kezdo: !!$("kezdo").checked,
+                  elengedes: labels[c.id].elengedes, ki: userId, ido: new Date().toISOString() };
+    try {
+      await db.collection("kartartas2").doc(c.id).set(doc);
+      labels2[c.id] = doc;
+      form2Carry = doc.kezdo;
+      renderProgress();
+      const nxt = firstOpen(idx + 1);
+      if (nxt === -1) { status("Mentve. A 2. kör kész — köszönöm!", "ok"); loadClip(idx); }
+      else { loadClip(nxt); status("Mentve: " + c.id, "ok"); }
+    } catch (e) {
+      status("Nem sikerült menteni (" + (e && e.code || "hiba") + "). Próbáld újra.", "err");
+    }
   }
 
   async function save() {
@@ -308,15 +407,32 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
     const f = g.dataset.field; form[f] = form[f] === b.dataset.v ? undefined : b.dataset.v; renderForm();
   }));
   $("rossz").onchange = (e) => { form.rossz = e.target.checked; };
-  $("prev").onclick = () => loadClip(idx - 1);
-  $("next").onclick = () => loadClip(idx + 1);
+  $("prev").onclick = () => loadClip(nextEligible(-1));
+  $("next").onclick = () => loadClip(nextEligible(1));
   $("firstOpen").onclick = () => { const i = firstOpen(0); if (i >= 0) loadClip(i); else status("Nincs jelöletlen lövés.", "ok"); };
   $("save").onclick = save;
+  $("arm2btns").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) save2(b.dataset.v); });
+  $("skip2").onclick = () => save2("nem_latszik");
+  $("kezdo").onchange = (e) => { form.kezdo = e.target.checked; form2Carry = e.target.checked; };
+  window.addEventListener("hashchange", applyMode);
 
   document.addEventListener("keydown", (e) => {
     if (e.target.closest && e.target.closest("input, textarea, select")) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
+    if (mode2) {
+      if (k === "ArrowLeft") seekFrame(curFrame() - (e.shiftKey ? 5 : 1));
+      else if (k === "ArrowRight") seekFrame(curFrame() + (e.shiftKey ? 5 : 1));
+      else if (k === " ") $("play").click();
+      else if (k === "1") save2("fent");
+      else if (k === "2") save2("fej_mellett");
+      else if (k === "3") save2("oldalt");
+      else if (k === "x" || k === "X") save2("nem_latszik");
+      else if (k === "k" || k === "K") { const cb = $("kezdo"); cb.checked = !cb.checked; cb.onchange({ target: cb }); }
+      else return;
+      e.preventDefault();
+      return;
+    }
     const set = (f, v) => { form[f] = v; renderForm(); };
     if (k === "ArrowLeft") { seekFrame(curFrame() - (e.shiftKey ? 5 : 1)); }
     else if (k === "ArrowRight") { seekFrame(curFrame() + (e.shiftKey ? 5 : 1)); }
@@ -342,8 +458,8 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
       $("progress").textContent = "A klip-lista nem töltődött be.";
       return;
     }
-    renderProgress();
-    loadClip(0);
+    mode2 = location.hash === "#kartartas";
+    applyMode();
 
     if (!window.claude || !window.claude.use) { showNotice("A mentés csak a claude.ai-n megnyitva működik."); return; }
     const [dbNs, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
@@ -359,15 +475,27 @@ details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
       if (!snap.metadata.fromCache) { clearTimeout(timer); $("notice").hidden = true; }
       const fresh = {};
       snap.docs.forEach((d) => { fresh[d.id] = d.data(); });
-      const firstLoad = Object.keys(labels).length === 0;
       labels = fresh;
-      renderProgress();
-      const c = clip();
-      if (c) { const tag = $("cliptag"); tag.textContent = labels[c.id] ? "jelölve" : "nincs jelölve"; tag.classList.toggle("done", !!labels[c.id]); }
-      if (firstLoad && Object.keys(labels).length && c && labels[c.id] && !snap.metadata.fromCache) {
-        const i = firstOpen(0); if (i >= 0) loadClip(i);
-      }
+      if (!snap.metadata.fromCache) loaded1 = true;
+      afterData();
     }, (e) => { clearTimeout(timer); showNotice("A jelölések nem olvashatók (" + e.code + ")."); });
+    db.collection("kartartas2").onSnapshot((snap) => {
+      const fresh = {};
+      snap.docs.forEach((d) => { fresh[d.id] = d.data(); });
+      labels2 = fresh;
+      if (!snap.metadata.fromCache) loaded2 = true;
+      afterData();
+    }, (e) => { showNotice("A 2. kör jelölései nem olvashatók (" + e.code + ")."); });
+  }
+  // Mindkét gyűjtemény megérkezése után egyszer az első jelöletlen lövésre ugrunk.
+  function afterData() {
+    renderProgress();
+    renderTag();
+    if (mode2) renderArm2();
+    if (!jumped && loaded1 && loaded2) {
+      jumped = true;
+      const i = firstOpen(0); if (i >= 0 && i !== idx) loadClip(i);
+    }
   }
   function showNotice(t) { const n = $("notice"); n.textContent = t; n.hidden = false; }
   start();
