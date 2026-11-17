@@ -1,0 +1,320 @@
+<title>Meccsjelölő</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Elrendezés: bal oldalt (széles képernyőn) a videó és a vezérlők, jobb oldalt az események idővonal-listája; keskenyen egymás alatt. A lövésjelölő színei: pálya-kék + jelző-narancs. */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #16202c; --muted: #5c6b7c; --line: #d6dde6;
+  --court: #1f5fa8; --court-ink: #ffffff; --signal: #e8731c;
+  --goal: #1d8a4e; --save: #7a4cc2; --miss: #b4521b; --pass: #5c6b7c;
+  --video-bg: #0d141c;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a;
+  --goal: #3cb878; --save: #a983e8; --miss: #f0995a; --pass: #93a3b5; --video-bg: #05080c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a;
+  --goal: #3cb878; --save: #a983e8; --miss: #f0995a; --pass: #93a3b5; --video-bg: #05080c; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 16px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; margin: 0; }
+.sub { color: var(--muted); margin: 0; }
+.notice { padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--miss); color: var(--miss); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.main { display: grid; gap: 10px; min-width: 0; }
+
+.drop { border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); padding: 28px 16px; text-align: center; display: grid; gap: 10px; justify-items: center; }
+.drop.over { border-color: var(--court); }
+.drop p { margin: 0; color: var(--muted); max-width: 52ch; }
+.drop strong { font-family: var(--font-display); font-size: 22px; color: var(--ink); }
+
+.stage { position: relative; background: var(--video-bg); border-radius: 10px; overflow: hidden; }
+video { display: block; width: 100%; max-width: 100%; max-height: 70vh; background: var(--video-bg); }
+.flash { position: absolute; top: 12px; left: 12px; padding: 6px 12px; border-radius: 6px; font-family: var(--font-display);
+  font-size: 22px; font-weight: 700; letter-spacing: .03em; color: #fff; background: rgba(0,0,0,.6); opacity: 0; transition: opacity .25s; pointer-events: none; }
+.flash.show { opacity: 1; }
+
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 6px; }
+button, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-height: 40px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, select:focus-visible { outline: 3px solid var(--court); outline-offset: 2px; }
+.icon { min-width: 44px; font-family: var(--font-mono); }
+kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; margin-left: 6px; opacity: .75; }
+label.inline { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+
+.tags { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.tags button { font-weight: 600; border-width: 2px; min-height: 52px; }
+.t-loves { border-color: var(--signal); color: var(--signal); }
+.t-gol { border-color: var(--goal); color: var(--goal); }
+.t-vedes { border-color: var(--save); color: var(--save); }
+.t-melle { border-color: var(--miss); color: var(--miss); }
+.t-passz { border-color: var(--pass); color: var(--pass); }
+
+aside { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; min-width: 0; }
+aside h2 { font-family: var(--font-display); font-size: 20px; margin: 0; }
+.counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.counts b { color: var(--ink); }
+ol.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow-y: auto; }
+ol.events li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; }
+ol.events li:hover { background: var(--bg); }
+ol.events .t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); cursor: pointer; background: none; border: none; padding: 2px 4px; min-height: 0; }
+ol.events .k { font-weight: 600; }
+ol.events .del { min-height: 0; padding: 2px 8px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+.status { color: var(--muted); font-size: 13px; min-height: 1.4em; }
+.status.err { color: var(--miss); }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+summary { cursor: pointer; font-weight: 600; }
+details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .flash { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Meccsjelölő</h1>
+    <p class="sub" id="matchname">Nincs megnyitott videó</p>
+  </header>
+  <div class="notice" id="notice" hidden></div>
+
+  <div class="layout">
+    <div class="main">
+      <label class="drop" id="drop" for="file">
+        <strong>Nyisd meg a meccsfelvételt</strong>
+        <p>Kattints ide, vagy húzd ide a videófájlt. A videó a gépeden marad, nem töltődik fel; csak a jelölések időpontjai mentődnek. Ha ugyanazt a fájlt később újra megnyitod, a korábbi jelölések visszajönnek.</p>
+        <input type="file" id="file" accept="video/*">
+      </label>
+
+      <div id="player" hidden>
+        <div class="stage">
+          <video id="video" playsinline preload="auto"></video>
+          <div class="flash" id="flash"></div>
+        </div>
+      </div>
+
+      <div class="bar" id="controls" hidden>
+        <button class="icon" id="back" title="1 kocka vissza (←)">◀</button>
+        <button class="icon" id="play" title="Lejátszás / megállítás (szóköz)">▶</button>
+        <button class="icon" id="fwd" title="1 kocka előre (→)">▶|</button>
+        <span class="time" id="time">0:00.00</span>
+        <label class="inline">Sebesség
+          <select id="rate"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="1.5">1,5×</option><option value="2">2×</option></select>
+        </label>
+        <label class="inline">Kocka/s
+          <select id="fps"><option value="25">25</option><option value="30" selected>30</option><option value="50">50</option><option value="60">60</option></select>
+        </label>
+      </div>
+
+      <div class="tags" id="tagbar" hidden>
+        <button class="t-loves" data-tipus="loves">Lövés<kbd>L</kbd></button>
+        <button class="t-gol" data-tipus="loves" data-eredmeny="gol">Gól<kbd>G</kbd></button>
+        <button class="t-vedes" data-tipus="loves" data-eredmeny="vedes">Védés<kbd>V</kbd></button>
+        <button class="t-melle" data-tipus="loves" data-eredmeny="melle">Mellé / fölé<kbd>M</kbd></button>
+        <button class="t-passz" data-tipus="passz">Passz<kbd>P</kbd></button>
+      </div>
+      <div class="status" id="status" role="status"></div>
+
+      <details>
+        <summary>Hogyan jelölj</summary>
+        <ul>
+          <li><b>Szóköz</b>: lejátszás / megállítás. <b>← →</b>: egy kocka vissza / előre (megállított videón). <b>Shift + ← →</b>: 1 másodperc.</li>
+          <li>Lövésnél nyomd meg a <b>G</b> (gól), <b>V</b> (védés) vagy <b>M</b> (mellé / fölé) billentyűt; ha az eredmény nem látszik, az <b>L</b>-t. Passz: <b>P</b>.</li>
+          <li>Nem kell pontosan a lövés kockáján nyomni: a klip a nyomás előtt 3 és utána 2 másodpercet fog át. A pontos elengedést később a lövésjelölőn jelöljük.</li>
+          <li>Elrontottad? <b>Backspace</b> törli az utolsó jelölést, vagy a listában az ✕.</li>
+          <li>A listában az időpontra kattintva oda ugrik a videó.</li>
+          <li>A „Kocka/s” legyen a felvétel valódi képkockaszáma (a kamera beállításából; telefonnál általában 30 vagy 60) — ettől pontos a kockánkénti léptetés.</li>
+        </ul>
+      </details>
+    </div>
+
+    <aside>
+      <h2>Jelölések</h2>
+      <div class="counts" id="counts"></div>
+      <ol class="events" id="events"></ol>
+      <p class="empty" id="empty">Még nincs jelölés. Indítsd el a videót, és lövésnél nyomd meg a G, V, M vagy L billentyűt.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const video = $("video");
+  const LABEL = { loves: "Lövés", passz: "Passz" };
+  const RES = { gol: "gól", vedes: "védés", melle: "mellé" };
+  let events = [];            // {t, tipus, eredmeny}
+  let matchId = null, matchMeta = null;
+  let db = null, userId = null, canSave = false;
+  let saving = false, dirty = false;
+
+  function status(t, err) { const s = $("status"); s.textContent = t; s.className = "status" + (err ? " err" : ""); }
+  function notice(t) { const n = $("notice"); n.textContent = t; n.hidden = false; }
+  function fps() { return parseFloat($("fps").value) || 30; }
+  function fmt(t) {
+    const m = Math.floor(t / 60), s = t - m * 60;
+    return m + ":" + s.toFixed(2).padStart(5, "0");
+  }
+  function slug(name, size) {
+    const base = name.replace(/\.[^.]+$/, "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 80) || "meccs";
+    return base + "_" + size;
+  }
+
+  // --- videó megnyitása ---
+  function openFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith("video/") && !/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file.name)) {
+      status("Ez nem videófájl. Válassz egy .mp4 vagy .mov felvételt.", true); return;
+    }
+    video.src = URL.createObjectURL(file);
+    matchId = slug(file.name, file.size);
+    matchMeta = { nev: file.name, meret: file.size };
+    $("matchname").textContent = file.name;
+    $("drop").hidden = true;
+    $("player").hidden = false; $("controls").hidden = false; $("tagbar").hidden = false;
+    events = [];
+    render();
+    loadSaved();
+  }
+  $("file").addEventListener("change", (e) => openFile(e.target.files[0]));
+  const drop = $("drop");
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); openFile(e.dataTransfer.files[0]); });
+  video.addEventListener("loadedmetadata", () => { if (matchMeta) matchMeta.hossz_s = Math.round(video.duration); });
+
+  // --- lejátszás ---
+  function togglePlay() { if (video.paused) video.play().catch(() => {}); else video.pause(); }
+  function step(frames) {
+    video.pause();
+    video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + frames / fps()));
+  }
+  function jump(sec) { video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + sec)); }
+  $("play").onclick = togglePlay;
+  $("back").onclick = () => step(-1);
+  $("fwd").onclick = () => step(1);
+  $("rate").onchange = (e) => { video.playbackRate = parseFloat(e.target.value); };
+  video.addEventListener("play", () => { $("play").textContent = "❚❚"; tick(); });
+  video.addEventListener("pause", () => { $("play").textContent = "▶"; showTime(); });
+  video.addEventListener("seeked", showTime);
+  function showTime() { $("time").textContent = fmt(video.currentTime) + "  ·  " + Math.floor(video.currentTime * fps() + 1e-3) + ". kocka"; }
+  function tick() { showTime(); if (!video.paused) requestAnimationFrame(tick); }
+  // gombnyomás után ne maradjon fókuszban a gomb, különben a szóköz azt "nyomná meg"
+  document.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) b.blur(); });
+
+  // --- jelölés ---
+  function flash(text) {
+    const f = $("flash"); f.textContent = text; f.classList.add("show");
+    clearTimeout(flash._t); flash._t = setTimeout(() => f.classList.remove("show"), 700);
+  }
+  function addEvent(tipus, eredmeny) {
+    if (!matchId) return;
+    const ev = { t: Math.round(video.currentTime * 100) / 100, tipus };
+    if (eredmeny) ev.eredmeny = eredmeny;
+    events.push(ev);
+    events.sort((a, b) => a.t - b.t);
+    flash(LABEL[tipus] + (eredmeny ? " – " + RES[eredmeny] : "") + "  " + fmt(ev.t));
+    render(); queueSave();
+  }
+  function removeEvent(i) { events.splice(i, 1); render(); queueSave(); }
+  $("tagbar").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (b) addEvent(b.dataset.tipus, b.dataset.eredmeny);
+  });
+
+  function render() {
+    const ol = $("events"); ol.textContent = "";
+    events.forEach((ev, i) => {
+      const li = document.createElement("li");
+      const t = document.createElement("button"); t.className = "t"; t.textContent = fmt(ev.t);
+      t.title = "Ugrás ide"; t.onclick = () => { video.pause(); video.currentTime = Math.max(0, ev.t - 3); };
+      const k = document.createElement("span"); k.className = "k";
+      k.textContent = LABEL[ev.tipus] + (ev.eredmeny ? " – " + RES[ev.eredmeny] : "");
+      k.style.color = ev.tipus === "passz" ? "var(--pass)" : ev.eredmeny === "gol" ? "var(--goal)"
+        : ev.eredmeny === "vedes" ? "var(--save)" : ev.eredmeny === "melle" ? "var(--miss)" : "var(--signal)";
+      const d = document.createElement("button"); d.className = "del"; d.textContent = "✕"; d.title = "Jelölés törlése";
+      d.onclick = () => removeEvent(i);
+      li.append(t, k, d); ol.append(li);
+    });
+    $("empty").hidden = events.length > 0;
+    const n = (f) => events.filter(f).length;
+    const shots = n((e) => e.tipus === "loves");
+    $("counts").innerHTML = matchId ? "<span>Lövés: <b>" + shots + "</b></span><span>gól <b>" + n((e) => e.eredmeny === "gol") +
+      "</b></span><span>védés <b>" + n((e) => e.eredmeny === "vedes") + "</b></span><span>mellé <b>" + n((e) => e.eredmeny === "melle") +
+      "</b></span><span>Passz: <b>" + n((e) => e.tipus === "passz") + "</b></span>" : "";
+  }
+
+  // --- mentés: meccsenként egy dokumentum, egyszerre egy írás ---
+  function queueSave() { dirty = true; if (!saving) setTimeout(flush, 600); }
+  async function flush() {
+    if (!dirty || saving || !db || !matchId) return;
+    if (!canSave) { status("A mentéshez bejelentkezés és szerkesztési jog kell.", true); return; }
+    saving = true; dirty = false;
+    try {
+      await db.collection("meccsek").doc(matchId).set({ ...matchMeta, fps: fps(), esemenyek: events,
+        ki: userId, frissitve: new Date().toISOString() });
+      status("Mentve (" + events.length + " jelölés).");
+    } catch (e) {
+      dirty = true; status("Nem sikerült menteni (" + (e && e.code || "hiba") + "); a következő jelölésnél újrapróbálom.", true);
+    } finally { saving = false; if (dirty) setTimeout(flush, 1500); }
+  }
+  async function loadSaved() {
+    if (!db || !matchId) return;
+    try {
+      const snap = await db.collection("meccsek").doc(matchId).get();
+      if (snap.exists) {
+        const d = snap.data();
+        events = (d.esemenyek || []).slice();
+        if (d.fps) $("fps").value = String(d.fps);
+        render(); status("Visszatöltve: " + events.length + " korábbi jelölés ehhez a felvételhez.");
+      }
+    } catch (e) { status("A korábbi jelölések nem tölthetők be (" + (e && e.code || "hiba") + ").", true); }
+  }
+  $("fps").onchange = () => { showTime(); queueSave(); };
+
+  // --- billentyűk ---
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || !matchId) return;
+    const k = e.key.toLowerCase();
+    if (e.key === " ") togglePlay();
+    else if (e.key === "ArrowLeft") e.shiftKey ? jump(-1) : step(-1);
+    else if (e.key === "ArrowRight") e.shiftKey ? jump(1) : step(1);
+    else if (k === "l") addEvent("loves");
+    else if (k === "g") addEvent("loves", "gol");
+    else if (k === "v") addEvent("loves", "vedes");
+    else if (k === "m") addEvent("loves", "melle");
+    else if (k === "p") addEvent("passz");
+    else if (e.key === "Backspace") { if (events.length) { const last = events.reduce((a, ev, i) => ev.t <= video.currentTime + 0.01 ? i : a, events.length - 1); removeEvent(last); } }
+    else return;
+    e.preventDefault();
+  });
+
+  // --- adatbázis ---
+  async function start() {
+    render();
+    if (!window.claude || !window.claude.use) { notice("A jelölések mentése csak a claude.ai-n megnyitva működik."); return; }
+    const [dbNs, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    db = dbNs;
+    if (!db) { notice("A mentéshez jelentkezz be a claude.ai-ra. Jelölni így is lehet, de nem mentődik."); return; }
+    userId = user ? await user.id() : null;
+    const can = user ? await user.can("data.write") : null;
+    canSave = can !== false;
+    if (!canSave) notice("Ehhez az oldalhoz csak olvasási jogod van, a jelölés nem menthető.");
+    if (matchId) loadSaved();
+  }
+  start();
+})();
+</script>
