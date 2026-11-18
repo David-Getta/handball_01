@@ -74,7 +74,11 @@ aside h2 { font-family: var(--font-display); font-size: 20px; margin: 0; }
 .counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .counts b { color: var(--ink); }
 ol.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow-y: auto; }
-ol.events li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; }
+ol.events li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; }
+ol.events .rep { min-height: 0; padding: 2px 8px; color: var(--muted); }
+ol.events .rep[aria-pressed="true"] { background: var(--save); color: #fff; border-color: var(--save); }
+ol.events .sugg { font-size: 12px; color: var(--save); font-weight: 500; margin-left: 6px; }
+.reviewbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 ol.events li:hover { background: var(--bg); }
 ol.events .t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); cursor: pointer; background: none; border: none; padding: 2px 4px; min-height: 0; }
 ol.events .k { font-weight: 600; }
@@ -186,6 +190,7 @@ button, select, video { touch-action: manipulation; }
     <aside>
       <h2>Jelölések</h2>
       <div class="counts" id="counts"></div>
+      <div class="reviewbar" id="susCount"></div>
       <ol class="events" id="events"></ol>
       <p class="empty" id="empty">Még nincs jelölés. Indítsd el a videót, és lövésnél nyomd meg a G, V, M vagy L billentyűt.</p>
     </aside>
@@ -312,6 +317,22 @@ button, select, video { touch-action: manipulation; }
     flash((replay ? "↺ " : "") + (kipattano ? "Kipattanó lövés" : LABEL[tipus] + (eredmeny ? " – " + RES[eredmeny] : "")) + "  " + fmt(ev.t));
     render(); queueSave();
   }
+  function toggleReplay(idxs, on) {
+    [].concat(idxs).forEach((i) => { if (on) events[i].ismetles = true; else delete events[i].ismetles; });
+    render(); queueSave();
+  }
+  // Valószínű ismétlés: az előző élő lövéshez képest 45 s-on belül, ugyanazzal az eredménnyel
+  // (a közvetítés gól után jellemzően 1-2 ismétlést mutat). Csak javaslat, a döntés a jelölőé.
+  const SUGGEST_S = 45;
+  function suspicious(view) {
+    const s = new Set(); let prev = null;
+    view.forEach((e, j) => {
+      if (e.tipus !== "loves") return;
+      if (!e.ismetles && prev && e.eredmeny && e.eredmeny === prev.eredmeny && e.t - prev.t <= SUGGEST_S) s.add(j);
+      if (!e.ismetles) prev = e;
+    });
+    return s;
+  }
   function removeEvent(idxs) {
     [].concat(idxs).sort((a, b) => b - a).forEach((i) => events.splice(i, 1));
     render(); queueSave();
@@ -340,20 +361,27 @@ button, select, video { touch-action: manipulation; }
   function render() {
     const ol = $("events"); ol.textContent = "";
     const view = shotsView();
-    view.forEach((ev) => {
+    const sus = suspicious(view);
+    view.forEach((ev, j) => {
       const li = document.createElement("li");
       const t = document.createElement("button"); t.className = "t"; t.textContent = fmt(ev.t);
       t.title = "Ugrás ide"; t.onclick = () => { video.pause(); video.currentTime = Math.max(0, ev.t - 3); };
       const k = document.createElement("span"); k.className = "k";
       k.textContent = (ev.ismetles ? "↺ " : "") + (ev.kipattano ? "Kipattanó" : LABEL[ev.tipus]) + (ev.eredmeny ? " – " + RES[ev.eredmeny] : "");
       if (ev.ismetles) k.title = "Ismétlésből jelölve";
+      if (sus.has(j)) { const sg = document.createElement("span"); sg.className = "sugg"; sg.textContent = "ismétlés?"; k.append(sg); }
+      const r = document.createElement("button"); r.className = "rep"; r.textContent = "↺";
+      r.title = ev.ismetles ? "Mégsem ismétlés" : "Ez ismétlés volt";
+      r.setAttribute("aria-pressed", String(!!ev.ismetles));
+      r.onclick = () => toggleReplay(ev.idx, !ev.ismetles);
       k.style.color = ev.tipus === "passz" ? "var(--pass)" : ev.eredmeny === "gol" ? "var(--goal)"
         : ev.eredmeny === "vedes" ? "var(--save)" : ev.eredmeny === "melle" ? "var(--miss)" : "var(--signal)";
       const d = document.createElement("button"); d.className = "del"; d.textContent = "✕"; d.title = "Jelölés törlése";
       d.onclick = () => removeEvent(ev.idx);
-      li.append(t, k, d); ol.append(li);
+      li.append(t, k, r, d); ol.append(li);
     });
     $("empty").hidden = events.length > 0;
+    $("susCount").textContent = sus.size ? sus.size + " lövés lehet ismétlés („ismétlés?” címke): kattints az időpontra, nézd meg, és ha az, nyomd meg a ↺ gombot." : "";
     const live = view.filter((e) => !e.ismetles);
     const n = (f) => live.filter(f).length;
     const replays = view.length - live.length;
