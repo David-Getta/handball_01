@@ -46,6 +46,11 @@ video { display: block; width: 100%; max-width: 100%; max-height: 70vh; backgrou
 .flash { position: absolute; top: 12px; left: 12px; padding: 6px 12px; border-radius: 6px; font-family: var(--font-display);
   font-size: 22px; font-weight: 700; letter-spacing: .03em; color: #fff; background: rgba(0,0,0,.6); opacity: 0; transition: opacity .25s; pointer-events: none; }
 .flash.show { opacity: 1; }
+.replay-badge { position: absolute; top: 12px; right: 12px; padding: 6px 12px; border-radius: 6px; font-family: var(--font-display);
+  font-size: 20px; font-weight: 700; letter-spacing: .06em; color: #fff; background: var(--save); pointer-events: none; }
+.t-kipattano { border-color: var(--signal); color: var(--signal); border-style: dashed; }
+.t-ismetles[aria-pressed="true"] { background: var(--save); color: #fff; border-color: var(--save); }
+.t-ismetles { border-color: var(--save); color: var(--save); }
 
 .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 6px; }
@@ -131,6 +136,7 @@ button, select, video { touch-action: manipulation; }
         <div class="stage">
           <video id="video" playsinline preload="auto"></video>
           <div class="flash" id="flash"></div>
+          <div class="replay-badge" id="replayBadge" hidden>ISMÉTLÉS</div>
         </div>
       </div>
 
@@ -155,6 +161,8 @@ button, select, video { touch-action: manipulation; }
         <button class="t-vedes" data-tipus="loves" data-eredmeny="vedes">Védés<kbd>V</kbd></button>
         <button class="t-melle" data-tipus="loves" data-eredmeny="melle">Mellé / fölé<kbd>M</kbd></button>
         <button class="t-passz" data-tipus="passz">Passz<kbd>P</kbd></button>
+        <button class="t-kipattano" data-tipus="loves" data-kipattano="1">Kipattanó lövés<kbd>K</kbd></button>
+        <button class="t-ismetles" id="replayBtn" aria-pressed="false">Ismétlés mód<kbd>I</kbd></button>
       </div>
       <div class="status" id="status" role="status"></div>
 
@@ -163,7 +171,8 @@ button, select, video { touch-action: manipulation; }
         <ul>
           <li><b>Szóköz</b>: lejátszás / megállítás. <b>← →</b>: egy kocka vissza / előre (megállított videón). <b>Shift + ← →</b>: 1 másodperc.</li>
           <li>Ajánlott: a lövés pillanatában <b>L</b>, majd amikor látod az eredményt, <b>G</b> (gól), <b>V</b> (védés) vagy <b>M</b> (mellé / fölé). A kettő egy lövésnek számít (4 másodpercen belül). Ha a lövés nem jut el a kapuig (blokk), maradhat a sima <b>L</b>. Passz: <b>P</b>.</li>
-          <li>Visszajátszást (ismétlést) ne jelölj, csak az élő játékot — különben egy lövés kétszer kerülne be.</li>
+          <li>Kipattanó: ha a védés után újra rálőnek, nyomd meg a <b>K</b>-t (új lövés), majd az eredményt. Példa: L → V → K → G = két lövés.</li>
+          <li>Ismétlés: amikor a közvetítés visszajátszást mutat, nyomd meg az <b>I</b>-t (a videón „ISMÉTLÉS” látszik), jelölj ugyanúgy, majd az élő játéknál nyomd meg újra. Az ismétlések a tanításhoz jók, a lövésszámba nem számítanak bele.</li>
           <li>Nem kell pontosan a lövés kockáján nyomni: a klip a nyomás előtt 3 és utána 2 másodpercet fog át. A pontos elengedést később a lövésjelölőn jelöljük.</li>
           <li>Elrontottad? <b>Backspace</b> törli az utolsó jelölést, vagy a listában az ✕.</li>
           <li>A listában az időpontra kattintva oda ugrik a videó.</li>
@@ -283,13 +292,24 @@ button, select, video { touch-action: manipulation; }
     const f = $("flash"); f.textContent = text; f.classList.add("show");
     clearTimeout(flash._t); flash._t = setTimeout(() => f.classList.remove("show"), 700);
   }
-  function addEvent(tipus, eredmeny) {
+  // Ismétlés mód: amíg be van kapcsolva, minden jelölés visszajátszásként mentődik
+  // (tanításra jó, de a meccs-statisztikába nem számít bele még egyszer).
+  let replay = false;
+  function setReplay(on) {
+    replay = on;
+    $("replayBadge").hidden = !on;
+    $("replayBtn").setAttribute("aria-pressed", String(on));
+    flash(on ? "Ismétlés mód BE" : "Ismétlés mód KI");
+  }
+  function addEvent(tipus, eredmeny, kipattano) {
     if (!matchId) return;
     const ev = { t: Math.round(video.currentTime * 100) / 100, tipus };
     if (eredmeny) ev.eredmeny = eredmeny;
+    if (kipattano) ev.kipattano = true;
+    if (replay) ev.ismetles = true;
     events.push(ev);
     events.sort((a, b) => a.t - b.t);
-    flash(LABEL[tipus] + (eredmeny ? " – " + RES[eredmeny] : "") + "  " + fmt(ev.t));
+    flash((replay ? "↺ " : "") + (kipattano ? "Kipattanó lövés" : LABEL[tipus] + (eredmeny ? " – " + RES[eredmeny] : "")) + "  " + fmt(ev.t));
     render(); queueSave();
   }
   function removeEvent(idxs) {
@@ -303,14 +323,18 @@ button, select, video { touch-action: manipulation; }
     const out = [];
     for (let i = 0; i < events.length; i++) {
       const e = events[i], n = events[i + 1];
-      if (e.tipus === "loves" && !e.eredmeny && n && n.tipus === "loves" && n.eredmeny && n.t - e.t <= PAIR_S) {
-        out.push({ t: e.t, tipus: "loves", eredmeny: n.eredmeny, idx: [i, i + 1] }); i++;
+      // csak a közvetlenül következő eredmény tartozik a lövéshez; a kipattanó (K) mindig új lövés
+      if (e.tipus === "loves" && !e.eredmeny && n && n.tipus === "loves" && n.eredmeny && !n.kipattano
+          && n.t - e.t <= PAIR_S && !!n.ismetles === !!e.ismetles) {
+        out.push({ t: e.t, tipus: "loves", eredmeny: n.eredmeny, kipattano: e.kipattano, ismetles: e.ismetles, idx: [i, i + 1] }); i++;
       } else out.push({ ...e, idx: [i] });
     }
     return out;
   }
   $("tagbar").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (b) addEvent(b.dataset.tipus, b.dataset.eredmeny);
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.id === "replayBtn") { setReplay(!replay); return; }
+    addEvent(b.dataset.tipus, b.dataset.eredmeny, !!b.dataset.kipattano);
   });
 
   function render() {
@@ -321,7 +345,8 @@ button, select, video { touch-action: manipulation; }
       const t = document.createElement("button"); t.className = "t"; t.textContent = fmt(ev.t);
       t.title = "Ugrás ide"; t.onclick = () => { video.pause(); video.currentTime = Math.max(0, ev.t - 3); };
       const k = document.createElement("span"); k.className = "k";
-      k.textContent = LABEL[ev.tipus] + (ev.eredmeny ? " – " + RES[ev.eredmeny] : "");
+      k.textContent = (ev.ismetles ? "↺ " : "") + (ev.kipattano ? "Kipattanó" : LABEL[ev.tipus]) + (ev.eredmeny ? " – " + RES[ev.eredmeny] : "");
+      if (ev.ismetles) k.title = "Ismétlésből jelölve";
       k.style.color = ev.tipus === "passz" ? "var(--pass)" : ev.eredmeny === "gol" ? "var(--goal)"
         : ev.eredmeny === "vedes" ? "var(--save)" : ev.eredmeny === "melle" ? "var(--miss)" : "var(--signal)";
       const d = document.createElement("button"); d.className = "del"; d.textContent = "✕"; d.title = "Jelölés törlése";
@@ -329,11 +354,14 @@ button, select, video { touch-action: manipulation; }
       li.append(t, k, d); ol.append(li);
     });
     $("empty").hidden = events.length > 0;
-    const n = (f) => view.filter(f).length;
+    const live = view.filter((e) => !e.ismetles);
+    const n = (f) => live.filter(f).length;
+    const replays = view.length - live.length;
     const shots = n((e) => e.tipus === "loves");
     $("counts").innerHTML = matchId ? "<span>Lövés: <b>" + shots + "</b></span><span>gól <b>" + n((e) => e.eredmeny === "gol") +
       "</b></span><span>védés <b>" + n((e) => e.eredmeny === "vedes") + "</b></span><span>mellé <b>" + n((e) => e.eredmeny === "melle") +
-      "</b></span><span>Passz: <b>" + n((e) => e.tipus === "passz") + "</b></span>" : "";
+      "</b></span><span>kipattanó <b>" + n((e) => e.kipattano) + "</b></span><span>Passz: <b>" + n((e) => e.tipus === "passz") +
+      "</b></span><span>Ismétlésből: <b>" + replays + "</b></span>" : "";
   }
 
   // --- mentés: meccsenként egy dokumentum, egyszerre egy írás ---
@@ -413,6 +441,8 @@ button, select, video { touch-action: manipulation; }
     else if (k === "v") addEvent("loves", "vedes");
     else if (k === "m") addEvent("loves", "melle");
     else if (k === "p") addEvent("passz");
+    else if (k === "k") addEvent("loves", null, true);
+    else if (k === "i") setReplay(!replay);
     else if (e.key === "Backspace") { if (events.length) { const last = events.reduce((a, ev, i) => ev.t <= video.currentTime + 0.01 ? i : a, events.length - 1); removeEvent([last]); } }
     else return;
     e.preventDefault();
