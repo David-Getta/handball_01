@@ -162,7 +162,8 @@ button, select, video { touch-action: manipulation; }
         <summary>Hogyan jelölj</summary>
         <ul>
           <li><b>Szóköz</b>: lejátszás / megállítás. <b>← →</b>: egy kocka vissza / előre (megállított videón). <b>Shift + ← →</b>: 1 másodperc.</li>
-          <li>Lövésnél nyomd meg a <b>G</b> (gól), <b>V</b> (védés) vagy <b>M</b> (mellé / fölé) billentyűt; ha az eredmény nem látszik, az <b>L</b>-t. Passz: <b>P</b>.</li>
+          <li>Ajánlott: a lövés pillanatában <b>L</b>, majd amikor látod az eredményt, <b>G</b> (gól), <b>V</b> (védés) vagy <b>M</b> (mellé / fölé). A kettő egy lövésnek számít (4 másodpercen belül). Ha a lövés nem jut el a kapuig (blokk), maradhat a sima <b>L</b>. Passz: <b>P</b>.</li>
+          <li>Visszajátszást (ismétlést) ne jelölj, csak az élő játékot — különben egy lövés kétszer kerülne be.</li>
           <li>Nem kell pontosan a lövés kockáján nyomni: a klip a nyomás előtt 3 és utána 2 másodpercet fog át. A pontos elengedést később a lövésjelölőn jelöljük.</li>
           <li>Elrontottad? <b>Backspace</b> törli az utolsó jelölést, vagy a listában az ✕.</li>
           <li>A listában az időpontra kattintva oda ugrik a videó.</li>
@@ -291,14 +292,31 @@ button, select, video { touch-action: manipulation; }
     flash(LABEL[tipus] + (eredmeny ? " – " + RES[eredmeny] : "") + "  " + fmt(ev.t));
     render(); queueSave();
   }
-  function removeEvent(i) { events.splice(i, 1); render(); queueSave(); }
+  function removeEvent(idxs) {
+    [].concat(idxs).sort((a, b) => b - a).forEach((i) => events.splice(i, 1));
+    render(); queueSave();
+  }
+  // Jelölési szokás: a lövés pillanatában L, majd az eredmény (G/V/M) pár tized
+  // másodperccel később. Ami PAIR_S-en belül követi a sima lövést, az ugyanaz a lövés.
+  const PAIR_S = 4;
+  function shotsView() {
+    const out = [];
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i], n = events[i + 1];
+      if (e.tipus === "loves" && !e.eredmeny && n && n.tipus === "loves" && n.eredmeny && n.t - e.t <= PAIR_S) {
+        out.push({ t: e.t, tipus: "loves", eredmeny: n.eredmeny, idx: [i, i + 1] }); i++;
+      } else out.push({ ...e, idx: [i] });
+    }
+    return out;
+  }
   $("tagbar").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (b) addEvent(b.dataset.tipus, b.dataset.eredmeny);
   });
 
   function render() {
     const ol = $("events"); ol.textContent = "";
-    events.forEach((ev, i) => {
+    const view = shotsView();
+    view.forEach((ev) => {
       const li = document.createElement("li");
       const t = document.createElement("button"); t.className = "t"; t.textContent = fmt(ev.t);
       t.title = "Ugrás ide"; t.onclick = () => { video.pause(); video.currentTime = Math.max(0, ev.t - 3); };
@@ -307,11 +325,11 @@ button, select, video { touch-action: manipulation; }
       k.style.color = ev.tipus === "passz" ? "var(--pass)" : ev.eredmeny === "gol" ? "var(--goal)"
         : ev.eredmeny === "vedes" ? "var(--save)" : ev.eredmeny === "melle" ? "var(--miss)" : "var(--signal)";
       const d = document.createElement("button"); d.className = "del"; d.textContent = "✕"; d.title = "Jelölés törlése";
-      d.onclick = () => removeEvent(i);
+      d.onclick = () => removeEvent(ev.idx);
       li.append(t, k, d); ol.append(li);
     });
     $("empty").hidden = events.length > 0;
-    const n = (f) => events.filter(f).length;
+    const n = (f) => view.filter(f).length;
     const shots = n((e) => e.tipus === "loves");
     $("counts").innerHTML = matchId ? "<span>Lövés: <b>" + shots + "</b></span><span>gól <b>" + n((e) => e.eredmeny === "gol") +
       "</b></span><span>védés <b>" + n((e) => e.eredmeny === "vedes") + "</b></span><span>mellé <b>" + n((e) => e.eredmeny === "melle") +
@@ -395,7 +413,7 @@ button, select, video { touch-action: manipulation; }
     else if (k === "v") addEvent("loves", "vedes");
     else if (k === "m") addEvent("loves", "melle");
     else if (k === "p") addEvent("passz");
-    else if (e.key === "Backspace") { if (events.length) { const last = events.reduce((a, ev, i) => ev.t <= video.currentTime + 0.01 ? i : a, events.length - 1); removeEvent(last); } }
+    else if (e.key === "Backspace") { if (events.length) { const last = events.reduce((a, ev, i) => ev.t <= video.currentTime + 0.01 ? i : a, events.length - 1); removeEvent([last]); } }
     else return;
     e.preventDefault();
   });
