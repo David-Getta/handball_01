@@ -150,6 +150,7 @@ button, select, video { touch-action: manipulation; }
         <button class="icon" id="play" title="Lejátszás / megállítás (szóköz)">▶</button>
         <button class="icon" id="fwd" title="1 kocka előre (→)">▶|</button>
         <button class="icon" id="fwd5s" title="5 másodperc előre">+5 s</button>
+        <button class="icon" id="mute" title="Hang ki / be (H)" aria-pressed="false">Hang: be<kbd>H</kbd></button>
         <span class="time" id="time">0:00.00</span>
         <label class="inline">Sebesség
           <select id="rate"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="1.5">1,5×</option><option value="2">2×</option></select>
@@ -180,6 +181,7 @@ button, select, video { touch-action: manipulation; }
           <li>Nem kell pontosan a lövés kockáján nyomni: a klip a nyomás előtt 3 és utána 2 másodpercet fog át. A pontos elengedést később a lövésjelölőn jelöljük.</li>
           <li>Elrontottad? <b>Backspace</b> törli az utolsó jelölést, vagy a listában az ✕.</li>
           <li>A listában az időpontra kattintva oda ugrik a videó.</li>
+          <li><b>H</b>: a videó hangja ki / be.</li>
           <li>Telefonon: koppints a videóra a megállításhoz, a ◀ ▶|  gombok kockánként, a −5 s / +5 s gombok öt másodpercet léptetnek.</li>
           <li>Bármikor abbahagyhatod: a jelölések és a hely, ahol tartasz, mentődnek. Ugyanazt a videófájlt bármelyik eszközön megnyitva ott folytatod.</li>
           <li>A „Kocka/s” legyen a felvétel valódi képkockaszáma (a kamera beállításából; telefonnál általában 30 vagy 60) — ettől pontos a kockánkénti léptetés.</li>
@@ -255,6 +257,15 @@ button, select, video { touch-action: manipulation; }
   $("play").onclick = togglePlay;
   $("back").onclick = () => step(-1);
   $("fwd").onclick = () => step(1);
+  // Hang ki/be (H). A beállítást ez a böngésző megjegyzi (csak kényelmi, hibát nem okozhat).
+  function setMuted(on) {
+    video.muted = on;
+    const b = $("mute"); b.setAttribute("aria-pressed", String(on));
+    b.firstChild.textContent = on ? "Hang: ki" : "Hang: be";
+    try { localStorage.setItem("meccsjelolo_nemitva", on ? "1" : "0"); } catch (e) { /* nincs tárhely */ }
+  }
+  $("mute").onclick = () => setMuted(!video.muted);
+  try { if (localStorage.getItem("meccsjelolo_nemitva") === "1") setMuted(true); } catch (e) { /* nincs tárhely */ }
   $("back5s").onclick = () => jump(-5);
   $("fwd5s").onclick = () => jump(5);
   video.addEventListener("click", togglePlay);   // telefonon: koppintás a videóra
@@ -477,6 +488,7 @@ button, select, video { touch-action: manipulation; }
     else if (k === "p") addEvent("passz");
     else if (k === "k") addEvent("loves", null, true);
     else if (k === "i") setReplay(!replay);
+    else if (k === "h") setMuted(!video.muted);
     else if (e.key === "Backspace") { if (events.length) { const last = events.reduce((a, ev, i) => ev.t <= video.currentTime + 0.01 ? i : a, events.length - 1); removeEvent([last]); } }
     else return;
     e.preventDefault();
