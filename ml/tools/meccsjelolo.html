@@ -318,7 +318,11 @@ button, select, video { touch-action: manipulation; }
     render(); queueSave();
   }
   function toggleReplay(idxs, on) {
-    [].concat(idxs).forEach((i) => { if (on) events[i].ismetles = true; else delete events[i].ismetles; });
+    [].concat(idxs).forEach((i) => {
+      const e = { ...events[i] };
+      if (on) e.ismetles = true; else delete e.ismetles;
+      events[i] = e;
+    });
     render(); queueSave();
   }
   // Valószínű ismétlés: az előző élő lövéshez képest 45 s-on belül, ugyanazzal az eredménnyel
@@ -417,7 +421,9 @@ button, select, video { touch-action: manipulation; }
       }
       if (snap.exists) {
         const d = snap.data();
-        events = (d.esemenyek || []).slice();
+        // az adatbázisból érkező objektumok írásvédettek (fagyasztottak): szerkeszthető másolat kell,
+        // különben a ↺ (ismétlés) jelölés némán hatástalan
+        events = (d.esemenyek || []).map((e) => ({ ...e }));
         if (d.fps) $("fps").value = String(d.fps);
         render();
         let msg = "Visszatöltve: " + events.length + " korábbi jelölés.";
