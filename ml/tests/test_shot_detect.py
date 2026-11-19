@@ -59,3 +59,65 @@ def test_jellemzok_alakja_ures_kockaval_is():
     assert (F[pose["n"] == 0, 0] == 0).all()
     X, xn = window_features(F, pose["t"], names)
     assert X.shape[0] == 50 and X.shape[1] == len(xn) and np.isfinite(X).all()
+
+
+def test_lendites_kovetessel_gyors_karmozdulatot_lat():
+    """Egy ember két egymást követő mintán: a csukló a fej fölül a váll alá csap."""
+    from hbd.shot_detect import swing_features
+
+    kps = np.zeros((2, 17, 3), np.float32)
+    kps[..., 2] = 0.9
+    for k in range(2):
+        kps[k, 5, :2] = (0.48, 0.40)   # bal váll
+        kps[k, 6, :2] = (0.52, 0.40)   # jobb váll
+    kps[0, 10, :2] = (0.53, 0.30)      # jobb csukló a váll fölött
+    kps[1, 10, :2] = (0.55, 0.48)      # 0.2 s múlva a váll alatt
+    pose = {"n": np.array([1, 1]), "offsets": np.array([0, 1, 2]), "kps": kps,
+            "boxes": np.array([[0.45, 0.3, 0.55, 0.7]] * 2, np.float32), "t": np.array([0.0, 0.2]),
+            "size": np.array([1920, 1080])}
+    F, names = swing_features(pose)
+    assert F[0].sum() == 0
+    assert F[1, names.index("csuklo_seb_fentrol_max")] > 1.0
+    assert F[1, names.index("kar_lecsapas_max")] > 1.0
+    assert F[1, names.index("kovetett_db")] == 1
+
+
+def test_kovetes_nem_parosit_tavoli_embert():
+    from hbd.shot_detect import _match_people
+
+    prev = np.array([[100.0, 100.0], [900.0, 500.0]])
+    cur = np.array([[110.0, 105.0], [400.0, 400.0]])
+    assert _match_people(prev, cur, np.array([100.0, 100.0])) == [(0, 0)]
+
+
+def test_eredmenyjelzo_jelenlet_es_allasvaltozas():
+    from hbd.broadcast import score_change, scoreboard_presence
+
+    rng = np.random.default_rng(1)
+    board = rng.integers(0, 255, (24, 60)).astype(np.uint8)
+    static = np.stack([board if i % 4 else rng.integers(0, 255, (24, 60)).astype(np.uint8) for i in range(80)])
+    ncc = scoreboard_presence(static)
+    assert (ncc[1::4] > 0.99).all() and (ncc[::4] < 0.5).all()
+    digits = np.zeros((6, 24, 12), np.uint8)
+    digits[3:] = 200                    # a 3. mintán változik az állás
+    present = np.ones(6, bool)
+    d = score_change(digits, present)
+    assert d.argmax() == 3 and d[[1, 2, 4, 5]].max() == 0
+    present[2] = False                  # ha az egyik oldalon nem látszik a grafika: nem gól
+    assert score_change(digits, present)[3] == 0
+
+
+def test_kozvetitesi_jelek_igazitasa_es_jellemzok():
+    from hbd.broadcast import align
+    from hbd.shot_detect import build_features
+
+    pose = _fake_pose()
+    pose["frame"] = np.arange(50) * 5
+    bc = {"frame": np.arange(0, 300, 5), "sb_ncc": np.ones(60, np.float32), "sb_change": np.zeros(60, np.float32),
+          "cam_dx": np.full(60, 0.01, np.float32), "cam_dy": np.zeros(60, np.float32),
+          "cam_resp": np.ones(60, np.float32)}
+    a = align(pose["frame"], bc)
+    assert a["cam_dx"].shape == (50,) and np.allclose(a["cam_dx"], 0.01)
+    F, names, X, xn = build_features(pose, bc)
+    assert "allas_valtozas" in names and any(n.startswith("allas_valtozas@+5.0") for n in xn)
+    assert X.shape == (50, len(xn)) and np.isfinite(X).all()

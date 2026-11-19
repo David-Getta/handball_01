@@ -46,6 +46,13 @@ MIN_GAP_S = 2.0
 WINDOWS = ((-2.0, -1.0), (-1.0, -0.2), (-0.2, 0.2), (0.2, 1.0), (1.0, 2.0))
 BLOCKS = 5
 PAIR_S = 4.0
+# Hosszabb kitekintés a lassú közvetítési jelekre: az állás a gól után
+# másodpercekkel frissül, a kamera a lövés után fordul.
+LONG_WINDOWS = ((-8.0, -2.0), (2.0, 5.0), (5.0, 10.0))
+LONG_FEATURES = ("allas_valtozas", "eredmenyjelzo_latszik", "kamera_dx", "kamera_seb")
+# Követés: két mintakocka közti legnagyobb ugrás (doboz-magasságban) és időköz.
+TRACK_MAX_JUMP = 0.6
+TRACK_MAX_DT_S = 0.5
 
 # COCO testpont-indexek
 NOSE, L_SH, R_SH, L_WR, R_WR, L_HIP, R_HIP = 0, 5, 6, 9, 10, 11, 12
@@ -118,11 +125,88 @@ def frame_features(pose: dict) -> tuple[np.ndarray, list[str]]:
     return np.nan_to_num(F), names
 
 
-def window_features(F: np.ndarray, t: np.ndarray, names: list[str]) -> tuple[np.ndarray, list[str]]:
+def _match_people(c_prev: np.ndarray, c_cur: np.ndarray, scale: np.ndarray) -> list[tuple[int, int]]:
+    """Mohó párosítás két mintakocka emberei között (középpont-távolság / doboz-magasság)."""
+    if len(c_prev) == 0 or len(c_cur) == 0:
+        return []
+    d = np.linalg.norm(c_cur[:, None, :] - c_prev[None, :, :], axis=2) / scale[:, None]
+    pairs, used_p, used_c = [], set(), set()
+    for flat in np.argsort(d, axis=None):
+        ci, pi = divmod(int(flat), d.shape[1])
+        if d[ci, pi] > TRACK_MAX_JUMP:
+            break
+        if ci in used_c or pi in used_p:
+            continue
+        used_c.add(ci)
+        used_p.add(pi)
+        pairs.append((pi, ci))
+    return pairs
+
+
+def swing_features(pose: dict) -> tuple[np.ndarray, list[str]]:
+    """Mozgás-jellemzők rövid követéssel: ki kicsoda az előző mintakockán (N, F).
+
+    A dobás a kar GYORS lendítése: a csukló a vállhoz képest egy-két tized
+    másodperc alatt fej mögül előre-le csap. Egy kockából ez nem látszik,
+    két egymást követőből igen. A csukló-elmozdulást a vállak közepéhez
+    mérjük (így a futás és a kamera-mozgás kiesik), a doboz magasságával
+    osztva (így a közeli és távoli játékos összemérhető), másodpercre."""
+    off, kps, boxes = pose["offsets"], pose["kps"].astype(np.float32), pose["boxes"].astype(np.float32)
+    w, h = (pose["size"] if "size" in pose else (1920, 1080))
+    t = pose["t"]
+    N = len(pose["n"])
+    names = ["csuklo_seb_max", "csuklo_seb_fentrol_max", "kar_lecsapas_max", "ember_seb_max", "kovetett_db"]
+    F = np.zeros((N, len(names)), np.float32)
+    for i in range(1, N):
+        dt = t[i] - t[i - 1]
+        a0, b0, a, b = off[i - 1], off[i], off[i], off[i + 1]
+        if not (0 < dt <= TRACK_MAX_DT_S) or b0 == a0 or b == a:
+            continue
+        bp, bc = boxes[a0:b0] * [w, h, w, h], boxes[a:b] * [w, h, w, h]
+        cp = np.stack([(bp[:, 0] + bp[:, 2]) / 2, (bp[:, 1] + bp[:, 3]) / 2], 1)
+        cc = np.stack([(bc[:, 0] + bc[:, 2]) / 2, (bc[:, 1] + bc[:, 3]) / 2], 1)
+        hc = np.maximum(bc[:, 3] - bc[:, 1], 1.0)
+        pairs = _match_people(cp, cc, hc)
+        if not pairs:
+            continue
+        kp, kc = kps[a0:b0] * [w, h, 1], kps[a:b] * [w, h, 1]
+        best = np.zeros(4, np.float32)
+        for pi, ci in pairs:
+            p, c, hh = kp[pi], kc[ci], hc[ci]
+            best[3] = max(best[3], np.linalg.norm(cc[ci] - cp[pi]) / hh / dt)
+            if min(p[L_SH, 2], p[R_SH, 2], c[L_SH, 2], c[R_SH, 2]) < 0.3:
+                continue
+            shp, shc = (p[L_SH, :2] + p[R_SH, :2]) / 2, (c[L_SH, :2] + c[R_SH, :2]) / 2
+            for wr in (L_WR, R_WR):
+                if p[wr, 2] < 0.3 or c[wr, 2] < 0.3:
+                    continue
+                rp, rc = (p[wr, :2] - shp) / hh, (c[wr, :2] - shc) / hh
+                v = np.linalg.norm(rc - rp) / dt
+                best[0] = max(best[0], v)
+                if rp[1] < 0:            # az előző kockán a csukló a váll fölött volt
+                    best[1] = max(best[1], v)
+                    best[2] = max(best[2], (rc[1] - rp[1]) / dt)  # lefelé csap (kép-y lefelé nő)
+        F[i, :4] = best
+        F[i, 4] = len(pairs)
+    return F, names
+
+
+def broadcast_features(bc: dict) -> tuple[np.ndarray, list[str]]:
+    """A közvetítés jelei (a póz-mintakockákra igazítva, lásd `broadcast.align`)."""
+    from .broadcast import SB_PRESENT_NCC
+
+    names = ["eredmenyjelzo_latszik", "allas_valtozas", "kamera_dx", "kamera_dy", "kamera_seb", "kamera_biztos"]
+    F = np.stack([(bc["sb_ncc"] > SB_PRESENT_NCC).astype(np.float32), bc["sb_change"], bc["cam_dx"], bc["cam_dy"],
+                  np.hypot(bc["cam_dx"], bc["cam_dy"]), bc["cam_resp"]], 1).astype(np.float32)
+    return F, names
+
+
+def window_features(F: np.ndarray, t: np.ndarray, names: list[str],
+                    windows=None) -> tuple[np.ndarray, list[str]]:
     """Minden mintakocka körül a WINDOWS szakaszok átlaga és maximuma (N, F*len(WINDOWS)*2)."""
     N = len(t)
     out, onames = [], []
-    for lo, hi in WINDOWS:
+    for lo, hi in (windows or WINDOWS):
         a = np.searchsorted(t, t + lo, side="left")
         b = np.searchsorted(t, t + hi, side="right")
         mean = np.zeros_like(F)
@@ -183,12 +267,31 @@ def smooth(score: np.ndarray, k: int = 3) -> np.ndarray:
     return np.convolve(np.pad(score, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
 
 
-def evaluate(pose: dict, shots: list[dict], seed: int = 0) -> dict:
+def build_features(pose: dict, bc: dict | None = None, swing: bool = True):
+    """A teljes jellemző-mátrix: póz (+ követéses lendítés) (+ közvetítés), időablakokkal."""
+    t = pose["t"]
+    F, names = frame_features(pose)
+    if swing:
+        S, sn = swing_features(pose)
+        F, names = np.concatenate([F, S], 1), names + sn
+    if bc is not None:
+        from .broadcast import align
+
+        B, bn = broadcast_features(align(pose["frame"], bc))
+        F, names = np.concatenate([F, B], 1), names + bn
+    X, xnames = window_features(F, t, names)
+    long_idx = [names.index(n) for n in LONG_FEATURES if n in names]
+    if long_idx:
+        XL, xl = window_features(F[:, long_idx], t, [names[i] for i in long_idx], LONG_WINDOWS)
+        X, xnames = np.concatenate([X, XL], 1), xnames + xl
+    return F, names, X, xnames
+
+
+def evaluate(pose: dict, shots: list[dict], seed: int = 0, bc: dict | None = None, swing: bool = True) -> dict:
     from sklearn.ensemble import HistGradientBoostingClassifier
 
     t = pose["t"]
-    F, names = frame_features(pose)
-    X, xnames = window_features(F, t, names)
+    F, names, X, xnames = build_features(pose, bc, swing)
     y = labels(t, shots)
     st = np.array([s["t"] for s in shots])
     edges = np.linspace(t.min(), t.max() + 1e-6, BLOCKS + 1)
@@ -268,6 +371,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--live-only", action="store_true", help="csak az élő lövések (ismétlések nélkül)")
     ap.add_argument("--title", default="")
+    ap.add_argument("--broadcast", help="a hbd.broadcast kimenete (eredményjelző + kamera)")
+    ap.add_argument("--no-swing", action="store_true", help="követéses lendítés-jellemzők nélkül")
     args = ap.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -275,7 +380,12 @@ def main(argv=None) -> int:
     doc = doc.get("data", doc)
     shots = shot_times(doc, include_replays=not args.live_only)
     pose = load_pose(args.pose)
-    res = evaluate(pose, shots)
+    bc = None
+    if args.broadcast:
+        from .broadcast import load as load_bc
+
+        bc = load_bc(args.broadcast)
+    res = evaluate(pose, shots, bc=bc, swing=not args.no_swing)
     import joblib
 
     joblib.dump({"model": res.pop("model"), "features": res["features"]}, out / "shot_detect.joblib")

@@ -88,3 +88,18 @@ python -m pytest -q
 | `hbd/goalkeeper.py` | kapus-profil: lövőkéz, kartartás, felugrás |
 | `hbd/models.py` | kis időbeli konvolúciós háló (torch) |
 | `hbd/train.py` | keresztvalidált kiértékelés, jelentés, végső modellek (CLI) |
+| `hbd/release.py` | elengedés-pillanat + lövőkéz tanított modellje a kézi címkékből (CLI) |
+| `hbd/match_pose.py` | teljes meccs: minden ritkított kockán az összes ember testpontja (CLI) |
+| `hbd/broadcast.py` | közvetítési jelek: eredményjelző (látszik? változik az állás?) + kamera-mozgás (CLI) |
+| `hbd/shot_detect.py` | lövésfelismerés a teljes meccsen: póz + rövid követés (kar-lendítés) + közvetítés (CLI) |
+
+## Teljes meccs: hol vannak a lövések?
+
+```bash
+python -m hbd.match_pose --video meccs.mp4 --out out/m1_pose.npz --stride 5 --imgsz 1280   # CPU-n ~50 perc/meccs
+python -m hbd.broadcast  --video meccs.mp4 --out out/m1_broadcast.npz --stride 5           # ~6 perc
+python -m hbd.shot_detect --pose out/m1_pose.npz --broadcast out/m1_broadcast.npz \
+    --events cimkek/meccs1_esemenyek.json --out out/sd
+```
+
+Eredmény az első meccsen: `eredmenyek/loves_felismeres_meccs1.md`.
