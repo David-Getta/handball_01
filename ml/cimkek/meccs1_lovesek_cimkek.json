@@ -1,0 +1,3518 @@
+{
+"meccs": "1. meccs",
+"forras": "meccs-lövésjelölő (cimkek_m1)",
+"megjegyzes": "kartartás: a fej_mellett edzői besorolás szerint oldalt",
+"cimkek": [
+{
+"elengedes": 65,
+"fps": 25,
+"ido": "2026-11-19T13:24:41.404Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_000",
+"lovo": {
+"k": 76,
+"x": 0.386,
+"y": 0.384
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 298.7,
+"t_video": 301.7,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 65,
+"fps": 25,
+"ido": "2026-11-20T01:36:23.515Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_001_ism",
+"lovo": {
+"k": 78,
+"x": 0.319,
+"y": 0.381
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 308.61,
+"t_video": 311.61,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T16:35:43.339Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_002",
+"lovo": {
+"k": 73,
+"x": 0.433,
+"y": 0.538
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 317.57,
+"t_video": 320.57,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:36:08.550Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_003",
+"lovo": {
+"k": 74,
+"x": 0.621,
+"y": 0.435
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 329.07,
+"t_video": 332.07,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T16:36:47.495Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_004",
+"lovo": {
+"k": 76,
+"x": 0.613,
+"y": 0.504
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 338.02,
+"t_video": 341.02,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T16:37:10.577Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_005",
+"lovo": {
+"k": 77,
+"x": 0.483,
+"y": 0.556
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 383.98,
+"t_video": 386.98,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T16:37:49.842Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_006",
+"lovo": {
+"k": 75,
+"x": 0.543,
+"y": 0.414
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 444.79,
+"t_video": 447.79,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:44:26.589Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "blokk",
+"klip": "m1_007",
+"lovo": {
+"k": 74,
+"x": 0.312,
+"y": 0.529
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 457.82,
+"t_video": 460.82,
+"zona": null
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:44:49.937Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_008",
+"lovo": {
+"k": 74,
+"x": 0.318,
+"y": 0.436
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 468.93,
+"t_video": 471.93,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 80,
+"fps": 25,
+"ido": "2026-11-20T16:45:24.452Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_009",
+"lovo": {
+"k": 80,
+"x": 0.351,
+"y": 0.554
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 481.39,
+"t_video": 484.39,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:49:50.810Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_010",
+"lovo": {
+"k": 74,
+"x": 0.261,
+"y": 0.404
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 513.98,
+"t_video": 516.98,
+"zona": "kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:50:21.510Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_011_ism",
+"lovo": {
+"k": 74,
+"x": 0.68,
+"y": 0.25
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 537.17,
+"t_video": 540.17,
+"zona": "kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T16:50:52.929Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_012",
+"lovo": {
+"k": 75,
+"x": 0.365,
+"y": 0.493
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 579.09,
+"t_video": 582.09,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:52:00.689Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_013",
+"lovo": {
+"k": 74,
+"x": 0.351,
+"y": 0.578
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 617.29,
+"t_video": 620.29,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T16:52:36.238Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_014",
+"lovo": {
+"k": 75,
+"x": 0.387,
+"y": 0.437
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 622.84,
+"t_video": 625.84,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T16:53:43.203Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_015",
+"lovo": {
+"k": 74,
+"x": 0.289,
+"y": 0.398
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 713.58,
+"t_video": 716.58,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T17:45:32.590Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_016",
+"lovo": {
+"k": 75,
+"x": 0.593,
+"y": 0.333
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 722.32,
+"t_video": 725.32,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 65,
+"fps": 25,
+"ido": "2026-11-20T17:45:51.780Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_017",
+"lovo": {
+"k": 77,
+"x": 0.482,
+"y": 0.474
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 795.99,
+"t_video": 798.99,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T17:46:12.668Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_018",
+"lovo": {
+"k": 74,
+"x": 0.277,
+"y": 0.424
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 847.65,
+"t_video": 850.65,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T17:46:43.138Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_019",
+"lovo": {
+"k": 76,
+"x": 0.504,
+"y": 0.515
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 857.18,
+"t_video": 860.18,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T17:47:34.479Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_020",
+"lovo": {
+"k": 77,
+"x": 0.38,
+"y": 0.397
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 871.95,
+"t_video": 874.95,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T17:47:57.504Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_021_ism",
+"lovo": {
+"k": 74,
+"x": 0.73,
+"y": 0.419
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 897.87,
+"t_video": 900.87,
+"zona": "lent-bal"
+},
+{
+"elengedes": 65,
+"fps": 25,
+"ido": "2026-11-20T18:10:44.176Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_022",
+"lovo": {
+"k": 78,
+"x": 0.232,
+"y": 0.436
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 935.66,
+"t_video": 938.66,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T18:11:08.551Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_023",
+"lovo": {
+"k": 76,
+"x": 0.647,
+"y": 0.442
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 947.64,
+"t_video": 950.64,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 71,
+"fps": 25,
+"ido": "2026-11-20T18:11:23.076Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_024_ism",
+"lovo": {
+"k": 71,
+"x": 0.37,
+"y": 0.608
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 963.43,
+"t_video": 966.43,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T18:11:46.105Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_025_ism",
+"lovo": {
+"k": 73,
+"x": 0.339,
+"y": 0.405
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 967.11,
+"t_video": 970.11,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T18:12:20.471Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_026",
+"lovo": {
+"k": 74,
+"x": 0.425,
+"y": 0.34
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1068.84,
+"t_video": 1071.84,
+"zona": null
+},
+{
+"elengedes": 84,
+"fps": 25,
+"ido": "2026-11-20T18:12:34.442Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_027_ism",
+"lovo": {
+"k": 84,
+"x": 0.64,
+"y": 0.517
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1078.89,
+"t_video": 1081.89,
+"zona": null
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T18:12:58.367Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_028",
+"lovo": {
+"k": 75,
+"x": 0.351,
+"y": 0.444
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1099.22,
+"t_video": 1102.22,
+"zona": "lent-bal"
+},
+{
+"elengedes": 79,
+"fps": 25,
+"ido": "2026-11-20T18:13:10.130Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_029_ism",
+"lovo": {
+"k": 79,
+"x": 0.509,
+"y": 0.519
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1112.75,
+"t_video": 1115.75,
+"zona": "lent-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T18:13:30.563Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_030_ism",
+"lovo": {
+"k": 76,
+"x": 0.546,
+"y": 0.439
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1116.74,
+"t_video": 1119.74,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T18:14:34.508Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_031",
+"lovo": {
+"k": 74,
+"x": 0.623,
+"y": 0.163
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1186.33,
+"t_video": 1189.33,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T18:15:03.708Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_032_ism",
+"lovo": {
+"k": 74,
+"x": 0.543,
+"y": 0.416
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1202.85,
+"t_video": 1205.85,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T18:15:21.083Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "blokk",
+"klip": "m1_033",
+"lovo": {
+"k": 73,
+"x": 0.422,
+"y": 0.404
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1243.94,
+"t_video": 1246.94,
+"zona": null
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T18:15:33.308Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "blokk",
+"klip": "m1_034_ism",
+"lovo": {
+"k": 75,
+"x": 0.411,
+"y": 0.331
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1259.4,
+"t_video": 1262.4,
+"zona": null
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T18:15:54.163Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_035",
+"lovo": {
+"k": 74,
+"x": 0.298,
+"y": 0.544
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1276.61,
+"t_video": 1279.61,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 72,
+"fps": 25,
+"ido": "2026-11-20T18:16:42.824Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_036_ism",
+"lovo": {
+"k": 72,
+"x": 0.59,
+"y": 0.492
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1290.44,
+"t_video": 1293.44,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T18:19:01.498Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_037",
+"lovo": {
+"k": 73,
+"x": 0.602,
+"y": 0.452
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1304.29,
+"t_video": 1307.29,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T18:20:07.994Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_038_ism",
+"lovo": {
+"k": 76,
+"x": 0.597,
+"y": 0.571
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1319.89,
+"t_video": 1322.89,
+"zona": "lent-jobb"
+},
+{
+"elengedes": null,
+"fps": 25,
+"ido": "2026-11-20T18:20:23.186Z",
+"ismetles": false,
+"kartartas": null,
+"kimenet": "vedes",
+"klip": "m1_039",
+"lovo": null,
+"lovokez": null,
+"rossz": true,
+"t_start": 1346.94,
+"t_video": 1349.94,
+"zona": null
+},
+{
+"elengedes": 86,
+"fps": 25,
+"ido": "2026-11-20T18:20:56.689Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_040_ism",
+"lovo": {
+"k": 86,
+"x": 0.446,
+"y": 0.459
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1366.07,
+"t_video": 1369.07,
+"zona": "kozep"
+},
+{
+"elengedes": 84,
+"fps": 25,
+"ido": "2026-11-20T18:21:14.177Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_041_ism",
+"lovo": {
+"k": 84,
+"x": 0.385,
+"y": 0.491
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1371.65,
+"t_video": 1374.65,
+"zona": "kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T18:22:34.344Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_042",
+"lovo": {
+"k": 74,
+"x": 0.273,
+"y": 0.564
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1384.21,
+"t_video": 1387.21,
+"zona": "lent-bal"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T18:23:43.714Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_043_ism",
+"lovo": {
+"k": 73,
+"x": 0.561,
+"y": 0.557
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1398.25,
+"t_video": 1401.25,
+"zona": "lent-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T18:24:51.959Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_044",
+"lovo": {
+"k": 76,
+"x": 0.531,
+"y": 0.225
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1425.66,
+"t_video": 1428.66,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 79,
+"fps": 25,
+"ido": "2026-11-20T18:27:13.417Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_045_ism",
+"lovo": {
+"k": 79,
+"x": 0.466,
+"y": 0.391
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1441.62,
+"t_video": 1444.62,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 79,
+"fps": 25,
+"ido": "2026-11-20T18:30:52.521Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_046",
+"lovo": {
+"k": 79,
+"x": 0.497,
+"y": 0.476
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1516.68,
+"t_video": 1519.68,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 86,
+"fps": 25,
+"ido": "2026-11-20T19:04:31.913Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_047_ism",
+"lovo": {
+"k": 86,
+"x": 0.296,
+"y": 0.394
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1540.69,
+"t_video": 1543.69,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:05:47.759Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_048",
+"lovo": {
+"k": 75,
+"x": 0.707,
+"y": 0.173
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1559.36,
+"t_video": 1562.36,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 92,
+"fps": 25,
+"ido": "2026-11-20T19:06:09.255Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_049_ism",
+"lovo": {
+"k": 92,
+"x": 0.588,
+"y": 0.256
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1575.06,
+"t_video": 1578.06,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 83,
+"fps": 25,
+"ido": "2026-11-20T19:06:49.164Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_050",
+"lovo": {
+"k": 83,
+"x": 0.719,
+"y": 0.531
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1591.61,
+"t_video": 1594.61,
+"zona": "lent-bal"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T19:07:04.302Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_051_ism",
+"lovo": {
+"k": 77,
+"x": 0.514,
+"y": 0.426
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1602.12,
+"t_video": 1605.12,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:08:58.589Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_052",
+"lovo": {
+"k": 74,
+"x": 0.318,
+"y": 0.338
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1627.45,
+"t_video": 1630.45,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 82,
+"fps": 25,
+"ido": "2026-11-20T19:10:54.282Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_053",
+"lovo": {
+"k": 82,
+"x": 0.344,
+"y": 0.481
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1637.71,
+"t_video": 1640.71,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T19:10:25.198Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_054",
+"lovo": {
+"k": 76,
+"x": 0.338,
+"y": 0.465
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1637.95,
+"t_video": 1640.95,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 82,
+"fps": 25,
+"ido": "2026-11-20T19:11:09.507Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_055_ism",
+"lovo": {
+"k": 82,
+"x": 0.66,
+"y": 0.549
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1653.64,
+"t_video": 1656.64,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 79,
+"fps": 25,
+"ido": "2026-11-20T19:11:23.853Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_056_ism",
+"lovo": {
+"k": 79,
+"x": 0.08,
+"y": 0.453
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1659.35,
+"t_video": 1662.35,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:11:59.386Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_057_ism",
+"lovo": {
+"k": 75,
+"x": 0.499,
+"y": 0.448
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1664.01,
+"t_video": 1667.01,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:12:21.374Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_058",
+"lovo": {
+"k": 74,
+"x": 0.252,
+"y": 0.292
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1674.43,
+"t_video": 1677.43,
+"zona": "fent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:12:41.032Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_059",
+"lovo": {
+"k": 75,
+"x": 0.472,
+"y": 0.314
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1675.97,
+"t_video": 1678.97,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:13:44.054Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "vedes",
+"klip": "m1_060",
+"lovo": {
+"k": 75,
+"x": 0.388,
+"y": 0.295
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1685.41,
+"t_video": 1688.41,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T19:15:02.554Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "vedes",
+"klip": "m1_061_ism",
+"lovo": {
+"k": 73,
+"x": 0.47,
+"y": 0.431
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1705.05,
+"t_video": 1708.05,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T19:14:55.796Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_062_ism",
+"lovo": {
+"k": 76,
+"x": 0.427,
+"y": 0.178
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1709.68,
+"t_video": 1712.68,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:15:31.392Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_063",
+"lovo": {
+"k": 75,
+"x": 0.451,
+"y": 0.331
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1724.09,
+"t_video": 1727.09,
+"zona": "lent-bal"
+},
+{
+"elengedes": 70,
+"fps": 25,
+"ido": "2026-11-20T19:15:44.942Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_064_ism",
+"lovo": {
+"k": 70,
+"x": 0.554,
+"y": 0.357
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1740.03,
+"t_video": 1743.03,
+"zona": "lent-bal"
+},
+{
+"elengedes": 69,
+"fps": 25,
+"ido": "2026-11-20T19:16:28.754Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_065",
+"lovo": {
+"k": 69,
+"x": 0.435,
+"y": 0.402
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1779.13,
+"t_video": 1782.13,
+"zona": "lent-bal"
+},
+{
+"elengedes": 65,
+"fps": 25,
+"ido": "2026-11-20T19:16:57.238Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_066_ism",
+"lovo": {
+"k": 76,
+"x": 0.49,
+"y": 0.341
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1805.42,
+"t_video": 1808.42,
+"zona": "lent-bal"
+},
+{
+"elengedes": 66,
+"fps": 25,
+"ido": "2026-11-20T19:19:15.647Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_067",
+"lovo": {
+"k": 66,
+"x": 0.335,
+"y": 0.442
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1829.7,
+"t_video": 1832.7,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:19:41.372Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_068_ism",
+"lovo": {
+"k": 75,
+"x": 0.432,
+"y": 0.627
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 1845.17,
+"t_video": 1848.17,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:19:59.151Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_069",
+"lovo": {
+"k": 74,
+"x": 0.18,
+"y": 0.5
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 1980.4,
+"t_video": 1983.4,
+"zona": "lent-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T19:20:36.748Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_070",
+"lovo": {
+"k": 76,
+"x": 0.371,
+"y": 0.535
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2070.59,
+"t_video": 2073.59,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:20:57.185Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_071",
+"lovo": {
+"k": 74,
+"x": 0.536,
+"y": 0.39
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2079.86,
+"t_video": 2082.86,
+"zona": "fent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:21:28.335Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_072",
+"lovo": {
+"k": 74,
+"x": 0.268,
+"y": 0.463
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2116.7,
+"t_video": 2119.7,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T19:22:37.879Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_073",
+"lovo": {
+"k": 76,
+"x": 0.525,
+"y": 0.296
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2155.8,
+"t_video": 2158.8,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:23:33.443Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_074",
+"lovo": {
+"k": 75,
+"x": 0.351,
+"y": 0.381
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2164.32,
+"t_video": 2167.32,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 87,
+"fps": 25,
+"ido": "2026-11-20T19:23:27.013Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_075_ism",
+"lovo": {
+"k": 87,
+"x": 0.268,
+"y": 0.491
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2174.54,
+"t_video": 2177.54,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 78,
+"fps": 25,
+"ido": "2026-11-20T19:23:51.305Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_076_ism",
+"lovo": {
+"k": 78,
+"x": 0.617,
+"y": 0.377
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2179.62,
+"t_video": 2182.62,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T19:24:07.218Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_077_ism",
+"lovo": {
+"k": 74,
+"x": 0.302,
+"y": 0.288
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2182.9,
+"t_video": 2185.9,
+"zona": "lent-bal"
+},
+{
+"elengedes": 82,
+"fps": 25,
+"ido": "2026-11-20T19:25:30.917Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_078_ism",
+"lovo": {
+"k": 82,
+"x": 0.539,
+"y": 0.536
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2186.35,
+"t_video": 2189.35,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 105,
+"fps": 25,
+"ido": "2026-11-20T19:26:28.929Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_079_ism",
+"lovo": {
+"k": 105,
+"x": 0.496,
+"y": 0.445
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2190.26,
+"t_video": 2193.26,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T19:27:22.671Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_080",
+"lovo": {
+"k": 75,
+"x": 0.218,
+"y": 0.617
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2206.24,
+"t_video": 2209.24,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:24:35.452Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_081_ism",
+"lovo": {
+"k": 75,
+"x": 0.64,
+"y": 0.447
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2218.18,
+"t_video": 2221.18,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:25:15.725Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_082",
+"lovo": {
+"k": 75,
+"x": 0.289,
+"y": 0.425
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2240.14,
+"t_video": 2243.14,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:25:28.500Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_083_ism",
+"lovo": {
+"k": 75,
+"x": 0.285,
+"y": 0.523
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2267.95,
+"t_video": 2270.95,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:26:17.213Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_084",
+"lovo": {
+"k": 75,
+"x": 0.385,
+"y": 0.471
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2346.11,
+"t_video": 2349.11,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T20:26:35.792Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_085_ism",
+"lovo": {
+"k": 77,
+"x": 0.725,
+"y": 0.388
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2364.16,
+"t_video": 2367.16,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:27:04.371Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_086",
+"lovo": {
+"k": 76,
+"x": 0.593,
+"y": 0.495
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2382.99,
+"t_video": 2385.99,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:27:21.113Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_087",
+"lovo": {
+"k": 74,
+"x": 0.242,
+"y": 0.578
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2413.91,
+"t_video": 2416.91,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:27:40.501Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_088_ism",
+"lovo": {
+"k": 75,
+"x": 0.08,
+"y": 0.365
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2427.01,
+"t_video": 2430.01,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:27:54.475Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_089_ism",
+"lovo": {
+"k": 74,
+"x": 0.587,
+"y": 0.582
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2432.7,
+"t_video": 2435.7,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:29:28.971Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_090",
+"lovo": {
+"k": 74,
+"x": 0.508,
+"y": 0.48
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2448.99,
+"t_video": 2451.99,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:28:34.942Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_091",
+"lovo": {
+"k": 75,
+"x": 0.354,
+"y": 0.373
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2453.24,
+"t_video": 2456.24,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:29:18.517Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_092_ism",
+"lovo": {
+"k": 74,
+"x": 0.526,
+"y": 0.533
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2471.23,
+"t_video": 2474.23,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:29:54.838Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_093_ism",
+"lovo": {
+"k": 75,
+"x": 0.402,
+"y": 0.573
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2476.51,
+"t_video": 2479.51,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:30:59.201Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_094_ism",
+"lovo": {
+"k": 75,
+"x": 0.549,
+"y": 0.216
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2484.58,
+"t_video": 2487.58,
+"zona": null
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:31:11.155Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_095",
+"lovo": {
+"k": 74,
+"x": 0.543,
+"y": 0.208
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2484.64,
+"t_video": 2487.64,
+"zona": null
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:31:39.142Z",
+"ismetles": false,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_096",
+"lovo": {
+"k": 75,
+"x": 0.625,
+"y": 0.511
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2489.16,
+"t_video": 2492.16,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:31:53.151Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_097_ism",
+"lovo": {
+"k": 74,
+"x": 0.672,
+"y": 0.537
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2509.05,
+"t_video": 2512.05,
+"zona": null
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:32:10.613Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "gol",
+"klip": "m1_098_ism",
+"lovo": {
+"k": 74,
+"x": 0.398,
+"y": 0.381
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2513.66,
+"t_video": 2516.66,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:32:30.422Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_099",
+"lovo": {
+"k": 74,
+"x": 0.766,
+"y": 0.369
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2526.11,
+"t_video": 2529.11,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:32:46.034Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_100_ism",
+"lovo": {
+"k": 76,
+"x": 0.675,
+"y": 0.277
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2541.02,
+"t_video": 2544.02,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T20:33:04.827Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_101",
+"lovo": {
+"k": 73,
+"x": 0.357,
+"y": 0.421
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2614.62,
+"t_video": 2617.62,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:33:27.584Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_102",
+"lovo": {
+"k": 74,
+"x": 0.662,
+"y": 0.416
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2726.85,
+"t_video": 2729.85,
+"zona": "lent-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:33:42.677Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_103_ism",
+"lovo": {
+"k": 76,
+"x": 0.266,
+"y": 0.496
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2742.86,
+"t_video": 2745.86,
+"zona": "lent-bal"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:34:02.960Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_104_ism",
+"lovo": {
+"k": 76,
+"x": 0.745,
+"y": 0.32
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2747.67,
+"t_video": 2750.67,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:34:36.239Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_105",
+"lovo": {
+"k": 75,
+"x": 0.303,
+"y": 0.35
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2763.95,
+"t_video": 2766.95,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:34:49.547Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_106_ism",
+"lovo": {
+"k": 76,
+"x": 0.392,
+"y": 0.338
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2786.29,
+"t_video": 2789.29,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:36:03.005Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_107",
+"lovo": {
+"k": 75,
+"x": 0.478,
+"y": 0.29
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2805.04,
+"t_video": 2808.04,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:35:25.726Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_108",
+"lovo": {
+"k": 75,
+"x": 0.479,
+"y": 0.319
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2809.63,
+"t_video": 2812.63,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:35:47.276Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_109_ism",
+"lovo": {
+"k": 74,
+"x": 0.615,
+"y": 0.562
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2827.89,
+"t_video": 2830.89,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:36:18.918Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_110_ism",
+"lovo": {
+"k": 74,
+"x": 0.287,
+"y": 0.379
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2832.91,
+"t_video": 2835.91,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:36:35.163Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_111",
+"lovo": {
+"k": 75,
+"x": 0.439,
+"y": 0.486
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2873.66,
+"t_video": 2876.66,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:36:51.710Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_112_ism",
+"lovo": {
+"k": 74,
+"x": 0.626,
+"y": 0.141
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 2895.41,
+"t_video": 2898.41,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:37:40.339Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_113",
+"lovo": {
+"k": 75,
+"x": 0.73,
+"y": 0.403
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2925.66,
+"t_video": 2928.66,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:37:34.310Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_114_ism",
+"lovo": {
+"k": 75,
+"x": 0.665,
+"y": 0.589
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2938.35,
+"t_video": 2941.35,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:38:51.376Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_115",
+"lovo": {
+"k": 75,
+"x": 0.671,
+"y": 0.483
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2964.52,
+"t_video": 2967.52,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:38:47.176Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_116_ism",
+"lovo": {
+"k": 75,
+"x": 0.402,
+"y": 0.55
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 2979.84,
+"t_video": 2982.84,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:39:11.739Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_117",
+"lovo": {
+"k": 74,
+"x": 0.403,
+"y": 0.229
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3001.11,
+"t_video": 3004.11,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:39:27.323Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_118",
+"lovo": {
+"k": 75,
+"x": 0.397,
+"y": 0.639
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3032.84,
+"t_video": 3035.84,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:39:51.918Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_119_ism",
+"lovo": {
+"k": 74,
+"x": 0.219,
+"y": 0.569
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3048.62,
+"t_video": 3051.62,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:40:26.485Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_120",
+"lovo": {
+"k": 75,
+"x": 0.259,
+"y": 0.309
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3124.02,
+"t_video": 3127.02,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:40:50.169Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_121",
+"lovo": {
+"k": 74,
+"x": 0.48,
+"y": 0.473
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3134.42,
+"t_video": 3137.42,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:41:11.340Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_122_ism",
+"lovo": {
+"k": 75,
+"x": 0.013,
+"y": 0.383
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3145.45,
+"t_video": 3148.45,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:41:43.318Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_123",
+"lovo": {
+"k": 74,
+"x": 0.565,
+"y": 0.512
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3170.82,
+"t_video": 3173.82,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:41:55.556Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_124_ism",
+"lovo": {
+"k": 76,
+"x": 0.286,
+"y": 0.61
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3190.15,
+"t_video": 3193.15,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:42:10.793Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_125",
+"lovo": {
+"k": 74,
+"x": 0.61,
+"y": 0.397
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3322.15,
+"t_video": 3325.15,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:42:23.973Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_126_ism",
+"lovo": {
+"k": 75,
+"x": 0.72,
+"y": 0.557
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3335.38,
+"t_video": 3338.38,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:42:41.339Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_127",
+"lovo": {
+"k": 74,
+"x": 0.542,
+"y": 0.542
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3383.18,
+"t_video": 3386.18,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:42:54.910Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_128_ism",
+"lovo": {
+"k": 74,
+"x": 0.567,
+"y": 0.329
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3401.39,
+"t_video": 3404.39,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:43:10.323Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "blokk",
+"klip": "m1_129",
+"lovo": {
+"k": 74,
+"x": 0.629,
+"y": 0.307
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3419.21,
+"t_video": 3422.21,
+"zona": null
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:43:39.966Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "melle",
+"klip": "m1_130",
+"lovo": {
+"k": 75,
+"x": 0.509,
+"y": 0.411
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3423.86,
+"t_video": 3426.86,
+"zona": "fent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:44:02.125Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_131",
+"lovo": {
+"k": 74,
+"x": 0.524,
+"y": 0.275
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3431.97,
+"t_video": 3434.97,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:44:15.420Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_132",
+"lovo": {
+"k": 74,
+"x": 0.547,
+"y": 0.386
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3445.05,
+"t_video": 3448.05,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T20:44:28.337Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_133_ism",
+"lovo": {
+"k": 73,
+"x": 0.433,
+"y": 0.488
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3456.34,
+"t_video": 3459.34,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 78,
+"fps": 25,
+"ido": "2026-11-20T20:44:39.666Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_134_ism",
+"lovo": {
+"k": 78,
+"x": 0.711,
+"y": 0.719
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3460.92,
+"t_video": 3463.92,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:44:55.628Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_135",
+"lovo": {
+"k": 74,
+"x": 0.24,
+"y": 0.499
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3477.62,
+"t_video": 3480.62,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:45:16.245Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_136",
+"lovo": {
+"k": 75,
+"x": 0.42,
+"y": 0.354
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3593.18,
+"t_video": 3596.18,
+"zona": "lent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:45:31.340Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_137",
+"lovo": {
+"k": 75,
+"x": 0.578,
+"y": 0.384
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3622.14,
+"t_video": 3625.14,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:45:52.986Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_138",
+"lovo": {
+"k": 75,
+"x": 0.557,
+"y": 0.427
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3654.13,
+"t_video": 3657.13,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:46:03.148Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_139_ism",
+"lovo": {
+"k": 75,
+"x": 0.521,
+"y": 0.562
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3673.92,
+"t_video": 3676.92,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:46:18.215Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_140",
+"lovo": {
+"k": 75,
+"x": 0.65,
+"y": 0.544
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3742.48,
+"t_video": 3745.48,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:46:44.827Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_141",
+"lovo": {
+"k": 75,
+"x": 0.316,
+"y": 0.469
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3753.67,
+"t_video": 3756.67,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:47:02.102Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_142",
+"lovo": {
+"k": 74,
+"x": 0.339,
+"y": 0.365
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3765.01,
+"t_video": 3768.01,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:47:15.106Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_143_ism",
+"lovo": {
+"k": 76,
+"x": 0.235,
+"y": 0.41
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3779.88,
+"t_video": 3782.88,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:47:27.977Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_144_ism",
+"lovo": {
+"k": 74,
+"x": 0.118,
+"y": 0.347
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3788.27,
+"t_video": 3791.27,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:47:51.631Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_145",
+"lovo": {
+"k": 74,
+"x": 0.598,
+"y": 0.37
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3865.94,
+"t_video": 3868.94,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:48:34.513Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_146",
+"lovo": {
+"k": 74,
+"x": 0.345,
+"y": 0.444
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3922.09,
+"t_video": 3925.09,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:48:28.943Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_147_ism",
+"lovo": {
+"k": 74,
+"x": 0.537,
+"y": 0.522
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 3935.57,
+"t_video": 3938.57,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T20:48:59.447Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_148",
+"lovo": {
+"k": 73,
+"x": 0.516,
+"y": 0.461
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 3994.75,
+"t_video": 3997.75,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:50:02.038Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_149_ism",
+"lovo": {
+"k": 74,
+"x": 0.491,
+"y": 0.418
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4008.97,
+"t_video": 4011.97,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:50:20.212Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_150_ism",
+"lovo": {
+"k": 75,
+"x": 0.684,
+"y": 0.314
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4014.56,
+"t_video": 4017.56,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:50:51.392Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_151",
+"lovo": {
+"k": 75,
+"x": 0.452,
+"y": 0.432
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4069.3,
+"t_video": 4072.3,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:51:11.095Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_152_ism",
+"lovo": {
+"k": 75,
+"x": 0.664,
+"y": 0.699
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4085.06,
+"t_video": 4088.06,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:51:31.791Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_153",
+"lovo": {
+"k": 75,
+"x": 0.652,
+"y": 0.374
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4221.16,
+"t_video": 4224.16,
+"zona": "kozep-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:51:49.857Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_154",
+"lovo": {
+"k": 74,
+"x": 0.592,
+"y": 0.477
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4227.13,
+"t_video": 4230.13,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:53:12.806Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_155",
+"lovo": {
+"k": 76,
+"x": 0.54,
+"y": 0.321
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4236.74,
+"t_video": 4239.74,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:53:07.060Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_156_ism",
+"lovo": {
+"k": 74,
+"x": 0.541,
+"y": 0.384
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4251.96,
+"t_video": 4254.96,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:53:41.720Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_157",
+"lovo": {
+"k": 74,
+"x": 0.546,
+"y": 0.535
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4273.72,
+"t_video": 4276.72,
+"zona": "kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:53:54.901Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_158_ism",
+"lovo": {
+"k": 75,
+"x": 0.334,
+"y": 0.37
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4288.33,
+"t_video": 4291.33,
+"zona": "kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:54:42.668Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_159",
+"lovo": {
+"k": 75,
+"x": 0.447,
+"y": 0.287
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4366.91,
+"t_video": 4369.91,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:55:43.442Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_160",
+"lovo": {
+"k": 75,
+"x": 0.599,
+"y": 0.506
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4415.11,
+"t_video": 4418.11,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:56:46.729Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_161_ism",
+"lovo": {
+"k": 75,
+"x": 0.475,
+"y": 0.736
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4429.02,
+"t_video": 4432.02,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:57:22.149Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_162",
+"lovo": {
+"k": 74,
+"x": 0.41,
+"y": 0.294
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4465.23,
+"t_video": 4468.23,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 76,
+"fps": 25,
+"ido": "2026-11-20T20:57:55.199Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "vedes",
+"klip": "m1_163_ism",
+"lovo": {
+"k": 76,
+"x": 0.589,
+"y": 0.41
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4478.56,
+"t_video": 4481.56,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T20:58:09.632Z",
+"ismetles": true,
+"kartartas": "fej_mellett",
+"kimenet": "vedes",
+"klip": "m1_164_ism",
+"lovo": {
+"k": 73,
+"x": 0.445,
+"y": 0.419
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4483.59,
+"t_video": 4486.59,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:58:22.961Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_165",
+"lovo": {
+"k": 74,
+"x": 0.32,
+"y": 0.577
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4499.38,
+"t_video": 4502.38,
+"zona": "fent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:58:37.123Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_166_ism",
+"lovo": {
+"k": 75,
+"x": 0.477,
+"y": 0.559
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4512.75,
+"t_video": 4515.75,
+"zona": "fent-bal"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T20:59:03.436Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "vedes",
+"klip": "m1_167",
+"lovo": {
+"k": 73,
+"x": 0.465,
+"y": 0.433
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4546.02,
+"t_video": 4549.02,
+"zona": "kozep-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T20:59:18.265Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_168",
+"lovo": {
+"k": 74,
+"x": 0.411,
+"y": 0.412
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4602.11,
+"t_video": 4605.11,
+"zona": "lent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T20:59:29.144Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_169_ism",
+"lovo": {
+"k": 75,
+"x": 0.33,
+"y": 0.397
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4614.93,
+"t_video": 4617.93,
+"zona": "lent-bal"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T20:59:46.706Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "blokk",
+"klip": "m1_170",
+"lovo": {
+"k": 77,
+"x": 0.628,
+"y": 0.355
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4643.65,
+"t_video": 4646.65,
+"zona": null
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T21:00:00.681Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_171",
+"lovo": {
+"k": 74,
+"x": 0.317,
+"y": 0.268
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4702.45,
+"t_video": 4705.45,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T21:00:12.843Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_172_ism",
+"lovo": {
+"k": 74,
+"x": 0.305,
+"y": 0.3
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4714.7,
+"t_video": 4717.7,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T21:00:52.873Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_173",
+"lovo": {
+"k": 73,
+"x": 0.501,
+"y": 0.454
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4740.45,
+"t_video": 4743.45,
+"zona": "lent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T21:01:06.884Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_174",
+"lovo": {
+"k": 74,
+"x": 0.421,
+"y": 0.36
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4760.22,
+"t_video": 4763.22,
+"zona": "fent-jobb"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T21:01:20.459Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_175",
+"lovo": {
+"k": 74,
+"x": 0.211,
+"y": 0.338
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4795.11,
+"t_video": 4798.11,
+"zona": "fent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T21:01:34.655Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_176_ism",
+"lovo": {
+"k": 75,
+"x": 0.449,
+"y": 0.293
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4808.61,
+"t_video": 4811.61,
+"zona": "fent-bal"
+},
+{
+"elengedes": 74,
+"fps": 25,
+"ido": "2026-11-20T21:01:56.893Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_177",
+"lovo": {
+"k": 74,
+"x": 0.36,
+"y": 0.445
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4831.4,
+"t_video": 4834.4,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 81,
+"fps": 25,
+"ido": "2026-11-20T21:02:10.380Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_178_ism",
+"lovo": {
+"k": 81,
+"x": 0.313,
+"y": 0.618
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4846.85,
+"t_video": 4849.85,
+"zona": "lent-jobb"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T21:02:47.533Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_179",
+"lovo": {
+"k": 73,
+"x": 0.467,
+"y": 0.419
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4864.21,
+"t_video": 4867.21,
+"zona": "fent-bal"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T21:02:58.567Z",
+"ismetles": true,
+"kartartas": "fent",
+"kimenet": "vedes",
+"klip": "m1_180_ism",
+"lovo": {
+"k": 75,
+"x": 0.468,
+"y": 0.469
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4888.17,
+"t_video": 4891.17,
+"zona": "fent-bal"
+},
+{
+"elengedes": 77,
+"fps": 25,
+"ido": "2026-11-20T21:03:21.150Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "melle",
+"klip": "m1_181",
+"lovo": {
+"k": 77,
+"x": 0.631,
+"y": 0.353
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4908.16,
+"t_video": 4911.16,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 75,
+"fps": 25,
+"ido": "2026-11-20T21:04:37.531Z",
+"ismetles": false,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_182",
+"lovo": {
+"k": 75,
+"x": 0.365,
+"y": 0.399
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4943.87,
+"t_video": 4946.87,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T21:06:01.220Z",
+"ismetles": true,
+"kartartas": "oldalt",
+"kimenet": "gol",
+"klip": "m1_183_ism",
+"lovo": {
+"k": 73,
+"x": 0.518,
+"y": 0.346
+},
+"lovokez": "bal",
+"rossz": false,
+"t_start": 4959.19,
+"t_video": 4962.19,
+"zona": "fent-kozep"
+},
+{
+"elengedes": 73,
+"fps": 25,
+"ido": "2026-11-20T21:23:38.724Z",
+"ismetles": false,
+"kartartas": "fent",
+"kimenet": "gol",
+"klip": "m1_184",
+"lovo": {
+"k": 73,
+"x": 0.642,
+"y": 0.405
+},
+"lovokez": "jobb",
+"rossz": false,
+"t_start": 4988.75,
+"t_video": 4991.75,
+"zona": "lent-kozep"
+}
+]
+}
