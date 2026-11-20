@@ -340,12 +340,12 @@ def at_recall(curve: list[dict], target: float) -> dict | None:
     return min(ok, key=lambda c: c["teves_per_perc"]) if ok else None
 
 
-def write_report(res: dict, out: Path, title: str) -> Path:
+def write_report(res: dict, out: Path, title: str, live_only: bool = False) -> Path:
     b, r = res["legjobb"], res["szabaly_legjobb"]
     pct = lambda v: f"{100 * v:.0f}%"  # noqa: E731
     md = [f"# Lövésfelismerés a teljes meccsen — {title}", "",
           f"{res['percek']:.0f} perc, {res['mintakockak']} mintakocka, {res['lovesek']} jelölt lövés "
-          f"(élő + ismétlés). Kiértékelés: {BLOCKS} egymást követő idő-blokk, mindig a többi blokkon tanítva. "
+          f"({'csak élő' if live_only else 'élő + ismétlés'}). Kiértékelés: {BLOCKS} egymást követő idő-blokk, mindig a többi blokkon tanítva. "
           f"Egy jelölt akkor talált, ha {MATCH_S} s-on belül van valódi lövés.", "",
           "| | felidézés (megtalált lövések) | pontosság (a jelöltekből valódi) | téves riasztás / perc |",
           "|---|---|---|---|",
@@ -392,7 +392,7 @@ def main(argv=None) -> int:
     np.savez_compressed(out / "shot_scores.npz", t=res.pop("t"), score=res.pop("score"))
     (out / "shot_detect.json").write_text(json.dumps({k: v for k, v in res.items() if k != "features"},
                                                       ensure_ascii=False, indent=1))
-    print(write_report(res, out, args.title or doc.get("nev", "")).read_text())
+    print(write_report(res, out, args.title or doc.get("nev", ""), args.live_only).read_text())
     return 0
 
 
