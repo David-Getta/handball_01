@@ -88,6 +88,31 @@ def test_roster_count_with_suspensions():
     assert roster.on_court_count(Team.AWAY, 10) == 7
 
 
+def test_has_goalkeeper_a_kapus_nelkuli_jatek_jelzese():
+    """Alapból mindkét csapatnak van kapusa; a "7. mezőnyjátékos"
+    jelzés csapatonként külön él, és a LÉTSZÁMOT nem csökkenti (heten
+    vannak a pályán, csak kapus nélkül)."""
+    alap = RosterTimeline()
+    assert alap.has_goalkeeper(Team.HOME, 0) is True
+    assert alap.has_goalkeeper(Team.AWAY, 0) is True
+    hazai_ures = RosterTimeline(gk_absent_home=True)
+    assert hazai_ures.has_goalkeeper(Team.HOME, 0) is False
+    assert hazai_ures.has_goalkeeper(Team.AWAY, 0) is True
+    vendeg_ures = RosterTimeline(gk_absent_away=True)
+    assert vendeg_ures.has_goalkeeper(Team.HOME, 500) is True
+    assert vendeg_ures.has_goalkeeper(Team.AWAY, 500) is False
+    # Az időponttól független (csapatonként egy jelző), és a létszám
+    # teljes marad.
+    assert {hazai_ures.has_goalkeeper(Team.HOME, t)
+            for t in (0, 1, 10 ** 6)} == {False}
+    assert hazai_ures.on_court_count(Team.HOME, 0) == 7
+    # A kiállítás a létszámot csökkenti, a kapus-jelzőt nem érinti.
+    kiallitas = RosterTimeline(suspensions=[
+        Suspension(team=Team.HOME, start_t=0, duration_t=100)])
+    assert kiallitas.on_court_count(Team.HOME, 50) == 6
+    assert kiallitas.has_goalkeeper(Team.HOME, 50) is True
+
+
 # pytest nélkül is futtatható: lefuttatja az összes test_ függvényt.
 if __name__ == "__main__":
     failures = 0

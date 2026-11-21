@@ -60,10 +60,14 @@ Phase classifyPhase(Frame frame, TacticsConfig config) {
   return poss == Team.home ? Phase.homeAttack : Phase.awayAttack;
 }
 
+/// A formafelismerés hátsó sávjának határa (m a saját kaputól — a backend
+/// tactics._BACK_MAX-ja); a fal tanulása is ezzel méri a hátsó sort.
+const double formationBackMaxM = 7.0;
+
 /// A védekező csapat formája az AKTUÁLIS frame-en (a backend detect_formation tükre).
 /// Visszaadja a címkét (pl. "6-0", "5-1", "3-2-1") vagy a sávok leírását.
 String detectFormation(Frame frame, Team defendingTeam, TacticsConfig config) {
-  const backMax = 7.0, midMax = 10.5, gkMax = 2.0;
+  const backMax = formationBackMaxM, midMax = 10.5, gkMax = 2.0;
   final goalX = config.ownGoalX(defendingTeam);
   int back = 0, mid = 0, high = 0;
   for (final p in frame.players) {

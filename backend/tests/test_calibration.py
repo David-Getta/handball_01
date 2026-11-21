@@ -105,6 +105,33 @@ def test_standard_landmarks_sane():
         assert 0.0 <= x <= 40.0 and 0.0 <= y <= 20.0
 
 
+def test_homography_for_frame_a_referenciat_adja_vissza():
+    """A kockánkénti kalibráció belépési pontja a REFERENCIÁT adja vissza
+    (a pásztázás G(t) mátrixát a feldolgozó PanTracker-e kezeli): bármely
+    kockára ugyanaz a kép→pálya leképezés, mint a referenciáé."""
+    cal = Calibrator()
+    ref = cal.calibrate_reference(
+        [(100.0, 700.0), (1800.0, 720.0), (1500.0, 250.0), (400.0, 240.0)],
+        [(0.0, 0.0), (40.0, 0.0), (40.0, 20.0), (0.0, 20.0)])
+    for kocka in (None, object(), "kep_0001.jpg"):
+        per_kocka = cal.homography_for_frame(kocka, ref)
+        assert per_kocka is ref
+        x, y = per_kocka.image_to_court(1800.0, 720.0)
+        assert abs(x - 40.0) < 1e-6 and abs(y - 0.0) < 1e-6
+
+
+def test_homography_for_frame_kalibracio_nelkul_is_fut():
+    """Üres referenciával (még nincs kalibráció) sem hibázik: az üres
+    kalibrációt adja vissza, amin a koordináta változatlanul megy át —
+    a pipeline így is végigfut."""
+    from handball.pipeline.calibration import CourtCalibration
+
+    ures = CourtCalibration()
+    per_kocka = Calibrator().homography_for_frame(None, ures)
+    assert per_kocka is ures and per_kocka.homography is None
+    assert per_kocka.image_to_court(123.0, 456.0) == (123.0, 456.0)
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

@@ -43,6 +43,31 @@ def _load_match(path: str) -> Match:
     return Match.from_dict(d)
 
 
+def _ledger_append(ledger: Path, row: str) -> None:
+    """A sort a PONTOSSÁG-tábla végére szúrja, nem a fájl végére.
+
+    A jegyzőkönyvben a pontosság-tábla UTÁN más szakasz is áll (Sebesség,
+    a saját táblájával) — a fájl végére fűzött sor oda keveredne. A tábla
+    az első `| Dátum |` fejlécű; ha nincs ilyen (friss, üres napló), a
+    sor a fájl végére kerül, mint eddig.
+    """
+    text = ledger.read_text(encoding="utf-8") if ledger.exists() else ""
+    lines = text.split("\n")
+    fej = next((i for i, ln in enumerate(lines)
+                if ln.startswith("| Dátum |")), None)
+    if fej is None:
+        with ledger.open("a", encoding="utf-8") as f:
+            f.write(row + "\n")
+        return
+    i = fej + 1
+    if i < len(lines) and lines[i].startswith("|--"):
+        i += 1
+    while i < len(lines) and lines[i].startswith("|"):
+        i += 1
+    lines.insert(i, row)
+    ledger.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Pontosság-validáció kézi ground-truth ellen.")
@@ -136,8 +161,7 @@ def main(argv=None) -> int:
         row = validation_ledger_row(
             res, match_id=Path(args.match_json).stem, version=version)
         ledger = Path(args.jegyzokonyv)
-        with ledger.open("a", encoding="utf-8") as f:
-            f.write(row + "\n")
+        _ledger_append(ledger, row)
         print(f"\nJegyzőkönyv-sor hozzáfűzve: {ledger}")
 
     # A go/no-go-hoz hasznos kilépőkód: 0 = MEGFELEL, 1 = GYENGE/nincs adat.

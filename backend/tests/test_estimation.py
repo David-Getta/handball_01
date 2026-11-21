@@ -241,3 +241,91 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_a_becsles_ideje_valos_masodpercben_ertendo():
+    """Ugyanaz a KOCKASZÁM a profiltól függően mást jelentene.
+
+    A feldolgozás ritkít (a termék alapja minden 3. kocka), tehát a
+    tracking képrátája profilonként más. Kockában rögzítve a sebesség a
+    termék alapbeállításán 2 helyett 6 másodpercig hatott volna — egy 7
+    m/s-mal sprintelő játékost ez a pálya túlsó végébe visz, ami
+    rosszabb, mint ha ott "megállna", ahol utoljára láttuk.
+    """
+    from handball.pipeline.estimation import (CONFIDENCE_HALFLIFE_S,
+                                              OffScreenEstimator,
+                                              VELOCITY_FADE_S)
+    from handball.models.events import RosterTimeline
+
+    e25 = OffScreenEstimator(RosterTimeline(), fps=25.0)
+    assert e25.velocity_fade_frames == VELOCITY_FADE_S * 25.0
+    assert e25.halflife_frames == CONFIDENCE_HALFLIFE_S * 25.0
+
+    # stride=3 (a termék alapja): a tracking ~8,3 fps → UGYANANNYI
+    # valós idő, harmadannyi kocka.
+    e8 = OffScreenEstimator(RosterTimeline(), fps=25.0 / 3.0)
+    assert e8.velocity_fade_frames < e25.velocity_fade_frames
+    assert abs(e8.velocity_fade_frames
+               - VELOCITY_FADE_S * 25.0 / 3.0) < 1e-6
+
+    # Hibás/hiányzó fps: a 25-ös alapra esünk vissza, nem nullára.
+    e0 = OffScreenEstimator(RosterTimeline(), fps=0.0)
+    assert e0.velocity_fade_frames == VELOCITY_FADE_S * 25.0
+
+
+def test_a_ritkitott_meccsen_a_becsult_jatekos_hamarabb_megall():
+    """Ritkított feldolgozáson ugyanannyi VALÓS idő után áll meg a
+    becsült játékos — nem háromszor annyi után."""
+    from handball.models.events import RosterTimeline
+    from handball.models.tracking import PlayerPosition, PositionSource, Team
+    from handball.pipeline.estimation import OffScreenEstimator
+
+    def _hol(fps, kockak):
+        e = OffScreenEstimator(RosterTimeline(), fps=fps)
+        # Két látás: a játékos +1 m/kocka sebességgel jobbra tart.
+        for t, x in ((0, 5.0), (1, 6.0)):
+            e.update_seen(t, [PlayerPosition(
+                track_id=7, team=Team.HOME, x=x, y=10.0,
+                source=PositionSource.MEASURED, confidence=1.0)])
+        return e._extrapolate(e._last_seen[7], 1 + kockak).x
+
+    # 30 kocka: 25 fps-en 1,2 mp (a 2 mp-es korláton belül → 30 m-t megy,
+    # a pálya végére vágva), ritkítva 3,6 mp (a korlát már megállította).
+    x25 = _hol(25.0, 30)
+    x8 = _hol(25.0 / 3.0, 30)
+    assert x8 < x25, (x8, x25)
+
+
+# ---- A pálya-határra vágás (_clamp) -----------------------------------------
+
+def test_clamp_a_tartomanyba_vag():
+    """Az érték a [low, high] tartományba kerül: a határon belüli
+    változatlan, a kívül eső a közelebbi határra — a becslés így nem
+    kerülhet a pályán kívülre."""
+    from handball.pipeline.estimation import _clamp
+
+    assert _clamp(12.5, 0.0, 40.0) == 12.5
+    assert _clamp(-3.0, 0.0, 40.0) == 0.0
+    assert _clamp(47.2, 0.0, 40.0) == 40.0
+    assert _clamp(0.0, 0.0, 40.0) == 0.0 and _clamp(40.0, 0.0, 40.0) == 40.0
+    assert _clamp(5.0, 5.0, 5.0) == 5.0          # elfajult tartomány
+
+
+def test_a_becsult_pozicio_a_palyan_marad():
+    """A VALÓDI úton: a pálya széle felé nagy sebességgel kilépő játékos
+    becsült helye a pályán belül marad (a határra vágva), nem repül ki."""
+    from handball.models.events import RosterTimeline
+    from handball.models.tracking import PlayerPosition, Team
+    from handball.pipeline.estimation import OffScreenEstimator
+
+    est = OffScreenEstimator(RosterTimeline())
+
+    def mert(x, y):
+        return [PlayerPosition(track_id=1, team=Team.HOME, x=x, y=y)]
+
+    est.update_seen(0, mert(37.0, 1.5))
+    est.update_seen(1, mert(39.0, 0.5))          # 2 m/kocka a sarok felé
+    becsult = est.estimate_missing(10, [])
+    assert [p.track_id for p in becsult] == [1]
+    assert 0.0 <= becsult[0].x <= 40.0 and 0.0 <= becsult[0].y <= 20.0
+    assert becsult[0].x == 40.0 and becsult[0].y == 0.0

@@ -22,6 +22,8 @@ import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
+import "zoomable.dart";
+import "num_format.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -90,7 +92,7 @@ class _LiveScreenState extends State<LiveScreen> {
       if (selected != null) {
         try {
           match = await _api.fetchMatch(selected);
-          label = "backend · $selected";
+          label = "motor · $selected";
         } catch (_) {
           match = buildDemoMatch();
           label = "demó";
@@ -139,6 +141,195 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "taktika",
                 "7 a 6! $team lehozta a kapust — labdaszerzésnél azonnali "
                 "hosszú indítás az üres kapura!")));
+      }
+    } catch (_) {}
+    // Élő döntés-figyelő: a játékos-modellből — mikor válik láthatóvá egy
+    // csapat rossz döntési szokása egy helyzetben (a védekező oldalnak
+    // szól: abba a helyzetbe kell kényszeríteni őket).
+    try {
+      for (final a in await _api.fetchDecisionAlerts(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(_sulya(a, 4), "dontes",
+                "Döntés-figyelő — ${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Ismert figura: a csapat meccsről meccsre visszatérő figurája
+    // indul — a védekező oldalnak szól (kettőzés a súlypontnál). A
+    // könyvtár több elemzett meccsből épül; egy meccsnél a lista üres.
+    try {
+      for (final a in await _api.fetchFigureAlerts(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "figura", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő figura-ajánló: a 15., 30., 45. percben az addig látott fal
+    // ellen melyik figuránk érne a legtöbbet — csak az addigi kockákból,
+    // a támadó kispadnak szól.
+    try {
+      for (final a in await _api.fetchLiveFigureSuggestions(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "figura", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő utolsó labda: a hajrában, szoros állásnál kinek a kezében és
+    // honnan ér a legtöbbet az utolsó labda — a tanult lövők az ellenfél
+    // kapusa ellen (a szezon korábbi meccseiből, különben az addigiakból).
+    try {
+      for (final a in await _api.fetchLiveLastShot(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő kit kinek: a 15., 30., 45. percben az addig látott falunk védői
+    // × az ellenfél tanult lövői (a szezon korábbi meccseiből) — ki álljon
+    // a veszélyes távoli lövővel szemben, és kire ne lépjünk ki; a védő
+    // kispadnak szól, és csak változásnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveMatchup(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő lövés-elosztás: a 15., 30., 45. percben az addigi lövések
+    // részesedése a tanult lövők értékéhez mérve — ki lőhetne többet és
+    // ki kevesebbet; a támadó kispadnak szól, csak új párnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveShotAllocation(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Félidő: a meccs előtti várakozás (eredmény, gólszerzők, fal) az
+    // első félidő valóságához mérve — a félidei beszéd tényei.
+    try {
+      for (final a in await _api.fetchLiveHalftimeReview(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "ai", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Emberhátrány-fal: a kiállítás kezdetén a hátrányban lévő kispadnak.
+    try {
+      for (final a in await _api.fetchLiveShorthanded(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Fal-váltás: rossz szakasz után a védekező kispadnak.
+    try {
+      for (final a in await _api.fetchLiveDefenseSwitch(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // 7 a 6: a hajrában a vesztő csapatnak a könyvtár mérlege szerint.
+    try {
+      for (final a in await _api.fetchLiveSevenSix(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Hetes-dobó: a hetes pillanatában a könyvtár szerinti dobó.
+    try {
+      for (final a in await _api.fetchLiveSevenTaker(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Szuper-csere: a gól nélküli sorozatnál a könyvtár szerinti beálló.
+    try {
+      for (final a in await _api.fetchLiveSuperSub(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Időkérés a sorozat ellen: a 3-0-s sorozat pillanatában — a tanács
+    // az időkérés könyvtári próbájától függ (megtöri-e a sorozatot).
+    try {
+      for (final a in await _api.fetchLiveTimeoutAdvice(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "momentum", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Időkérés-jegyzet: a felismert időkérések kezdetén az utolsó 5 perc
+    // állása, a kérő elleni sorozat a próbával, a várakozás eddig.
+    try {
+      for (final j in await _api.fetchLiveTimeoutBriefs(matchId)) {
+        out.add(_FeedEntry(
+            (j["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "ai", "${j["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Kapus-forma: a saját szokásos szintje felett / alatt védő kapus — a
+    // tanács a kapus napi formájának próbájától függ.
+    try {
+      for (final a in await _api.fetchLiveKeeperForm(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Napi forma: a modell várakozása felett / alatt járó lövő — a tanács
+    // a forró kéz próbájától függ (kitart-e a napi forma a könyvtárban).
+    try {
+      for (final a in await _api.fetchLiveForm(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Várható védekezés: a meccs elején a többi meccsük fő rendszere
+    // ("ai"), és ha a 15., 30., 45. percben eltérnek tőle, a figura-terv
+    // igazítása ("taktika", magas súllyal).
+    try {
+      for (final a in await _api.fetchLiveDefenseSystem(matchId)) {
+        final valtas = a["perc"] != null;
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(valtas ? 5 : 3, valtas ? "taktika" : "ai",
+                "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Meccs-előrejelzés: a meccs elején a két csapat többi meccséből
+    // jósolt eredmény és esélyek (a próbával) — a várakozás, amihez a
+    // meccs alakulását mérni lehet.
+    try {
+      for (final a in await _api.fetchLiveForecast(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "ai", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // AI-megbízhatóság: a meccs elején csapatonként, mennyire bizonyult
+    // megbízhatónak a lövő-, a kapus- és a döntés-modell a korábbi
+    // meccseken — az élő jelzések súlya.
+    try {
+      for (final a in await _api.fetchLiveModelTrust(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(3, "ai", "${a["text"] ?? ""}")));
+      }
+    } catch (_) {}
+    // Élő kapus-választás: a 15., 30., 45. percben melyik kapusunk álljon
+    // az ő lövőik ellen, ha most nem ő áll bent — a védő kispadnak szól,
+    // csak új javaslatnál ismétli.
+    try {
+      for (final a in await _api.fetchLiveKeeperChoice(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(_sulya(a, 5), "taktika", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     try {
@@ -210,7 +401,7 @@ class _LiveScreenState extends State<LiveScreen> {
               atFrame,
               Suggestion(4, "taktika",
                   "Félidei kép ($team): a(z) $who átlag "
-                  "${dist.toStringAsFixed(1)} m-ről őrizte az emberét — "
+                  "${huNum(dist)} m-ről őrizte az emberét — "
                   "a második félidőre szorosabb tapadást kérj.")));
         }
         // Félidei labdaeladók: ki szórja a labdát — présre őt a másodikra.
@@ -476,6 +667,39 @@ class _LiveScreenState extends State<LiveScreen> {
     return out;
   }
 
+  /// Időkérés-jegyzet az aktuális percre (a pad kér időt): a backend
+  /// jegyzete a folyam elejére; hibánál egy rövid jelzés.
+  Future<void> _timeoutBriefNow(Match match, String kero) async {
+    final id = _selectedId;
+    if (id == null || match.frames.isEmpty) return;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final perc = (match.frames[_frameIndex].t - match.frames.first.t) /
+        fps /
+        60.0;
+    List<Map<String, dynamic>> jegyzetek;
+    try {
+      jegyzetek = await _api.fetchLiveTimeoutBriefs(id, perc: perc, kero: kero);
+    } catch (_) {
+      jegyzetek = const [];
+    }
+    if (!mounted) return;
+    setState(() {
+      if (jegyzetek.isEmpty) {
+        _feed.insert(
+            0,
+            _FeedEntry(_frameIndex,
+                const Suggestion(3, "ai", "Időkérés-jegyzet: még nincs adat")));
+      }
+      for (final j in jegyzetek) {
+        _feed.insert(0,
+            _FeedEntry(_frameIndex, Suggestion(5, "ai", "${j["text"] ?? ""}")));
+      }
+      while (_feed.length > _feedMax) {
+        _feed.removeLast();
+      }
+    });
+  }
+
   void _togglePlay() {
     final match = _match;
     if (match == null || match.frames.isEmpty) return;
@@ -581,7 +805,7 @@ class _LiveScreenState extends State<LiveScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _playing ? AppColors.away.withOpacity(0.15) : AppColors.surfaceAlt,
+            color: _playing ? AppColors.away.withValues(alpha: 0.15) : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: _playing ? AppColors.away : AppColors.border),
           ),
@@ -623,7 +847,7 @@ class _LiveScreenState extends State<LiveScreen> {
         const SizedBox(width: AppSpacing.md),
         _chip(_sourceLabel),
         const Spacer(),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text("${huNum(_frameIndex / fps)} s", style: AppText.value),
         Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
       ],
     );
@@ -648,7 +872,9 @@ class _LiveScreenState extends State<LiveScreen> {
           child: Container(
             decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: CustomPaint(painter: CourtPainter(frame: frame)),
+            // Nagyítható élő pálya: csippentés vagy Ctrl+görgő.
+            child: ZoomPanView(
+                child: CustomPaint(painter: CourtPainter(frame: frame))),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -687,6 +913,25 @@ class _LiveScreenState extends State<LiveScreen> {
             onChanged: (v) => setState(() => _frameIndex = v.round()),
           ),
         ),
+        // Időkérés-jegyzet MOST: a pad kér időt — a kérő csapat
+        // választásával a jegyzet az aktuális percre a folyam elejére.
+        if (_selectedId != null)
+          PopupMenuButton<String>(
+            tooltip: "Időkérés-jegyzet most",
+            color: AppColors.surface,
+            onSelected: (kero) => _timeoutBriefNow(match, kero),
+            itemBuilder: (_) => [
+              for (final side in const ["home", "away"])
+                PopupMenuItem(
+                  value: side,
+                  child: Text(
+                      "${side == "home" ? match.meta.homeTeam : match.meta.awayTeam} kér időt",
+                      style: AppText.value),
+                ),
+            ],
+            icon: const Icon(Icons.pan_tool, color: AppColors.textSecondary,
+                size: 20),
+          ),
         // Lejátszási sebesség (0,5–4×) — mint a meccs-elemzőben.
         PopupMenuButton<double>(
           tooltip: "Sebesség",
@@ -747,6 +992,14 @@ class _LiveScreenState extends State<LiveScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // A "most" rész alacsony ablakban (600 px) görgethető, nem
+          // csordul túl: a korábbi jelzések listája megtartja a helyét.
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
           Row(children: [
             const Icon(Icons.tips_and_updates_outlined, size: 18, color: AppColors.accent),
             const SizedBox(width: 8),
@@ -771,6 +1024,10 @@ class _LiveScreenState extends State<LiveScreen> {
           const Divider(height: AppSpacing.xl, color: AppColors.border),
           Text("KORÁBBI JELZÉSEK", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: _feed.isEmpty
                 ? Text("Indítsd el a lejátszást — a jelzések itt gyűlnek, "
@@ -829,7 +1086,11 @@ class _LiveScreenState extends State<LiveScreen> {
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      // IntrinsicHeight: a sor oszlopban és listában ül (végtelen
+      // magasság) — a stretch-igazítás nélküle "végtelen magasságra"
+      // kényszerítene, és a javaslat helyén hibadoboz jelent meg.
+      child: IntrinsicHeight(
+          child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(width: 3, color: color), // prioritás-színcsík
@@ -838,7 +1099,7 @@ class _LiveScreenState extends State<LiveScreen> {
             padding: const EdgeInsets.only(top: 12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(color: color.withOpacity(0.16), borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(6)),
               child: Text(s.category.toUpperCase(),
                   style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
             ),
@@ -852,11 +1113,17 @@ class _LiveScreenState extends State<LiveScreen> {
           ),
           const SizedBox(width: 12),
         ],
-      ),
+      )),
     );
   }
 
   /// A prioritás színe: 5 → arany (sürgős kiemelés), 4 → teal, ≤3 → halvány.
+  /// Az önkalibrált élő jelzés súlya: ha a mögötte álló modell a
+  /// korábbi meccseken a próbán részlegesen vagy rosszul teljesített
+  /// (a backend "ovatos" jelzője — play_simulation.calibrate_alerts),
+  /// a jelzés szürke (3), különben az alap-súlyán marad.
+  static int _sulya(Map a, int alap) => a["ovatos"] == true ? 3 : alap;
+
   Color _prioColor(int priority) {
     if (priority >= 5) return AppColors.gold;
     if (priority == 4) return AppColors.accent;

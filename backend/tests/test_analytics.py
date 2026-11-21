@@ -92,6 +92,24 @@ def test_team_summary_empty_when_too_few():
     assert s.frames_counted == 0
 
 
+# ---- Az üres hőtérkép-rács (_empty_grid) ------------------------------------
+
+def test_empty_grid_sorok_es_oszlopok_fuggetlen_nullai():
+    """Az üres rács bins_y sor × bins_x oszlop, csupa 0,0; a sorok
+    FÜGGETLEN listák (egy cella írása nem látszik a többi sorban — a
+    `[[0.0] * n] * m` hibája itt nem fordulhat elő)."""
+    from handball.pipeline.analytics import _empty_grid
+
+    racs = _empty_grid(4, 3)
+    assert len(racs) == 3 and all(len(sor) == 4 for sor in racs)
+    assert all(v == 0.0 for sor in racs for v in sor)
+    racs[1][2] = 5.0
+    assert racs[0][2] == 0.0 and racs[2][2] == 0.0
+    assert sum(v for sor in racs for v in sor) == 5.0
+    assert _empty_grid(0, 0) == [] and _empty_grid(3, 0) == []
+    assert _empty_grid(0, 2) == [[], []]
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

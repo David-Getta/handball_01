@@ -79,6 +79,57 @@ def test_two_teams_separated_by_nearest():
     assert nearest_label((250, 130, 125), prof) == AppearanceLabel.AWAY
 
 
+def test_labeled_colors_a_profil_minden_szine_cimkevel():
+    """A hozzárendelés nyersanyaga: a profil összes (címke, szín) párja —
+    hazai, vendég, aztán MINDEN kapus- és bíró-szín külön párként (a két
+    kapus eltérő színű lehet, több bíró is van)."""
+    prof = AppearanceProfile(
+        home=(240, 240, 240), away=(20, 20, 20),
+        goalkeeper=[(30, 160, 60), (240, 140, 20)],
+        referee=[(230, 210, 40)],
+    )
+    assert prof.labeled_colors() == [
+        (AppearanceLabel.HOME, (240, 240, 240)),
+        (AppearanceLabel.AWAY, (20, 20, 20)),
+        (AppearanceLabel.GOALKEEPER, (30, 160, 60)),
+        (AppearanceLabel.GOALKEEPER, (240, 140, 20)),
+        (AppearanceLabel.REFEREE, (230, 210, 40)),
+    ]
+    # Mindkét kapus-szín tényleg kapusnak sorol.
+    assert nearest_label((35, 150, 65), prof) == AppearanceLabel.GOALKEEPER
+    assert nearest_label((235, 150, 30), prof) == AppearanceLabel.GOALKEEPER
+
+
+def test_labeled_colors_csak_a_megadott_szinek():
+    """Ami nincs megadva, az nem kerül a párok közé (nem None-színnel,
+    nem alapértelmezett színnel): üres profil → üres lista; a fekete
+    (0, 0, 0) viszont VALÓDI szín, nem "hiányzó"."""
+    assert AppearanceProfile().labeled_colors() == []
+    csak_vendeg = AppearanceProfile(away=(30, 60, 200))
+    assert csak_vendeg.labeled_colors() == [
+        (AppearanceLabel.AWAY, (30, 60, 200))]
+    csak_biro = AppearanceProfile(referee=[(15, 15, 15), (230, 210, 40)])
+    assert [c for c, _ in csak_biro.labeled_colors()] == [
+        AppearanceLabel.REFEREE, AppearanceLabel.REFEREE]
+    fekete = AppearanceProfile(home=(0, 0, 0))
+    assert fekete.labeled_colors() == [(AppearanceLabel.HOME, (0, 0, 0))]
+    assert nearest_label((5, 5, 5), fekete) == AppearanceLabel.HOME
+
+
+def test_labeled_colors_friss_lista_a_profil_nem_modosul():
+    """Minden hívás saját listát ad: a hívó módosítása nem ír vissza a
+    profilba, és két profil kapus-listája nem közös (nincs megosztott
+    alapérték)."""
+    prof = AppearanceProfile(home=(200, 30, 30), goalkeeper=[(240, 140, 20)])
+    parok = prof.labeled_colors()
+    parok.append((AppearanceLabel.REFEREE, (1, 2, 3)))
+    assert len(prof.labeled_colors()) == 2
+    assert prof.referee == []
+    masik = AppearanceProfile()
+    masik.goalkeeper.append((1, 1, 1))
+    assert AppearanceProfile().goalkeeper == []
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

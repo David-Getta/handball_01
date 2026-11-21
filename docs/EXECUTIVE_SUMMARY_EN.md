@@ -32,10 +32,16 @@ to objective match analysis.
 - **Explainable AI chain**: every verdict is backed by an explicit,
   inspectable threshold — no black boxes (GDPR / AI Act friendly).
   With few samples the system stays silent rather than guessing.
+- **Self-checking match decisions**: keeper choice, seven-metre taker
+  and direction, timeout against a scoring run, keeper hot/cold streaks
+  and the scouting report itself are each back-tested on the club's own
+  match library — earlier matches only, against a naive baseline — and
+  the product states which of its checks are proven before the coach
+  acts on them.
 - **On-premise processing**: no video upload, no cloud dependency —
   critical for clubs working with minors.
-- **313 analysis layers** across attack, defence, goalkeeping, rules,
-  momentum and physical load; **1,312 automated tests** and a
+- **526 analysis layers** across attack, defence, goalkeeping, rules,
+  momentum and physical load; **3,656 automated tests** and a
   reproducible benchmark guard the quality of every release. (Live
   figures, generated from the codebase: `docs/SZAMOK.md`; per-layer
   catalogue: `docs/RETEG_KATALOGUS.md`.)
@@ -62,6 +68,10 @@ Working end-to-end prototype validated on simulated and real footage
 70% funding rate) closes TRL 4 on annotated real-match datasets,
 runs a 3–5 club pilot to TRL 5, demonstrates a season-long multi-club
 deployment (TRL 6), and prepares the company for the EIC Accelerator.
+Speed is a product requirement, not an afterthought: the pilot target
+is a full 60-minute match analysed in ≤ 15 minutes on the pilot GPU
+server (quick picture ≤ 3 minutes); the analysis layers themselves
+already run in just over a minute on a laptop CPU (`docs/SEBESSEG.md`).
 
 ## Why EU / widening support
 

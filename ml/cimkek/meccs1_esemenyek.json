@@ -1,0 +1,1775 @@
+{
+"esemenyek": [
+{
+"t": 301.7,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 302,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 311.61,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 311.97,
+"tipus": "loves"
+},
+{
+"t": 320.57,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 320.9,
+"tipus": "loves"
+},
+{
+"t": 332.07,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 332.34,
+"tipus": "loves"
+},
+{
+"t": 341.02,
+"tipus": "loves"
+},
+{
+"t": 386.98,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 387.45,
+"tipus": "loves"
+},
+{
+"t": 447.79,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 448.12,
+"tipus": "loves"
+},
+{
+"t": 460.82,
+"tipus": "loves"
+},
+{
+"t": 471.93,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 472.3,
+"tipus": "loves"
+},
+{
+"t": 484.39,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 484.86,
+"tipus": "loves"
+},
+{
+"t": 516.98,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 517.41,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 540.17,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 540.77,
+"tipus": "loves"
+},
+{
+"t": 582.09,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 582.53,
+"tipus": "loves"
+},
+{
+"t": 620.29,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 620.62,
+"tipus": "loves"
+},
+{
+"t": 625.84,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 626.59,
+"tipus": "loves"
+},
+{
+"t": 716.58,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 716.92,
+"tipus": "loves"
+},
+{
+"t": 725.32,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 725.35,
+"tipus": "loves"
+},
+{
+"t": 798.99,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 799.45,
+"tipus": "loves"
+},
+{
+"t": 850.65,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 851.06,
+"tipus": "loves"
+},
+{
+"t": 860.18,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 860.77,
+"tipus": "loves"
+},
+{
+"t": 874.95,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 875.73,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 900.87,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 901.72,
+"tipus": "loves"
+},
+{
+"t": 938.66,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 939.06,
+"tipus": "loves"
+},
+{
+"t": 950.64,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 950.92,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 966.43,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 966.77,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 970.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 970.29,
+"tipus": "loves"
+},
+{
+"t": 1071.84,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 1072.06,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1081.89,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 1082.62,
+"tipus": "loves"
+},
+{
+"t": 1102.22,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1102.37,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1115.75,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1116.53,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1119.74,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1120.15,
+"tipus": "loves"
+},
+{
+"t": 1189.33,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1189.91,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1205.85,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1206.1,
+"tipus": "loves"
+},
+{
+"t": 1246.94,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1262.4,
+"tipus": "loves"
+},
+{
+"t": 1279.61,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1280.16,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1293.44,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1293.63,
+"tipus": "loves"
+},
+{
+"t": 1307.29,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 1307.74,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1322.89,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1323.56,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 1349.94,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1369.07,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1370.01,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1374.65,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1375.46,
+"tipus": "loves"
+},
+{
+"t": 1387.21,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1387.68,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1401.25,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1401.7,
+"tipus": "loves"
+},
+{
+"t": 1428.66,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 1428.94,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1444.62,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 1445.13,
+"tipus": "loves"
+},
+{
+"t": 1519.68,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1520.36,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1543.69,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1545.43,
+"tipus": "loves"
+},
+{
+"t": 1562.36,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 1563.01,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1578.06,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 1579.91,
+"tipus": "loves"
+},
+{
+"t": 1594.61,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1595.59,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1605.12,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1605.76,
+"tipus": "loves"
+},
+{
+"t": 1630.45,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1631.23,
+"tipus": "loves"
+},
+{
+"t": 1640.71,
+"tipus": "loves"
+},
+{
+"t": 1640.95,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 1641.18,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1656.64,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1657.17,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1662.35,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1662.85,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1667.01,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1667.67,
+"tipus": "loves"
+},
+{
+"t": 1677.43,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 1677.78,
+"tipus": "loves"
+},
+{
+"t": 1678.97,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1679.51,
+"tipus": "loves"
+},
+{
+"t": 1688.41,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 1688.57,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1708.05,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1708.38,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1712.68,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 1713.25,
+"tipus": "loves"
+},
+{
+"t": 1727.09,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1727.57,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1743.03,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1743.17,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 1782.13,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1808.42,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 1808.99,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1832.7,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 1848.17,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 1848.56,
+"tipus": "loves"
+},
+{
+"t": 1983.4,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 1984.13,
+"tipus": "loves"
+},
+{
+"t": 2073.59,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2073.9,
+"tipus": "loves"
+},
+{
+"t": 2082.86,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2083.26,
+"tipus": "loves"
+},
+{
+"t": 2119.7,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2120.85,
+"tipus": "loves"
+},
+{
+"t": 2158.8,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2158.95,
+"tipus": "loves"
+},
+{
+"t": 2167.32,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2168.51,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2177.54,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2178.49,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2182.62,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2182.93,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2185.9,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2186.53,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2189.35,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2191.32,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2193.26,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2195.86,
+"tipus": "loves"
+},
+{
+"t": 2209.24,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2209.61,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2221.18,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2221.57,
+"tipus": "loves"
+},
+{
+"t": 2243.14,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2245.2,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2270.95,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2273.79,
+"tipus": "loves"
+},
+{
+"t": 2349.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2349.54,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2367.16,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2367.66,
+"tipus": "loves"
+},
+{
+"t": 2385.99,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2386.17,
+"tipus": "loves"
+},
+{
+"t": 2416.91,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2417.27,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2430.01,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2430.66,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2435.7,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2436.08,
+"tipus": "loves"
+},
+{
+"t": 2451.99,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2452.26,
+"tipus": "loves"
+},
+{
+"t": 2456.24,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2458.17,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2474.23,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2474.85,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2479.51,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2482.46,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2487.58,
+"tipus": "loves"
+},
+{
+"t": 2487.64,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 2490.28,
+"tipus": "loves"
+},
+{
+"t": 2492.16,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2492.59,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2512.05,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 2514.6,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2516.66,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2517.36,
+"tipus": "loves"
+},
+{
+"t": 2529.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 2529.5,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2544.02,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 2545.25,
+"tipus": "loves"
+},
+{
+"t": 2617.62,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2618.06,
+"tipus": "loves"
+},
+{
+"t": 2729.85,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2730.45,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2745.86,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2746.25,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2750.67,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2751.05,
+"tipus": "loves"
+},
+{
+"t": 2766.95,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2767.04,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2789.29,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2789.63,
+"tipus": "loves"
+},
+{
+"t": 2808.04,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2808.28,
+"tipus": "loves"
+},
+{
+"t": 2812.63,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2812.93,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2830.89,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2831.06,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2835.91,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2836.27,
+"tipus": "loves"
+},
+{
+"t": 2876.66,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2876.96,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2898.41,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2898.78,
+"tipus": "loves"
+},
+{
+"t": 2928.66,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 2929.11,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2941.35,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 2941.95,
+"tipus": "loves"
+},
+{
+"t": 2967.52,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 2967.99,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 2982.84,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 2983.8,
+"tipus": "loves"
+},
+{
+"t": 3004.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3004.51,
+"tipus": "loves"
+},
+{
+"t": 3035.84,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3036.21,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3051.62,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3052.42,
+"tipus": "loves"
+},
+{
+"t": 3127.02,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 3127.38,
+"tipus": "loves"
+},
+{
+"t": 3137.42,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 3137.94,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3148.45,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 3148.92,
+"tipus": "loves"
+},
+{
+"t": 3173.82,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3174.22,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3193.15,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3193.75,
+"tipus": "loves"
+},
+{
+"t": 3325.15,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3325.58,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3338.38,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3339.18,
+"tipus": "loves"
+},
+{
+"t": 3386.18,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 3386.71,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3404.39,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"ismetles": true,
+"t": 3406.29,
+"tipus": "loves"
+},
+{
+"t": 3422.21,
+"tipus": "loves"
+},
+{
+"t": 3426.86,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 3427.15,
+"tipus": "loves"
+},
+{
+"t": 3434.97,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3435.86,
+"tipus": "loves"
+},
+{
+"t": 3448.05,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3448.7,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3459.34,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3460.09,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3463.92,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3465.38,
+"tipus": "loves"
+},
+{
+"t": 3480.62,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3481.2,
+"tipus": "loves"
+},
+{
+"t": 3596.18,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3596.68,
+"tipus": "loves"
+},
+{
+"t": 3625.14,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 3625.48,
+"tipus": "loves"
+},
+{
+"t": 3657.13,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3657.83,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3676.92,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3677.63,
+"tipus": "loves"
+},
+{
+"t": 3745.48,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 3746.57,
+"tipus": "loves"
+},
+{
+"t": 3756.67,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 3756.8,
+"tipus": "loves"
+},
+{
+"t": 3768.01,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 3768.32,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3782.88,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 3783.39,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3791.27,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 3791.68,
+"tipus": "loves"
+},
+{
+"t": 3868.94,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3869.52,
+"tipus": "loves"
+},
+{
+"t": 3925.09,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3925.49,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 3938.57,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 3938.88,
+"tipus": "loves"
+},
+{
+"t": 3997.75,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 3998.05,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4011.97,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4012.32,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4017.56,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4017.87,
+"tipus": "loves"
+},
+{
+"t": 4072.3,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4072.62,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4088.06,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4088.37,
+"tipus": "loves"
+},
+{
+"t": 4224.16,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4224.74,
+"tipus": "loves"
+},
+{
+"t": 4230.13,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4230.49,
+"tipus": "loves"
+},
+{
+"t": 4239.74,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4240.4,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4254.96,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4255.76,
+"tipus": "loves"
+},
+{
+"t": 4276.72,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4277,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4291.33,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4292.27,
+"tipus": "loves"
+},
+{
+"t": 4369.91,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4370.13,
+"tipus": "loves"
+},
+{
+"t": 4418.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4418.51,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4432.02,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4432.82,
+"tipus": "loves"
+},
+{
+"t": 4468.23,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4468.39,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4481.56,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4482.02,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4486.59,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4486.89,
+"tipus": "loves"
+},
+{
+"t": 4502.38,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4503.46,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4515.75,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4516.53,
+"tipus": "loves"
+},
+{
+"t": 4549.02,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4549.14,
+"tipus": "loves"
+},
+{
+"t": 4605.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4605.85,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4617.93,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4618.64,
+"tipus": "loves"
+},
+{
+"t": 4646.65,
+"tipus": "loves"
+},
+{
+"t": 4705.45,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4705.9,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4717.7,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4718.29,
+"tipus": "loves"
+},
+{
+"t": 4743.45,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4743.78,
+"tipus": "loves"
+},
+{
+"t": 4763.22,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4763.67,
+"tipus": "loves"
+},
+{
+"t": 4798.11,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4798.73,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4811.61,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4812.15,
+"tipus": "loves"
+},
+{
+"t": 4834.4,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4834.85,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4849.85,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4850.35,
+"tipus": "loves"
+},
+{
+"t": 4867.21,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"t": 4867.5,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4891.17,
+"tipus": "loves"
+},
+{
+"eredmeny": "vedes",
+"ismetles": true,
+"t": 4891.4,
+"tipus": "loves"
+},
+{
+"t": 4911.16,
+"tipus": "loves"
+},
+{
+"eredmeny": "melle",
+"t": 4912.27,
+"tipus": "loves"
+},
+{
+"t": 4946.87,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4947.51,
+"tipus": "loves"
+},
+{
+"ismetles": true,
+"t": 4962.19,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"ismetles": true,
+"t": 4962.72,
+"tipus": "loves"
+},
+{
+"t": 4991.75,
+"tipus": "loves"
+},
+{
+"eredmeny": "gol",
+"t": 4992.36,
+"tipus": "loves"
+}
+],
+"fps": 30,
+"frissitve": "2026-11-18T23:02:28.518Z",
+"hossz_s": 5074,
+"meret": 2944548330,
+"nev": "Telekom Veszprém - SG Flensburg-Handewitt 29 - 25.mp4",
+"pozicio": 5034.5
+}
