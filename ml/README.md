@@ -92,6 +92,8 @@ python -m pytest -q
 | `hbd/match_pose.py` | teljes meccs: minden ritkított kockán az összes ember testpontja (CLI) |
 | `hbd/broadcast.py` | közvetítési jelek: eredményjelző (látszik? változik az állás?) + kamera-mozgás (CLI) |
 | `hbd/shot_detect.py` | lövésfelismerés a teljes meccsen: póz + rövid követés (kar-lendítés) + közvetítés (CLI) |
+| `hbd/court.py` | ki áll a pályán: a nézők kiszűrése a láb alatti színből (CLI) |
+| `hbd/match_shots.py` | lövés-profil a meccs-lövésjelölő címkéiből: ráközelítő lövő-követés, elengedés, kartartás, lövőkéz, célzóna, ki lő (CLI) |
 
 ## Teljes meccs: hol vannak a lövések?
 
@@ -102,4 +104,4 @@ python -m hbd.shot_detect --pose out/m1_pose.npz --broadcast out/m1_broadcast.np
     --events cimkek/meccs1_esemenyek.json --out out/sd
 ```
 
-Eredmény az első meccsen: `eredmenyek/loves_felismeres_meccs1.md`.
+Eredmény az első meccsen: `eredmenyek/loves_felismeres_meccs1.md`; lövés-profil: `eredmenyek/meccs1_lovesprofil.md`.
