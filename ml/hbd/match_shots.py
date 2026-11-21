@@ -252,6 +252,10 @@ def refine_all(clips_dir: Path, poses_dir: Path, labels_dir: Path, video: str, o
 ZOOM_SIDE_X = 2.5
 ZOOM_SIDE_PX = (280, 900)
 ZOOM_IMGSZ = 640
+# Az induló keresés kivágásai (px). Nem lehet kisebb, mint egy közeli játékos: a csonkán
+# kivágott testre a becslő csonka dobozt ad, és a követés ehhez a hibás mérethez igazodna
+# (az első változat 280 px-ről indult, a lövő medián magassága 219 px volt).
+ZOOM_START_SIDES = (450, 800)
 
 
 def _zoom_detect(model, img, cx, cy, side):
@@ -283,7 +287,7 @@ def zoom_track(frames: list, k: int, x: float, y: float, model, fps: float) -> d
         f = k + dk_
         if not 0 <= f < T:
             continue
-        for side in (ZOOM_SIDE_PX[0], 2 * ZOOM_SIDE_PX[0]):
+        for side in ZOOM_START_SIDES:
             db, dkp = _zoom_detect(model, frames[f], x, y, side)
             j = pick_clicked(db, x, y)
             if j is not None:
