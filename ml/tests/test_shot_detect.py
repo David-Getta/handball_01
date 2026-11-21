@@ -121,3 +121,18 @@ def test_kozvetitesi_jelek_igazitasa_es_jellemzok():
     F, names, X, xn = build_features(pose, bc)
     assert "allas_valtozas" in names and any(n.startswith("allas_valtozas@+5.0") for n in xn)
     assert X.shape == (50, len(xn)) and np.isfinite(X).all()
+
+
+def test_palya_szuro_a_padlo_szinet_tanulja_es_szur():
+    from hbd.court import filter_pose, floor_colors, on_court
+
+    rng = np.random.default_rng(0)
+    floor = np.array([150, 120, 100], np.float32)
+    colors = np.concatenate([floor + rng.normal(0, 3, (80, 3)), rng.uniform(0, 255, (20, 3))]).astype(np.float32)
+    keep = on_court(colors, floor_colors(colors))
+    assert keep[:80].mean() > 0.95 and keep[80:].mean() < 0.3
+    pose = _fake_pose(10)
+    keep = np.zeros(len(pose["boxes"]), bool)
+    keep[::2] = True
+    f = filter_pose(pose, keep)
+    assert f["n"].sum() == keep.sum() and f["offsets"][-1] == keep.sum() and len(f["kps"]) == keep.sum()

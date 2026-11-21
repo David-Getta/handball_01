@@ -373,6 +373,7 @@ def main(argv=None) -> int:
     ap.add_argument("--title", default="")
     ap.add_argument("--broadcast", help="a hbd.broadcast kimenete (eredményjelző + kamera)")
     ap.add_argument("--no-swing", action="store_true", help="követéses lendítés-jellemzők nélkül")
+    ap.add_argument("--court", help="a hbd.court kimenete: csak a pályán álló emberek (nézők nélkül)")
     args = ap.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -380,6 +381,10 @@ def main(argv=None) -> int:
     doc = doc.get("data", doc)
     shots = shot_times(doc, include_replays=not args.live_only)
     pose = load_pose(args.pose)
+    if args.court:
+        from .court import filter_pose
+
+        pose = filter_pose(pose, np.load(args.court)["on_court"])
     bc = None
     if args.broadcast:
         from .broadcast import load as load_bc

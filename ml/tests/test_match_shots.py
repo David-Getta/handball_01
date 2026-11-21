@@ -66,3 +66,73 @@ def test_lovo_jelolt_jellemzok():
     X, boxes = candidate_features(p, 7)
     assert X.shape == (2, 9) and np.isfinite(X).all()
     assert X[0, 3] == 1.0 and X[1, 3] < 1.0             # a legnagyobb doboz aránya 1
+
+
+class _FakeModel:
+    """Kivágásonként az egyetlen "embert" adja vissza, ha a kivágásba esik (a teljes kép koordinátáiban mozog)."""
+
+    def __init__(self, path):
+        self.path, self.f, self.crops = path, 0, []
+
+    def __call__(self, crops):
+        return [self._one(c) for c in crops]
+
+    def _one(self, crop):
+        x0, y0 = crop.ox, crop.oy
+        b = self.path[crop.f]
+        lb = np.array([[b[0] - x0, b[1] - y0, b[2] - x0, b[3] - y0]], np.float32)
+        if lb[0, 0] < 0 or lb[0, 1] < 0 or lb[0, 2] > crop.shape[1] or lb[0, 3] > crop.shape[0]:
+            return np.zeros((0, 4), np.float32), np.zeros((0, 17, 3), np.float32)
+        k = np.zeros((1, 17, 3), np.float32)
+        k[0, :, 0], k[0, :, 1], k[0, :, 2] = (lb[0, 0] + lb[0, 2]) / 2, np.linspace(lb[0, 1], lb[0, 3], 17), 0.9
+        return lb, k
+
+
+def test_rakozelito_koveto_vegigviszi_a_kicsi_lovot(monkeypatch):
+    import hbd.match_shots as ms
+
+    path = [[900 + 4 * f, 500, 930 + 4 * f, 580] for f in range(12)]   # 80 px magas, jobbra fut
+
+    class Img(np.ndarray):
+        pass
+
+    frames = []
+    for f in range(12):
+        im = np.zeros((1080, 1920, 3), np.uint8).view(Img)
+        im.f = f
+        frames.append(im)
+
+    real = ms._zoom_detect
+
+    def fake_detect(model, img, cx, cy, side):
+        h, w = img.shape[:2]
+        x0, y0 = int(max(0, cx - side / 2)), int(max(0, cy - side / 2))
+        crop = img[y0:int(min(h, cy + side / 2)), x0:int(min(w, cx + side / 2))].view(Img)
+        crop.f, crop.ox, crop.oy = img.f, x0, y0
+        db, dk = model([crop])[0]
+        if len(db):
+            db = db + [x0, y0, x0, y0]
+            dk[..., 0] += x0
+            dk[..., 1] += y0
+        return db, dk
+
+    monkeypatch.setattr(ms, "_zoom_detect", fake_detect)
+    tr = ms.zoom_track(frames, 6, 925, 540, _FakeModel(path), 25.0)
+    assert real is not None and tr["start"] == 0 and len(tr["kps"]) == 12
+    assert np.allclose(tr["boxes"][11], path[11])
+
+
+def test_kivagas_koordinatai_visszakerulnek_a_teljes_kepre():
+    from hbd.match_shots import _zoom_detect
+
+    seen = {}
+
+    def model(crops):
+        seen["shape"] = crops[0].shape
+        k = np.zeros((1, 17, 3), np.float32)
+        k[0, :, :2] = (10, 20)
+        return [(np.array([[10, 20, 30, 60]], np.float32), k)]
+
+    db, dk = _zoom_detect(model, np.zeros((1080, 1920, 3), np.uint8), 1000, 500, 300)
+    assert seen["shape"] == (300, 300, 3)
+    assert np.allclose(db[0], [860, 370, 880, 410]) and np.allclose(dk[0, 0, :2], [860, 370])

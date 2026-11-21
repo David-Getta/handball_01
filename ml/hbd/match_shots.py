@@ -20,8 +20,9 @@ Lépések:
 A kartartás edzői besorolás: a fej mellől induló lövés is "oldalt" (a
 jelölő megerősítése szerint), tehát két osztály: fent / oldalt.
 
-    python -m hbd.match_shots extract --clips m1web --out m1_clip_poses
-    python -m hbd.match_shots evaluate --clips m1web --poses m1_clip_poses --labels cimkek_m1/ --out res/
+    python -m hbd.match_shots extract --clips m1web --video meccs.mp4 --out m1_clip_poses
+    python -m hbd.match_shots zoom --clips m1web --labels cimkek_m1/ --video meccs.mp4 --out m1_zoom
+    python -m hbd.match_shots evaluate --clips m1web --poses m1_clip_poses --labels cimkek_m1/ --zoom m1_zoom --out res/
 """
 
 from __future__ import annotations
@@ -198,6 +199,161 @@ def track_shooter(p: dict, k: int, x: float, y: float) -> dict | None:
     return {"start": a, "kps": out_k, "boxes": out_b, "k": k - a}
 
 
+def refine_all(clips_dir: Path, poses_dir: Path, labels_dir: Path, video: str, out_dir: Path, weights: str,
+               device: str | None = None) -> None:
+    """A követett lövő testpontjai újra, a köré vágott, felnagyított képen (folytatható).
+
+    Széles képen a lövő ~100 px magas, a teljes képen futó pózbecslő karja
+    zajos. A UNIRI-csőhöz hasonlóan a lövő dobozát négyzetesen kivágjuk
+    (CROP_SCALE), és a kivágáson fut újra a becslő (POSE_IMGSZ); a doboza
+    alapján választjuk ki (pick_person)."""
+    from .pose import PoseModel, pick_person, square_crop_box
+
+    man = {c["id"]: c for c in json.loads((clips_dir / "manifest.json").read_text())["clips"]}
+    labels = load_labels(labels_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model = PoseModel(weights, device)
+    t0, done = time.time(), 0
+    for cid, lab in labels.items():
+        dst, f = out_dir / f"{cid}.npz", poses_dir / f"{cid}.npz"
+        if dst.exists() or not f.exists():
+            continue
+        p = load_clip_pose(f)
+        k0, (w, h), fps = int(p.get("k0", 0)), p["size"], float(p["fps"])
+        tr = track_shooter(p, lab["lovo"]["k"] - k0, lab["lovo"]["x"] * w, lab["lovo"]["y"] * h)
+        if tr is None:
+            continue
+        T = len(tr["boxes"])
+        frames = _orig_frames(video, man[cid]["t_start"] + (k0 + tr["start"]) / fps, T)
+        crops, origins = [], []
+        for img, box in zip(frames, tr["boxes"]):
+            x0, y0, x1, y1 = square_crop_box(box, w, h)
+            crops.append(np.ascontiguousarray(img[y0:y1, x0:x1]))
+            origins.append((x0, y0))
+        kps = tr["kps"][:len(crops)].copy()
+        found = np.zeros(len(crops), bool)
+        for t, (db, dk) in enumerate(model(crops)):
+            ox, oy = origins[t]
+            tb = tr["boxes"][t]
+            j = pick_person(db, (tb[0] - ox, tb[1] - oy, tb[2] - ox, tb[3] - oy))
+            if j is not None:
+                kps[t] = dk[j]
+                kps[t, :, 0] += ox
+                kps[t, :, 1] += oy
+                found[t] = True
+        np.savez_compressed(dst, start=np.int32(tr["start"]), kps=kps, found=found)
+        done += 1
+        print(f"  {cid}: {len(crops)} kocka, {found.mean():.0%} újrabecsülve · "
+              f"{(time.time() - t0) / done:.1f} s/klip", flush=True)
+
+
+# ------------------------------------------------------------ ráközelítő követés
+# A kivágás oldala a lövő doboz-magasságának ennyiszerese (korlátok px-ben, 1080p-n).
+ZOOM_SIDE_X = 2.5
+ZOOM_SIDE_PX = (280, 900)
+ZOOM_IMGSZ = 640
+
+
+def _zoom_detect(model, img, cx, cy, side):
+    """Kivágás (cx, cy) körül, észlelés → dobozok, testpontok a teljes kép koordinátáiban."""
+    h, w = img.shape[:2]
+    half = side / 2
+    x0, y0 = int(max(0, cx - half)), int(max(0, cy - half))
+    x1, y1 = int(min(w, cx + half)), int(min(h, cy + half))
+    (db, dk), = model([np.ascontiguousarray(img[y0:y1, x0:x1])])
+    if len(db):
+        db = db + [x0, y0, x0, y0]
+        dk = dk.copy()
+        dk[..., 0] += x0
+        dk[..., 1] += y0
+    return db, dk
+
+
+def zoom_track(frames: list, k: int, x: float, y: float, model, fps: float) -> dict | None:
+    """A lövő követése RÁKÖZELÍTVE: minden kockán az előző helye körüli kivágáson keresünk.
+
+    Széles képen a lövő gyakran csak 60–100 px, a 6-os előtti tömegben a
+    teljes képen futó becslő nem találja meg; a kivágáson (ZOOM_IMGSZ-re
+    nagyítva) igen, és a testpontjai is pontosabbak. Indulás: a kattintás
+    kockáján a kattintás körül; ha ott nincs találat, a szomszédos kockákon."""
+    T = len(frames)
+    k = int(min(max(k, 0), T - 1))
+    start = None
+    for dk_ in (0, -1, 1, -2, 2, -3, 3):
+        f = k + dk_
+        if not 0 <= f < T:
+            continue
+        for side in (ZOOM_SIDE_PX[0], 2 * ZOOM_SIDE_PX[0]):
+            db, dkp = _zoom_detect(model, frames[f], x, y, side)
+            j = pick_clicked(db, x, y)
+            if j is not None:
+                start = (f, db[j], dkp[j])
+                break
+        if start:
+            break
+    if start is None:
+        return None
+    max_gap = max(1, int(round(TRACK_GAP_S * fps)))
+    seq = {start[0]: (start[1], start[2])}
+    for direction in (1, -1):
+        last, gap, f = start[1], 0, start[0] + direction
+        while 0 <= f < T and gap <= max_gap:
+            hgt = max(last[3] - last[1], 1.0)
+            side = float(np.clip(ZOOM_SIDE_X * hgt, *ZOOM_SIDE_PX))
+            c = _center(last)
+            db, dkp = _zoom_detect(model, frames[f], c[0], c[1], side)
+            i = _step(last, db, gap)
+            if i is None:
+                gap += 1
+            else:
+                seq[f] = (db[i], dkp[i])
+                last, gap = db[i], 0
+            f += direction
+    a, b = min(seq), max(seq) + 1
+    out_b = np.zeros((b - a, 4), np.float32)
+    out_k = np.zeros((b - a, 17, 3), np.float32)
+    last = None
+    for f in range(a, b):
+        if f in seq:
+            last = seq[f]
+            out_b[f - a], out_k[f - a] = seq[f]
+        else:
+            out_b[f - a] = last[0]
+            out_k[f - a, :, :2] = last[1][:, :2]
+    return {"start": a, "kps": out_k, "boxes": out_b, "k": k - a}
+
+
+def zoom_track_all(clips_dir: Path, labels_dir: Path, video: str, out_dir: Path, weights: str,
+                   device: str | None = None) -> None:
+    """Minden címkézett klip lövőjének ráközelítő követése → out_dir/<id>.npz (folytatható)."""
+    from .pose import PoseModel
+
+    man = {c["id"]: c for c in json.loads((clips_dir / "manifest.json").read_text())["clips"]}
+    labels = load_labels(labels_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model = PoseModel(weights, device, imgsz=ZOOM_IMGSZ, batch=1)
+    t0, done = time.time(), 0
+    for cid, lab in labels.items():
+        dst = out_dir / f"{cid}.npz"
+        if dst.exists() or cid not in man:
+            continue
+        c = man[cid]
+        fps = float(c["fps"])
+        k0 = max(0, c["press_k"] + int(round(WINDOW_S[0] * fps)))
+        k1 = min(c["frames"], c["press_k"] + int(round(WINDOW_S[1] * fps)) + 1)
+        frames = _orig_frames(video, c["t_start"] + k0 / fps, k1 - k0)
+        h, w = frames[0].shape[:2]
+        tr = zoom_track(frames, lab["lovo"]["k"] - k0, lab["lovo"]["x"] * w, lab["lovo"]["y"] * h, model, fps)
+        done += 1
+        if tr is None:
+            np.savez_compressed(dst, lost=True)
+            print(f"  {cid}: NINCS lövő a kattintásnál", flush=True)
+            continue
+        np.savez_compressed(dst, lost=False, start=np.int32(tr["start"]), kps=tr["kps"], boxes=tr["boxes"],
+                            k0=np.int32(k0), fps=np.float32(fps), size=np.array([w, h], np.int32))
+        print(f"  {cid}: {len(tr['kps'])}/{len(frames)} kocka · {(time.time() - t0) / done:.1f} s/klip", flush=True)
+
+
 # ------------------------------------------------------------ címkék, csoportok
 def load_labels(labels_dir: Path) -> dict[str, dict]:
     """A meccs-lövésjelölő dokumentumai (klip → címke); a "rossz" klipek kimaradnak."""
@@ -297,7 +453,11 @@ def evaluate_picker(items: list[dict], seed: int = 0) -> dict:
     hit_big = np.array([int(np.argmax(it["X"][:, 3])) == it["target"] for it in data])
     hit_arm = np.array([int(np.argmax(it["X"][:, 0])) == it["target"] for it in data])
     n_people = np.array([len(it["X"]) for it in data])
-    return {"klipek": len(data), "emberek_atlag": float(n_people.mean()),
+    # a teljes képen elő sem került lövő: egyik módszer sem találhatja el
+    n_all = len(items)
+    return {"klipek": len(data), "osszes_klip": n_all, "lovo_nincs_a_jeloltek_kozt": n_all - len(data),
+            "modell_az_osszesbol": float(hit_model.sum() / max(1, n_all)),
+            "emberek_atlag": float(n_people.mean()),
             "veletlen": float((1 / n_people).mean()),
             "legnagyobb_ember": float(hit_big.mean()), "legmagasabb_kar": float(hit_arm.mean()),
             "modell": float(hit_model.mean())}
@@ -347,7 +507,7 @@ def evaluate_zone(clips: list[dict], labels: dict, seed: int = 0) -> dict:
 
 
 # ------------------------------------------------------------ összefűzés
-def build(clips_dir: Path, poses_dir: Path, labels_dir: Path):
+def build(clips_dir: Path, poses_dir: Path, labels_dir: Path, zoom_dir: Path | None = None):
     """A címkézett klipekből: lövő-sorozatok (a `release` modul formátumában) és lövő-választási tételek."""
     man = json.loads((clips_dir / "manifest.json").read_text())
     labels = load_labels(labels_dir)
@@ -362,8 +522,14 @@ def build(clips_dir: Path, poses_dir: Path, labels_dir: Path):
         k0 = int(p.get("k0", 0))
         w, h = p["size"]
         lv = lab["lovo"]
-        # a kattintás általában az elengedés kockáján van; ha az ablakon kívül esne, onnan indulunk
-        tr = track_shooter(p, lv["k"] - k0, lv["x"] * w, lv["y"] * h)
+        tr = None
+        if zoom_dir is not None and (zoom_dir / f"{c['id']}.npz").exists():
+            z = np.load(zoom_dir / f"{c['id']}.npz")
+            if not bool(z["lost"]) and int(z["k0"]) == k0:
+                tr = {"start": int(z["start"]), "kps": z["kps"], "boxes": z["boxes"]}
+        if tr is None:
+            # a kattintás általában az elengedés kockáján van; ha az ablakon kívül esne, onnan indulunk
+            tr = track_shooter(p, lv["k"] - k0, lv["x"] * w, lv["y"] * h)
         if tr is None:
             lost.append(c["id"])
             continue
@@ -402,7 +568,9 @@ def write_report(res: dict, out: Path, title: str) -> Path:
           f"(élő + ismétlés; az ismétlés az élő párjával egy csoportban, {FOLDS}-szörös csoportosított "
           "keresztvalidáció).", "",
           "## Ki lő? (lövő-választás az elengedés pillanatában)", "",
-          f"Átlagosan {pk['emberek_atlag']:.1f} ember a képen.", "",
+          f"Átlagosan {pk['emberek_atlag']:.1f} ember a képen. {pk['lovo_nincs_a_jeloltek_kozt']} klipen a lövőt a "
+          "teljes képen futó becslő meg sem találta (ott egyik módszer sem választhatja); a táblázat a többi "
+          f"{pk['klipek']} klipre vonatkozik, a tanított rangsoroló az összesből: {pct(pk['modell_az_osszesbol'])}.", "",
           "| módszer | eltalálja a lövőt |", "|---|---|",
           f"| véletlen | {pct(pk['veletlen'])} |",
           f"| a legnagyobb ember | {pct(pk['legnagyobb_ember'])} |",
@@ -453,15 +621,39 @@ def main(argv=None) -> int:
     v.add_argument("--out", required=True)
     v.add_argument("--title", default="1. meccs")
     v.add_argument("--epochs", type=int, default=120)
+    v.add_argument("--zoom", help="a zoom lépés kimenete (a lövő ráközelítő követése)")
+    zm = sub.add_parser("zoom")
+    zm.add_argument("--clips", required=True)
+    zm.add_argument("--labels", required=True)
+    zm.add_argument("--video", required=True)
+    zm.add_argument("--out", required=True)
+    zm.add_argument("--weights", default="yolo11n-pose.pt")
+    zm.add_argument("--device", default=None)
+    rf = sub.add_parser("refine")
+    rf.add_argument("--clips", required=True)
+    rf.add_argument("--poses", required=True)
+    rf.add_argument("--labels", required=True)
+    rf.add_argument("--video", required=True)
+    rf.add_argument("--out", required=True)
+    rf.add_argument("--weights", default="yolo11n-pose.pt")
+    rf.add_argument("--device", default=None)
     args = ap.parse_args(argv)
     if args.cmd == "extract":
         extract(Path(args.clips), Path(args.out), args.weights, args.device, args.imgsz, video=args.video)
+        return 0
+    if args.cmd == "zoom":
+        zoom_track_all(Path(args.clips), Path(args.labels), args.video, Path(args.out), args.weights, args.device)
+        return 0
+    if args.cmd == "refine":
+        refine_all(Path(args.clips), Path(args.poses), Path(args.labels), args.video, Path(args.out),
+                   args.weights, args.device)
         return 0
     from .release import evaluate as eval_release
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    seqs, pick, rel_labels, labels, lost = build(Path(args.clips), Path(args.poses), Path(args.labels))
+    seqs, pick, rel_labels, labels, lost = build(Path(args.clips), Path(args.poses), Path(args.labels),
+                                                 Path(args.zoom) if args.zoom else None)
     res = {"cimkezett": len(labels), "kovetett": len(seqs), "elveszett": lost,
            "lovo_valasztas": evaluate_picker(pick),
            "release": eval_release(seqs, rel_labels, epochs=args.epochs),
