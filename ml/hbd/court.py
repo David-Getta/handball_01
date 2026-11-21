@@ -25,8 +25,9 @@ from .video import ffmpeg_exe
 WORK = (640, 360)
 # A láb alatti folt: a doboz alsó szélének közepén, a doboz-magasság ennyi részéig lefelé.
 FOOT_PATCH = 0.06
-# Lab-színtávolság a padló-színtől, ami alatt "pályán áll".
-FLOOR_DIST = 22.0
+# Lab-színtávolság a padló-színtől, ami alatt "pályán áll". Az 1. meccsen a pályán álló
+# játékosok 20–36 (fény, vonal, reklám a padlón), a nézők 55–140 között voltak.
+FLOOR_DIST = 45.0
 # A padló-színt ennyi leggyakoribb színcsoport adja (a pálya több színű lehet: alap + 9-es terület).
 FLOOR_BINS = 2
 BIN = 16
