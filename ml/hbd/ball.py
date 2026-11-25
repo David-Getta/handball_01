@@ -202,7 +202,9 @@ def evaluate(data: Path, weights: str, imgsz: int = 640, conf: float = 0.01) -> 
 # Követés: kockánként ennyi jelölt, a hiányzó kocka "ára", és a mozgás korlátja
 # labdaátmérőben / kocka (25 m/s, 25 fps → ~1 m/kocka ≈ 5 átmérő; a tartalék a becsült méret hibájára).
 TRACK_TOPK = 5
-TRACK_MISS = np.log(0.03)
+# A 0,03 túl olcsó volt: a pálya inkább "eltűnt", mint hogy a kicsit
+# gyengébb, de helyes jelöltet vegye (a félretett lövéseken mérve: 0,003 → 67%).
+TRACK_MISS = np.log(0.003)
 TRACK_FREE_JUMP = 6.0
 TRACK_JUMP_W = 0.5
 # A követés ablaka a (korábbi, meccs-lövésjelölős) elengedéshez képest, kockában.
