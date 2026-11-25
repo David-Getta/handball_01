@@ -39,6 +39,9 @@ POS_PER_POINT = 3
 NEG_PER_POINT = 1
 HOLDOUT = 0.2
 HIT_X = 1.5
+# A kattintások közötti kockák kitöltése (csak tanításhoz), legfeljebb ekkora hézagban.
+INTERPOLATE = True
+INTERP_MAX_GAP = 8
 SEED = 0
 
 
@@ -81,6 +84,25 @@ def _tile_without(rng, cx, cy, size, W, H, tries=50):
     return None
 
 
+def interpolate_points(pontok: list[dict], max_gap: int = INTERP_MAX_GAP) -> list[dict]:
+    """A kattintások KÖZÖTTI kockák labdahelye egyenes vonalú közelítéssel.
+
+    Kézben → elválik: 1–3 kocka, a kéz rövid íve jól közelíthető egyenessel;
+    elválik → repül: a labda röppályája ilyen rövid szakaszon szinte egyenes.
+    Csak a tanító lövésekre (a kiértékelés a valódi kattintásokon fut)."""
+    pts = sorted((p for p in pontok if not p.get("nincs")), key=lambda p: p["k"])
+    out = []
+    for a, b in zip(pts, pts[1:]):
+        gap = b["k"] - a["k"]
+        if not 2 <= gap <= max_gap:
+            continue
+        for k in range(a["k"] + 1, b["k"]):
+            w = (k - a["k"]) / gap
+            out.append({"nev": f"koztes{k}", "k": k, "cx": a["cx"] + w * (b["cx"] - a["cx"]),
+                        "cy": a["cy"] + w * (b["cy"] - a["cy"])})
+    return out
+
+
 def build(ball_dir: Path, labels: Path, zoom_dir: Path | None, clips_manifest: Path, out: Path) -> dict:
     """YOLO-formátumú adathalmaz (images/labels train+val) + a kiértékelő pontok listája."""
     import cv2
@@ -102,7 +124,10 @@ def build(ball_dir: Path, labels: Path, zoom_dir: Path | None, clips_manifest: P
         zf = (zoom_dir / f"{cid}.npz") if zoom_dir else None
         z = np.load(zf) if zf is not None and zf.exists() else None
         # a zoom kimenet kockái a lövés-klip k0-jához mérve; a labdavideó saját k0-ja más
-        for p in L[cid]["pontok"]:
+        pts = list(L[cid]["pontok"])
+        if cid not in held and INTERPOLATE:
+            pts += interpolate_points(pts)
+        for p in pts:
             if p.get("nincs"):
                 continue
             f = p["k"] - m["k0"]
@@ -140,6 +165,8 @@ def build(ball_dir: Path, labels: Path, zoom_dir: Path | None, clips_manifest: P
                 (out / f"labels/{split}/{stem}.txt").write_text("")
     (out / "data.yaml").write_text(f"path: {out.resolve()}\ntrain: images/train\nval: images/val\nnames:\n  0: labda\n")
     (out / "eval_points.json").write_text(json.dumps(evalpts))
+    (out / "labels_full.json").write_text(json.dumps({cid: [p for p in L[cid]["pontok"] if not p.get("nincs")]
+                                                      for cid in sorted(held)}))
     info = {"klipek": len(ids), "kiertekelo_klipek": len(held), "tanito_kepek": n_tr, "kiertekelo_pontok": len(evalpts)}
     (out / "info.json").write_text(json.dumps(info))
     return info
@@ -172,6 +199,111 @@ def evaluate(data: Path, weights: str, imgsz: int = 640, conf: float = 0.01) -> 
     return out
 
 
+# Követés: kockánként ennyi jelölt, a hiányzó kocka "ára", és a mozgás korlátja
+# labdaátmérőben / kocka (25 m/s, 25 fps → ~1 m/kocka ≈ 5 átmérő; a tartalék a becsült méret hibájára).
+TRACK_TOPK = 5
+TRACK_MISS = np.log(0.03)
+TRACK_FREE_JUMP = 6.0
+TRACK_JUMP_W = 0.5
+# A követés ablaka a (korábbi, meccs-lövésjelölős) elengedéshez képest, kockában.
+TRACK_WINDOW = (-8, 10)
+
+
+def detect_candidates(model, frames: list[np.ndarray], imgsz: int = 640, conf: float = 0.01) -> list[np.ndarray]:
+    """Kockánként a legjobb TRACK_TOPK jelölt: (x, y, átmérő, megbízhatóság)."""
+    out = []
+    for i in range(0, len(frames), 16):
+        for r in model.predict(frames[i:i + 16], imgsz=imgsz, conf=conf, verbose=False):
+            b = r.boxes.xyxy.cpu().numpy()
+            c = r.boxes.conf.cpu().numpy()
+            o = np.argsort(-c)[:TRACK_TOPK]
+            out.append(np.stack([(b[o, 0] + b[o, 2]) / 2, (b[o, 1] + b[o, 3]) / 2,
+                                 (b[o, 2] - b[o, 0] + b[o, 3] - b[o, 1]) / 2, c[o]], 1) if len(o) else np.zeros((0, 4)))
+    return out
+
+
+def track(cands: list[np.ndarray]) -> list[np.ndarray | None]:
+    """A legvalószínűbb, egyenletes labdapálya (Viterbi): kockánként egy jelölt vagy "nem látszik".
+
+    Pontszám: a jelöltek log-megbízhatósága, mínusz a túl nagy ugrás büntetése
+    (TRACK_FREE_JUMP átmérő / kocka fölött négyzetesen). A "nem látszik" állapot
+    ára TRACK_MISS; utána a következő jelölt a legutóbbi látott helyhez mérődik."""
+    T = len(cands)
+    if T == 0:
+        return []
+    # állapot: (jelölt index | -1 = nem látszik); a "nem látszik" a legutóbbi látott helyet viszi tovább
+    score = [np.append(np.log(cands[0][:, 3] + 1e-6), TRACK_MISS)]
+    last = [np.vstack([cands[0][:, :3], [np.nan, np.nan, np.nan]])]
+    back = []
+    for t in range(1, T):
+        c = cands[t]
+        n = len(c)
+        prev_s, prev_last = score[-1], last[-1]
+        s = np.full(n + 1, -np.inf)
+        bk = np.zeros(n + 1, int)
+        lp = np.full((n + 1, 3), np.nan)
+        for j in range(n):
+            for i in range(len(prev_s)):
+                px, py, pd = prev_last[i]
+                pen = 0.0
+                if not np.isnan(px):
+                    jump = np.hypot(c[j, 0] - px, c[j, 1] - py) / max(pd, c[j, 2], 4.0)
+                    pen = TRACK_JUMP_W * max(0.0, jump - TRACK_FREE_JUMP) ** 2
+                v = prev_s[i] + np.log(c[j, 3] + 1e-6) - pen
+                if v > s[j]:
+                    s[j], bk[j] = v, i
+            lp[j] = c[j, :3]
+        i = int(np.argmax(prev_s))
+        s[n], bk[n], lp[n] = prev_s[i] + TRACK_MISS, i, prev_last[i]
+        score.append(s)
+        last.append(lp)
+        back.append(bk)
+    j = int(np.argmax(score[-1]))
+    path = [j]
+    for bk in reversed(back):
+        j = int(bk[j])
+        path.append(j)
+    path.reverse()
+    return [cands[t][j] if j < len(cands[t]) else None for t, j in enumerate(path)]
+
+
+def evaluate_track(data: Path, ball_dir: Path, weights: str) -> dict:
+    """A félretett lövéseken: kockánkénti legjobb jelölt vs. követés — eltalálja-e a jelölt labdát."""
+    from ultralytics import YOLO
+
+    model = YOLO(weights)
+    man = {c["id"]: c for c in json.loads((ball_dir / "ball_manifest.json").read_text())["klipek"]}
+    pts = json.loads((data / "eval_points.json").read_text())
+    by_clip = {}
+    for p in pts:
+        by_clip.setdefault(p["klip"], []).append(p)
+    res = {"kockankent": {}, "kovetes": {}}
+    for cid, ps in sorted(by_clip.items()):
+        m = man[cid]
+        frames = read_video_frames(ball_dir / m["src"])
+        e = m["elengedes"] - m["k0"]
+        a, b = max(0, e + TRACK_WINDOW[0]), min(len(frames), e + TRACK_WINDOW[1] + 1)
+        cands = detect_candidates(model, frames[a:b])
+        path = track(cands)
+        lab = {q["nev"]: q for q in json.loads((data / "labels_full.json").read_text())[cid]}
+        for p in ps:
+            f = lab[p["nev"]]["k"] - m["k0"] - a
+            if not 0 <= f < len(cands):
+                hit_top = hit_tr = False
+            else:
+                c = cands[f]
+                hit_top = bool(len(c)) and np.hypot(c[0, 0] - p["x"], c[0, 1] - p["y"]) <= HIT_X * p["d"]
+                q = path[f]
+                hit_tr = q is not None and np.hypot(q[0] - p["x"], q[1] - p["y"]) <= HIT_X * p["d"]
+            res["kockankent"].setdefault(p["nev"], []).append(bool(hit_top))
+            res["kovetes"].setdefault(p["nev"], []).append(bool(hit_tr))
+    out = {}
+    for mode, d in res.items():
+        out[mode] = {nev: round(float(np.mean(v)), 3) for nev, v in d.items()}
+        out[mode]["osszes"] = round(float(np.mean([x for v in d.values() for x in v])), 3)
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Labdafelismerő a közvetítésen")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -187,9 +319,11 @@ def main(argv=None) -> int:
     t.add_argument("--epochs", type=int, default=40)
     t.add_argument("--device", default="cpu")
     t.add_argument("--project", default="runs_ball")
+    t.add_argument("--name", default="labda")
     e = sub.add_parser("evaluate")
     e.add_argument("--data", required=True)
     e.add_argument("--weights", required=True)
+    e.add_argument("--ball-dir", help="megadva a követést is kiértékeli (a labdajelölő videóin)")
     args = ap.parse_args(argv)
     if args.cmd == "build":
         info = build(Path(args.ball_dir), Path(args.labels), Path(args.zoom) if args.zoom else None,
@@ -199,10 +333,13 @@ def main(argv=None) -> int:
         from ultralytics import YOLO
 
         YOLO(args.weights).train(data=str(Path(args.data) / "data.yaml"), imgsz=TILE, epochs=args.epochs,
-                                 device=args.device, batch=16, project=args.project, name="labda", exist_ok=True,
+                                 device=args.device, batch=16, project=args.project, name=args.name, exist_ok=True,
                                  mosaic=0.5, fliplr=0.5, degrees=0, scale=0.3, workers=2, patience=15, verbose=False)
     else:
-        print(json.dumps(evaluate(Path(args.data), args.weights), ensure_ascii=False, indent=1))
+        res = evaluate(Path(args.data), args.weights)
+        if args.ball_dir:
+            res["kovetessel"] = evaluate_track(Path(args.data), Path(args.ball_dir), args.weights)
+        print(json.dumps(res, ensure_ascii=False, indent=1))
     return 0
 
 
