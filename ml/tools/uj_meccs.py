@@ -1,7 +1,7 @@
 """Egy ÚJ meccs teljes előkészítése egy paranccsal — a jelölés előtt, vakon.
 
 Lépések (mindegyik kihagyva, ha a kimenete már megvan → megszakítás után folytatható):
-  1. póz a teljes meccsen         (hbd.match_pose, ~50 perc CPU-n)
+  1. póz a teljes meccsen         (hbd.match_pose, ~50 perc CPU-n; 5 minta/s, bármilyen fps-ből)
   2. eredményjelző + kamera       (hbd.broadcast, ~6 perc)
   3. pálya-szűrő (nézők ki)       (hbd.court)
   4. jelölt lövések a KÉSZ modellel (hbd.shot_detect --model; az új meccsen nem tanul)
@@ -10,7 +10,8 @@ Lépések (mindegyik kihagyva, ha a kimenete már megvan → megszakítás után
 A 4. lépés kimenete (jelolt_lovesek.json) a "vak jóslat": commitold, MIELŐTT az
 emberi jelölés megérkezik, így a későbbi összevetés becsületes.
 
-    python tools/uj_meccs.py --video meccs2.mp4 --name m2 --model shot_detect.joblib --out m2/
+    python tools/uj_meccs.py --video meccs2.mp4 --name m2 --model shot_detect.joblib --out m2/ \
+        --sb-static 0.372 0.062 0.448 0.110 --sb-score 0.462 0.062 0.545 0.110   # ha az eredményjelző máshol van
 """
 
 from __future__ import annotations
@@ -21,6 +22,15 @@ import sys
 from pathlib import Path
 
 ML = Path(__file__).resolve().parents[1]
+# A lövésfelismerő az első meccsen 5 minta/s-mal tanult (25 fps, minden 5. kocka).
+SAMPLE_HZ = 5.0
+
+
+def probe_fps(video: str) -> float:
+    o = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                 "stream=r_frame_rate", "-of", "default=nw=1:nk=1", video], text=True)
+    a, b = o.strip().split("/")
+    return float(a) / float(b)
 
 
 def run(cmd: list[str], done: Path, what: str) -> None:
@@ -42,6 +52,8 @@ def main(argv=None) -> int:
     ap.add_argument("--device", default=None)
     ap.add_argument("--threshold", type=float, help="jelölt-küszöb (alapból a modellé)")
     ap.add_argument("--no-clips", action="store_true", help="csak a jóslat, klipek nélkül")
+    ap.add_argument("--sb-static", type=float, nargs=4, help="az eredményjelző állandó része (x0 y0 x1 y1, 0..1)")
+    ap.add_argument("--sb-score", type=float, nargs=4, help="az eredményjelző állás-része (x0 y0 x1 y1, 0..1)")
     args = ap.parse_args(argv)
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -49,9 +61,13 @@ def main(argv=None) -> int:
     n = args.name
     pose, bc, court = out / f"{n}_pose.npz", out / f"{n}_broadcast.npz", out / f"{n}_court.npz"
     dev = ["--device", args.device] if args.device else []
-    run(["-m", "hbd.match_pose", "--video", video, "--out", str(pose), "--stride", "5", "--imgsz", "1280",
+    # A mintavétel időben azonos az első meccsel (SAMPLE_HZ minta/s): 25 fps → minden 5., 50 fps → minden 10. kocka.
+    stride = str(max(1, round(probe_fps(video) / SAMPLE_HZ)))
+    sb = (["--sb-static", *map(str, args.sb_static)] if args.sb_static else []) + \
+         (["--sb-score", *map(str, args.sb_score)] if args.sb_score else [])
+    run(["-m", "hbd.match_pose", "--video", video, "--out", str(pose), "--stride", stride, "--imgsz", "1280",
          "--weights", args.pose_weights, *dev], pose, "póz")
-    run(["-m", "hbd.broadcast", "--video", video, "--out", str(bc), "--stride", "5"], bc, "közvetítés-jelek")
+    run(["-m", "hbd.broadcast", "--video", video, "--out", str(bc), "--stride", stride, *sb], bc, "közvetítés-jelek")
     run(["-m", "hbd.court", "--video", video, "--pose", str(pose), "--out", str(court)], court, "pálya-szűrő")
     sd = out / "jeloltek"
     thr = ["--threshold", str(args.threshold)] if args.threshold is not None else []
