@@ -47,6 +47,33 @@ mér. A követés "nem látszik" árát ugyanezen a 40 lövésen választottuk k
 ezért a 67% kissé optimista; az eredeti beállítással a követés 55%-ra
 rontott.)
 
+## Követés: sebesség és összefésülés (v2 felismerővel)
+
+Hol a hiba a repülő labdánál? A félretett lövéseken a valódi labda a kocka 5
+legjobb jelöltje közt: kézben 78%, elválik 92%, **repül csak 65%**. A gyors,
+elmosódott labdát a felismerő sokszor jelöltnek sem adja → ezt követés nem
+javíthatja, csak jobb felismerő. A követés a repülő labdánál 18%-ban
+"nem látszik"-ot mondott.
+
+Kipróbált változatok (a paramétereket kétfelé osztott lövéseken választva,
+a másik felén mérve, 50 véletlen felosztás átlaga = **keresztvalidált**; a
+"mindenen hangolva" szám ugyanazon a 40 lövésen választott, optimista):
+
+| módszer | keresztvalidált | mindenen hangolva | kézben / elválik / repül (hangolva) |
+|---|---|---|---|
+| elsőrendű követés (ugrás-büntetés) | 64% | 69% | 72 / 83 / 50% |
+| másodrendű követés (sebesség-jóslat) | 65% | 70% | 75 / 81 / 53% |
+| **elsőrendű + összefésülés** | **69%** | 71% | 70 / 86 / 56% |
+
+- **Másodrendű követés:** az állapot két egymást követő jelölt, így a labda
+  sebessége ismert, és a következő helytől való eltérés büntetett (nem az
+  ugrás). Gyakorlatilag nem jobb (65% vs 64%) — a szűk keresztmetszet a
+  felismerő, nem a pálya. Összevetésre megmaradt (`track2`).
+- **Összefésülés (alapértelmezés):** ahol a követés "nem látszik"-ot mond,
+  vagy a kocka legjobb jelöltje legalább 3× biztosabb a követettnél, azt
+  vesszük. Ez segít: **64% → 69% keresztvalidálva**; a 3–10 közti arányok
+  mind hasonlóak, tehát nem egy szerencsés beállítás.
+
 ## Mit ad a labda — a kézi címkékkel mérve (a felismerő felső korlátja)
 
 | kérdés | eredmény | viszonyítás |
