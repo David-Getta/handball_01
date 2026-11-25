@@ -74,6 +74,21 @@ a másik felén mérve, 50 véletlen felosztás átlaga = **keresztvalidált**; 
   vesszük. Ez segít: **64% → 69% keresztvalidálva**; a 3–10 közti arányok
   mind hasonlóak, tehát nem egy szerencsés beállítás.
 
+## Öntanítás (előkészítve, a tanítás még hátravan)
+
+A v2 felismerő + követés + összefésülés a TANÍTÓ lövések összes kockáján
+gépi labdapontot ad, ahol a választott jelölt legalább 0,15 biztos (a
+félretett lövéseken 0,1 fölött 89%, 0,2 fölött 90% a valódi labda). Eredmény:
+1043 gépi pont 144 lövésen → 3709 tanítókép (2865 helyett; a gépi pont csak
+pozitív kivágást kap, "nincs labda" kivágást nem). A félretett 40 lövés
+érintetlen, a kiértékelő halmaz bájtra azonos. Az újratanítás a terhelt
+CPU-n ~3 óra/korszak lett volna, ezért szabad gépen vagy Kaggle-GPU-n fut:
+
+    python -m hbd.ball pseudo --ball-dir m1ball2 --labels cimkek/meccs1_labda_cimkek.json \
+        --clips m1web/manifest.json --weights labda2/best.pt --out pseudo.json
+    python -m hbd.ball build ... --pseudo pseudo.json --out balldata3
+    python -m hbd.ball train --data balldata3 --epochs 30
+
 ## Mit ad a labda — a kézi címkékkel mérve (a felismerő felső korlátja)
 
 | kérdés | eredmény | viszonyítás |
