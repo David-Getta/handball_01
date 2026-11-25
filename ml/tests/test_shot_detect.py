@@ -136,3 +136,41 @@ def test_palya_szuro_a_padlo_szinet_tanulja_es_szur():
     keep[::2] = True
     f = filter_pose(pose, keep)
     assert f["n"].sum() == keep.sum() and f["offsets"][-1] == keep.sum() and len(f["kps"]) == keep.sum()
+
+
+def test_uj_meccs_jeloltek_a_meccsjelolo_formatumaban():
+    from hbd.shot_detect import candidates_doc
+
+    t = np.arange(0, 60, 0.2)
+    score = np.zeros_like(t)
+    score[[50, 51, 200]] = [0.9, 0.8, 0.6]
+    doc = candidates_doc(t, score, 0.5, "m2")
+    ev = doc["esemenyek"]
+    # a két szomszédos csúcsból egy jelölt; a nyomás = lövés + reakcióidő, mint az embernél
+    assert [e["t"] for e in ev] == [round(t[50] + REACTION_S, 2), round(t[200] + REACTION_S, 2)]
+    assert all(e["tipus"] == "loves" and e["gepi"] for e in ev)
+
+
+def test_rogzitett_modell_osszevetese_az_emberi_jelolessel():
+    from hbd.shot_detect import score_against
+
+    t = np.arange(0, 120, 0.2)
+    score = np.zeros_like(t)
+    score[[100, 300, 500]] = 0.9  # 20 s, 60 s, 100 s
+    res = score_against(t, score, [{"t": 20.3}, {"t": 60.0}, {"t": 80.0}])
+    c = next(c for c in res["gorbe"] if c["kuszob"] == 0.5)
+    assert (c["talalt"], c["teves"], c["kihagyott"]) == (2, 1, 1)
+
+
+def test_josolt_kuszob_a_cel_felidezeshez_es_hianyzo_kozvetites():
+    import pytest
+
+    from hbd.shot_detect import make_bundle, predict
+
+    curve = [{"kuszob": 0.3, "felidezes": 0.9, "teves_per_perc": 2.0}, {"kuszob": 0.5, "felidezes": 0.82,
+              "teves_per_perc": 0.8}, {"kuszob": 0.7, "felidezes": 0.6, "teves_per_perc": 0.1}]
+    b = make_bundle({"gorbe": curve, "legjobb": curve[2], "model": None, "features": []},
+                    swing=True, broadcast=True, court=False)
+    assert b["kuszob"] == 0.5
+    with pytest.raises(ValueError):
+        predict({"t": np.zeros(1)}, b, None)

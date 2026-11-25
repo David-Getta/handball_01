@@ -105,3 +105,21 @@ python -m hbd.shot_detect --pose out/m1_pose.npz --broadcast out/m1_broadcast.np
 ```
 
 Eredmény az első meccsen: `eredmenyek/loves_felismeres_meccs1.md`; lövés-profil: `eredmenyek/meccs1_lovesprofil.md`.
+
+### Új meccs: vak jóslat, aztán összevetés
+
+A kész (az 1. meccsen tanított) modell az új meccsen NEM tanul — így derül ki,
+mit ér egy ismeretlen meccsen.
+
+```bash
+# 1) előkészítés egy paranccsal (póz, közvetítés, pálya-szűrő, jelölt lövések, klipek)
+python tools/uj_meccs.py --video meccs2.mp4 --name m2 --model sd_final/shot_detect.joblib --out m2/
+#    → m2/jeloltek/jelolt_lovesek.json: a VAK JÓSLAT — commitold, mielőtt az emberi jelölés megjön
+# 2) az ember a meccsjelölővel végignézi a meccset (ez a mérce)
+# 3) összevetés újratanítás nélkül
+python -m hbd.shot_detect --pose m2/m2_pose.npz --broadcast m2/m2_broadcast.npz --court m2/m2_court.npz \
+    --model sd_final/shot_detect.joblib --events cimkek/meccs2_esemenyek.json --live-only --out m2/osszevetes
+```
+
+A modell-csomag a beállítást is viszi (közvetítés-jelek, pálya-szűrő, jelölt-küszöb:
+az 1. meccs keresztvalidációjában a 80%-os felidézéshez tartozó küszöb).

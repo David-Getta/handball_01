@@ -335,6 +335,54 @@ def evaluate(pose: dict, shots: list[dict], seed: int = 0, bc: dict | None = Non
             "score": score, "t": t, "model": clf, "features": xnames}
 
 
+# ------------------------------------------------------------ új meccs: jóslás egy kész modellel
+# A jelölt-küszöb: az első meccs keresztvalidációjában ennyi felidézést elérő legkisebb
+# téves-riasztású küszöb (a jelölteket ember nézi át → inkább több, mint kevesebb).
+PREDICT_RECALL = 0.8
+
+
+def make_bundle(res: dict, swing: bool, broadcast: bool, court: bool) -> dict:
+    """A teljes meccsen tanított modell + a beállítás, amivel egy ÚJ meccsen ugyanúgy kell futtatni."""
+    c = at_recall(res["gorbe"], PREDICT_RECALL) or res["legjobb"]
+    return {"model": res["model"], "features": res["features"], "swing": swing, "broadcast": broadcast,
+            "court": court, "kuszob": c["kuszob"], "kuszob_cv": {k: c[k] for k in ("felidezes", "teves_per_perc")}}
+
+
+def predict(pose: dict, bundle: dict, bc: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Lövés-pontszám mintakockánként egy kész modellel (ugyanazokkal a jellemzőkkel, mint tanításkor)."""
+    if bundle.get("broadcast") and bc is None:
+        raise ValueError("a modell közvetítés-jellemzőkkel tanult: --broadcast kell")
+    _, _, X, xnames = build_features(pose, bc if bundle.get("broadcast") else None, bundle.get("swing", True))
+    idx = {n: i for i, n in enumerate(xnames)}
+    missing = [n for n in bundle["features"] if n not in idx]
+    if missing:
+        raise ValueError(f"hiányzó jellemzők: {missing[:5]}")
+    X = X[:, [idx[n] for n in bundle["features"]]]
+    return pose["t"], smooth(bundle["model"].predict_proba(X)[:, 1], 3)
+
+
+def candidates_doc(t: np.ndarray, score: np.ndarray, thr: float, name: str) -> dict:
+    """A jelölt lövések a meccsjelölő formátumában (a nyomás = lövés + REACTION_S, mint az embernél),
+    így a cut_match_clips változtatás nélkül kivágja őket."""
+    peaks = pick_peaks(t, score, thr)
+    ev = [{"tipus": "loves", "t": round(tm + REACTION_S, 2), "gepi": True, "pontszam": round(p, 3)}
+          for tm, p in peaks]
+    return {"nev": name, "hossz_s": float(t.max()), "kuszob": thr, "esemenyek": ev}
+
+
+def score_against(t: np.ndarray, score: np.ndarray, shots: list[dict]) -> dict:
+    """Egy rögzített modell pontszámai az emberi jelöléssel összevetve (nincs újratanítás)."""
+    st = np.array([s["t"] for s in shots])
+    minutes = (t.max() - t.min()) / 60
+    curve = []
+    for thr in np.round(np.arange(0.05, 0.96, 0.05), 2):
+        tp, fp, fn = match_events(pick_peaks(t, score, thr), st)
+        prec, rec = tp / max(1, tp + fp), tp / max(1, len(st))
+        curve.append({"kuszob": float(thr), "talalt": tp, "teves": fp, "kihagyott": fn, "felidezes": rec,
+                      "pontossag": prec, "teves_per_perc": fp / minutes, "f1": 2 * prec * rec / max(1e-9, prec + rec)})
+    return {"percek": minutes, "lovesek": int(len(st)), "gorbe": curve, "legjobb": max(curve, key=lambda c: c["f1"])}
+
+
 def at_recall(curve: list[dict], target: float) -> dict | None:
     ok = [c for c in curve if c["felidezes"] >= target]
     return min(ok, key=lambda c: c["teves_per_perc"]) if ok else None
@@ -367,7 +415,9 @@ def write_report(res: dict, out: Path, title: str, live_only: bool = False) -> P
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Lövésfelismerés a teljes meccsen")
     ap.add_argument("--pose", required=True, help="a hbd.match_pose kimenete")
-    ap.add_argument("--events", required=True, help="a meccsjelölő dokumentuma (JSON)")
+    ap.add_argument("--events", help="a meccsjelölő dokumentuma (JSON); --model nélkül kötelező")
+    ap.add_argument("--model", help="kész modell (shot_detect.joblib) → jóslás egy ÚJ meccsen, újratanítás nélkül")
+    ap.add_argument("--threshold", type=float, help="jelölt-küszöb (alapból a modellé)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--live-only", action="store_true", help="csak az élő lövések (ismétlések nélkül)")
     ap.add_argument("--title", default="")
@@ -377,6 +427,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    if args.model:
+        return _predict_main(args, out)
+    if not args.events:
+        ap.error("--events vagy --model kell")
     doc = json.loads(Path(args.events).read_text())
     doc = doc.get("data", doc)
     shots = shot_times(doc, include_replays=not args.live_only)
@@ -393,11 +447,64 @@ def main(argv=None) -> int:
     res = evaluate(pose, shots, bc=bc, swing=not args.no_swing)
     import joblib
 
-    joblib.dump({"model": res.pop("model"), "features": res["features"]}, out / "shot_detect.joblib")
+    joblib.dump(make_bundle(res, swing=not args.no_swing, broadcast=bc is not None, court=bool(args.court)),
+                out / "shot_detect.joblib")
+    res.pop("model")
     np.savez_compressed(out / "shot_scores.npz", t=res.pop("t"), score=res.pop("score"))
     (out / "shot_detect.json").write_text(json.dumps({k: v for k, v in res.items() if k != "features"},
                                                       ensure_ascii=False, indent=1))
     print(write_report(res, out, args.title or doc.get("nev", ""), args.live_only).read_text())
+    return 0
+
+
+def _predict_main(args, out: Path) -> int:
+    """Új meccs: jelölt lövések egy kész modellel; ha van emberi jelölés is, összevetés vele."""
+    import joblib
+
+    bundle = joblib.load(args.model)
+    pose = load_pose(args.pose)
+    if bundle.get("court"):
+        from .court import filter_pose
+
+        if not args.court:
+            raise SystemExit("a modell pálya-szűrővel tanult: --court kell (a hbd.court kimenete)")
+        pose = filter_pose(pose, np.load(args.court)["on_court"])
+    bc = None
+    if bundle.get("broadcast"):
+        from .broadcast import load as load_bc
+
+        if not args.broadcast:
+            raise SystemExit("a modell közvetítés-jellemzőkkel tanult: --broadcast kell")
+        bc = load_bc(args.broadcast)
+    t, score = predict(pose, bundle, bc)
+    thr = args.threshold if args.threshold is not None else bundle["kuszob"]
+    cand = candidates_doc(t, score, thr, args.title or Path(args.pose).stem)
+    (out / "jelolt_lovesek.json").write_text(json.dumps(cand, ensure_ascii=False, indent=1))
+    np.savez_compressed(out / "shot_scores.npz", t=t, score=score)
+    print(f"{len(cand['esemenyek'])} jelölt lövés (küszöb {thr}) → {out / 'jelolt_lovesek.json'}")
+    if args.events:
+        doc = json.loads(Path(args.events).read_text())
+        doc = doc.get("data", doc)
+        res = score_against(t, score, shot_times(doc, include_replays=not args.live_only))
+        at = next(c for c in res["gorbe"] if abs(c["kuszob"] - thr) < 1e-9) if any(
+            abs(c["kuszob"] - thr) < 1e-9 for c in res["gorbe"]) else None
+        (out / "shot_detect_uj_meccs.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
+        pct = lambda v: f"{100 * v:.0f}%"  # noqa: E731
+        md = [f"# Lövésfelismerés egy ÚJ meccsen (újratanítás nélkül) — {args.title}", "",
+              f"{res['percek']:.0f} perc, {res['lovesek']} jelölt lövés (ember). A modell ezt a meccset nem látta.", "",
+              "| | felidézés | pontosság | téves riasztás / perc |", "|---|---|---|---|"]
+        if at:
+            md.append(f"| a rögzített küszöbön ({thr}) | {pct(at['felidezes'])} | {pct(at['pontossag'])} | "
+                      f"{at['teves_per_perc']:.2f} |")
+        b = res["legjobb"]
+        md.append(f"| legjobb F1 (utólag választott küszöb) | {pct(b['felidezes'])} | {pct(b['pontossag'])} | "
+                  f"{b['teves_per_perc']:.2f} |")
+        for target in (0.7, 0.8, 0.9):
+            c = at_recall(res["gorbe"], target)
+            md.append(f"| {pct(target)} felidézéshez | " + (f"{pct(c['felidezes'])} | {pct(c['pontossag'])} | "
+                      f"{c['teves_per_perc']:.2f} |" if c else "nem érhető el | – | – |"))
+        (out / "shot_detect_uj_meccs.md").write_text("\n".join(md) + "\n")
+        print("\n".join(md))
     return 0
 
 
