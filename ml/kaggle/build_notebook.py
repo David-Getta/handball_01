@@ -21,7 +21,7 @@ ML = Path(__file__).resolve().parents[1]
 NB = ML / "kaggle" / "uniri_hbd_pose.ipynb"
 MODULES = ["__init__", "dataset", "video", "locate", "pose", "features", "goalkeeper", "models",
            "train", "release", "match_pose", "broadcast", "court", "shot_detect", "match_shots", "ball", "hand_image",
-           "shooter_ball", "scoreboard", "ticker"]
+           "shooter_ball", "scoreboard", "ticker", "jersey"]
 
 INTRO = """# Sport Machine — kézilabda-mozdulatfelismerés (UNIRI-HBD)
 
