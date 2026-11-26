@@ -67,7 +67,8 @@ def torso_color(crop: np.ndarray) -> np.ndarray:
     return np.median(lab, 0).astype(np.float32)
 
 
-def read_window(video: str, t0: float, t1: float, pose: dict, reader, W: int = 1920, H: int = 1080) -> list[dict]:
+def read_window(video: str, t0: float, t1: float, pose: dict, reader, W: int = 1920, H: int = 1080,
+                fast: bool = False) -> list[dict]:
     """A [t0, t1] ablak póz-kockáin minden olvasható törzs: szín + OCR-olvasatok."""
     fps, frames = float(pose["fps"]), pose["frame"]
     k0, k1 = int(np.ceil(t0 * fps)), int(np.floor(t1 * fps))
@@ -76,8 +77,10 @@ def read_window(video: str, t0: float, t1: float, pose: dict, reader, W: int = 1
         return []
     # pontos keresés a k0. kockára (-ss a bemenet előtt, dekódolással), utána a póz-kockák n = k - k0
     want = "+".join(f"eq(n\\,{int(frames[i]) - k0})" for i in sel)
-    cmd = ["ffmpeg", "-v", "error", "-threads", "1", "-ss", f"{k0 / fps:.3f}", "-i", video,
-           "-t", f"{(k1 - k0 + 1) / fps:.3f}", "-vf", f"select='{want}'", "-fps_mode", "passthrough",
+    # a -t BEMENETI kapcsoló (az -i előtt): kimeneti -t-vel a ritkított kimenet sosem éri el a
+    # hosszt, és az ffmpeg a videó végéig dekódolna
+    cmd = ["ffmpeg", "-v", "error", "-threads", "1", "-ss", f"{k0 / fps:.3f}", "-t", f"{(k1 - k0 + 1) / fps:.3f}",
+           "-i", video, "-vf", f"select='{want}'", "-fps_mode", "passthrough",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     raw = subprocess.run(cmd, stdout=subprocess.PIPE, check=True).stdout
     n = len(raw) // (W * H * 3)
@@ -90,8 +93,15 @@ def read_window(video: str, t0: float, t1: float, pose: dict, reader, W: int = 1
                 continue
             x0, y0, x1, y1 = box
             crop = imgs[j][y0:y1, x0:x1]
-            reads = [(int(txt), round(float(conf), 3))
-                     for _, txt, conf in reader.readtext(crop, allowlist="0123456789", mag_ratio=3.0)
+            if fast:
+                # csak a felismerő a teljes kivágáson (a szám a törzs közepén van) — kb. 10× gyorsabb
+                import cv2
+
+                g = cv2.cvtColor(np.ascontiguousarray(crop), cv2.COLOR_RGB2GRAY)
+                res = reader.recognize(cv2.resize(g, None, fx=2, fy=2), allowlist="0123456789")
+            else:
+                res = reader.readtext(crop, allowlist="0123456789", mag_ratio=3.0)
+            reads = [(int(txt), round(float(conf), 3)) for _, txt, conf in res
                      if 1 <= len(txt) <= 2 and conf >= MIN_OCR_CONF]
             recs.append({"k": int(frames[i]), "ember": q, "doboz": list(box),
                          "szin": torso_color(crop).round(1).tolist(), "olvasat": reads})
@@ -186,6 +196,7 @@ def main(argv=None) -> int:
     ap.add_argument("--roster", required=True)
     ap.add_argument("--cache", required=True, help="mappa: gólonként egy JSON (folytatható)")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--fast", action="store_true", help="csak felismerés (szövegkeresés nélkül), ~10× gyorsabb")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     goals = [e for e in json.loads(Path(a.ticker).read_text())["esemenyek"] if e["tipus"] == "gol" and "t_tol" in e]
@@ -205,7 +216,8 @@ def main(argv=None) -> int:
                 import easyocr
 
                 reader = easyocr.Reader(["en"], gpu=False, verbose=False)
-            recs = read_window(a.video, g["t_tol"] + WINDOW_S[0], g["t_tol"] + WINDOW_S[1], pose, reader)
+            recs = read_window(a.video, g["t_tol"] + WINDOW_S[0], g["t_tol"] + WINDOW_S[1], pose, reader,
+                               fast=a.fast)
             f.write_text(json.dumps(recs))
             print(f"{key}: {len(recs)} törzs, {sum(len(r['olvasat']) for r in recs)} olvasat", flush=True)
         windows[key] = json.loads(f.read_text())
