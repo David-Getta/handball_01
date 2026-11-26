@@ -368,8 +368,11 @@ def fuse(cands: list[np.ndarray], path: list[np.ndarray | None], ratio: float = 
     return out
 
 
-def evaluate_track(data: Path, ball_dir: Path, weights: str) -> dict:
-    """A félretett lövéseken: kockánkénti legjobb jelölt vs. követés — eltalálja-e a jelölt labdát."""
+def evaluate_track(data: Path, ball_dir: Path, weights: str, imgsz: int = 640) -> dict:
+    """A félretett lövéseken: kockánkénti legjobb jelölt vs. követés — eltalálja-e a jelölt labdát.
+
+    imgsz: a felismerő bemeneti mérete a 640-es kivágásokon (a nagyobb felbontáson
+    tanított modell 2× nagyítva, imgsz=1280-nal látja ugyanakkorának a labdát)."""
     from ultralytics import YOLO
 
     model = YOLO(weights)
@@ -384,7 +387,7 @@ def evaluate_track(data: Path, ball_dir: Path, weights: str) -> dict:
         frames = read_video_frames(ball_dir / m["src"])
         e = m["elengedes"] - m["k0"]
         a, b = max(0, e + TRACK_WINDOW[0]), min(len(frames), e + TRACK_WINDOW[1] + 1)
-        cands = detect_candidates(model, frames[a:b])
+        cands = detect_candidates(model, frames[a:b], imgsz=imgsz)
         paths = {"kovetes": track(cands), "kovetes_masodrendu": track2(cands)}
         paths["osszefesult"] = fuse(cands, paths["kovetes"])
         lab = {q["nev"]: q for q in json.loads((data / "labels_full.json").read_text())[cid]}
@@ -458,10 +461,17 @@ def main(argv=None) -> int:
     t.add_argument("--device", default="cpu")
     t.add_argument("--project", default="runs_ball")
     t.add_argument("--name", default="labda")
+    t.add_argument("--imgsz", type=int, default=TILE,
+                   help=f"a tanító kivágások ({TILE} px) bemeneti mérete; 2×{TILE} = 2× nagyítás a kis labdához")
+    t.add_argument("--batch", type=int, default=16)
+    t.add_argument("--patience", type=int, default=15)
     e = sub.add_parser("evaluate")
     e.add_argument("--data", required=True)
     e.add_argument("--weights", required=True)
     e.add_argument("--ball-dir", help="megadva a követést is kiértékeli (a labdajelölő videóin)")
+    e.add_argument("--imgsz", type=int, default=640,
+                   help="a 640-es kivágások bemeneti mérete; a 2× nagyítással tanított modellnél 1280")
+    e.add_argument("--out", help="az eredmény JSON-ja ide is (a képernyőn kívül)")
     args = ap.parse_args(argv)
     if args.cmd == "build":
         pseudo = json.loads(Path(args.pseudo).read_text()) if args.pseudo else None
@@ -475,13 +485,15 @@ def main(argv=None) -> int:
     elif args.cmd == "train":
         from ultralytics import YOLO
 
-        YOLO(args.weights).train(data=str(Path(args.data) / "data.yaml"), imgsz=TILE, epochs=args.epochs,
-                                 device=args.device, batch=16, project=args.project, name=args.name, exist_ok=True,
-                                 mosaic=0.5, fliplr=0.5, degrees=0, scale=0.3, workers=2, patience=15, verbose=False)
+        YOLO(args.weights).train(data=str(Path(args.data) / "data.yaml"), imgsz=args.imgsz, epochs=args.epochs,
+                                 device=args.device, batch=args.batch, project=args.project, name=args.name, exist_ok=True,
+                                 mosaic=0.5, fliplr=0.5, degrees=0, scale=0.3, workers=2, patience=args.patience, verbose=False)
     else:
-        res = evaluate(Path(args.data), args.weights)
+        res = evaluate(Path(args.data), args.weights, imgsz=args.imgsz)
         if args.ball_dir:
-            res["kovetessel"] = evaluate_track(Path(args.data), Path(args.ball_dir), args.weights)
+            res["kovetessel"] = evaluate_track(Path(args.data), Path(args.ball_dir), args.weights, imgsz=args.imgsz)
+        if args.out:
+            Path(args.out).write_text(json.dumps(res, ensure_ascii=False, indent=1))
         print(json.dumps(res, ensure_ascii=False, indent=1))
     return 0
 

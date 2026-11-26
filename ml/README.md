@@ -63,6 +63,23 @@ kell hozzá a GitHub-repó. Forrásváltozás után újragenerálandó:
 cd ml && python kaggle/build_notebook.py
 ```
 
+### Nagyobb labdafelismerő GPU-n (`labda_gpu.ipynb`)
+
+A kis labdafelismerő (YOLO11n, 320 px) helyett YOLO11s / YOLO11m, illetve
+2× nagyított bemenet — mind ugyanazon a félretett 40 lövésen mérve, a v2
+mellett. Bemenet: a labdajelölő címkéiből épített csomag (közvetítés-képek →
+**privát** Kaggle-adathalmaz):
+
+```bash
+python tools/labda_kaggle_csomag.py --data balldata2 --ball-dir m1ball2 \
+    --weights runs_ball/labda2/weights/best.pt --out labda_kaggle.zip   # ~165 MB
+```
+
+Kaggle: *Datasets → New Dataset* (privát) → a zip; *Import Notebook* →
+`ml/kaggle/labda_gpu.ipynb`; *Add Input*, GPU T4 x2, Internet On;
+*Save Version → Save & Run All* (kb. 2–3 óra, a háttérben fut). Kimenet:
+`labda_eredmenyek.md` és a modellek (`labda_*.pt`).
+
 ## Helyben (CPU-n is megy, csak lassabb)
 
 ```bash
