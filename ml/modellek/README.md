@@ -8,3 +8,7 @@ A `lovesfelismero_m1.joblib` a 2. meccs VAK jóslatának modellje: a 2. meccs
 emberi jelölése előtt került a repóba, a 2. meccsen nem tanult.
 
     python tools/uj_meccs.py --video meccs2.mp4 --name m2 --model modellek/lovesfelismero_m1.joblib --out m2/
+| `eredmenyjelzo_ard_sablon.npy` | az ARD-közvetítés eredményjelzőjének számjegy-sablonjai (14 k-közép klaszter, 16×24 px) | 2. meccs, 387 stabil állapot | címkék: `2,1,9,4,3,7,5,6,8,0,1,2,x,3` (a 12. klaszter két összeolvadt jel) |
+
+    python -m hbd.scoreboard read --crops sb.npy --broadcast m2_broadcast.npz \
+        --templates modellek/eredmenyjelzo_ard_sablon.npy --labels 2,1,9,4,3,7,5,6,8,0,1,2,x,3 --out allas.json

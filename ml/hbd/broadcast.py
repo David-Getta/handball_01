@@ -142,50 +142,52 @@ def score_change(score: np.ndarray, present: np.ndarray) -> np.ndarray:
 
 # Gólszámlálás az eredményjelzőből: egy GÓL után az állás TARTÓSAN más; a grafika
 # animációja (kiúszás, statisztika-sáv, ismétlés-kártya) után a kép visszaáll.
-# Az ablak, amin az előtte / utána látszó állást mérjük (s), és a változás közti szünet.
-GOAL_STABLE_S = 3.0
-GOAL_GUARD_S = 0.6
+# Egy állapot legalább ennyi ideig látszó, változatlan grafika (s); két gól közt legalább ennyi idő.
+GOAL_STABLE_S = 2.0
 GOAL_MIN_GAP_S = 8.0
 # A jelölt változás: a mintánkénti eltérés legalább ennyi (a zaj ~0,1–0,3).
 GOAL_CAND_DIFF = 2.0
-# Az ablakban legalább ennyi minta kell, ahol a grafika látszik.
-GOAL_MIN_PRESENT = 0.7
 
 
 def goal_changes(score: np.ndarray, t: np.ndarray, present: np.ndarray, state_diff: float | None = None) -> dict:
     """Tartós állásváltozások (gólok) időpontjai az állás-kivágásokból.
 
-    Jelölt minden pont, ahol a szomszédos minták eltérése GOAL_CAND_DIFF fölött van.
-    Mindegyiknél az előtte és utána GOAL_STABLE_S-nyi, látszó grafikájú minták
-    MEDIÁN képe kerül összevetésre: ha a kettő eltér (átlagos abszolút eltérés >
-    state_diff), az állás tartósan megváltozott → gól. A state_diff alapból a
-    jelöltek "előtte–utána" eltéréseinek kétcsúcsú eloszlásából jön (Otsu)."""
+    Az állás ÁLLAPOTOK sorozata: egy állapot a grafika olyan, legalább
+    GOAL_STABLE_S hosszú szakasza, ahol látszik és nem változik (szomszédos
+    minták eltérése < GOAL_CAND_DIFF). Gól ott van, ahol a következő állapot
+    mediánképe eltér az utoljára elfogadott állapotétól — akkor is, ha közben
+    a grafika ismétlés miatt percekig nem látszott. Az ennél rövidebb szakaszok
+    (animáció, beúszás) nem állapotok, így az A→B→A villanás nem számít.
+    A state_diff alapból az állapot-váltások eltéréseinek kétcsúcsú eloszlásából jön (Otsu)."""
     s = score.reshape(len(score), -1).astype(np.float32)
-    step = np.zeros(len(s), np.float32)
+    step = np.full(len(s), np.inf, np.float32)
     step[1:] = np.abs(s[1:] - s[:-1]).mean(1)
-    step[~present] = 0
-    step[1:][~present[:-1]] = 0
-    cand = np.where(step > GOAL_CAND_DIFF)[0]
-    rows = []
-    for i in cand:
-        b = (t >= t[i] - GOAL_GUARD_S - GOAL_STABLE_S) & (t < t[i] - GOAL_GUARD_S)
-        a = (t > t[i] + GOAL_GUARD_S) & (t <= t[i] + GOAL_GUARD_S + GOAL_STABLE_S)
-        if b.sum() == 0 or a.sum() == 0:
+    ok = present & (step < GOAL_CAND_DIFF)
+    ok[0] = present[0]
+    # stabil szakaszok
+    segs, i, n = [], 0, len(s)
+    while i < n:
+        if not ok[i]:
+            i += 1
             continue
-        if present[b].mean() < GOAL_MIN_PRESENT or present[a].mean() < GOAL_MIN_PRESENT:
-            continue
-        mb, ma = np.median(s[b & present], 0), np.median(s[a & present], 0)
-        rows.append((float(t[i]), float(np.abs(ma - mb).mean())))
-    if not rows:
-        return {"t": np.zeros(0), "kuszob": state_diff, "jeloltek": 0}
-    d = np.array([r[1] for r in rows])
+        j = i
+        while j + 1 < n and ok[j + 1] and present[j + 1]:
+            j += 1
+        if t[j] - t[i] >= GOAL_STABLE_S:
+            segs.append((t[i], t[j], np.median(s[i:j + 1], 0)))
+        i = j + 1
+    if len(segs) < 2:
+        return {"t": np.zeros(0), "kuszob": state_diff, "jeloltek": 0, "elteresek": np.zeros(0)}
+    d_all = np.array([np.abs(segs[k][2] - segs[k - 1][2]).mean() for k in range(1, len(segs))])
     if state_diff is None:
-        state_diff = _otsu(d)
-    times = []
-    for (ti, di) in rows:
-        if di > state_diff and (not times or ti - times[-1] > GOAL_MIN_GAP_S):
-            times.append(ti)
-    return {"t": np.array(times), "kuszob": float(state_diff), "jeloltek": len(rows), "elteresek": d}
+        state_diff = _otsu(d_all)
+    times, state = [], segs[0][2]
+    for (t0, _t1, med) in segs[1:]:
+        if np.abs(med - state).mean() > state_diff:
+            if not times or t0 - times[-1] > GOAL_MIN_GAP_S:
+                times.append(float(t0))
+            state = med
+    return {"t": np.array(times), "kuszob": float(state_diff), "jeloltek": len(segs), "elteresek": d_all}
 
 
 def _otsu(x: np.ndarray, bins: int = 64) -> float:
