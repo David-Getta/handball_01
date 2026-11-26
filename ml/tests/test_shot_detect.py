@@ -190,3 +190,17 @@ def test_golszamlalas_tartos_valtozast_szamol_animaciot_nem():
     present = np.ones(len(t), bool)
     res = goal_changes(score, t, present, state_diff=10.0)
     assert np.allclose(res["t"], [30.0, 90.0], atol=0.3)
+
+
+def test_palya_szuro_a_sotet_lelatot_nem_tanulja_padlonak():
+    from hbd.court import floor_colors, on_court
+
+    rng = np.random.default_rng(1)
+    padlo = rng.normal([150, 130, 100], 3, (500, 3))
+    lelato = rng.normal([8, 128, 127], 3, (300, 3))      # sötét lelátó: sok néző, de nem padló
+    vonal = rng.normal([165, 130, 100], 3, (200, 3))
+    colors = np.concatenate([padlo, lelato, vonal]).astype(np.float32)
+    f = floor_colors(colors)
+    assert (f[:, 0] >= 60).all()
+    keep = on_court(colors, f)
+    assert keep[:500].all() and not keep[500:800].any()

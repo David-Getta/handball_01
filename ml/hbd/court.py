@@ -31,6 +31,11 @@ FLOOR_DIST = 45.0
 # A padló-színt ennyi leggyakoribb színcsoport adja (a pálya több színű lehet: alap + 9-es terület).
 FLOOR_BINS = 2
 BIN = 16
+# A padló világos (a csarnok megvilágítja); ennél sötétebb színcsoport nem padló (OpenCV Lab: L 0..255).
+# A 2. meccsen a 2. leggyakoribb "láb alatti" szín L≈7 volt: a sötét lelátón ülő nézők.
+FLOOR_MIN_L = 60.0
+# Ennyi leggyakoribb csoportból választunk FLOOR_BINS világosat.
+FLOOR_CANDIDATES = 6
 
 
 def foot_colors(video: str, pose: dict) -> np.ndarray:
@@ -72,13 +77,18 @@ def foot_colors(video: str, pose: dict) -> np.ndarray:
 
 
 def floor_colors(colors: np.ndarray) -> np.ndarray:
-    """A padló színe(i): a láb alatti színek FLOOR_BINS leggyakoribb csoportjának mediánja."""
+    """A padló színe(i): a láb alatti színek leggyakoribb, VILÁGOS (L ≥ FLOOR_MIN_L) csoportjainak
+    mediánja, legfeljebb FLOOR_BINS darab."""
     q = (colors // BIN).astype(np.int32)
     keys = q[:, 0] * 10000 + q[:, 1] * 100 + q[:, 2]
     vals, counts = np.unique(keys, return_counts=True)
     out = []
-    for key in vals[np.argsort(-counts)][:FLOOR_BINS]:
-        out.append(np.median(colors[keys == key], 0))
+    for key in vals[np.argsort(-counts)][:FLOOR_CANDIDATES]:
+        med = np.median(colors[keys == key], 0)
+        if med[0] >= FLOOR_MIN_L:
+            out.append(med)
+        if len(out) == FLOOR_BINS:
+            break
     return np.array(out, np.float32)
 
 
