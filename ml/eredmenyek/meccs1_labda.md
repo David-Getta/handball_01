@@ -74,15 +74,30 @@ a másik felén mérve, 50 véletlen felosztás átlaga = **keresztvalidált**; 
   vesszük. Ez segít: **64% → 69% keresztvalidálva**; a 3–10 közti arányok
   mind hasonlóak, tehát nem egy szerencsés beállítás.
 
-## Öntanítás (előkészítve, a tanítás még hátravan)
+## Öntanítás (v3): nem javított
 
 A v2 felismerő + követés + összefésülés a TANÍTÓ lövések összes kockáján
 gépi labdapontot ad, ahol a választott jelölt legalább 0,15 biztos (a
 félretett lövéseken 0,1 fölött 89%, 0,2 fölött 90% a valódi labda). Eredmény:
-1043 gépi pont 144 lövésen → 3709 tanítókép (2865 helyett; a gépi pont csak
-pozitív kivágást kap, "nincs labda" kivágást nem). A félretett 40 lövés
-érintetlen, a kiértékelő halmaz bájtra azonos. Az újratanítás a terhelt
-CPU-n ~3 óra/korszak lett volna, ezért szabad gépen vagy Kaggle-GPU-n fut:
+1043 gépi pont 144 lövésen → 4628 tanítókép (a gépi pont csak pozitív
+kivágást kap, "nincs labda" kivágást nem). A félretett 40 lövés érintetlen
+(egyetlen kiértékelő kép sincs a tanító halmazban), a kiértékelő halmaz
+bájtra azonos. YOLO11n, 30 korszak CPU-n (~100 perc).
+
+| a félretett 40 lövésen | v2 | v3 (öntanított) |
+|---|---|---|
+| kockánként | 64% | 66% (kézben 73 / elválik 64 / repül 59%) |
+| követés | 67% | 64% |
+| másodrendű követés | 70% | 66% |
+| összefésülés (hangolva) | 71% | 66% |
+
+**Olvasat:** az öntanítás érdemben nem segített. Kockánként +1–2 pont
+(110 ponton ez 1–2 találat, a zajon belül), a követéssel együtt inkább
+romlott. A gépi pontok jórészt a KÖNNYŰ kockák (kézben lévő, éles labda),
+amiket a v2 is megtalált — a nehéz, elmosódott repülő labdához nem ad új
+példát. A v2 marad az alapértelmezés. Ami segíthet: nagyobb modell vagy
+nagyobb felbontás GPU-n, és célzott kézi címke a repülő labdára. A lépések
+megismételhetők:
 
     python -m hbd.ball pseudo --ball-dir m1ball2 --labels cimkek/meccs1_labda_cimkek.json \
         --clips m1web/manifest.json --weights labda2/best.pt --out pseudo.json
@@ -104,8 +119,8 @@ CPU-n ~3 óra/korszak lett volna, ezért szabad gépen vagy Kaggle-GPU-n fut:
 - A labdafelismerő a v2-ben 57%-ról 64%-ra (követéssel 67%-ra) javult; az
   elválás pillanatát 81%-ban találja. A repülő labdát kockánként jobban
   találja (59%), mint a követés (50%): a gyors labdánál a pálya-feltétel még
-  túl szigorú. Következő lépés: nagyobb modell
-  GPU-n (Kaggle), és öntanítás a jelöletlen kockákon.
+  túl szigorú. Az öntanítás a jelöletlen kockákon kipróbálva nem javított
+  (v3, fent); következő lépés: nagyobb modell / felbontás GPU-n (Kaggle).
 - A **lövőkéz** a tévéképről egyetlen lövésből nehéz. Biztos megoldás: a
   játékos felismerése (mezszám) — a lövőkéz játékosonként állandó, a keretből
   ismert.
