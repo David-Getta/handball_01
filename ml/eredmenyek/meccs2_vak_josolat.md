@@ -14,6 +14,7 @@ Viszonyítás: ugyanennyi, véletlenül szórt jelölt mennyit "találna".
 |---|---|---|---|---|---|
 | póz + közvetítés-jelek (`lovesfelismero_m1`) | 104 | **64/68 (94%)** | 14% | 66/68 (97%) | 19% |
 | csak póz (`lovesfelismero_m1_csakpoz`) | 265 | **58/68 (85%)** | 33% | 62/68 (91%) | 42% |
+| póz + kamera, eredményjelző nélkül (`lovesfelismero_m1_kamera`) | 186 | **62/68 (91%)** | 24% | 65/68 (96%) | 31% |
 
 ## Olvasat (óvatosan)
 
@@ -24,6 +25,11 @@ Viszonyítás: ugyanennyi, véletlenül szórt jelölt mennyit "találna".
   modell a lövés UTÁNI eredményjelző-változást is látja (2–10 s-os ablak),
   és ez az új meccsen erősen húz. A védett / mellé ment lövésekre legfeljebb ~10
   jelölt jut — ezeket valószínűleg nagyrészt kihagyja.
+- **Póz + kamera (eredményjelző nélkül)** a legkiegyensúlyozottabb: az 1.
+  meccsen majdnem olyan jó, mint a teljes modell (legjobb F1-nél 75%
+  felidézés, 57% pontosság), a 2. meccsen a gólok 91%-a előtt jelez, és a
+  186 jelöltből 90 NEM köthető gólhoz — köztük lehetnek a védések és a mellé
+  lövések, amiket a teljes modell kihagy. Ez az emberi jelöléssel dől el.
 - A végső számot (felidézés MINDEN lövésre, pontosság) az emberi jelölés adja:
 
       python -m hbd.shot_detect --pose m2_pose.npz --broadcast m2_broadcast.npz --court m2_court.npz \
