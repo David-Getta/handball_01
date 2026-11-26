@@ -1,0 +1,289 @@
+{
+ "meccs": "2. meccs: SC Magdeburg – Füchse Berlin 35:33 (15:15), HBL 26. forduló, 2026-03-28",
+ "forras": "sportschau.de, spiel-kader oldal (a szezon-keret, nem a meccs-jegyzőkönyv: a mezszám a szezonra szól)",
+ "hazai": {
+  "csapat": "SC Magdeburg",
+  "jatekosok": [
+   {
+    "mez": 1,
+    "nev": "Sergey Hernández",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 12,
+    "nev": "Matej Mandić",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 80,
+    "nev": "Nikola Portner",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 16,
+    "nev": "Oskar Stieglitz",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 7,
+    "nev": "Felix Claar",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 5,
+    "nev": "Noah Hensen",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 19,
+    "nev": "Elvar Örn Jónsson",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 10,
+    "nev": "Gisli Kristjánsson",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 21,
+    "nev": "Albin Lagergren",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 14,
+    "nev": "Ómar Ingi Magnússon",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 24,
+    "nev": "Christian O'Sullivan",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 2,
+    "nev": "Daniel Phileas",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 20,
+    "nev": "Philipp Weber",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 8,
+    "nev": "Manuel Zehnder",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 25,
+    "nev": "Sebastian Barthold",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 96,
+    "nev": "Jordan Hammer",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 17,
+    "nev": "Tim Hornke",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 5,
+    "nev": "Pablo Lange",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 22,
+    "nev": "Lukas Mertens",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 6,
+    "nev": "Matthias Musche",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 11,
+    "nev": "Daniel Pettersson",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 49,
+    "nev": "Leander Schöbe",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 54,
+    "nev": "Oscar Bergendahl",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 18,
+    "nev": "Mattis Heiß",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 23,
+    "nev": "Magnus Saugstrup Jensen",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 9,
+    "nev": "Tim Zechel",
+    "poszt": "beallo"
+   }
+  ]
+ },
+ "vendeg": {
+  "csapat": "Füchse Berlin",
+  "jatekosok": [
+   {
+    "mez": 21,
+    "nev": "Frederik Höler",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 16,
+    "nev": "Pius Joppich",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 41,
+    "nev": "Henning Lahuis",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 1,
+    "nev": "Lasse Ludwig",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 96,
+    "nev": "Dejan Milosavljev",
+    "poszt": "kapus"
+   },
+   {
+    "mez": 11,
+    "nev": "Lasse Andersson",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 33,
+    "nev": "Felix Bernkop-Schnürch",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 22,
+    "nev": "Nejc Cehte",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 19,
+    "nev": "Mathias Gidsel",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 15,
+    "nev": "Tobias Grøndahl",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 36,
+    "nev": "Gabriel Kofler",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 32,
+    "nev": "Julian Kusche",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 25,
+    "nev": "Matthes Langhoff",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 17,
+    "nev": "Nils Lichtlein",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 21,
+    "nev": "Lucas Mohr",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 24,
+    "nev": "Lauro Pichiri",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 3,
+    "nev": "Fabian Wiede",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 27,
+    "nev": "Justin Wollny",
+    "poszt": "atlovo"
+   },
+   {
+    "mez": 14,
+    "nev": "Aitor Arino",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 34,
+    "nev": "Hákun av Teigum",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 20,
+    "nev": "Tim Freihöfer",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 35,
+    "nev": "Max Günther",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 6,
+    "nev": "Leo Prantner",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 37,
+    "nev": "Lennart Steltner",
+    "poszt": "szelso"
+   },
+   {
+    "mez": 5,
+    "nev": "Max Darj",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 29,
+    "nev": "Lukas Herburger",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 31,
+    "nev": "Jonas Kofler",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 93,
+    "nev": "Mijajlo Marsenić",
+    "poszt": "beallo"
+   },
+   {
+    "mez": 38,
+    "nev": "Tim Schröder",
+    "poszt": "beallo"
+   }
+  ]
+ }
+}
