@@ -287,11 +287,17 @@ def build_features(pose: dict, bc: dict | None = None, swing: bool = True):
     return F, names, X, xnames
 
 
-def evaluate(pose: dict, shots: list[dict], seed: int = 0, bc: dict | None = None, swing: bool = True) -> dict:
+def evaluate(pose: dict, shots: list[dict], seed: int = 0, bc: dict | None = None, swing: bool = True,
+             drop: tuple[str, ...] = ()) -> dict:
+    """drop: ezekkel a nevekkel kezdődő jellemzők kimaradnak (pl. az eredményjelző-jelek, hogy a
+    modell ne a lövés UTÁNI állásváltozásból tudja meg, hogy lövés volt)."""
     from sklearn.ensemble import HistGradientBoostingClassifier
 
     t = pose["t"]
     F, names, X, xnames = build_features(pose, bc, swing)
+    if drop:
+        keep = [i for i, n in enumerate(xnames) if not n.startswith(tuple(drop))]
+        X, xnames = X[:, keep], [xnames[i] for i in keep]
     y = labels(t, shots)
     st = np.array([s["t"] for s in shots])
     edges = np.linspace(t.min(), t.max() + 1e-6, BLOCKS + 1)
@@ -424,6 +430,7 @@ def main(argv=None) -> int:
     ap.add_argument("--broadcast", help="a hbd.broadcast kimenete (eredményjelző + kamera)")
     ap.add_argument("--no-swing", action="store_true", help="követéses lendítés-jellemzők nélkül")
     ap.add_argument("--court", help="a hbd.court kimenete: csak a pályán álló emberek (nézők nélkül)")
+    ap.add_argument("--drop", nargs="*", default=[], help="ezekkel kezdődő jellemzők nélkül (pl. allas_valtozas)")
     args = ap.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -444,7 +451,7 @@ def main(argv=None) -> int:
         from .broadcast import load as load_bc
 
         bc = load_bc(args.broadcast)
-    res = evaluate(pose, shots, bc=bc, swing=not args.no_swing)
+    res = evaluate(pose, shots, bc=bc, swing=not args.no_swing, drop=tuple(args.drop))
     import joblib
 
     joblib.dump(make_bundle(res, swing=not args.no_swing, broadcast=bc is not None, court=bool(args.court)),
