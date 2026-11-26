@@ -140,6 +140,72 @@ def score_change(score: np.ndarray, present: np.ndarray) -> np.ndarray:
     return np.where(ok, d, 0.0)
 
 
+# Gólszámlálás az eredményjelzőből: egy GÓL után az állás TARTÓSAN más; a grafika
+# animációja (kiúszás, statisztika-sáv, ismétlés-kártya) után a kép visszaáll.
+# Az ablak, amin az előtte / utána látszó állást mérjük (s), és a változás közti szünet.
+GOAL_STABLE_S = 3.0
+GOAL_GUARD_S = 0.6
+GOAL_MIN_GAP_S = 8.0
+# A jelölt változás: a mintánkénti eltérés legalább ennyi (a zaj ~0,1–0,3).
+GOAL_CAND_DIFF = 2.0
+# Az ablakban legalább ennyi minta kell, ahol a grafika látszik.
+GOAL_MIN_PRESENT = 0.7
+
+
+def goal_changes(score: np.ndarray, t: np.ndarray, present: np.ndarray, state_diff: float | None = None) -> dict:
+    """Tartós állásváltozások (gólok) időpontjai az állás-kivágásokból.
+
+    Jelölt minden pont, ahol a szomszédos minták eltérése GOAL_CAND_DIFF fölött van.
+    Mindegyiknél az előtte és utána GOAL_STABLE_S-nyi, látszó grafikájú minták
+    MEDIÁN képe kerül összevetésre: ha a kettő eltér (átlagos abszolút eltérés >
+    state_diff), az állás tartósan megváltozott → gól. A state_diff alapból a
+    jelöltek "előtte–utána" eltéréseinek kétcsúcsú eloszlásából jön (Otsu)."""
+    s = score.reshape(len(score), -1).astype(np.float32)
+    step = np.zeros(len(s), np.float32)
+    step[1:] = np.abs(s[1:] - s[:-1]).mean(1)
+    step[~present] = 0
+    step[1:][~present[:-1]] = 0
+    cand = np.where(step > GOAL_CAND_DIFF)[0]
+    rows = []
+    for i in cand:
+        b = (t >= t[i] - GOAL_GUARD_S - GOAL_STABLE_S) & (t < t[i] - GOAL_GUARD_S)
+        a = (t > t[i] + GOAL_GUARD_S) & (t <= t[i] + GOAL_GUARD_S + GOAL_STABLE_S)
+        if b.sum() == 0 or a.sum() == 0:
+            continue
+        if present[b].mean() < GOAL_MIN_PRESENT or present[a].mean() < GOAL_MIN_PRESENT:
+            continue
+        mb, ma = np.median(s[b & present], 0), np.median(s[a & present], 0)
+        rows.append((float(t[i]), float(np.abs(ma - mb).mean())))
+    if not rows:
+        return {"t": np.zeros(0), "kuszob": state_diff, "jeloltek": 0}
+    d = np.array([r[1] for r in rows])
+    if state_diff is None:
+        state_diff = _otsu(d)
+    times = []
+    for (ti, di) in rows:
+        if di > state_diff and (not times or ti - times[-1] > GOAL_MIN_GAP_S):
+            times.append(ti)
+    return {"t": np.array(times), "kuszob": float(state_diff), "jeloltek": len(rows), "elteresek": d}
+
+
+def _otsu(x: np.ndarray, bins: int = 64) -> float:
+    """Két csoportra bontó küszöb (Otsu) — a "nem változott" és a "változott" állás közt."""
+    lx = np.log1p(x)
+    hist, edges = np.histogram(lx, bins)
+    centers = (edges[:-1] + edges[1:]) / 2
+    best, thr = -1.0, centers[0]
+    for k in range(1, bins):
+        w0, w1 = hist[:k].sum(), hist[k:].sum()
+        if w0 == 0 or w1 == 0:
+            continue
+        m0 = (hist[:k] * centers[:k]).sum() / w0
+        m1 = (hist[k:] * centers[k:]).sum() / w1
+        v = w0 * w1 * (m0 - m1) ** 2
+        if v > best:
+            best, thr = v, edges[k]
+    return float(np.expm1(thr))
+
+
 def features(raw: dict) -> dict:
     """A nyers jelekből a lövésfelismerő mintakockánkénti jelei."""
     present_ncc = scoreboard_presence(raw["sb_static"])

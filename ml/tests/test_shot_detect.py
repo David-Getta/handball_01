@@ -174,3 +174,19 @@ def test_josolt_kuszob_a_cel_felidezeshez_es_hianyzo_kozvetites():
     assert b["kuszob"] == 0.5
     with pytest.raises(ValueError):
         predict({"t": np.zeros(1)}, b, None)
+
+
+def test_golszamlalas_tartos_valtozast_szamol_animaciot_nem():
+    from hbd.broadcast import goal_changes
+
+    rng = np.random.default_rng(0)
+    t = np.arange(0, 120, 0.2)
+    a, b, c = (rng.integers(0, 255, (10, 20)).astype(np.float32) for _ in range(3))
+    score = np.stack([a] * len(t))
+    score[t >= 30] = b                       # gól 30 s-nál: tartósan új állás
+    score[(t >= 60) & (t < 61)] = c          # 1 s-os animáció: utána visszaáll
+    score[t >= 90] = a                       # újabb gól 90 s-nál
+    score += rng.normal(0, 1, score.shape).astype(np.float32)
+    present = np.ones(len(t), bool)
+    res = goal_changes(score, t, present, state_diff=10.0)
+    assert np.allclose(res["t"], [30.0, 90.0], atol=0.3)

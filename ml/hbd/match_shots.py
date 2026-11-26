@@ -63,8 +63,10 @@ def _orig_frames(video: str, t0: float, n: int):
     from .video import ffmpeg_exe, probe
 
     w, h, _ = probe(video)
-    cmd = [ffmpeg_exe(), "-v", "error", "-ss", f"{max(0.0, t0):.3f}", "-i", video, "-frames:v", str(n),
-           "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+    # -fps_mode passthrough: az alap-időzítés a pontos ugrásnál néha megduplázza az első
+    # kockát ([F, F, F+1, …]) → minden későbbi kocka 1-gyel elcsúszna.
+    cmd = [ffmpeg_exe(), "-v", "error", "-ss", f"{max(0.0, t0):.3f}", "-i", video, "-fps_mode", "passthrough",
+           "-frames:v", str(n), "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
     raw = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout
     k = len(raw) // (w * h * 3)
     return list(np.frombuffer(raw[:k * w * h * 3], np.uint8).reshape(k, h, w, 3))

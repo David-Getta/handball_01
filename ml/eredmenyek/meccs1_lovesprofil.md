@@ -62,4 +62,10 @@ figyelmen kívül hagyni őket.
 - Nagyobb pózmodell GPU-n (Kaggle, yolo11x) a ráközelítő követéshez.
 - Második meccs címkézve: tanítás nélküli próba.
 
+**Javított hiba (a fenti számok még előtte készültek):** az eredeti
+felvételből olvasó `_orig_frames` pontos ugrásnál néha megduplázta az első
+kockát, így a klip-pózok 185-ből 104 klipben 1 kockával (40 ms) késtek. A
+javítás (`-fps_mode passthrough`) a következő futásoktól él; az elengedés
+±2 kockás pontossága emiatt inkább alul-, mint felülbecsült.
+
 Futtatás: `python -m hbd.match_shots extract|zoom|evaluate` (lásd a modul fejlécét).

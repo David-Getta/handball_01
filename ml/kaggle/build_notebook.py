@@ -15,7 +15,8 @@ from pathlib import Path
 ML = Path(__file__).resolve().parents[1]
 NB = ML / "kaggle" / "uniri_hbd_pose.ipynb"
 MODULES = ["__init__", "dataset", "video", "locate", "pose", "features", "goalkeeper", "models",
-           "train", "release", "match_pose", "broadcast", "court", "shot_detect", "match_shots", "ball", "hand_image"]
+           "train", "release", "match_pose", "broadcast", "court", "shot_detect", "match_shots", "ball", "hand_image",
+           "shooter_ball"]
 
 INTRO = """# Sport Machine — kézilabda-mozdulatfelismerés (UNIRI-HBD)
 
