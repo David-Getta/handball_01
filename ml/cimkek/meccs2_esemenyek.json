@@ -1725,6 +1725,15 @@
    "tipus": "loves"
   },
   {
+   "t": 4833.1,
+   "tipus": "loves"
+  },
+  {
+   "eredmeny": "gol",
+   "t": 4833.58,
+   "tipus": "loves"
+  },
+  {
    "t": 4865.74,
    "tipus": "loves"
   },
@@ -2038,10 +2047,10 @@
   }
  ],
  "fps": 30,
- "frissitve": "2026-11-28T18:20:24.974Z",
+ "frissitve": "2026-11-28T18:26:10.712Z",
  "hossz_s": 5538,
  "meret": 3962573923,
  "nev": "Magdeburg  Berlin 03 2026  Bundesliga  handball 🤾‍♂️.mp4",
- "pozicio": 5526.1,
+ "pozicio": 4834.7,
  "megjegyzes": "visszafujva: a lövés megtörtént, de a játékvezető visszafújta (nem számít a statisztikába); a jelölő szóbeli közlése alapján utólag beírva"
 }
