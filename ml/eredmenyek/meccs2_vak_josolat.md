@@ -1,5 +1,9 @@
 # 2. meccs (Magdeburg–Füchse Berlin, 35:33) — vak lövés-jóslat
 
+> **Az emberi jelöléssel összevetve:** `meccs2_osszevetes.md` — a póz + kamera
+> modell 81% felidézés, 55% pontosság a rögzített küszöbön; a teljes modell
+> valóban gól-felismerő lett (védések: 4/43).
+
 Az 1. meccsen tanított lövésfelismerő a 2. meccsen **újratanítás nélkül**, más
 közvetítővel (ARD, 50 fps), más csarnokban, más mezekkel. A jóslatok a 2.
 meccs emberi jelölése ELŐTT kerültek a repóba (`cimkek/meccs2_vak_josolt_*.json`).
