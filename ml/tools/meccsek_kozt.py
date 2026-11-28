@@ -91,12 +91,42 @@ def summarize(c: list[dict]) -> dict:
             "felidezes_80": None if a is None else {k: r(a[k]) for k in ("felidezes", "pontossag", "teves_per_perc")}}
 
 
+FINAL_RECALL = 0.8
+
+
+def save_final(m1: dict, m2: dict, path: Path) -> dict:
+    """A végleges modell mindkét meccs összes élő lövésén. A küszöb: a kombinált blokkos CV-ben
+    (a másik meccs + ez a meccs) mindkét meccsen legalább FINAL_RECALL felidézést adó küszöbök
+    közül a kisebb (a jelölteket ember nézi át → inkább több, mint kevesebb)."""
+    import joblib
+
+    thr, cv = [], {}
+    for name, test, other in (("m1", m1, m2), ("m2", m2, m1)):
+        c = at_recall(curve_of(test["t"], scores(test, other, True), test["st"]), FINAL_RECALL)
+        thr.append(c["kuszob"] if c else 0.05)
+        cv[name] = c
+    k = float(min(thr))
+    X = np.concatenate([m1["X"][m1["y"] >= 0], m2["X"][m2["y"] >= 0]])
+    y = np.concatenate([m1["y"][m1["y"] >= 0], m2["y"][m2["y"] >= 0]])
+    bundle = {"model": _clf().fit(X, y), "features": m1["names"], "swing": True, "broadcast": True, "court": True,
+              "kuszob": k, "kuszob_cv": cv}
+    joblib.dump(bundle, path)
+    print(f"végleges modell → {path} (küszöb {k}; CV a küszöbökön: {cv})")
+    return bundle
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--m1", nargs=4, required=True, metavar=("POSE", "BROADCAST", "COURT", "EVENTS"))
     ap.add_argument("--m2", nargs=4, required=True, metavar=("POSE", "BROADCAST", "COURT", "EVENTS"))
     ap.add_argument("--out", required=True)
+    ap.add_argument("--save-model", help="a két meccsen együtt tanított póz + kamera modell (joblib) ide")
+    ap.add_argument("--only-model", action="store_true", help="a kísérlet nélkül, csak a végleges modell")
     a = ap.parse_args(argv)
+    if a.save_model:
+        save_final(load_match(*a.m1, True), load_match(*a.m2, True), Path(a.save_model))
+        if a.only_model:
+            return 0
     res = {}
     for cname, use_bc in CONFIGS.items():
         M = {"m1": load_match(*a.m1, use_bc), "m2": load_match(*a.m2, use_bc)}
