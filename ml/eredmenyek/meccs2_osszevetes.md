@@ -48,5 +48,7 @@ Utólag választott küszöbbel (legjobb F1, optimista): póz + kamera 79% felid
 
 Az eredményjelzőről gépileg kiolvasott 68 gólhoz képest két eltérés maradt a
 jelölésben: 80:34-nél (Gidsel, 28:28) nincs gól-jelölés, 26:15-nél egy élő
-gól-jelölés mögött nincs állásváltozás (valószínűleg ismétlés). Ez a fenti
-számokon legfeljebb egy lövést változtat.
+gól-jelölés mögött nincs állásváltozás — a jelölő szerint a labda bement, de
+belemenést (támadó faultot) fújtak, így a gólt nem adták meg. Lövésnek
+helyes, a címkében `visszafujva` jelzéssel. A fenti számokon ez legfeljebb
+egy lövést változtat.

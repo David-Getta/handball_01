@@ -676,12 +676,14 @@
   },
   {
    "t": 1574.81,
-   "tipus": "loves"
+   "tipus": "loves",
+   "visszafujva": "belemenés (támadó fault) — a gólt nem adták meg"
   },
   {
    "eredmeny": "gol",
    "t": 1575.54,
-   "tipus": "loves"
+   "tipus": "loves",
+   "visszafujva": "belemenés (támadó fault) — a gólt nem adták meg"
   },
   {
    "t": 1585.88,
@@ -2040,5 +2042,6 @@
  "hossz_s": 5538,
  "meret": 3962573923,
  "nev": "Magdeburg  Berlin 03 2026  Bundesliga  handball 🤾‍♂️.mp4",
- "pozicio": 5526.1
+ "pozicio": 5526.1,
+ "megjegyzes": "visszafujva: a lövés megtörtént, de a játékvezető visszafújta (nem számít a statisztikába); a jelölő szóbeli közlése alapján utólag beírva"
 }
