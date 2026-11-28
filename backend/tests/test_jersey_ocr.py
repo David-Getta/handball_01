@@ -209,3 +209,62 @@ def test_reader_still_works_with_net():
                              borderValue=(40, 40, 40))
     r = read_jersey_number(rotated)
     assert r is not None and r[0] == 23, f"lett: {r}"
+
+
+# ---- A számjegy-sablonok (_digit_templates) — a tartalék-illesztés alapja -----
+
+def test_digit_templates_tiz_szamjegy_ket_vastagsaggal():
+    """A sablon-készlet a 0..9 számjegyeket adja, jegyenként két
+    vastagsággal, a kért méretre (alapból 28×28) nyújtva — a jegy a
+    befoglalójára vágva kitölti a képet."""
+    from handball.pipeline.jersey_ocr import _digit_templates
+
+    sablonok = _digit_templates()
+    assert sorted(sablonok) == list(range(10))
+    for d, valtozatok in sablonok.items():
+        assert len(valtozatok) == 2, d
+        for kep in valtozatok:
+            assert kep.shape == (28, 28) and kep.dtype == np.uint8
+            assert kep.max() > 200                 # van rajta "tinta"
+            # Szoros vágás: a jegy mind a négy szélig ér.
+            assert kep[0].max() > 0 and kep[-1].max() > 0, d
+            assert kep[:, 0].max() > 0 and kep[:, -1].max() > 0, d
+    # (A két vastagság képe OpenCV-változattól függően egyezhet is — az
+    # újabb betű-motor a vonalvastagságot nem veszi figyelembe —, ezért
+    # a változatok különbözőségét nem követeljük meg.)
+    assert _digit_templates(size=40)[7][0].shape == (40, 40)
+
+
+def test_digit_templates_a_jegyek_megkulonboztethetok():
+    """Minden sablon a SAJÁT jegyéhez illik a legjobban (a többi jegy
+    sablonjával kisebb az egyezés) — erre épül a sablon-illesztés,
+    amikor a tanított háló nem érhető el."""
+    from handball.pipeline.jersey_ocr import _digit_templates
+
+    sablonok = _digit_templates()
+
+    def egyezes(a, b):
+        return float(cv2.matchTemplate(a.astype(np.float32),
+                                       b.astype(np.float32),
+                                       cv2.TM_CCOEFF_NORMED)[0][0])
+
+    for d in range(10):
+        minta = sablonok[d][1]
+        pontok = {e: max(egyezes(minta, t) for t in sablonok[e])
+                  for e in range(10)}
+        assert max(pontok, key=pontok.get) == d, (d, pontok)
+        assert pontok[d] > 0.99
+
+
+def test_halo_nelkul_a_sablon_illesztes_olvas(monkeypatch):
+    """A VALÓDI úton: ha a tanított háló nem érhető el (hiányzó /
+    sérült súlyfájl), a felismerő a sablon-illesztésre esik vissza, és
+    a tiszta, nagy mezszámot így is kiolvassa."""
+    from handball.pipeline import jersey_ocr
+
+    monkeypatch.setattr(jersey_ocr, "_load_digit_net", lambda: None)
+    crop = np.full((120, 120, 3), 40, np.uint8)
+    cv2.putText(crop, "7", (40, 90), cv2.FONT_HERSHEY_SIMPLEX, 2.6,
+                (255, 255, 255), 6)
+    r = read_jersey_number(crop)
+    assert r is not None and r[0] == 7, f"lett: {r}"

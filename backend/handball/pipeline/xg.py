@@ -62,7 +62,7 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
      "shooters": [{"player_id", "team", "shots", "goals", "xg", "diff"}]}
     — diff = gól − várható gól (pozitív: a helyzetei FELETT teljesít,
     negatív: kihagyott nagy helyzetek). A shooters xG szerint csökkenő."""
-    from .event_detection import EventType, detect_shots
+    from .event_detection import EventType, detect_shots, unseen_goal
 
     config = config or TacticsConfig()
     by_t = {f.t: f for f in match.frames}
@@ -73,15 +73,30 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     for e in detect_shots(match, config):
         if e.type not in (EventType.SHOT, EventType.GOAL):
             continue
+        # A középkezdésből következtetett, NEM LÁTOTT lövés gólja: a
+        # lövés helyét és minőségét nem ismerjük — az xG (és a rá épülő
+        # kapus-mérlegek) csak a látott lövésekből mér.
+        if unseen_goal(e):
+            continue
         f = by_t.get(e.t)
         if f is None:
             continue
+        # A lövés HELYE az elengedés kockája (release_t), nem a
+        # kapu-megközelítésé: az esemény t-jén a labda már úton van, és
+        # ritkított felvételen métereket ugrik — aki ott mér, a kapuhoz
+        # közelebbről mér, és az xG felfelé torzul.
+        rf = by_t.get((e.detail or {}).get("release_t"))
         x = y = None
         if e.player_id is not None:
-            for p in f.players:
-                if p.track_id == e.player_id:
-                    x, y = p.x, p.y
-                    break
+            for src in (rf, f):
+                if src is None or x is not None:
+                    continue
+                for p in src.players:
+                    if p.track_id == e.player_id:
+                        x, y = p.x, p.y
+                        break
+        if x is None and rf is not None and rf.ball is not None:
+            x, y = rf.ball.x, rf.ball.y
         if x is None and f.ball is not None:
             x, y = f.ball.x, f.ball.y
         if x is None:
@@ -92,6 +107,10 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             ("goal" if e.type == EventType.GOAL else "miss")
         side = e.team.value
         shots.append({"t": e.t, "team": side, "player_id": e.player_id,
+                      # Az elengedés kockája: a jelenet-mérő rétegek
+                      # (elzárás, fal, kilépés) ebből olvassák a lövés
+                      # PILLANATÁT — az esemény t-jén a kép már szétmozgott.
+                      "release_t": (e.detail or {}).get("release_t"),
                       "x": round(x, 2), "y": round(y, 2),
                       "xg": xg, "outcome": outcome})
         teams[side]["xg"] += xg
@@ -245,6 +264,213 @@ def shot_accuracy(match: Match,
     return out
 
 
+# Centis kihagyás: a mellé lövés hol lépi át a gólvonalat. A kapufán
+# kívül ennyi méteren belül HAJSZÁLLAL ment mellé; ennyi idő alatt kell
+# a labdának a gólvonalig érnie (a blokkolt / rövid lövés kimarad);
+# ennyi gólvonalig érő mellé lövés és ennyi "centis" kell az ítélethez;
+# e részarány felett a csapat a sarkokat keresi, alatta messze lő mellé.
+NM_MARGIN_M = 0.6
+NM_LOOK_S = 0.6
+NM_LINE_M = 0.7
+NM_MIN_MISSES = 6
+NM_MIN_NARROW = 3
+NM_NARROW_PCT = 60.0
+NM_WIDE_PCT = 25.0
+
+
+def _miss_line_y(match: Match, idx: int, goal_x: float, fps: float):
+    """A mellé lövés gólvonal-átlépésének y-ja (None, ha a labda
+    NM_LOOK_S alatt nem éri el a vonalat — blokkolt / rövid lövés)."""
+    frames = match.frames
+    t_end = frames[idx].t + NM_LOOK_S * fps
+    prev = None
+    for f in frames[idx:]:
+        if f.t > t_end:
+            break
+        b = f.ball
+        if b is None:
+            continue
+        if abs(b.x - goal_x) <= NM_LINE_M:
+            return b.y
+        if prev is not None and (prev[0] - goal_x) * (b.x - goal_x) < 0:
+            u = (goal_x - prev[0]) / (b.x - prev[0])
+            return prev[1] + u * (b.y - prev[1])
+        prev = (b.x, b.y)
+    return None
+
+
+def _measured_misses(match: Match, config: Optional[TacticsConfig] = None):
+    """A gólvonalig érő mellé lövések: (csapat, lövő id, a kapufán
+    kívüli távolság méterben) hármasok időrendben — a centis-kihagyás
+    csapat- és lövő-szintű rétegének közös mérése."""
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    centre = COURT_WIDTH_M / 2.0
+    out = []
+    for e in detect_shots(match, config):
+        if e.type != EventType.SHOT \
+                or (e.detail or {}).get("outcome") != "miss":
+            continue
+        i = idx_of.get(e.t)
+        if i is None:
+            continue
+        y = _miss_line_y(match, i, config.attacks_toward_x(e.team), fps)
+        if y is None:
+            continue
+        off = abs(y - centre) - 1.5      # a kapufán kívüli távolság
+        if off < 0:
+            continue      # a kapufák közé érő "mellé" lövés: nem mérhető
+        out.append((e.team.value, e.player_id, off))
+    return out
+
+
+def narrow_misses_kind(misses: int, narrow: int):
+    """A centis-kihagyás döntése a két darabszámból — a motor, a
+    felderítés és a meccsterv közös ítélete (meccsek közt a darabszámok
+    adódnak össze). Visszatérés: (minta, centis %) — a minta "centis" /
+    "messzi" / None; a % None, ha nincs gólvonalig érő mellé lövés."""
+    pct = round(100.0 * narrow / misses, 1) if misses else None
+    if misses < NM_MIN_MISSES:
+        return None, pct
+    if narrow >= NM_MIN_NARROW and pct >= NM_NARROW_PCT:
+        return "centis", pct
+    if pct <= NM_WIDE_PCT:
+        return "messzi", pct
+    return None, pct
+
+
+def narrow_misses(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Centis kihagyás: HAJSZÁLLAL vagy MESSZE mennek mellé a lövéseik.
+
+    A célzás-pontosság (shot_accuracy) azt mondja meg, MENNYI lövés tart
+    kapura — ez azt, hogy a kaput elkerülő lövés MENNYIVEL megy mellé:
+    a gólvonalig érő mellé lövéseknél megnézzük, hol lépi át a labda a
+    vonalat, és a kapufán kívül NM_MARGIN_M-en belül "centis" (a
+    kapufát súroló), azon túl "messzi" a kihagyás.
+
+    Edzőileg: ha a kihagyásaik zöme CENTIS, a sarkokat keresik, minden
+    lövés a kapufa mellé megy — a kapus nyugodtan maradhat középen, a
+    legszélső sarkot a lövő pontatlansága fedezi; saját csapatnál a
+    célzás biztonsági ráhagyással (fél méterrel a kapufán belül) az
+    edzés-téma. Ha a zöme MESSZI, kapkodnak vagy rossz szögből lőnek —
+    a korai kilépés és a sietetés működik ellenük.
+
+    Visszatérés csapatonként: {"misses", "narrow", "wide",
+    "narrow_pct", "pattern", "verdict"} — a "misses" a gólvonalig érő
+    mellé lövések száma; pattern "centis" / "messzi" / None, és None,
+    ha kevés (NM_MIN_MISSES alatti) a minta.
+    """
+    counts = {"home": {"misses": 0, "narrow": 0},
+              "away": {"misses": 0, "narrow": 0}}
+    for team, _pid, off in _measured_misses(match, config):
+        rec = counts[team]
+        rec["misses"] += 1
+        rec["narrow"] += int(off <= NM_MARGIN_M)
+
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        n, k = rec["misses"], rec["narrow"]
+        pattern, pct = narrow_misses_kind(n, k)
+        verdict = None
+        if pattern == "centis":
+            verdict = (f"a kihagyásaik centisek ({k} a {n} gólvonalig "
+                       f"érő mellé lövésből a kapufát súrolja, {pct:.0f}%) "
+                       "— a sarkokat keresik: a kapus maradhat középen, a "
+                       "legszélső sarkot a lövő pontatlansága fedezi")
+        elif pattern == "messzi":
+            verdict = (f"messze lőnek mellé ({n - k} a {n} gólvonalig érő "
+                       f"mellé lövésből méterekkel kerüli el a kaput) — "
+                       "kapkodnak vagy rossz szögből lőnek: a korai "
+                       "kilépés és a sietetés működik ellenük")
+        out[side] = {"misses": n, "narrow": k, "wide": n - k,
+                     "narrow_pct": pct, "pattern": pattern,
+                     "verdict": verdict}
+    return out
+
+
+# Centis lövők: lövőnként ennyi gólvonalig érő mellé lövéstől ítélünk;
+# a "sarok-kereső" kihagyásainak legalább NM_NARROW_PCT-a centis (és
+# legalább NMS_MIN_NARROW darab), a "vaktában lövőé" legfeljebb
+# NM_WIDE_PCT-a.
+NMS_MIN_MISSES = 4
+NMS_MIN_NARROW = 3
+
+
+def narrow_miss_seeker(misses_by: dict, narrow_by: dict):
+    """A sarok-kereső lövő a lövőnkénti darabszámokból (meccsek közt
+    összeadva) — a felderítés és a meccsterv ugyanazzal a döntéssel
+    dolgozik, mint a motor. Visszatérés: (kulcs, mellé, centis) vagy
+    None."""
+    rows = sorted(((k, int(m), int(narrow_by.get(k, 0)))
+                   for k, m in misses_by.items()),
+                  key=lambda r: (-r[2], -r[1], str(r[0])))
+    for k, m, c in rows:
+        if m >= NMS_MIN_MISSES and c >= NMS_MIN_NARROW \
+                and 100.0 * c / m >= NM_NARROW_PCT:
+            return k, m, c
+    return None
+
+
+def narrow_miss_shooters(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Centis lövők: KINEK a kihagyásai centisek, és ki lő messze mellé.
+
+    A centis kihagyás (narrow_misses) csapat-szinten mondja meg, hogy a
+    mellé lövéseik hajszállal vagy messze mennek el — ez lövőnként
+    bontja: a gólvonalig érő mellé lövéseiből mennyi súrolja a kapufát
+    (NM_MARGIN_M-en belül).
+
+    Edzőileg: a "sarok-kereső" lövő a legszélső sarkot célozza — a
+    kapus ellene maradhat középen, a pontatlansága neki dolgozik
+    ellenetek; a "vaktában lövő" kapkod — rá a korai kilépés és a
+    sietetés működik. Saját csapatnál a sarok-kereső egyéni
+    célzás-feladatot kap (biztonsági ráhagyás a kapufától).
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "misses", "narrow"}], "corner_seeker", "wild"} — a lista a centis
+    kihagyás szerint csökkenő; a két kiemelt sor None, ha nincs
+    NMS_MIN_MISSES mellé lövésű, a feltételnek megfelelő lövő.
+    """
+    jersey: dict = {}
+    for fr in match.frames:
+        for pl in fr.players:
+            if pl.jersey_number is not None:
+                jersey.setdefault(pl.track_id, pl.jersey_number)
+    tally: dict = {"home": {}, "away": {}}
+    for team, pid, off in _measured_misses(match, config):
+        if pid is None:
+            continue
+        rec = tally[team].setdefault(pid, {"misses": 0, "narrow": 0})
+        rec["misses"] += 1
+        rec["narrow"] += int(off <= NM_MARGIN_M)
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": r["misses"], "narrow": r["narrow"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: (-kv[1]["narrow"],
+                                                     -kv[1]["misses"],
+                                                     kv[0]))]
+        seeker = wild = None
+        for row in rows:
+            if row["misses"] < NMS_MIN_MISSES:
+                continue
+            pct = 100.0 * row["narrow"] / row["misses"]
+            if seeker is None and row["narrow"] >= NMS_MIN_NARROW \
+                    and pct >= NM_NARROW_PCT:
+                seeker = row
+            if wild is None and pct <= NM_WIDE_PCT:
+                wild = row
+        out[side] = {"players": rows, "corner_seeker": seeker,
+                     "wild": wild}
+    return out
+
+
 # Lövő-koncentráció: ennyi azonosított lövőjű lövéstől ítélünk, és e
 # részarány felett számít egy emberre épülőnek a lövés-terhelés.
 CONC_MIN_SHOTS = 12
@@ -358,8 +584,15 @@ def goal_patterns(match: Match,
         f = by_t.get(e.t)
         if f is None:
             continue
-        shooter = next((p for p in f.players
-                        if p.track_id == e.player_id), None)
+        # A lövő helye az elengedés kockájáról (release_t) — az esemény
+        # kockáján (ritkítva különösen) már elmozdult a lövése óta.
+        rf = by_t.get((e.detail or {}).get("release_t"))
+        shooter = None
+        for src in (rf, f):
+            if src is None or shooter is not None:
+                continue
+            shooter = next((p for p in src.players
+                            if p.track_id == e.player_id), None)
         if shooter is None:
             continue
         side = getattr(e.team, "value", e.team)
@@ -424,6 +657,59 @@ def shot_concentration(match: Match,
             rec["share"] = round(top / total, 2)
             rec["concentrated"] = rec["share"] >= CONC_TOP_SHARE
         out[side] = rec
+    return out
+
+
+# Befejezés-mérleg: ennyi lövés kell az ítélethez, és ennyi gólnyi
+# eltérés (gól − várható gól) számít érdeminek — ez alatt a különbség
+# még belefér a véletlenbe.
+FBAL_MIN_SHOTS = 12
+FBAL_DIFF_GOALS = 2.5
+
+
+def finishing_balance(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Befejezés-mérleg: FENNTARTHATÓ-E a gólterméskük (gól − xG).
+
+    A meccs-xG (match_xg) kiszámolja a különbséget, de nem ítél — ez a
+    réteg teszi hozzá az edzői olvasatot. Aki érdemben a helyzetei
+    FELETT teljesít, annak a gólszáma szebb a játékánál: ugyanezekből a
+    helyzetekből legközelebb kevesebb gól lesz. Aki a helyzetei ALATT,
+    annál a játék jó, csak a befejezés nem ült — ő a veszélyesebb
+    ellenfél, mint amit az eredmény mutat.
+
+    Edzőileg felderítésben: a felülteljesítő ellen NEM kell átszabni a
+    védekezést — ugyanazokat a lövéseket kell rájuk kényszeríteni, és a
+    kapus alapállását a bejáratott sarkukra állítani; ha egy emberen
+    múlik a többlet (lásd a lövőnkénti diff-et a match_xg-ben), ŐT kell
+    kivenni. Az alulteljesítő ellen fordítva: a helyzet-teremtésüket
+    kell megfogni, mert a befejezésük magától rendbe jön.
+
+    Visszatérés csapatonként: {"shots", "goals", "xg", "diff",
+    "diff_per_shot", "verdict"} — a verdict None FBAL_MIN_SHOTS alatt
+    vagy FBAL_DIFF_GOALS-nál kisebb eltérésnél; egyébként "a helyzetei
+    FELETT teljesít (nem fenntartható)" / "a helyzetei ALATT teljesít
+    (a befejezés a gond, nem a játék)".
+    """
+    teams = match_xg(match, config or TacticsConfig())["teams"]
+    out = {}
+    for side in ("home", "away"):
+        rec = teams[side]
+        n = rec["shots"]
+        diff = rec["diff"]
+        verdict = None
+        if n >= FBAL_MIN_SHOTS:
+            if diff >= FBAL_DIFF_GOALS:
+                verdict = "a helyzetei FELETT teljesít (nem fenntartható)"
+            elif diff <= -FBAL_DIFF_GOALS:
+                verdict = ("a helyzetei ALATT teljesít "
+                           "(a befejezés a gond, nem a játék)")
+        out[side] = {
+            "shots": n, "goals": rec["goals"], "xg": rec["xg"],
+            "diff": diff,
+            "diff_per_shot": round(diff / n, 3) if n else None,
+            "verdict": verdict,
+        }
     return out
 
 
@@ -1027,4 +1313,668 @@ def defense_by_score(match: Match,
                 buckets["verdict"] = "előnyben leül a faluk"
             elif diff <= DBS_TIGHT_XG:
                 buckets["verdict"] = "előnyben is feszes a faluk"
+    return out
+
+
+# Pazarló-poszt: ennyi poszthoz kötött, kaput elkerülő lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a pontatlan
+# lövéseik egy posztra sűrűsödnek.
+WSR_MIN_OFF = 3
+WSR_SHARE_PCT = 60.0
+
+
+def wasteful_shooter_roles(match: Match,
+                           config: Optional[XGConfig] = None) -> dict:
+    """Pazarló-poszt: MELYIK POSZTJUK lövi mellé a lövéseit.
+
+    A pontatlan lövők rétege (wasteful_shooters) az embert nevezi
+    meg — ez a posztot: a kaput elkerülő (mellé/blokkolt) lövéseket
+    a lövő posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a védekezés-takarékosság terve: amelyik posztjuk
+    rendre mellé lő, arra rá lehet engedni a lövést — ott a kilépés
+    és a belemenés fölösleges kockázat, a mellé lövés utáni kidobás
+    pedig azonnali indítás nektek. Saját csapatra: célzás-gyakorlat
+    a posztnak, vagy a befejezés átosztása.
+
+    Visszatérés csapatonként: {"off_target" (poszthoz kötött, kaput
+    elkerülő lövés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    WSR_MIN_OFF, vagy egyik poszt sem éri el a WSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    roles = estimate_positions(match, TacticsConfig())
+    ws = wasteful_shooters(match, config)
+
+    out: dict = {side: {"off_target": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ws[side]["players"]:
+            if not row["off_target"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["off_target"])
+            rec["off_target"] += row["off_target"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["off_target"] >= WSR_MIN_OFF:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["off_target"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= WSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kaput elkerülő lövéseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztról jön ({rec['off_target']} mellé/"
+                    "blokkolt lövésből) — az ő lövését rá lehet "
+                    "engedni: kilépés helyett zárt sáv, a mellé lövés "
+                    "utáni kidobás azonnali indítás")
+    return out
+
+
+# Ziccer-poszt: ennyi poszthoz kötött nagy helyzet kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a ziccereik egy posztnál
+# alakulnak ki.
+BCR_MIN_CHANCES = 3
+BCR_SHARE_PCT = 60.0
+
+
+def big_chance_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccer-poszt: MELYIK POSZTJUKNÁL alakul ki a nagy helyzet.
+
+    A ziccer-befejezők rétege (big_chance_finishers) az embert nevezi
+    meg — ez a posztot: a BIG_CHANCE_XG feletti helyzet-értékű
+    lövéseket a lövő posztjához írja. Így a minta akkor is látszik,
+    ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a megelőzés terve: ha a ziccereik rendre ugyanannál a
+    posztnál alakulnak ki, a helyzetet a kialakulása ELŐTT kell
+    megfogni — korábbi besegítés és szűkítés az ő sávjában, mert ami
+    ott már kialakult, az jó eséllyel gól. Saját csapatra: ha csak
+    egy posztunk jut ziccerbe, a helyzet-teremtésünk egysíkú.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött nagy
+    helyzet), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a BCR_MIN_CHANCES,
+    vagy egyik poszt sem éri el a BCR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    roles = estimate_positions(match, config or TacticsConfig())
+    bcf = big_chance_finishers(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in bcf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["chances"])
+            rec["chances"] += row["chances"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCR_MIN_CHANCES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["chances"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-a a(z) {poszt} "
+                    f"posztnál alakul ki ({rec['chances']} nagy "
+                    "helyzetből) — a helyzetet a kialakulása előtt "
+                    "kell megfogni: korábbi besegítés és szűkítés "
+                    "az ő sávjában")
+    return out
+
+
+# Ziccerhagyó-poszt: ennyi poszthoz kötött kihagyott nagy helyzet
+# kell az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# ziccer-kihagyásaik egy posztra sűrűsödnek.
+MCR_MIN_MISSES = 3
+MCR_SHARE_PCT = 60.0
+
+
+# Ziccerhagyó emberek: ennyi kihagyott ziccer kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a kihagyások egy emberhez
+# kötődnek.
+MCP_MIN_MISSES = 2
+MCP_SHARE_PCT = 50.0
+
+
+def missed_chance_players(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Ziccerhagyó emberek: KI hagyja ki a ziccereket.
+
+    A ziccerhagyó-poszt (missed_chance_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a BIG_CHANCE_XG feletti helyzet-értékű, gól nélkül
+    záruló lövéseket a lövő nevéhez írja.
+
+    Edzőileg ez a fal kockázat-kezelése névre szólóan: akinél a
+    ziccer rendre kimarad, annál a helyzetbe engedés a kisebbik
+    rossz — a besegítés inkább a biztos kezű társakra menjen, és a
+    kapus nyugodtan bevárhatja őt. Saját csapatra: neki
+    befejezés-gyakorlás kell (ziccer-sorozat kapussal, fáradtan is),
+    mert a kihagyott ziccer a legdrágább hiba.
+
+    Visszatérés csapatonként: {"misses", "players": [{"player_id",
+    "jersey", "misses"}], "top"} — a "top" az első játékos, ha
+    legalább MCP_MIN_MISSES kihagyott ziccere van, és ez a csapat
+    kihagyásainak legalább MCP_SHARE_PCT-a, különben None.
+    """
+    xg = match_xg(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh.get("outcome") == "goal":
+            continue
+        if (sh.get("xg") or 0.0) < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        if side not in tally:
+            continue
+        tally[side][pid] = tally[side].get(pid, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["misses"] for r in rows)
+        top = None
+        if rows and rows[0]["misses"] >= MCP_MIN_MISSES:
+            share = 100.0 * rows[0]["misses"] / max(1, total)
+            if share >= MCP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"misses": total, "players": rows, "top": top}
+    return out
+
+
+def missed_chance_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccerhagyó-poszt: MELYIK POSZTJUK hagyja ki a ziccereket.
+
+    A ziccer-befejezők rétege (big_chance_finishers) az embert nevezi
+    meg — ez a posztot: a BIG_CHANCE_XG feletti helyzet-értékű, gól
+    NÉLKÜL záruló lövéseket a lövő posztjához írja. Így a minta akkor
+    is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a fal kockázat-kezelése: amelyik posztjuk a ziccert
+    rendre kihagyja, annál a helyzetbe engedés a kisebbik rossz — a
+    besegítés inkább a biztos kezű társakra menjen, az ő ziccere
+    vállalható. Saját csapatra: a posztnak befejezés-gyakorlás kell
+    (ziccer-sorozatok kapussal, fáradtan is).
+
+    Visszatérés csapatonként: {"misses" (poszthoz kötött kihagyott
+    ziccer), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az MCR_MIN_MISSES,
+    vagy egyik poszt sem éri el az MCR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    roles = estimate_positions(match, _TC())
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"misses": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        if sh["outcome"] == "goal":
+            continue
+        side = sh["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["misses"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["misses"] >= MCR_MIN_MISSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["misses"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= MCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kihagyott ziccereik {share:.0f}%-a a(z) "
+                    f"{poszt} posztnál esik ({rec['misses']} "
+                    "kihagyásból) — az ő helyzetbe engedése a "
+                    "kisebbik rossz: a besegítés a biztos kezű "
+                    "társakra menjen")
+    return out
+
+
+# Fáradt-lövő poszt: legalább ennyi 2. félidei kaput elkerülő lövés
+# kell, és ennyiszerese az első félideinek, hogy a posztot fáradt
+# lövőjűnek mondjuk ki.
+FSA_MIN_SH = 3
+FSA_FACTOR = 2.0
+
+
+# Fáradt lövők: ennyi második félidei pontatlan lövés kell a
+# névhez, és ekkora szorzó az elsőhöz képest.
+FSP_MIN_SH = 2
+FSP_FACTOR = 2.0
+
+
+def tired_shooters(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Fáradt lövők: KINEK megy szét a lövése a második félidőre.
+
+    A fáradt-lövő poszt (tired_shooter_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kaput elkerülő (mellé/blokkolt) lövéseket
+    félidőnként a lövő nevéhez írja, és megkeresi, kinek ugrik meg a
+    pontatlansága a szünet után.
+
+    Edzőileg ez a második félidei fal-terv névre szólóan: akinek
+    fáradtan szétmegy a lövése, arra a szünet után rá lehet engedni
+    — a kilépés nála már fölösleges kockázat, elég a lövő-vonalba
+    állni. Saját csapatra: fáradt célzás-blokk és a befejezés
+    átosztása a hajrában.
+
+    Visszatérés csapatonként: {"fh": {kulcs: darab}, "sh": {...},
+    "top"} — a "top" az a lövő, akinek a második félidei pontatlan
+    lövései elérik az FSP_MIN_SH-t, és legalább FSP_FACTOR-szorosai
+    az elsőnek; szünet-jel nélkül üres a kép.
+    """
+    from .halftime import detect_halftime
+
+    out: dict = {side: {"fh": {}, "sh": {}, "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    xg = match_xg(match, config)
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["outcome"] in ("goal", "save"):
+            continue  # csak a kaput ELKERÜLŐ lövés a pontatlanság
+        side = sh["team"]
+        if side not in tally:
+            continue
+        rec = tally[side].setdefault(pid, [0, 0])
+        rec[0 if sh["t"] <= ht else 1] += 1
+
+    for side in ("home", "away"):
+        rows = sorted(tally[side].items(), key=lambda kv: -kv[1][1])
+        out[side]["fh"] = {str(jersey.get(pid, pid)): n[0]
+                           for pid, n in rows if n[0]}
+        out[side]["sh"] = {str(jersey.get(pid, pid)): n[1]
+                           for pid, n in rows if n[1]}
+        for pid, (fh, sh_n) in rows:
+            if sh_n >= FSP_MIN_SH and sh_n >= FSP_FACTOR * max(1, fh):
+                out[side]["top"] = {
+                    "player_id": pid, "jersey": jersey.get(pid),
+                    "fh": fh, "sh": sh_n}
+                break
+    return out
+
+
+def tired_shooter_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Fáradt-lövő poszt: MELYIK POSZTJUK lövései mennek szét fáradtan.
+
+    A pazarló-poszt a teljes meccset nézi — ez a fáradást: a kaput
+    elkerülő (mellé/blokkolt) lövéseket félidőnként a lövő
+    posztjához írja, és megkeresi, melyik posztjuk pontatlansága
+    ugrik meg a második félidőre. Így látszik, kinek megy szét
+    fáradtan a lövése.
+
+    Edzőileg ez a második félidei fal-terv: akinek fáradtan szétmegy
+    a lövése, arra a szünet után rá lehet engedni — a kilépés nála
+    már fölösleges kockázat. Saját csapatra: fáradt célzás-blokk és
+    a befejezés átosztása a második félidőben.
+
+    Visszatérés csapatonként: {"fh_roles": {poszt: darab},
+    "sh_roles": {poszt: darab}, "main_role", "fh", "sh", "verdict"}
+    — az ítélet None, ha nincs felismert szünet, vagy egyik poszt
+    sem éri el az FSA_MIN_SH-t az FSA_FACTOR-os ugrással.
+    """
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, _TC())
+    xg = match_xg(match, config)
+
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["outcome"] in ("goal", "save"):
+            continue
+        side = sh["team"]
+        key = "fh_roles" if sh["t"] <= ht else "sh_roles"
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        out[side][key][poszt] = out[side][key].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, n_sh in sorted(rec["sh_roles"].items(),
+                                  key=lambda kv: -kv[1]):
+            n_fh = rec["fh_roles"].get(poszt, 0)
+            if n_sh >= FSA_MIN_SH and n_sh >= FSA_FACTOR * max(1, n_fh):
+                fader = (poszt, n_fh, n_sh)
+                break
+        if fader is not None:
+            poszt, n_fh, n_sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = n_fh, n_sh
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk kaput elkerülő lövései a "
+                f"második félidőre megugranak ({n_fh} → {n_sh}) — "
+                "fáradtan szétmegy a lövése: a szünet után rá lehet"
+                " engedni, a kilépés nála fölösleges kockázat")
+    return out
+
+
+# Ziccer-előkészítő poszt: ennyi poszthoz kötött ziccer-előkészítés
+# kell az ítélethez, ekkora részarány fölött mondjuk ki a mintát, és
+# ennyi időn belüli utolsó passzt tekintünk előkészítésnek.
+BCF_FEED_MIN = 3
+BCF_FEED_SHARE_PCT = 60.0
+BCF_FEED_WINDOW_S = 4.0
+
+
+def big_chance_feeder_roles(match: Match,
+                            config: Optional[TacticsConfig] = None
+                            ) -> dict:
+    """Ziccer-előkészítő poszt: KI ADJA a passzt a nagy helyzethez.
+
+    A ziccer-poszt azt mondja meg, MELYIK POSZTNÁL alakul ki a nagy
+    helyzet — ez azt, KI TEREMTI: a BIG_CHANCE_XG feletti lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a helyzetet a
+    PASSZOLÓ posztjához írja. Az előkészítő-poszt minden lövést néz,
+    ez csak a veszélyeseket.
+
+    Edzőileg ez a legdrágább passzsáv: ha a ziccereik nagy része
+    ugyanannak a posztnak a kezéből indul, az ő bejátszó-sávját kell
+    elvágni (testtel zárás, előrelépő védő) — a helyzet így ki sem
+    alakul, nem a befejezést kell hárítani. Saját csapatra: ha a
+    ziccer-teremtés egy emberen áll, a kiesésével a helyzeteink is
+    eltűnnek.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött
+    ziccer-előkészítés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    BCF_FEED_MIN, vagy egyik poszt sem éri el a
+    BCF_FEED_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        rec_role = roles[side].get(best.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["chances"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCF_FEED_MIN:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["chances"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BCF_FEED_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-át a(z) {poszt} "
+                    f"posztjuk teremti ({rec['chances']} "
+                    "ziccer-előkészítésből) — az ő bejátszó-sávját "
+                    "vágjátok el: a helyzet így ki sem alakul, nem "
+                    "a befejezést kell hárítani")
+    return out
+
+
+# Ziccerpáros-poszt küszöbei: ennyi poszthoz kötött ziccer-páros kell
+# az ítélethez, és ekkora részarány a fő párosnak (a páros ritkább
+# esemény, mint az egy-posztos minta, ezért enyhébb a részarány).
+BCP_PAIR_MIN = 3
+BCP_PAIR_SHARE_PCT = 55.0
+
+
+def big_chance_pair_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Ziccerpáros-poszt: KI ADJA és KI FEJEZI BE a nagy helyzeteiket.
+
+    A ziccer-előkészítő poszt azt mondja meg, kinek a kezéből indul a
+    nagy helyzet, a ziccer-poszt azt, kinél alakul ki — ez a kettőt
+    köti össze helyzetenként: az (előkészítő poszt → befejező poszt)
+    párost számolja. A gólpasszpáros a GÓLLAL zárult összjátékot
+    nézi, ez a helyzet-értéket: itt a bejáratott ziccer-gyár akkor is
+    látszik, ha a befejezés sokszor kimarad.
+
+    Edzőileg egy mozdulattal két posztot fog ki a védekezés: a párost
+    nem külön-külön kell fogni, hanem a köztük lévő passzsávot
+    elvágni (testtel zárás a bejátszó és az érkező között,
+    előrelépéssel a passz idejére) — ha a sáv zárva van, a ziccer ki
+    sem alakul. Saját csapatra: ha a ziccereink egyetlen kettősön
+    állnak, a párost szét kell szedni az edzésen (más befejező, más
+    bejátszó), különben az ellenfél egy emberrel megfogja mindkettőt.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött
+    ziccer-páros), "roles": {"A→B": darab}, "main_role" (a fő páros),
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    BCP_PAIR_MIN, vagy egyik páros sem éri el a
+    BCP_PAIR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        # A helyzethez vezető utolsó passz — mint a ziccer-előkészítő
+        # rétegben; itt a passzoló ÉS a befejező posztja is kell.
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_fin = roles[side].get(pid)
+        if r_feed is None or r_fin is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_fin['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["chances"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCP_PAIR_MIN:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["chances"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= BCP_PAIR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-a ugyanabból a "
+                    f"párosból jön ({par}, {rec['chances']} "
+                    "helyzetből) — nem külön-külön kell fogni őket, "
+                    "hanem a köztük lévő passzsávot elvágni: zárt "
+                    "sávnál a helyzet ki sem alakul")
+    return out
+
+
+# Ziccer-előkészítők: ennyi ziccer-előkészítéstől emeljük ki a
+# játékost.
+BCFP_MIN_FEEDS = 2
+
+
+def big_chance_feeders(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccer-előkészítők: KI ADJA a passzt a nagy helyzethez.
+
+    A ziccer-előkészítő poszt (big_chance_feeder_roles) a POSZTOT
+    nevezi meg — ez az EMBERT: a BIG_CHANCE_XG feletti lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a helyzetet a
+    PASSZOLÓ játékoshoz írja.
+
+    Edzőileg ez a legdrágább passzsáv névre szólóan: az ő
+    bejátszó-sávját kell elvágni (testtel zárás, előrelépő védő) — a
+    helyzet így ki sem alakul, nem a befejezést kell hárítani. Saját
+    csapatra: ha a ziccer-teremtés egy emberen áll, a kiesésével a
+    helyzeteink is eltűnnek.
+
+    Visszatérés csapatonként: {"chances" (emberhez kötött
+    ziccer-előkészítés), "players": [{"player_id", "jersey",
+    "chances"}], "top"} — a "top" az első játékos, ha legalább
+    BCFP_MIN_FEEDS előkészítése van, különben None.
+    """
+    from .decisions import detect_passes
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        tally[side][best.passer_id] = (
+            tally[side].get(best.passer_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "chances": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["chances"] >= BCFP_MIN_FEEDS
+               else None)
+        out[side] = {"chances": sum(r["chances"] for r in rows),
+                     "players": rows, "top": top}
     return out

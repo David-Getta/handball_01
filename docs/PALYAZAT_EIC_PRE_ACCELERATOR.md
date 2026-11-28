@@ -76,7 +76,7 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
 | TRL | Jelentés | SportMachine-bizonyíték ma |
 |---|---|---|
 | TRL 3 | kísérleti proof-of-concept | ✔ a teljes pipeline szimulált meccseken end-to-end működik |
-| **TRL 4** | **laborban validált technológia** | 🟡 erős alap: 1312 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark (`python -m scripts.benchmark`), beépített validációs modul (precision/recall/F1 az eseményfelismerésre — `pipeline/validation.py`), minőség-önellenőrzés. **Hiányzik: kézzel annotált VALÓS meccsfelvételeken mért, dokumentált pontosság.** |
+| **TRL 4** | **laborban validált technológia** | 🟡 erős alap: 3656 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark (`python -m scripts.benchmark`), beépített validációs modul (precision/recall/F1 az eseményfelismerésre — `pipeline/validation.py`), minőség-önellenőrzés. **Hiányzik: kézzel annotált VALÓS meccsfelvételeken mért, dokumentált pontosság.** |
 | TRL 5 | releváns környezetben validált | ⬜ a projekt tárgya: valós felvételek + pilot-klubok |
 | TRL 6 | releváns környezetben demonstrált | ⬜ a projekt tárgya: több klubos, szezonon átívelő pilot |
 
@@ -110,7 +110,7 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
   lenyomatának felismerése követési adatból — a piacon egyedülálló;
 - **magyarázható MI-lánc**: minden ítélet mögött kimondott küszöb és
   visszakövethető szabály (AI Act / GDPR szempontból is érv);
-- **313 elemző réteg** és **1312 automata teszt** — mérhető, verziók
+- **526 elemző réteg** és **3656 automata teszt** — mérhető, verziók
   közt összevethető minőség ("kevés minta → nincs ítélet" elv). A
   számok a kódbázisból generáltak és őr-teszttel frissen tartottak:
   `docs/SZAMOK.md` (tény-lap) + `docs/RETEG_KATALOGUS.md`
@@ -134,7 +134,10 @@ klubbal, követés-robusztusság éles csarnok-körülmények közt;
 2. év: szezonon átívelő, több klubos demonstráció (TRL 6), termékesítés
 (telepítő, licenc, támogatás), első fizető ügyfelek + felkészülés az
 EIC Acceleratorra (pitch, FTO, LOI-k). KPI-k: annotált pontosság-célok,
-pilot-klubok száma, elemzett meccsek száma, fizető licencek.
+pilot-klubok száma, elemzett meccsek száma, feldolgozási idő (egy 60
+perces meccs teljes elemzése ≤ 15 perc a pilot GPU-s szerverén, gyors
+kép ≤ 3 perc — a réteg-rész ma bő 1 perc, `docs/SEBESSEG.md`), fizető
+licencek.
 
 ## 6. Teendők a beadásig (akcióterv)
 

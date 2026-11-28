@@ -37,3 +37,43 @@ Ezért az útiterv (lásd `ROADMAP.md`) alulról építkezik: előbb a megbízha
 
 Elsősorban **edzők** és **elemzők**. A felület nyelve a taktika: figurák,
 védekezési formák, pozíciók, döntések — nem nyers koordináták.
+
+## Mit tud majd a szoftver — teljes funkció-lista
+
+Az alapító összefoglalója (2026. november). Ez a VÉGCÉL leírása, nem a
+mostani állapoté — a sorrendet a `ROADMAP.md` adja. Alapelv: **minden adat
+mögött ott a klip** — az edző nem csak számot lát, hanem egy kattintással
+meg is nézi, mi történt (később 3D-ben és VR-ban is).
+
+1. **Meccs-feldolgozás** — a meccs felvételéből automatikusan statisztikát
+   készít; kiválogatja és kivágja a lövéseket és a fontos játékhelyzeteket.
+2. **Játékos-adatbázis — minden játékosnak saját lapja** (pl. "a 23-as"):
+   - lövések: honnan lőtt, a kapu melyik részére, melyik kézzel, milyen
+     lövőcselből;
+   - ziccerek: milyen lövőcselből és hova lőtt, amikor ziccerbe került;
+   - cselek: hol, milyen csellel, melyik védő ellen ment át, és hol nem
+     sikerült (párharc: támadó × védő);
+   - védekezés: hogyan védekezik, mennyire agresszív;
+   - minden tételhez klip.
+3. **Kapus-adatbázis** — minden kapott gól és védés klippel, szöveges
+   leírással: hogyan kapta a gólt, hogyan védett.
+4. **Figura-könyvtár** — az AI felismeri a csapat figuráit; minden figurán
+   belül külön látszik az összes változat, ahogy lejátsszák, és a
+   végkimenetele (gól, védés, eladott labda, hetes) — minden esethez klip.
+   Pl. "Kereszt: 10-szer, 4 változatban; 1. változat: beálló-befejezés →
+   3 gól, 1 védés (4 klip)".
+5. **Játékos- és csapatszimuláció** — sok meccsből megtanulja, melyik
+   játékos milyen helyzetben hogyan dönt; szimulálja az egyes játékosokat és
+   az egész csapatot. Az edző kipróbálhatja a taktikáját egy adott ellenfél
+   ellen; megmutatja az ellenfél erősségeit, gyengeségeit, játékstílusát.
+   (Szimulátor, nem meccsterv: a döntés az edzőé.)
+6. **Élő segítség** — a mérkőzés közben javaslatot ad az edzőnek.
+7. **3D és VR** — a jeleneteket 3D-ben újraépíti, és **bármelyik poszt
+   szemével** megnézhetők VR-ban (pl. a kapus látja, hogyan lő egy ellenfél,
+   milyen magasra ugrik, mennyit vár ki; a játékos előre átélheti a meccset,
+   a szimulációt). A játékos-lapok, a kapus-adatbázis és a figura-könyvtár
+   klipjei is megnézhetők 3D-ben és VR-ban.
+8. **Játékvezetői videózás** — bármilyen szögből visszanézhető eset, így
+   megszűnik a rossz kameraszög gondja. A pálya köré több kamera és
+   LiDAR-szenzor kerül.
+9. **Más sportágak** — a rendszer kiterjeszthető más sportokra is.

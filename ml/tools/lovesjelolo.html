@@ -1,0 +1,503 @@
+<title>Lövésjelölő</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Elrendezés: felül a videó és a kockaléptető (a munka), alatta a négy kérdés egy rácsban, legalul a mentés. Csarnok-padló kék + jelző-narancs. */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #16202c;
+  --muted: #5c6b7c;
+  --line: #d6dde6;
+  --court: #1f5fa8;       /* a pálya kékje: kiválasztott állapot */
+  --court-ink: #ffffff;
+  --signal: #e8731c;      /* elengedés-jelző narancs */
+  --ok: #1d8a4e;
+  --warn: #b4521b;
+  --video-bg: #0d141c;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a; --ok: #3cb878; --warn: #f0995a;
+  --video-bg: #05080c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a; --ok: #3cb878; --warn: #f0995a;
+  --video-bg: #05080c; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 16px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; justify-content: space-between; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.progress { font-variant-numeric: tabular-nums; color: var(--muted); }
+.progress b { color: var(--ink); }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+.notice { padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--warn); color: var(--warn); }
+
+.clipline { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.clipname { font-family: var(--font-mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.tag { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line); }
+.tag.done { border-color: var(--ok); color: var(--ok); }
+
+.stage { background: var(--video-bg); border-radius: 10px; overflow: hidden; }
+video { display: block; width: 100%; max-width: 100%; aspect-ratio: 1000 / 360; background: var(--video-bg); }
+
+.transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.frame { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; padding: 0 6px; min-width: 9ch; }
+.frame.after { color: var(--muted); }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; min-height: 40px; }
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 3px solid var(--court); outline-offset: 2px; }
+button[disabled] { opacity: .45; cursor: default; }
+.icon { min-width: 44px; font-family: var(--font-mono); }
+.release-btn { border-color: var(--signal); color: var(--signal); font-weight: 600; }
+.release-btn.set { background: var(--signal); color: var(--panel); }
+kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; margin-left: 6px; opacity: .7; }
+
+.questions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+fieldset { margin: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 12px 14px 14px; min-width: 0; }
+legend { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: .02em; padding: 0 4px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { flex: 1 1 auto; }
+.seg button[aria-pressed="true"], .goal button[aria-pressed="true"] { background: var(--court); color: var(--court-ink); border-color: var(--court); }
+
+.goal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; border: 3px solid var(--ink);
+  border-bottom: none; border-radius: 4px 4px 0 0; max-width: 260px; }
+.goal button { min-height: 34px; padding: 4px; font-size: 12px; color: var(--muted); }
+.goalside { display: flex; justify-content: space-between; max-width: 260px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.extra { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.extra label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.primary { background: var(--court); color: var(--court-ink); border-color: var(--court); font-weight: 600; padding: 10px 18px; }
+.status { color: var(--muted); font-size: 13px; min-height: 1.4em; }
+.status.err { color: var(--warn); }
+.status.ok { color: var(--ok); }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+summary { cursor: pointer; font-weight: 600; }
+details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.modes a { text-decoration: none; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-weight: 500; }
+.modes a[aria-current="page"] { color: var(--court-ink); background: var(--court); border-color: var(--court); }
+.modes a:focus-visible { outline: 3px solid var(--court); outline-offset: 2px; }
+.arm2 .seg button { min-height: 56px; font-size: 16px; }
+.arm2 .seg button small { display: block; font-size: 12px; color: inherit; opacity: .8; font-weight: 400; }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Lövésjelölő</h1>
+    <div class="progress" id="progress">Betöltés…</div>
+  </header>
+  <nav class="modes" aria-label="Jelölési kör">
+    <a href="#teljes" id="tab1">1. kör: teljes jelölés</a>
+    <a href="#kartartas" id="tab2">2. kör: hol jön ki a labda</a>
+  </nav>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <div class="notice" id="notice" hidden></div>
+
+  <div class="clipline">
+    <span class="clipname" id="clipname">—</span>
+    <span class="tag" id="cliptag">nincs jelölve</span>
+  </div>
+
+  <div class="stage"><video id="video" playsinline muted preload="auto"></video></div>
+
+  <div class="transport">
+    <button class="icon" id="back5" title="5 kocka vissza (Shift+←)">−5</button>
+    <button class="icon" id="back1" title="1 kocka vissza (←)">◀</button>
+    <button class="icon" id="play" title="Lejátszás / megállítás (szóköz)">▶</button>
+    <button class="icon" id="fwd1" title="1 kocka előre (→)">▶|</button>
+    <button class="icon" id="fwd5" title="5 kocka előre (Shift+→)">+5</button>
+    <span class="frame" id="frame">k = 0</span>
+    <button class="release-btn" id="release">Itt engedi el<kbd>E</kbd></button>
+  </div>
+
+  <fieldset class="arm2" id="arm2" hidden>
+    <legend>Hol jön ki a labda?</legend>
+    <p class="hint">A videó az 1. körben jelölt elengedésnél áll meg. Azt jelöld, amit a kapus lát: hol van a labda (a kéz) ebben a pillanatban — a karformától függetlenül. Lógó könyökkel, de fej fölül dobott labda is „Fent”. A gomb ment és továbblép.</p>
+    <div class="seg" id="arm2btns">
+      <button data-v="fent">Fent<kbd>1</kbd><small>a labda a fej fölött</small></button>
+      <button data-v="fej_mellett">Fej mellett<kbd>2</kbd><small>a fej magasságában, mellette</small></button>
+      <button data-v="oldalt">Oldalt<kbd>3</kbd><small>váll magasságában vagy lejjebb</small></button>
+    </div>
+    <div class="extra" style="margin-top:12px">
+      <label><input type="checkbox" id="kezdo"> Kezdő lövő (gyerek, még kialakulatlan dobómozdulat)<kbd>K</kbd></label>
+      <button id="skip2">Nem látszik, kihagyom<kbd>X</kbd></button>
+    </div>
+  </fieldset>
+
+  <div class="questions" id="questions">
+    <fieldset>
+      <legend>Kartartás az elengedéskor</legend>
+      <p class="hint">Hol a dobókéz, amikor a labda elhagyja.</p>
+      <div class="seg" data-field="kartartas">
+        <button data-v="fent" aria-pressed="false">Fent<kbd>1</kbd></button>
+        <button data-v="oldalt" aria-pressed="false">Oldalt<kbd>2</kbd></button>
+        <button data-v="lent" aria-pressed="false">Lent<kbd>3</kbd></button>
+      </div>
+      <p class="hint" style="margin:10px 0 0">Fent: a fej vonalában vagy fölötte · Oldalt: váll magasságában, oldalra kitartva · Lent: csípő felől, alulról.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Lövőkéz</legend>
+      <p class="hint">A lövő saját keze.</p>
+      <div class="seg" data-field="lovokez">
+        <button data-v="jobb" aria-pressed="false">Jobb<kbd>J</kbd></button>
+        <button data-v="bal" aria-pressed="false">Bal<kbd>B</kbd></button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Hova ment</legend>
+      <p class="hint">A kapus szemszögéből: ő a gólvonalon áll, arccal a lövő felé.</p>
+      <div class="goal" data-field="zona">
+        <button data-v="fent-bal" aria-pressed="false">bal felső</button>
+        <button data-v="fent-kozep" aria-pressed="false">felső</button>
+        <button data-v="fent-jobb" aria-pressed="false">jobb felső</button>
+        <button data-v="kozep-bal" aria-pressed="false">bal</button>
+        <button data-v="kozep" aria-pressed="false">közép</button>
+        <button data-v="kozep-jobb" aria-pressed="false">jobb</button>
+        <button data-v="lent-bal" aria-pressed="false">bal alsó</button>
+        <button data-v="lent-kozep" aria-pressed="false">alsó</button>
+        <button data-v="lent-jobb" aria-pressed="false">jobb alsó</button>
+      </div>
+      <div class="goalside"><span>← kapus bal keze</span><span>kapus jobb keze →</span></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Kimenet</legend>
+      <p class="hint">Ebben az adathalmazban a felvétel a lövésnél véget ér, ezért alapból „Nem látszik”. Csak akkor változtasd, ha tényleg látod.</p>
+      <div class="seg" data-field="kimenet">
+        <button data-v="gol" aria-pressed="false">Gól</button>
+        <button data-v="vedes" aria-pressed="false">Védés</button>
+        <button data-v="melle" aria-pressed="false">Mellé / fölé</button>
+        <button data-v="nem_latszik" aria-pressed="false">Nem látszik<kbd>N</kbd></button>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="extra" id="extra1">
+    <label><input type="checkbox" id="rossz"> Rossz klip (nem lövés, vagy a kivágás másik játékoson van)</label>
+  </div>
+
+  <div class="actions">
+    <div class="seg">
+      <button id="prev">← Előző</button>
+      <button id="next">Következő →</button>
+      <button id="firstOpen">Első jelöletlen</button>
+    </div>
+    <button class="primary" id="save">Mentés és következő<kbd>Enter</kbd></button>
+  </div>
+  <div class="status" id="status" role="status"></div>
+
+  <details>
+    <summary>Hogyan jelölj (1 perc)</summary>
+    <ul>
+      <li>Nézd végig egyszer (szóköz), aztán a ◀ ▶ nyilakkal lépkedj kockánként oda, ahol a labda elhagyja a kezet, és nyomd meg az <b>E</b>-t.</li>
+      <li>A kockaszám a videó bal felső sarkában is látszik; a „(utana)” kockák már a klip utáni rész, a labda útjához.</li>
+      <li>Kartartás <b>1/2/3</b>, lövőkéz <b>J/B</b>, kimenet <b>N</b> = nem látszik. <b>Enter</b> ment és továbblép.</li>
+      <li>A kötelező: elengedés, kartartás, lövőkéz. A zóna és a kimenet csak akkor, ha látszik — a legtöbb klip a lövésnél véget ér, ezért a kapu-rész általában üres marad.</li>
+      <li>Ha bizonytalan vagy, inkább hagyd ki (Következő): kevesebb, de jó jelölés többet ér.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const video = $("video");
+  let clips = [];
+  let idx = 0;
+  let labels = {};          // klip-id → jelölés (az adatbázisból, élőben)
+  let form = {};            // az aktuális klip szerkesztés alatti állapota
+  let db = null, userId = null, canSave = false;
+  // 2. kör: "hol jön ki a labda" — külön gyűjtemény, az 1. kör jelölései érintetlenek
+  let labels2 = {};
+  let mode2 = false;
+  let loaded1 = false, loaded2 = false, jumped = false;
+  function eligible(c) { const l = labels[c.id]; return !!l && !l.rossz && Number.isInteger(l.elengedes); }
+  function isDone(c) { return mode2 ? !!labels2[c.id] : !!labels[c.id]; }
+
+  function status(msg, cls) { const s = $("status"); s.textContent = msg; s.className = "status" + (cls ? " " + cls : ""); }
+  function clip() { return clips[idx]; }
+  function fps() { return clip() ? clip().fps : 30; }
+
+  function curFrame() {
+    const c = clip(); const last = c ? c.frames - 1 : 0;
+    return Math.max(0, Math.min(last, Math.floor(video.currentTime * fps() + 1e-3)));
+  }
+  function seekFrame(k) {
+    const c = clip(); if (!c) return;
+    k = Math.max(0, Math.min(c.frames - 1, k));
+    video.pause();
+    video.currentTime = (k + 0.5) / fps();
+    showFrame(k);
+  }
+  function showFrame(k = curFrame()) {
+    const c = clip(); if (!c) return;
+    const f = $("frame");
+    f.textContent = "k = " + k + (k >= c.n ? " (utána)" : " / " + (c.n - 1));
+    f.classList.toggle("after", k >= c.n);
+  }
+
+  function renderProgress() {
+    const pool = mode2 ? clips.filter(eligible) : clips;
+    const done = pool.filter(isDone).length;
+    $("progress").innerHTML = "<b>" + done + "</b> / " + pool.length + (mode2 ? " lövés a 2. körben" : " lövés jelölve");
+    $("bar").style.width = pool.length ? (100 * done / pool.length) + "%" : "0";
+  }
+
+  function renderTag() {
+    const c = clip(); if (!c) return;
+    const tag = $("cliptag");
+    tag.textContent = isDone(c) ? "jelölve" : "nincs jelölve";
+    tag.classList.toggle("done", isDone(c));
+  }
+
+  function renderArm2() {
+    const c = clip(); const s = c && labels2[c.id];
+    $("arm2btns").querySelectorAll("button").forEach((b) =>
+      b.setAttribute("aria-pressed", String(!!s && s.kartartas2 === b.dataset.v)));
+    $("kezdo").checked = !!form.kezdo;
+  }
+
+  function applyMode() {
+    mode2 = location.hash === "#kartartas";
+    $("tab1").setAttribute("aria-current", mode2 ? "false" : "page");
+    $("tab2").setAttribute("aria-current", mode2 ? "page" : "false");
+    $("arm2").hidden = !mode2;
+    $("questions").hidden = mode2;
+    $("extra1").hidden = mode2;
+    $("save").hidden = mode2;
+    $("release").hidden = mode2;
+    renderProgress();
+    if (clips.length) { const i = firstOpen(0); loadClip(i >= 0 ? i : idx); }
+  }
+
+  function renderForm() {
+    document.querySelectorAll("[data-field]").forEach((g) => {
+      const field = g.dataset.field;
+      g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(form[field] === b.dataset.v)));
+    });
+    const r = $("release");
+    if (Number.isInteger(form.elengedes)) { r.classList.add("set"); r.firstChild.textContent = "Elengedés: k = " + form.elengedes; }
+    else { r.classList.remove("set"); r.firstChild.textContent = "Itt engedi el"; }
+    $("rossz").checked = !!form.rossz;
+  }
+
+  function loadClip(i) {
+    if (!clips.length) return;
+    idx = (i + clips.length) % clips.length;
+    const c = clip();
+    const saved = labels[c.id];
+    // Az UNIRI-HBD jelenetei a klip végén véget érnek: a labda útja szinte sosem látszik.
+    form = saved ? { ...saved } : { kimenet: "nem_latszik" };
+    if (mode2) {
+      const s2 = labels2[c.id];
+      // a "kezdő" jelölés jelenetenként jellemző: új klipnél az előzőét visszük tovább
+      form = { kezdo: s2 ? !!s2.kezdo : !!form2Carry };
+    }
+    $("clipname").textContent = (idx + 1) + ". " + c.id;
+    renderTag();
+    video.src = c.src;
+    video.load();
+    showFrame(0);
+    if (mode2 && eligible(c)) {
+      const r = labels[c.id].elengedes;
+      video.addEventListener("loadeddata", () => seekFrame(r), { once: true });
+      renderArm2();
+    } else {
+      renderForm();
+    }
+    status(mode2 && loaded1 && !eligible(c) ? "Ezt a lövést az 1. körben rossz klipnek jelölted." : "");
+  }
+  let form2Carry = false;
+
+  function firstOpen(from = 0) {
+    for (let j = 0; j < clips.length; j++) {
+      const i = (from + j) % clips.length;
+      const c = clips[i];
+      if (mode2 ? (eligible(c) && !labels2[c.id]) : !labels[c.id]) return i;
+    }
+    return -1;
+  }
+
+  function nextEligible(step) {
+    for (let j = 1; j <= clips.length; j++) {
+      const i = (idx + step * j + clips.length * j) % clips.length;
+      if (!mode2 || eligible(clips[i])) return i;
+    }
+    return idx;
+  }
+
+  async function save2(value) {
+    const c = clip(); if (!c || !eligible(c)) return;
+    if (!canSave) { status("A mentéshez bejelentkezés és szerkesztési jog kell.", "err"); return; }
+    const doc = { klip: c.id, kartartas2: value, kezdo: !!$("kezdo").checked,
+                  elengedes: labels[c.id].elengedes, ki: userId, ido: new Date().toISOString() };
+    try {
+      await db.collection("kartartas2").doc(c.id).set(doc);
+      labels2[c.id] = doc;
+      form2Carry = doc.kezdo;
+      renderProgress();
+      const nxt = firstOpen(idx + 1);
+      if (nxt === -1) { status("Mentve. A 2. kör kész — köszönöm!", "ok"); loadClip(idx); }
+      else { loadClip(nxt); status("Mentve: " + c.id, "ok"); }
+    } catch (e) {
+      status("Nem sikerült menteni (" + (e && e.code || "hiba") + "). Próbáld újra.", "err");
+    }
+  }
+
+  async function save() {
+    const c = clip(); if (!c) return;
+    if (!canSave) { status("A mentéshez bejelentkezés és szerkesztési jog kell.", "err"); return; }
+    if (!form.rossz) {
+      const missing = [];
+      if (!Number.isInteger(form.elengedes)) missing.push("elengedés (E)");
+      if (!form.kartartas) missing.push("kartartás (1/2/3)");
+      if (!form.lovokez) missing.push("lövőkéz (J/B)");
+      if (missing.length) { status("Még hiányzik: " + missing.join(", ") + ".", "err"); return; }
+    }
+    const doc = {
+      klip: c.id, kategoria: c.cat, fps: c.fps, klip_kockak: c.n,
+      elengedes: Number.isInteger(form.elengedes) ? form.elengedes : null,
+      kartartas: form.kartartas || null, lovokez: form.lovokez || null,
+      zona: form.zona || null, kimenet: form.kimenet || null,
+      rossz: !!form.rossz, ki: userId, ido: new Date().toISOString(),
+    };
+    const btn = $("save"); btn.disabled = true;
+    try {
+      await db.collection("cimkek").doc(c.id).set(doc);
+      labels[c.id] = doc;
+      renderProgress();
+      const nxt = firstOpen(idx + 1);
+      if (nxt === -1) { status("Mentve. Minden lövés jelölve — köszönöm!", "ok"); loadClip(idx); }
+      else { loadClip(nxt); status("Mentve: " + c.id, "ok"); }
+    } catch (e) {
+      status("Nem sikerült menteni (" + (e && e.code || "hiba") + "). Próbáld újra.", "err");
+    } finally { btn.disabled = false; }
+  }
+
+  // --- vezérlők ---
+  $("back1").onclick = () => seekFrame(curFrame() - 1);
+  $("back5").onclick = () => seekFrame(curFrame() - 5);
+  $("fwd1").onclick = () => seekFrame(curFrame() + 1);
+  $("fwd5").onclick = () => seekFrame(curFrame() + 5);
+  $("play").onclick = () => { if (video.paused) { if (video.ended) video.currentTime = 0; video.play().catch(() => {}); } else video.pause(); };
+  video.addEventListener("play", () => { $("play").textContent = "❚❚"; tick(); });
+  video.addEventListener("pause", () => { $("play").textContent = "▶"; showFrame(); });
+  video.addEventListener("seeked", () => showFrame());
+  function tick() { showFrame(); if (!video.paused) requestAnimationFrame(tick); }
+  $("release").onclick = () => { video.pause(); form.elengedes = curFrame(); renderForm(); };
+  document.querySelectorAll("[data-field]").forEach((g) => g.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const f = g.dataset.field; form[f] = form[f] === b.dataset.v ? undefined : b.dataset.v; renderForm();
+  }));
+  $("rossz").onchange = (e) => { form.rossz = e.target.checked; };
+  $("prev").onclick = () => loadClip(nextEligible(-1));
+  $("next").onclick = () => loadClip(nextEligible(1));
+  $("firstOpen").onclick = () => { const i = firstOpen(0); if (i >= 0) loadClip(i); else status("Nincs jelöletlen lövés.", "ok"); };
+  $("save").onclick = save;
+  $("arm2btns").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) save2(b.dataset.v); });
+  $("skip2").onclick = () => save2("nem_latszik");
+  $("kezdo").onchange = (e) => { form.kezdo = e.target.checked; form2Carry = e.target.checked; };
+  window.addEventListener("hashchange", applyMode);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (mode2) {
+      if (k === "ArrowLeft") seekFrame(curFrame() - (e.shiftKey ? 5 : 1));
+      else if (k === "ArrowRight") seekFrame(curFrame() + (e.shiftKey ? 5 : 1));
+      else if (k === " ") $("play").click();
+      else if (k === "1") save2("fent");
+      else if (k === "2") save2("fej_mellett");
+      else if (k === "3") save2("oldalt");
+      else if (k === "x" || k === "X") save2("nem_latszik");
+      else if (k === "k" || k === "K") { const cb = $("kezdo"); cb.checked = !cb.checked; cb.onchange({ target: cb }); }
+      else return;
+      e.preventDefault();
+      return;
+    }
+    const set = (f, v) => { form[f] = v; renderForm(); };
+    if (k === "ArrowLeft") { seekFrame(curFrame() - (e.shiftKey ? 5 : 1)); }
+    else if (k === "ArrowRight") { seekFrame(curFrame() + (e.shiftKey ? 5 : 1)); }
+    else if (k === " ") { $("play").click(); }
+    else if (k === "e" || k === "E") { $("release").click(); }
+    else if (k === "1") set("kartartas", "fent");
+    else if (k === "2") set("kartartas", "oldalt");
+    else if (k === "3") set("kartartas", "lent");
+    else if (k === "j" || k === "J") set("lovokez", "jobb");
+    else if (k === "b" || k === "B") set("lovokez", "bal");
+    else if (k === "n" || k === "N") set("kimenet", "nem_latszik");
+    else if (k === "Enter") { save(); }
+    else return;
+    e.preventDefault();
+  });
+
+  // --- adatok ---
+  async function start() {
+    try {
+      const res = await fetch("manifest.json");
+      clips = (await res.json()).clips || [];
+    } catch (e) {
+      $("progress").textContent = "A klip-lista nem töltődött be.";
+      return;
+    }
+    mode2 = location.hash === "#kartartas";
+    applyMode();
+
+    if (!window.claude || !window.claude.use) { showNotice("A mentés csak a claude.ai-n megnyitva működik."); return; }
+    const [dbNs, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    db = dbNs;
+    if (!db) { showNotice("A mentéshez jelentkezz be a claude.ai-ra. Nézni így is lehet."); return; }
+    userId = user ? await user.id() : null;
+    const can = user ? await user.can("data.write") : null;
+    canSave = can !== false;
+    if (!canSave) showNotice("Ehhez az oldalhoz csak olvasási jogod van, a jelölés nem menthető.");
+
+    const timer = setTimeout(() => showNotice("A mentett jelölések még nem érkeztek meg; ellenőrizd a kapcsolatot."), 10000);
+    db.collection("cimkek").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { clearTimeout(timer); $("notice").hidden = true; }
+      const fresh = {};
+      snap.docs.forEach((d) => { fresh[d.id] = d.data(); });
+      labels = fresh;
+      if (!snap.metadata.fromCache) loaded1 = true;
+      afterData();
+    }, (e) => { clearTimeout(timer); showNotice("A jelölések nem olvashatók (" + e.code + ")."); });
+    db.collection("kartartas2").onSnapshot((snap) => {
+      const fresh = {};
+      snap.docs.forEach((d) => { fresh[d.id] = d.data(); });
+      labels2 = fresh;
+      if (!snap.metadata.fromCache) loaded2 = true;
+      afterData();
+    }, (e) => { showNotice("A 2. kör jelölései nem olvashatók (" + e.code + ")."); });
+  }
+  // Mindkét gyűjtemény megérkezése után egyszer az első jelöletlen lövésre ugrunk.
+  function afterData() {
+    renderProgress();
+    renderTag();
+    if (mode2) renderArm2();
+    if (!jumped && loaded1 && loaded2) {
+      jumped = true;
+      const i = firstOpen(0); if (i >= 0 && i !== idx) loadClip(i);
+    }
+  }
+  function showNotice(t) { const n = $("notice"); n.textContent = t; n.hidden = false; }
+  start();
+})();
+</script>

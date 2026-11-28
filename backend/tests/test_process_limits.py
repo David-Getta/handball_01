@@ -48,8 +48,14 @@ def test_hog_cap_still_limits(tmp_path):
     assert len(raw) == 3  # a kifejezett plafon továbbra is érvényesül
 
 
-def test_progress_cb_exception_aborts_processing():
-    """A cb-ből dobott kivétel kifelé terjed — így működik a megszakítás."""
+def test_progress_cb_exception_aborts_processing(tmp_path):
+    """A cb-ből dobott kivétel kifelé terjed — így működik a megszakítás.
+
+    VALÓDI (pár kockás) videóval: a hiányzó fájl ma már korábban, saját
+    hibával elszáll (lásd a következő tesztet), tehát azon nem lehetne
+    a haladás-jelzést kipróbálni. Az első jelzés a videó-adatok
+    beolvasása után, de a tényleges feldolgozás ELŐTT történik.
+    """
 
     class Stop(Exception):
         pass
@@ -57,16 +63,34 @@ def test_progress_cb_exception_aborts_processing():
     def cb(stage, prog, msg):
         raise Stop()
 
+    v = tmp_path / "t.avi"
+    _tiny_video(v, frames=4)
     with pytest.raises(Stop):
-        # Nem létező fájl is jó: az első haladás-jelzés a videó-adatok
-        # beolvasása után, de a tényleges feldolgozás ELŐTT történik.
-        process("/nonexistent/video.mp4", None, progress_cb=cb)
+        process(str(v), None, progress_cb=cb)
+
+
+def test_hianyzo_video_azonnal_magyarul_szall_el():
+    """A nem létező videó NE fusson bele a feldolgozásba.
+
+    Korábban a nyers `cv2.VideoCapture` némán elbukott: az fps és a
+    felbontás a tartalék értékekre esett vissza, és a feldolgozás
+    elindult egy olyan videón, ami nincs is. A közös megnyitó ehelyett
+    emberi magyar üzenettel áll meg — ez az üzenet jut el a
+    felhasználóig.
+    """
+    from handball.video_io import VideoOpenError
+
+    with pytest.raises(VideoOpenError) as exc:
+        process("/nonexistent/video.mp4", None)
+    assert "videó" in str(exc.value)
 
 
 def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):
     """Ha a kocka-generátor beragad (nem ad több kockát), az elakadás-védő
-    időkorláttal kilép, és a már feldolgozott kockák megmaradnak — a
-    visszatérési érték jelzi a beragadást."""
+    az elakadt kockát ÁTUGORJA, és a folytató-olvasóval megy tovább — a
+    már feldolgozott kockák megmaradnak. Itt a folytató sem talál több
+    kockát (nem létező fájl), így a menet tisztán, beragadás-jelzés
+    NÉLKÜL zárul: a feladás csak sok egymás utáni elakadásnál jár."""
     import sys
     import types
 
@@ -119,5 +143,234 @@ def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):
     stalled = pv._process_yolo(
         "nem-letezo.mp4", str(w), stride=1, max_frames=100, imgsz=640,
         conf=0.2, raw_out=raw, colors_out=colors)
-    assert stalled is True
+    assert stalled is False  # átugrás után tisztán zárt, nem adta fel
     assert len(raw) == 3  # a beragadás előtti kockák megvannak
+
+
+def test_a_start_elotti_kockakat_nem_detektaljuk(tmp_path, monkeypatch):
+    """start > 0: a kezdőkocka ELŐTTI kockákon nem fut detektálás (eddig a
+    folyam-olvasó a videó elejétől minden ritkított kockát detektált, csak
+    hogy utána eldobja — a Folytatás a kész részt újradetektálta). A
+    kezdő olvasó a kezdőkockára teker, a KÖZÖS modellel; a felület a
+    modell betöltése után szól."""
+    import sys
+    import types
+
+    import cv2
+
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 8 * k, dtype=np.uint8))
+    vw.release()
+
+    import threading
+
+    hivasok = {"folyam": 0, "kockak": [], "peldany": 0, "cpu_szal": []}
+
+    class _Res:
+        def __init__(self, img, eszkoz="mps"):
+            self.orig_img = img
+            self.boxes = None
+            self.eszkoz = eszkoz
+
+        def cpu(self):
+            hivasok["cpu_szal"].append(threading.current_thread().name)
+            return _Res(self.orig_img, "cpu")
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            hivasok["peldany"] += 1
+
+        def track(self, source=None, **_kw):
+            if isinstance(source, str):
+                hivasok["folyam"] += 1
+                return iter(())
+            hivasok["kockak"].append(float(source.mean()))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+
+    raw, jegyzet = [], []
+    latott = []
+    eredeti = pv._is_dark
+
+    def _figyelo(img, *a, **k):
+        latott.append(threading.current_thread().name)
+        return eredeti(img, *a, **k)
+
+    monkeypatch.setattr(pv, "_is_dark", _figyelo)
+    pv._process_yolo(str(v), str(w), stride=2, max_frames=100, imgsz=640,
+                     conf=0.2, start=20, skip_dark=True, raw_out=raw,
+                     colors_out=[], on_note=jegyzet.append, ball_recover=False)
+    # Az Apple-GPU nem szál-biztos: az eredmény CPU-ra másolása a TERMELŐ
+    # szálon fut, a hívó szál (a kockák feldolgozása) már a CPU-s
+    # eredményt kapja.
+    fo = threading.current_thread().name
+    assert hivasok["cpu_szal"] and fo not in hivasok["cpu_szal"]
+    assert latott and set(latott) == {fo}
+    assert hivasok["folyam"] == 0           # a folyam-olvasó nem indult
+    assert hivasok["peldany"] == 1          # a közös modellel ment
+    assert len(hivasok["kockak"]) == 5 == len(raw)   # 20, 22, …, 28
+    assert abs(hivasok["kockak"][0] - 160) < 6       # a 20. kocka az első
+    assert jegyzet and jegyzet[0].startswith("a detektáló modell betöltve")
+
+
+def test_a_pontatlan_tekerest_a_kezdo_olvaso_potolja(tmp_path, monkeypatch):
+    """A tekerés (CAP_PROP_POS_FRAMES) nem minden fájlon kocka-pontos:
+    ha a dekóder a kért kocka ELÉ állt, lépegetéssel pótoljuk; ha MÖGÉ
+    szaladt, az elejéről olvasunk odáig — az első feldolgozott kocka
+    mindkét esetben a kért (a kalibrált horgony az, amit bejelöltek)."""
+    import sys
+    import types
+
+    import cv2
+
+    import handball.video_io as vio
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 8 * k, dtype=np.uint8))
+    vw.release()
+
+    class _Res:
+        def __init__(self, img):
+            self.orig_img = img
+            self.boxes = None
+
+    # Futásonként SAJÁT lista: az elengedett termelő szál a régi
+    # modell-példányba ír még egy-két kockát, nem a következő futáséba.
+    futasok = []
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            self._lista = futasok[-1]
+
+        def track(self, source=None, **_kw):
+            self._lista.append(float(source.mean()))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+    eredeti = vio.open_capture
+
+    class _PontatlanCap:
+        """A tekerés `elteres` kockával máshova áll, és a dekóder ezt
+        jelenti is (mint a B-kockás MP4-eknél)."""
+
+        def __init__(self, cap, elteres):
+            self._c, self._e = cap, elteres
+
+        def set(self, prop, v):
+            return self._c.set(prop, v + self._e)
+
+        def __getattr__(self, nev):
+            return getattr(self._c, nev)
+
+    for elteres in (-2, +2):
+        futasok.append([])
+        kockak = futasok[-1]
+        monkeypatch.setattr(
+            vio, "open_capture",
+            lambda p, _e=elteres: _PontatlanCap(eredeti(p), _e))
+        pv._process_yolo(str(v), str(w), stride=2, max_frames=3, imgsz=640,
+                         conf=0.2, start=20, skip_dark=False, raw_out=[],
+                         colors_out=[], ball_recover=False)
+        # (a termelő szál előreszalad a sor pufferéig — legalább 3)
+        assert len(kockak) >= 3, (elteres, kockak)
+        assert abs(kockak[0] - 160) < 6, (elteres, kockak)   # a 20. kocka
+        assert abs(kockak[1] - 176) < 6, (elteres, kockak)   # a 22.
+
+
+def test_elakadas_utan_mps_en_a_folytatas_a_processzoron_fut(tmp_path,
+                                                              monkeypatch):
+    """Az Apple-GPU nem szál-biztos: elakadás után a folytató olvasó
+    (ÚJ termelő szál, saját modell) a CPU-n számol, mert az elakadt szál
+    még fogja a GPU-t; a felület is megtudja. A kezdő olvasó (start > 0,
+    a közös modellel) a GPU-n marad."""
+    import sys
+    import threading
+    import types
+
+    import cv2
+
+    import scripts.process_video as pv
+
+    v = tmp_path / "v.mp4"
+    vw = cv2.VideoWriter(str(v), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (96, 64))
+    for k in range(30):
+        vw.write(np.full((64, 96, 3), 120, dtype=np.uint8))
+    vw.release()
+    eszkozok = []
+
+    class _Res:
+        def __init__(self, img):
+            self.orig_img = img
+            self.boxes = None
+
+    class _FakeModel:
+        names = {0: "person", 32: "sports ball"}
+
+        def __init__(self, *_a, **_k):
+            pass
+
+        def track(self, source=None, **kw):
+            if isinstance(source, str):     # a folyam-olvasó: 2 kocka, majd beragad
+                def gen():
+                    for _ in range(2):
+                        yield _Res(np.full((64, 96, 3), 120, np.uint8))
+                    threading.Event().wait(9999)
+                return gen()
+            eszkozok.append(kw.get("device"))
+            return [_Res(source)]
+
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLO = _FakeModel
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultra)
+    w = tmp_path / "w.pt"
+    w.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(pv, "_resolve_weights", lambda _w: str(w))
+    monkeypatch.setattr(pv, "_pick_device", lambda: "mps")
+
+    import queue as queue_mod
+    real_queue = queue_mod.Queue
+
+    class _FastQueue(real_queue):
+        def get(self, block=True, timeout=None):
+            if timeout is not None and timeout > 1:
+                timeout = 0.5
+            return super().get(block=block, timeout=timeout)
+
+    monkeypatch.setattr(queue_mod, "Queue", _FastQueue)
+    jegyzet = []
+    pv._process_yolo(str(v), str(w), stride=1, max_frames=100, imgsz=640,
+                     conf=0.2, raw_out=[], colors_out=[], skip_dark=False,
+                     on_note=jegyzet.append, ball_recover=False)
+    assert eszkozok and set(eszkozok) == {"cpu"}, eszkozok
+    assert any("a folytatás a processzoron fut" in j for j in jegyzet)
+    # A kezdő olvasó (start > 0, a közös modellel) a GPU-n marad.
+    eszkozok.clear()
+    pv._process_yolo(str(v), str(w), stride=2, max_frames=100, imgsz=640,
+                     conf=0.2, start=10, raw_out=[], colors_out=[],
+                     skip_dark=False, ball_recover=False)
+    assert eszkozok and set(eszkozok) == {"mps"}, eszkozok

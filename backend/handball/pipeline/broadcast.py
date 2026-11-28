@@ -22,6 +22,7 @@ tesztelhető.
 from __future__ import annotations
 
 from typing import Optional
+from ..video_io import open_capture
 
 # Vágás-küszöb: a szomszédos képkockák hisztogram-távolsága e fölött vágás.
 CUT_THRESHOLD = 0.45
@@ -160,7 +161,7 @@ def analyze_broadcast(video_path: str, stride: int = 5,
     videó indexe: index * stride."""
     import cv2
 
-    cap = cv2.VideoCapture(video_path)
+    cap = open_capture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     hists = []
     spreads = []

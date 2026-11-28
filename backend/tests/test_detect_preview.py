@@ -36,10 +36,20 @@ def test_missing_video_gives_404():
     assert r.status_code == 404
 
 
-def test_unreadable_frame_gives_404(tmp_path):
-    # Létező, de nem videó fájl → a kocka nem olvasható.
+def test_unreadable_frame_gives_400_with_reason(tmp_path):
+    """LÉTEZŐ, de megnyithatatlan videónál 400 jár — MAGYARÁZATTAL.
+
+    Korábban 404 volt, ami két okból rossz: a fájl megvan (tehát nem
+    "nincs meg"), és a kliens a 404-et "a kért elem nincs meg (lehet,
+    hogy időközben törölték)" mondatra fordítja — ami sérült videónál
+    vagy ékezetes útvonalnál félrevezető. A 400 mellé a szerver kiadja
+    a valódi okot és a teendőt is.
+    """
     bogus = tmp_path / "nem_video.mp4"
     bogus.write_bytes(b"ez nem videofajl")
     client = _client()
     r = client.get("/detect-preview", params={"path": str(bogus)})
-    assert r.status_code == 404
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "nem sikerült megnyitni" in detail
+    assert "kodek" in detail  # ékezet nélküli úton a kodek a gyanúsított

@@ -87,13 +87,22 @@ def test_package_without_video_contains_report_and_csv():
                 "pass_direction", "assist_sources",
                 "turnover_players", "clutch_scorers"):
         assert key in analyses, key
-    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
+    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz —
+    # csapat-szintű VAGY egyéni. (Az egyéni feladatok is a lapra
+    # kerülnek: az edző emberre bontva osztja ki a hét munkáját, és a
+    # csomagot sokszor épp ezért nyitja meg.)
     tf_pkg = analyses.get("training") or {}
-    has_focus = any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+    ptf_pkg = analyses.get("player_training_focus") or {}
+    has_focus = (any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+                 or any((ptf_pkg.get(s_) or {}).get("players")
+                        for s_ in ("home", "away")))
     assert ("edzesterv.txt" in names) == has_focus
     if has_focus:
         etxt = z.read("edzesterv.txt").decode("utf-8")
         assert "gyakorlat:" in etxt
+        if any((ptf_pkg.get(s_) or {}).get("players")
+               for s_ in ("home", "away")):
+            assert "egyéni feladatok" in etxt
     # Kulcs-pillanatok: ha van ilyen fájl, időbélyeges sorokat hoz.
     if "kulcs_pillanatok.txt" in names:
         kp = z.read("kulcs_pillanatok.txt").decode("utf-8")
@@ -120,7 +129,9 @@ def test_package_without_video_contains_report_and_csv():
     html = z.read("jelentes.html").decode("utf-8")
     assert "Meccsjelentés" in html
     csv = z.read("statisztika.csv").decode("utf-8")
-    assert "Játékos;Csapat" in csv
+    # A NÉV oszlop is ott van: a kimutatásban a név a lényeg, és a
+    # meccs-CSV nem mondhat kevesebbet, mint a szezon-CSV.
+    assert "Játékos;Név;Csapat" in csv
     # A játék-statisztika oszlopok is ott vannak a fejlécben.
     assert ";Gól;Lövés;xG;Blokk;Poszt;Őrzés (mp);Őrzés átl. táv (m)" in csv
 
@@ -186,8 +197,89 @@ def test_season_report_endpoint():
     # A rövid (5 mp-es) sim-meccseken nincs toplista-adat — a szakasz
     # ilyenkor elegánsan elmarad (lásd a dedikált leaders-tesztet).
     assert "A szezon játékosai" not in r.text
+    # Lövés nélkül tanult lövő és kapus-sáv sincs — a játékos-modell
+    # szakasza is elmarad (lásd a dedikált modell-tesztet).
+    assert "A szezon játékos-modellje" not in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
+
+
+def test_season_report_jatekos_modell_szakasz(monkeypatch):
+    """A szezon-riport a csapat SZEZONBÓL tanult lövőit és a kapus
+    sávjait hozza egy-egy sorban — a motor mondataival; a modell a csapat
+    meccsenkénti nyers mintáiból épül (player_models_from_samples — itt
+    két hazai meccs mintája, a lemezes eredmény-tárból)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=2)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    latott = []
+
+    def _modellek(mintak):
+        latott.append(mintak)
+        return {"tamadas": AttackModel(lovok={7: {"far": 1.3}}),
+                "kapus": {"far": 1.2, "mid": 1.0}, "vedok": [], "sav": {},
+                "lovo": {}}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report", params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    # (a kész riport a címeket tartalomjegyzék-azonosítóval látja el —
+    # a cím szövegét nézzük, nem a nyers <h2>-t)
+    assert "A szezon játékos-modellje" in r.text
+    assert ("<p><b>Lövők:</b> a lövők: a 7-es távolról 1,3× annyit lő be, "
+            "mint amennyit a helyzetei érnek</p>") in r.text
+    assert ("<p><b>Kapus:</b> a kapus távolról 1,2× annyi gólt kap, mint az "
+            "átlag</p>") in r.text
+    assert "a szezon 2 meccséből" in r.text
+    [mintak] = latott[:1]
+    assert len(mintak) == 2
+    assert all(set(m) == {"lovo", "sav", "kapus", "vedok", "kockak", "kapusok",
+                          "formak"}
+               for m in mintak)
+
+
+def test_season_report_jatekos_modell_fejlodes(monkeypatch):
+    """A szezon-riport a két fél (a fejlődés-tábla vágása) külön tanult
+    lövőit és kapusát veti össze: a régebbi fél egy meccsének mintájából
+    0,9×, az újabbéból 1,2× → "javul" sor; a két fél modellje a fél
+    meccseinek nyers mintáiból épül (player_models_from_samples — az
+    egész szezon után előbb a régebbi, aztán az újabb fél, egy-egy
+    mintából)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=2)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    hivasok = []
+
+    def _modellek(mintak):
+        hivasok.append(len(mintak))
+        ures = {"tamadas": AttackModel(), "kapus": {}, "vedok": [],
+                "sav": {}, "lovo": {}}
+        if len(mintak) != 1:
+            return ures
+        egyes = sum(1 for n in hivasok if n == 1)
+        return {**ures, "tamadas": AttackModel(
+            lovok={7: {"far": 0.9 if egyes == 1 else 1.2}})}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report", params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    assert hivasok[-3:] == [2, 1, 1]
+    assert "A játékos-modell fejlődése (első fél → második fél)" in r.text
+    assert "<li>a 7-es távolról 0,9× → 1,2× (javul)</li>" in r.text
 
 
 def test_season_report_venue_split():
@@ -214,6 +306,222 @@ def test_season_report_venue_split():
     assert int(row_h.group(1)) >= 1 and int(row_i.group(1)) >= 1
 
 
+def test_season_report_elorejelzes_sora(monkeypatch):
+    """A szezon-riport próba-szakaszának "Előrejelzés" sora: a könyvtári
+    meccs-előrejelzés próbájából a csapat sorai (forecast_rows_summary) —
+    a valódi láncon (hét rövid meccs, időrendben) ugyanaz, mint a motor
+    a meccs-mintákból; a "Gólszerzők" sor a csapat lövőinek próbája
+    (scorer_forecast_backtest), az "Élő esély" sor a csapat meccsein
+    (in_play_backtest)."""
+    import shutil
+
+    import handball.pipeline.play_simulation as ps
+    from handball.models.tracking import Team
+    from handball.pipeline.play_simulation import (forecast_backtest,
+                                                   forecast_backtest_text,
+                                                   forecast_rows_summary,
+                                                   in_play_backtest,
+                                                   match_forecast_sample,
+                                                   player_model_sample,
+                                                   scorer_forecast_backtest)
+    # Az élő esély percei a félperces felvételhez igazítva.
+    monkeypatch.setattr(ps, "LIVE_AJANLO_PERCEK", (0.1, 0.2, 0.3))
+    tmp2 = tempfile.mkdtemp(prefix="handball_elorejelzes_test_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    try:
+        matches_dir = Path(tmp2) / "data" / "matches"
+        matches_dir.mkdir(parents=True, exist_ok=True)
+        lista, jm = [], []
+        for seed in range(1, 8):
+            m = simulate_ground_truth(duration_s=30, fps=10.0, seed=seed,
+                                      shots_per_min=8)
+            m.meta.match_id = f"ej{seed}"
+            m.meta.date = f"2026-10-0{seed}"
+            (matches_dir / f"{m.meta.match_id}.json").write_text(
+                json.dumps(m.to_dict()), encoding="utf-8")
+            lista.append({"match_id": m.meta.match_id,
+                          "home": m.meta.home_team, "away": m.meta.away_team,
+                          "minta": json.loads(json.dumps(
+                              match_forecast_sample(m)))})
+            jm.append({"match_id": m.meta.match_id,
+                       "home": m.meta.home_team, "away": m.meta.away_team,
+                       "minta": {side: json.loads(json.dumps(
+                           player_model_sample(m, t))) for side, t in (
+                               ("home", Team.HOME), ("away", Team.AWAY))}})
+        ep = forecast_rows_summary(forecast_backtest(lista)["sorok"],
+                                   "Szimu Hazai")
+        assert ep is not None
+        gp = scorer_forecast_backtest(jm, "Szimu Hazai")
+        ip = in_play_backtest(lista, "Szimu Hazai")
+        assert ip is not None
+        from handball.models.tracking import Match
+        from handball.pipeline.primitive_cache import primitive_cache
+        from handball.pipeline.setplays import (figure_recurrence_backtest,
+                                                setplay_shapes)
+        figm = []
+        for x in lista:
+            mm = Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8")))
+            with primitive_cache(mm):
+                figm.append({**x, "alakok": json.loads(json.dumps(
+                    setplay_shapes(mm)))})
+        fp = figure_recurrence_backtest(figm, "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            keeper_form_sample, keeper_hot_hand_backtest)
+        kp = keeper_hot_hand_backtest([json.loads(json.dumps(
+            keeper_form_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team.HOME))) for x in lista])
+        from handball.pipeline.play_simulation import keeper_choice_backtest
+        kvp = keeper_choice_backtest(jm, "Szimu Hazai")
+        from handball.pipeline.play_simulation import (seven_taker_backtest,
+                                                       seven_taker_sample)
+        hp = seven_taker_backtest([{**x, "minta": {
+            s_: seven_taker_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            seven_direction_backtest, seven_direction_sample)
+        hip = seven_direction_backtest([{**x, "minta": {
+            s_: seven_direction_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (seven_six_backtest,
+                                                       seven_six_sample)
+        hhp = seven_six_backtest([{**x, "minta": {
+            s_: seven_six_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            defense_switch_backtest, defense_switch_sample)
+        fvp = defense_switch_backtest([{**x, "minta": {
+            s_: defense_switch_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            shorthanded_defense_backtest, shorthanded_defense_sample)
+        ehp = shorthanded_defense_backtest([{**x, "minta": {
+            s_: shorthanded_defense_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (last_shot_backtest,
+                                                       last_shot_sample)
+        ulp = last_shot_backtest([{**x, "minta": y["minta"], "hajra": {
+            s_: last_shot_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x, y in zip(lista, jm)], "Szimu Hazai")
+        from handball.pipeline.scouting import scouting_backtest, scout_team
+        fdp = scouting_backtest([{**x, "reports": {
+            s_: scout_team(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))), Team(s_)) for s_ in ("home", "away")}}
+            for x in lista], "Szimu Hazai")
+        from handball.pipeline.play_simulation import (
+            run_timeout_sample, timeout_run_backtest)
+        tp = timeout_run_backtest([{**x, "minta": json.loads(json.dumps(
+            run_timeout_sample(Match.from_dict(json.loads(
+                (matches_dir / f"{x['match_id']}.json").read_text(
+                    encoding="utf-8"))))))} for x in lista], "Szimu Hazai")
+        r = TestClient(create_app()).get("/season/report",
+                                         params={"team": "Szimu Hazai"})
+    finally:
+        os.environ["HANDBALL_DATA_DIR"] = _tmp
+        shutil.rmtree(tmp2, ignore_errors=True)
+    assert r.status_code == 200
+    assert "A modellek próbája" in r.text
+    assert (f"<p><b>Előrejelzés:</b> {forecast_backtest_text(ep)}.</p>"
+            in r.text)
+    # A várható gólszerzők próbája a csapat lövőire (a motorral egyezik;
+    # kevés párnál a sor elmarad).
+    if gp:
+        assert f"<p><b>Gólszerzők:</b> {gp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Gólszerzők:</b>" not in r.text
+    # Az élő esély próbája a csapat meccsein (in_play_backtest).
+    assert f"<p><b>Élő esély:</b> {ip['verdict']}.</p>" in r.text
+    # A szezon kulcsemberei (gól-érték a cserénél) a motorból.
+    from handball.pipeline.play_simulation import season_key_players
+    ks = season_key_players([x["minta"]["home"]["lovo"] for x in jm])
+    if ks:
+        assert "Kulcsemberek (gól-érték a cserénél)" in r.text
+        assert f"<li>{ks[0]['verdict']}</li>" in r.text
+    else:
+        assert "Kulcsemberek (gól-érték a cserénél)" not in r.text
+    # A figuráik próbája a csapat meccsein (a motorral egyezik; kevés
+    # figuránál a sor elmarad).
+    if fp:
+        assert f"<p><b>Figurák:</b> {fp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Figurák:</b>" not in r.text
+    # A kapusaik napi formájának próbája (a motorral egyezik; a félperces
+    # meccseken kevés a lövés egy félidőre — a sor elmarad).
+    if kp:
+        assert f"<p><b>Kapus napi formája:</b> {kp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Kapus napi formája:</b>" not in r.text
+    # A hetes-dobó választásuk próbája (a motorral egyezik; a szimulált
+    # hetesnek nincs azonosított dobója — a sor elmarad).
+    if hp:
+        assert f"<p><b>Hetes-dobó:</b> {hp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Hetes-dobó:</b>" not in r.text
+    # A hetes-irányuk próbája (a motorral egyezik; a szimulált hetesnek
+    # nincs azonosított dobója — a sor elmarad).
+    if hip:
+        assert f"<p><b>Hetes-irány:</b> {hip['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Hetes-irány:</b>" not in r.text
+    # A 7 a 6 mérlegük (a motorral egyezik; a szimulált meccseken nincs 7 a
+    # 6 — a sor elmarad).
+    if hhp:
+        assert f"<p><b>7 a 6:</b> {hhp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>7 a 6:</b>" not in r.text
+    # A fal-váltásuk próbája (a motorral egyezik; a hazai nem védekezik a
+    # szimulációban — a sor elmarad).
+    if fvp:
+        assert f"<p><b>Fal-váltás:</b> {fvp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Fal-váltás:</b>" not in r.text
+    # Az emberhátrány-faluk próbája (a motorral egyezik; a szimulációban
+    # nincs kiállítás — a sor elmarad).
+    if ehp:
+        assert f"<p><b>Emberhátrány-fal:</b> {ehp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Emberhátrány-fal:</b>" not in r.text
+    # Az utolsó labdájuk próbája (a motorral egyezik; az egyoldalú hajrá
+    # nem szoros — a sor elmarad).
+    if ulp:
+        assert f"<p><b>Utolsó labda:</b> {ulp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Utolsó labda:</b>" not in r.text
+    # A felderítésük próbája (a motorral egyezik; hét meccsen öt mérhető).
+    if fdp:
+        assert f"<p><b>Felderítés:</b> {fdp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Felderítés:</b>" not in r.text
+    # A kapus-választásuk próbája (a motorral egyezik; egy kapusnál a sor
+    # elmarad).
+    if kvp:
+        assert f"<p><b>Kapus-választás:</b> {kvp['verdict']}.</p>" in r.text
+    else:
+        assert "<b>Kapus-választás:</b>" not in r.text
+    # Az időkéréseik próbája a sorozat ellen (a motorral egyezik; a
+    # szimulált meccseken nincs időkérés — a sor elmarad).
+    if tp:
+        assert (f"<p><b>Időkérés a sorozat ellen:</b> {tp['verdict']}.</p>"
+                in r.text)
+    else:
+        assert "<b>Időkérés a sorozat ellen:</b>" not in r.text
+
+
 def test_season_report_leaders_section():
     """Ha van toplista-adat (hosszabb meccseken labdaszerzés már
     mérhető), a szezon-riport hozza A szezon játékosai szakaszt."""
@@ -223,7 +531,10 @@ def test_season_report_leaders_section():
     matches_dir = Path(tmp2) / "data" / "matches"
     matches_dir.mkdir(parents=True, exist_ok=True)
     for seed in (2, 3):
-        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed)
+        # 10 fps: a toplista másodperc-alapú (labdaszerzés/perc), a
+        # rétegek az fps-ből számolnak — a ritkább mintavétel a
+        # jelentést nem, a futásidőt viszont a felére viszi.
+        m = simulate_ground_truth(duration_s=120, fps=10.0, seed=seed)
         (matches_dir / f"{m.meta.match_id}.json").write_text(
             json.dumps(m.to_dict()), encoding="utf-8")
     client = TestClient(create_app())
@@ -251,6 +562,61 @@ def test_head_to_head_report_endpoint():
     assert "EGYMÁS ELLEN" in r.text
     assert "Mérleg (Szimu Hazai szemszögéből)" in r.text
     assert "Meccsről meccsre" in r.text
+    # A rövid (5 mp-es) meccseken nincs tanult lövő és kapus-sáv — a
+    # játékos-modell szakasza elmarad (lásd a dedikált tesztet).
+    assert "Játékos-modell egymás ellen" not in r.text
     assert client2.get("/head-to-head/report",
                        params={"team_a": "Szimu Hazai",
                                "team_b": "Nincs Ilyen"}).status_code == 404
+
+
+def test_head_to_head_report_jatekos_modell_szakasz(monkeypatch):
+    """Az egymás-elleni riport a KÖZÖS meccsekből tanult lövőkkel és
+    kapussal hozza a játékos-modell szakaszt mindkét csapatra: a lövők
+    sora, az utolsó labda ellenük (a lövőik × a másik kapusa), az
+    engedett lövő a falukban — a modellek csapatonként a közös meccsek
+    nyers mintáiból épülnek (player_models_from_samples: előbb az A, aztán
+    a B csapaté, ugyanannyi mintából)."""
+    from handball.pipeline.play_simulation import AttackModel
+
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=3)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    latott = []
+
+    def _modellek(mintak):
+        latott.append(len(mintak))
+        if len(latott) % 2 == 1:      # az A csapat (Szimu Hazai)
+            return {"tamadas": AttackModel(lovok={7: {"far": 1.3}}),
+                    "kapus": {}, "vedok": [], "sav": {},
+                    "lovo": {}}
+        return {"tamadas": AttackModel(lovok={4: {"far": 0.8}}),
+                "kapus": {"far": 1.2}, "vedok": [], "sav": {},
+                "lovo": {"4": {"far": [6, 1, 2.1]}}}
+
+    monkeypatch.setattr(
+        "handball.pipeline.play_simulation.player_models_from_samples",
+        _modellek)
+    client2 = TestClient(create_app())
+    r = client2.get("/head-to-head/report",
+                    params={"team_a": "Szimu Hazai",
+                            "team_b": "Szimu Vendég"})
+    assert r.status_code == 200
+    assert "Játékos-modell egymás ellen (a közös meccsekből)" in r.text
+    assert ("<h3>Szimu Hazai</h3><ul><li><b>Lövőik:</b> a lövők: a 7-es "
+            "távolról 1,3× annyit lő be, mint amennyit a helyzetei érnek</li>"
+            "<li><b>Utolsó labdájuk ellenük:</b> a 7-esé távolról") in r.text
+    assert ("<li><b>Engedett lövő a falukban:</b> a 4-es ellen nem kell "
+            "kilépni: távolról 0,8× annyit lő be, mint amennyit a helyzetei "
+            "érnek (6 lövés, 1 gól)") in r.text
+    assert ("<h3>Szimu Vendég</h3><ul><li><b>Lövőik:</b> a lövők: a 4-es "
+            "távolról 0,8×") in r.text
+    assert ("<li><b>Kapusuk:</b> a kapus távolról 1,2× annyi gólt kap, mint "
+            "az átlag</li>") in r.text
+    # A közös meccsek száma a könyvtár állapotától függ (a modul más
+    # tesztjei is tesznek be közös meccset) — a két csapat modellje
+    # ugyanannyi (legalább két) mintából épül.
+    assert len(latott) == 2 and latott[0] == latott[1] >= 2
+    assert f"a közös {latott[0]} meccsből tanulva" in r.text

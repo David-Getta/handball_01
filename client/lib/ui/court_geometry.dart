@@ -11,6 +11,11 @@ const double courtLength = 40.0; // x tengely (hosszú)
 const double courtWidth = 20.0; // y tengely (rövid)
 const double goalWidth = 3.0; // kapu szélessége → kapufák y=8.5 és y=11.5
 const double goalAreaRadius = 6.0; // 6 m-es kapuelőtér sugár
+const double freeThrowRadius = 9.0; // 9 m-es (szaggatott) szabaddobási vonal
+const double sevenMeterX = 7.0; // a hetes-vonal távolsága a gólvonaltól
+const double sevenMeterHalfLen = 0.5; // a hetes-vonal fél hossza (1 m-es vonal)
+const double keeperLineX = 4.0; // 4 m-es kapus-vonal a gólvonaltól
+const double keeperLineHalfLen = 0.075; // 15 cm-es vonal fele
 
 /// Méter↔képernyő transzformáció — a felülnézeti pálya egységes leképezése.
 ///
@@ -40,28 +45,47 @@ class CourtTransform {
 /// [leftSide] true esetén a bal kapu (x=0), false esetén a jobb (x=40).
 /// A határ: alsó negyedkör (a lenti kapufa körül) → 3 m egyenes → felső negyedkör.
 /// A köríveket [segments] szakasszal mintavételezzük, hogy sima legyen.
-List<Offset> goalAreaBoundary({required bool leftSide, int segments = 16}) {
+List<Offset> goalAreaBoundary({required bool leftSide, int segments = 16}) =>
+    _postArcBoundary(
+        radius: goalAreaRadius, leftSide: leftSide, segments: segments);
+
+/// A 9 m-es SZABADDOBÁSI vonal pontjai — ugyanaz az alak, 9 m sugárral.
+///
+/// A szabálykönyvben ez SZAGGATOTT vonal (a rajzoló így is húzza meg): a
+/// szabaddobást innen kell végrehajtani, és a védekező falnak is ez a
+/// vonatkoztatási vonala — a felülnézeti képen ettől lesz "igazi" pálya.
+List<Offset> freeThrowBoundary({required bool leftSide, int segments = 16}) =>
+    _postArcBoundary(
+        radius: freeThrowRadius, leftSide: leftSide, segments: segments);
+
+/// A kapufák köré húzott, `radius` sugarú határvonal (a 6 m-es és a 9 m-es
+/// vonal alakja azonos, csak a sugár más).
+List<Offset> _postArcBoundary({
+  required double radius,
+  required bool leftSide,
+  int segments = 16,
+}) {
   final cy = courtWidth / 2.0; // 10 m
   final half = goalWidth / 2.0; // 1.5 m
   final lowerPostY = cy - half; // 8.5
   final upperPostY = cy + half; // 11.5
   final pts = <Offset>[];
 
-  // Alsó negyedkör a lenti kapufa (x=0, y=8.5) körül: a (0, 2.5) ponttól a (6, 8.5)-ig.
+  // Alsó negyedkör a lenti kapufa (x=0, y=8.5) körül.
   for (int i = 0; i <= segments; i++) {
     final theta = (math.pi / 2) * (i / segments); // 0..90°
-    final x = goalAreaRadius * math.sin(theta);
-    final y = lowerPostY - goalAreaRadius * math.cos(theta);
+    final x = radius * math.sin(theta);
+    final y = lowerPostY - radius * math.cos(theta);
     pts.add(Offset(x, y));
   }
-  // 3 m-es egyenes szakasz: (6, 8.5) -> (6, 11.5).
-  pts.add(Offset(goalAreaRadius, lowerPostY));
-  pts.add(Offset(goalAreaRadius, upperPostY));
-  // Felső negyedkör a fenti kapufa (x=0, y=11.5) körül: (6, 11.5) -> (0, 17.5).
+  // 3 m-es egyenes szakasz a két negyedkör között.
+  pts.add(Offset(radius, lowerPostY));
+  pts.add(Offset(radius, upperPostY));
+  // Felső negyedkör a fenti kapufa (x=0, y=11.5) körül.
   for (int i = 0; i <= segments; i++) {
     final theta = (math.pi / 2) * (i / segments);
-    final x = goalAreaRadius * math.cos(theta);
-    final y = upperPostY + goalAreaRadius * math.sin(theta);
+    final x = radius * math.cos(theta);
+    final y = upperPostY + radius * math.sin(theta);
     pts.add(Offset(x, y));
   }
 
@@ -70,4 +94,871 @@ List<Offset> goalAreaBoundary({required bool leftSide, int segments = 16}) {
     return pts.map((p) => Offset(courtLength - p.dx, p.dy)).toList();
   }
   return pts;
+}
+
+/// A cserevonal jele az oldalvonalon: a félpályától ennyire (méter).
+const double substitutionLineX = 4.5;
+
+/// Lövés-mérés egy pálya-pontból — a backend `court3d.shot_geometry`
+/// TÜKRE (ugyanazok a képletek; a backend teszt a böngészős tükröt
+/// node-dal veti össze, ezt a forrás-őr nézi).
+class ShotGeometry {
+  final bool leftGoal; // a bal (x=0) kapura mérünk
+  final double goalX;
+  final double distance; // a kapu közepétől (m)
+  final double postDistance; // a kapufák közti szakasztól (m) — 6/9 m mércéje
+  final double angleDeg; // a két kapufa között látott szög
+  final String zone; // "kapuelőtér" / "6–9 m" / "9 m-en túl"
+  const ShotGeometry(this.leftGoal, this.goalX, this.distance,
+      this.postDistance, this.angleDeg, this.zone);
+}
+
+ShotGeometry shotGeometry(double x, double y, {bool? leftGoal}) {
+  final bal = leftGoal ?? x <= courtLength / 2;
+  final gx = bal ? 0.0 : courtLength;
+  final cy = courtWidth / 2;
+  final y1 = cy - goalWidth / 2, y2 = cy + goalWidth / 2;
+  final v1x = gx - x, v1y = y1 - y, v2x = gx - x, v2y = y2 - y;
+  final n1 = math.sqrt(v1x * v1x + v1y * v1y);
+  final n2 = math.sqrt(v2x * v2x + v2y * v2y);
+  var szog = 180.0;
+  if (n1 >= 1e-9 && n2 >= 1e-9) {
+    final c = ((v1x * v2x + v1y * v2y) / (n1 * n2)).clamp(-1.0, 1.0);
+    szog = math.acos(c) * 180 / math.pi;
+  }
+  final ny = y.clamp(y1, y2);
+  final kapufa = math.sqrt((x - gx) * (x - gx) + (y - ny) * (y - ny));
+  final sav = kapufa < goalAreaRadius
+      ? "kapuelőtér"
+      : (kapufa < freeThrowRadius ? "6–9 m" : "9 m-en túl");
+  final tav = math.sqrt((x - gx) * (x - gx) + (y - cy) * (y - cy));
+  return ShotGeometry(bal, gx, tav, kapufa, szog, sav);
+}
+
+/// Tankönyvi falak a BAL kapu előtt: (mélység a gólvonaltól, y) — a
+/// backend `court3d.FORMATION_TEMPLATES` tükre (a forrás-őr veti össze).
+/// A jobb kapura tükrözve: x → 40 − mélység.
+const Map<String, List<(double, double)>> formationTemplates = {
+  "6-0": [(4.2, 2.6), (6.3, 5.6), (6.7, 8.6), (6.7, 11.4), (6.3, 14.4), (4.2, 17.4)],
+  "5-1": [(4.4, 2.8), (6.4, 6.0), (6.8, 10.0), (6.4, 14.0), (4.4, 17.2), (10.0, 10.0)],
+  "4-2": [(4.6, 3.4), (6.6, 7.6), (6.6, 12.4), (4.6, 16.6), (9.6, 7.5), (9.6, 12.5)],
+  "3-2-1": [(4.4, 3.0), (6.8, 10.0), (4.4, 17.0), (8.6, 6.0), (8.6, 14.0), (11.0, 10.0)],
+};
+
+/// A sablon pozíciói a `goalX` kapu előtt, pálya-méterben.
+List<Offset> formationPositions(String name, double goalX) {
+  final s = formationTemplates[name];
+  if (s == null) return const [];
+  final jobb = goalX > courtLength / 2;
+  return [for (final (d, y) in s) Offset(jobb ? courtLength - d : d, y)];
+}
+
+/// Átlagos eltérés a sablontól: mohó párosítás (a legközelebbi pár előbb)
+/// — a böngészős nézet `elteres` függvényének tükre.
+double? formationDeviation(List<Offset> vedok, List<Offset> pontok) {
+  final parok = <(double, int, int)>[];
+  for (var i = 0; i < vedok.length; i++) {
+    for (var j = 0; j < pontok.length; j++) {
+      parok.add(((vedok[i] - pontok[j]).distance, i, j));
+    }
+  }
+  parok.sort((a, b) => a.$1.compareTo(b.$1));
+  final vi = <int>{}, pj = <int>{};
+  var osszeg = 0.0;
+  var db = 0;
+  for (final (d, i, j) in parok) {
+    if (vi.contains(i) || pj.contains(j)) continue;
+    vi.add(i);
+    pj.add(j);
+    osszeg += d;
+    db++;
+  }
+  return db == 0 ? null : osszeg / db;
+}
+
+/// A feltörés sávjának padló-téglalapja a `goalX` kaput védő fal előtt
+/// (a backend `court3d.breakpoint_zone_band` tükre): a 9 m-es vonalig,
+/// a sáv harmadában; a sáv a VÉDŐ nézőpontjából ("bal szél" / "közép" /
+/// "jobb szél") — a 0-s kaput védőnek a nagyobb y a bal keze.
+Rect? breakpointZoneBand(String? sav, double goalX) {
+  if (sav != "bal szél" && sav != "közép" && sav != "jobb szél") return null;
+  final harmad = courtWidth / 3.0;
+  final balKapu = goalX < courtLength / 2;
+  double y0, y1;
+  if (sav == "közép") {
+    y0 = harmad;
+    y1 = 2 * harmad;
+  } else if ((sav == "bal szél") == balKapu) {
+    y0 = 2 * harmad;
+    y1 = courtWidth;
+  } else {
+    y0 = 0.0;
+    y1 = harmad;
+  }
+  final x0 = balKapu ? 0.0 : courtLength - freeThrowRadius;
+  final x1 = balKapu ? freeThrowRadius : courtLength;
+  return Rect.fromLTRB(x0, y0, x1, y1);
+}
+
+/// A passzsávok küszöbei (a backend `court3d` és a döntés-elemzés
+/// `decisions.pass_completion` tükre).
+const double passLaneWidthM = 1.5;
+const double passLaneGood = 0.6;
+const double passLaneRisky = 0.35;
+
+/// A pillanatnyi labdás birtoklás-sugara (TacticsConfig.possession_radius_m).
+const double possessionRadiusM = 3.0;
+
+/// Egy passzsáv: a fogadó helye, a passz-esély, a sávban álló ellenfelek
+/// száma és a fokozat ("nyitott" / "kockázatos" / "zárt").
+class PassLane {
+  final double x, y, p;
+  final int blockers;
+  final String grade;
+  const PassLane(this.x, this.y, this.p, this.blockers, this.grade);
+}
+
+String passLaneGrade(double p) => p >= passLaneGood
+    ? "nyitott"
+    : (p >= passLaneRisky ? "kockázatos" : "zárt");
+
+double _pontSzakasz(
+    double px, double py, double ax, double ay, double bx, double by) {
+  final dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 == 0) return math.sqrt((px - ax) * (px - ax) + (py - ay) * (py - ay));
+  final t = (((px - ax) * dx + (py - ay) * dy) / l2).clamp(0.0, 1.0);
+  final cx = ax + t * dx, cy = ay + t * dy;
+  return math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+}
+
+/// A labdás passzsávjai (a backend `court3d.pass_lanes` tükre). `players`:
+/// (hazai?, x, y); null, ha nincs labda vagy a legközelebbi játékos a
+/// birtoklás-sugáron kívül van. Visszatérés: (labdás, sávok).
+((bool, double, double), List<PassLane>)? passLanes(
+    List<(bool, double, double)> players, Offset? ball) {
+  if (ball == null || players.isEmpty) return null;
+  (bool, double, double)? h;
+  var hd = double.infinity;
+  for (final p in players) {
+    final d = math.sqrt(
+        (p.$2 - ball.dx) * (p.$2 - ball.dx) + (p.$3 - ball.dy) * (p.$3 - ball.dy));
+    if (d < hd) {
+      hd = d;
+      h = p;
+    }
+  }
+  final holder = h!;
+  if (hd > possessionRadiusM) return null;
+  final lanes = <PassLane>[];
+  for (final t in players) {
+    if (identical(t, holder) || t.$1 != holder.$1) continue;
+    final tav = math.sqrt((holder.$2 - t.$2) * (holder.$2 - t.$2) +
+        (holder.$3 - t.$3) * (holder.$3 - t.$3));
+    final alap = math.max(0.1, 1 - tav / 35);
+    var blokk = 0;
+    for (final o in players) {
+      if (o.$1 == holder.$1) continue;
+      if (_pontSzakasz(o.$2, o.$3, holder.$2, holder.$3, t.$2, t.$3) <=
+          passLaneWidthM) {
+        blokk++;
+      }
+    }
+    final p = (alap - 0.3 * blokk).clamp(0.05, 0.99).toDouble();
+    lanes.add(PassLane(t.$2, t.$3, p, blokk, passLaneGrade(p)));
+  }
+  return (holder, lanes);
+}
+
+/// A pillanat-lapozó (Döntések, Szabad lövők ◀ ▶) közös logikája — a
+/// böngészős nézet `lapozCel`-jének tükre. `idok`: a pillanatok ideje
+/// (mp, növekvő); `utolso`: az utoljára ugrott pillanat ideje vagy null.
+/// A "következő" az utolsó ugrástól számít, amíg annak ablakában
+/// (−1,6…+2,5 mp) vagyunk, különben a lejátszófejtől (az első 1,6 mp
+/// pillanatai is elérhetők, és nem ragad le az épp nézett pillanaton).
+double? lapozCel(List<double> idok, double most, double? utolso, int irany) {
+  final benne = utolso != null && most >= utolso - 1.6 && most <= utolso + 2.5;
+  final alap = benne ? utolso : most;
+  if (irany > 0) {
+    for (final s in idok) {
+      if (benne ? s > alap + 1e-6 : s >= alap - 1e-6) return s;
+    }
+    return null;
+  }
+  for (var i = idok.length - 1; i >= 0; i--) {
+    if (benne ? idok[i] < alap - 1e-6 : idok[i] < alap - 0.5) return idok[i];
+  }
+  return null;
+}
+
+/// A fal-rés réteg küszöbei (a backend defense.WALL_GAP_M,
+/// WALL_GAP_DEPTH_M és WALL_GAP_MIN_DEFENDERS — teszt veti össze).
+const double wallGapM = 3.5;
+const double wallGapDepthM = 12.0;
+const int wallGapMinDefenders = 4;
+
+/// A védőfal rései EGY kockán: a fal védői (x, y) y szerint, a
+/// szomszéd-párok y-rései, a széles (≥ wallGapM) rések jele és a
+/// legnagyobb rés indexe (holtversenyben az első).
+class WallGaps {
+  final List<Offset> wall;
+  final List<double> gaps;
+  final List<bool> wide;
+  final int maxIndex;
+  const WallGaps(this.wall, this.gaps, this.wide, this.maxIndex);
+  double get maxGap => gaps[maxIndex];
+}
+
+/// A védőfal rései (a backend `court3d.wall_gap_segments` tükre — UGYANAZ
+/// a kiválogatás, mint a `wall_gaps` rétegben: a csapat mért, kapus
+/// nélküli védői a saját kaputól wallGapDepthM-en belül, y szerint,
+/// holtversenyben x szerint). `players`: (hazai?, x, y, mért?, kapus?);
+/// null, ha a fal nem áll (wallGapMinDefenders alatti védő).
+WallGaps? wallGapSegments(List<(bool, double, double, bool, bool)> players,
+    bool home, double goalX) {
+  final fal = [
+    for (final p in players)
+      if (p.$1 == home && p.$4 && !p.$5 && (p.$2 - goalX).abs() <= wallGapDepthM)
+        (p.$3, p.$2)
+  ]..sort((a, b) {
+      final c = a.$1.compareTo(b.$1);
+      return c != 0 ? c : a.$2.compareTo(b.$2);
+    });
+  if (fal.length < wallGapMinDefenders) return null;
+  final gaps = <double>[], wide = <bool>[];
+  var maxI = 0;
+  for (var i = 0; i + 1 < fal.length; i++) {
+    final g = fal[i + 1].$1 - fal[i].$1;
+    gaps.add(g);
+    wide.add(g >= wallGapM);
+    if (g > gaps[maxI]) maxI = i;
+  }
+  return WallGaps([for (final p in fal) Offset(p.$2, p.$1)], gaps, wide, maxI);
+}
+
+/// A jelenet-lista "ugyanaz a pillanat" tűrése (mp) — a backend
+/// court3d.SCENE_SAME_MOMENT_S tükre (őr-teszt): a kapott gól sora
+/// elmarad, ha ennyin belül szabad lövő GÓL-sor van.
+const double sceneSameMomentS = 0.05;
+
+/// A jelenet-vetítés (a lista sorai egymás után): a jelenet a pillanata
+/// után ennyi mp-ig fut, mielőtt a következő sor jön — a backend
+/// court3d.SCENE_REEL_TAIL_S tükre (őr-teszt).
+const double sceneReelTailS = 3.5;
+
+/// A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS
+/// tükre (őr-teszt): a színek (sárga labda/passz, kék futás, piros védő),
+/// legfeljebb ennyi nyíl, és ennél rövidebb húzás nem nyíl (méter).
+const List<int> drawingColors = [0xFFFFD23F, 0xFF4C9AFF, 0xFFFF6B6B];
+const List<String> drawingColorNames = [
+  "sárga — labda, passz", "kék — futás", "piros — védő"];
+const int drawingMax = 30;
+const double drawingMinM = 0.6;
+
+/// A nyílhegy két szárnypontja (pálya-méter): a csúcs (x2, y2), a szárak
+/// [hossz] méterrel vissza a nyíl tengelyén, onnan ±[szel]/2 oldalra — a
+/// böngésző nyilFej-ének tükre.
+(Offset, Offset) arrowHead(
+    double x1, double y1, double x2, double y2, double hossz, double szel) {
+  var d = math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+  if (d == 0) d = 1;
+  final ux = (x2 - x1) / d, uy = (y2 - y1) / d;
+  final bx = x2 - ux * hossz, by = y2 - uy * hossz;
+  return (Offset(bx - uy * szel / 2, by + ux * szel / 2),
+      Offset(bx + uy * szel / 2, by - ux * szel / 2));
+}
+
+/// A "rajz" szöveg (a link-paraméter és a jegyzet-tár alakja) → nyilak —
+/// a böngésző rajzDekodol-jának tükre: a hibás, pályán kívüli (−10…50 m-en
+/// túli), túl rövid és ismeretlen színű tag kimarad, legfeljebb
+/// [drawingMax] nyíl.
+List<(Offset, Offset, int)> decodeDrawing(String? s) {
+  final ki = <(Offset, Offset, int)>[];
+  // Csak a kódoló számalakja (-12.3; szín: egész) — a böngésző és a
+  // Python tükör ugyanígy (a tryParse az "1e1"-et is elfogadná).
+  final szam = RegExp(r"^-?[0-9]+(\.[0-9]+)?$"), egesz = RegExp(r"^[0-9]+$");
+  for (final tag in (s ?? "").split(";")) {
+    final p = tag.split(",");
+    if (p.length != 5 ||
+        !p.take(4).every((x) => szam.hasMatch(x.trim())) ||
+        !egesz.hasMatch(p[4].trim())) {
+      continue;
+    }
+    final v = [for (final x in p.take(4)) double.tryParse(x.trim())];
+    final k = int.tryParse(p[4].trim());
+    if (v.any((x) => x == null || !x.isFinite || x < -10 || x > 50)) continue;
+    if (k == null || k < 0 || k >= drawingColors.length) continue;
+    final a = Offset(v[0]!, v[1]!), b = Offset(v[2]!, v[3]!);
+    if ((b - a).distance < drawingMinM) continue;
+    ki.add((a, b, k));
+    if (ki.length >= drawingMax) break;
+  }
+  return ki;
+}
+
+/// Az app 3D kamerája (pálya-méter: x a hossz, y a szélesség, z a
+/// magasság; yaw: az előre-irány (sin yaw, cos yaw) a padlón; pitch: fel
+/// pozitív) a böngészős 3D three-terébe (x a hossz, y a magasság, z = a
+/// szélesség tükörképe; a rig yaw-ja és a kamera pitch-e) — a közös nézés
+/// "📍 Ide mindenki" nézőpontja. A böngésző előre-iránya
+/// (−sin yaw, sin pitch, −cos yaw) a pályán (−sin yaw, cos yaw), tehát a
+/// yaw előjelet vált, a pitch marad. A csarnok dobozába szorítva (mint a
+/// motor): a pálya hosszában −60…100, magasságban 0,2…60, a szélesség
+/// tükrében −60…80 m.
+Map<String, double> browserViewpoint(
+    double cx, double cy, double cz, double yaw, double pitch) {
+  return {
+    "x": cx.clamp(-60.0, 100.0).toDouble(),
+    "y": cz.clamp(0.2, 60.0).toDouble(),
+    "z": (courtWidth - cy).clamp(-60.0, 80.0).toDouble(),
+    "yaw": -yaw,
+    "pitch": pitch.clamp(-1.6, 1.6).toDouble(),
+  };
+}
+
+/// A közös nézés JELENLÉTE: a saját kamerához ennél közelebbi társ nem
+/// látszik ("Ide mindenki" után mindenki egy helyen áll) — a motor
+/// court3d.SHARED3D_NEAR_M-je (őr-teszt).
+const double presenceNearM = 1.2;
+
+/// A közös nézés egy társa az app pálya-terében: x a hossz, y a szélesség,
+/// h a szem magassága, (fx, fy) a nézés iránya a padlón (egységvektor).
+class TeamMember {
+  final int sz; // a csatlakozás sorszáma
+  final String nev;
+  final double x, y, h, fx, fy;
+  // A kvíz aktuális körére adott válasz (a padló pontja, pálya-méter) —
+  // null: nincs kvíz, vagy nem válaszolt.
+  final Offset? valasz;
+  // ✋ Kérdése van (a böngészős követő "Kérdésem van"-ja).
+  final bool kez;
+  const TeamMember(this.sz, this.nev, this.x, this.y, this.h, this.fx, this.fy,
+      {this.valasz, this.kez = false});
+
+  /// A név, név nélkül a csatlakozás sorszáma (#3) — mint a böngészőben
+  /// (a kvíz-eredmény is ezzel nevez).
+  String get cimke => nev.isNotEmpty ? nev : "#$sz";
+
+  /// A feje fölötti felirat: a név, kérdésnél ✋-val (mint a böngészőben).
+  String get felirat => kez ? "✋ $cimke" : cimke;
+}
+
+/// A motor "csapat" listája ([{"sz", "nev", "hely": [x, y, z, yaw]}] — a
+/// böngésző three-terében, court3d.shared3d_hely) az app pálya-terében: a
+/// pálya y-ja a szélesség − three z, a magasság a three y; a three
+/// (−sin yaw, −cos yaw) nézés-iránya a pályán (−sin yaw, cos yaw). A rossz
+/// alakú sor kimarad. A kvíz-válasz ("valasz": [x, y]) már pálya-méter.
+List<TeamMember> parseTeamPresence(Object? csapat) {
+  if (csapat is! List) return const [];
+  final ki = <TeamMember>[];
+  for (final e in csapat) {
+    if (e is! Map) continue;
+    final hely = e["hely"], sz = e["sz"];
+    if (sz is! num || hely is! List || hely.length != 4 ||
+        hely.any((v) => v is! num)) {
+      continue;
+    }
+    final v = [for (final x in hely) (x as num).toDouble()];
+    final va = e["valasz"];
+    final valasz = va is List && va.length == 2 && va.every((v) => v is num)
+        ? Offset((va[0] as num).toDouble(), (va[1] as num).toDouble())
+        : null;
+    ki.add(TeamMember(sz.toInt(), (e["nev"] ?? "").toString(), v[0],
+        courtWidth - v[2], v[1], -math.sin(v[3]), math.cos(v[3]),
+        valasz: valasz, kez: e["kez"] == true));
+  }
+  return ki;
+}
+
+/// DÖNTÉS-KVÍZ: a jobb cél (passznál a jobb társ helye) ennyi méteren
+/// belül számít találatnak; lövésnél a cél a kapu közepe, a találat a
+/// kapuelőtér — a motor court3d.SHARED3D_QUIZ_HIT_M / _SHOT_M-je
+/// (őr-teszt).
+const double quizHitM = 3.0;
+const double quizShotM = 6.0;
+
+/// A kvíz-válasz ítélete egy döntés-pillanatnál (court3d.quiz_verdict
+/// tükre): a válasz a JOBB opciót mutatja-e — közelebb a jobb célhoz, mint
+/// a választott passz céljához, és a jobb céltól legfeljebb quizHitM-re
+/// (lövésnél quizShotM-re).
+bool quizVerdict(Offset valasz, Offset jobb, Offset valasztott,
+    {bool loves = false}) {
+  final db = (valasz - jobb).distance, dc = (valasz - valasztott).distance;
+  return db < dc && db <= (loves ? quizShotM : quizHitM);
+}
+
+/// A kvíz eredménye jegyzet-szövegként (a böngésző kvizJegyzetSzoveg-
+/// jének tükre): valaszok = (név, ítélet — null: nem döntés-kvíz) a
+/// csatlakozás sorrendjében; fajta: a jobb opció ("s" lövés, "p" passz;
+/// null: nem döntés-kvíz); hianyzik: a nem válaszolók száma.
+String quizNoteText(List<(String, bool?)> valaszok, String? fajta,
+    int hianyzik) {
+  String nevek(bool Function(bool?) f) =>
+      [for (final (n, i) in valaszok) if (f(i)) n].join(", ");
+  final r = <String>[];
+  if (fajta != null) {
+    final jo = nevek((i) => i == true), rossz = nevek((i) => i == false);
+    if (jo.isNotEmpty) r.add("✓ $jo");
+    if (rossz.isNotEmpty) r.add("✗ $rossz");
+  } else if (valaszok.isNotEmpty) {
+    r.add("válaszolt: ${nevek((_) => true)}");
+  }
+  if (hianyzik > 0) r.add("nem válaszolt: $hianyzik");
+  final fej = fajta != null
+      ? "❓ Döntés-kvíz (jobb opció: ${fajta == "s" ? "lövés" : "passz"})"
+      : "❓ Kvíz";
+  return r.isEmpty ? fej : "$fej — ${r.join(" · ")}";
+}
+
+/// ⏺ FELVÉTEL: legfeljebb ennyi állapot (court3d.SHARED3D_REC_MAX —
+/// őr-teszt), a név legfeljebb ennyi jel (SHARED3D_REC_NAME_MAX).
+const int recordingMax = 20000;
+const int recordingNameMax = 80;
+
+/// A felvétel hossza "p:mm" alakban (a böngésző fvOra-jának tükre).
+String recordingClock(num? s) {
+  final t = math.max(0, (s ?? 0).floor());
+  return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+}
+
+/// A felvétel alapneve (a böngésző "Megbeszélés " + hu-HU rövid dátum-
+/// idejének alakja): "Megbeszélés 2026. 10. 14. 21:06".
+String recordingDefaultName(DateTime d) {
+  String k(int v) => v.toString().padLeft(2, "0");
+  return "Megbeszélés ${d.year}. ${k(d.month)}. ${k(d.day)}. "
+      "${k(d.hour)}:${k(d.minute)}";
+}
+
+/// Egy felvétel alsó sora a "▶ Felvételek" listában: a mentés ideje
+/// ("2026-10-14 21:06"), a hossz ("0:05"), a fejezetek száma (ha több
+/// van — ahol az edző másik jelenetre ugrott), 🎙, ha hangja is van, és
+/// hogy ki nézte meg (háromig névvel, fölötte a számuk).
+/// A felvétel követőinek névsora (a felvétel-sor tooltipje): ki követte
+/// élőben, ki nézte meg utólag.
+String recordingPeople(Map<String, dynamic> f) {
+  final jelen = [for (final n in (f["jelen"] as List? ?? const [])) "$n"];
+  final nezok = [for (final n in (f["nezok"] as List? ?? const [])) "$n"];
+  if (jelen.isEmpty && nezok.isEmpty) {
+    return "Még senki nem követte névvel (élőben vagy felvételről).";
+  }
+  return [
+    if (jelen.isNotEmpty) "Élőben: ${jelen.join(", ")}",
+    if (nezok.isNotEmpty) "Megnézte: ${nezok.join(", ")}",
+  ].join("\n");
+}
+
+/// A figura-tervező kulcs-pozíciói a böngészős 3D figura-linkjéhez
+/// (a motor /figura3d `u` paramétere): támadónként "x,y,x,y,…" méterben,
+/// tizedre kerekítve, a támadók ";"-vel elválasztva.
+String setplay3dPoints(List<List<Offset>> utak) => utak
+    .map((u) => u
+        .map((p) =>
+            "${p.dx.toStringAsFixed(1)},${p.dy.toStringAsFixed(1)}")
+        .join(","))
+    .join(";");
+
+/// Egy mentett figura (a motor /playbook/{id} alakja) a figura-oldalak
+/// link-paramétereire: u (az utak), l (a labdás-sor, ha nem végig az 1.),
+/// cim (a név). A fal a figura-oldal alap kézi fala (6 védő, 6 m).
+Map<String, String> savedPlayQuery(Map<String, dynamic> play) {
+  final utak = [
+    for (final a in (play["attackers"] as List?) ?? const [])
+      [
+        for (final pt in a as List)
+          Offset(((pt as List)[0] as num).toDouble(), (pt[1] as num).toDouble())
+      ]
+  ];
+  final labda = [
+    for (final v in (play["labda"] as List?) ?? const []) (v as num).toInt()
+  ];
+  final nev = "${play["name"] ?? ""}".trim();
+  return {
+    "u": setplay3dPoints(utak),
+    if (labda.any((v) => v != 0)) "l": labda.join(","),
+    if (nev.isNotEmpty) "cim": nev,
+  };
+}
+
+/// A kalibráló kép legkisebb mérete (a vászon arányában). A pálya sarka
+/// a képen kívül is lehet — a felezővonal közeli vége egy térfél-
+/// kalibrációnál akár másfél képmagassággal a kép alatt: 25%-nál a vászon
+/// alja épp ennyi, a sarok a szélén ragadt.
+const double calibMinScale = 0.10;
+
+/// A kalibráló képernyő vonalszín-választója: (a motor kulcsa, felirat) —
+/// a motor broadcast_lines.LINE_COLORS + "feher" + "mezo" (a festett
+/// mezők széle) + "auto".
+const calibLineColors = [
+  ("auto", "automatikus"),
+  ("feher", "fehér"),
+  ("piros", "piros"),
+  ("kek", "kék"),
+  ("zold", "zöld"),
+  ("sarga", "sárga"),
+  ("mezo", "festett mezők széle"),
+];
+
+/// A motor vonalszín-kulcsának magyar neve (ismeretlennél a kulcs).
+String calibLineColorHu(String? c) {
+  for (final (v, l) in calibLineColors) {
+    if (v == c) return l;
+  }
+  return c ?? "?";
+}
+
+/// A kalibráló kép következő mérete a kicsinyítés / nagyítás gombra:
+/// 25% fölött 12 százalékpontos, alatta 5 százalékpontos lépés,
+/// [calibMinScale]..1 között.
+double calibScaleStep(double s, {required bool shrink}) {
+  final lepes = shrink ? (s > 0.3 ? 0.12 : 0.05) : (s < 0.25 ? 0.05 : 0.12);
+  return (shrink ? s - lepes : s + lepes).clamp(calibMinScale, 1.0);
+}
+
+/// A vászon szélére szorult sarok (a vászon arányában): a húzás a vászon
+/// szélén megáll, a valódi sarok lehet, hogy még kijjebb van.
+bool calibCornerAtEdge(Offset p) =>
+    p.dx <= 0.002 || p.dx >= 0.998 || p.dy <= 0.002 || p.dy >= 0.998;
+
+/// A kezdőlap "FIGURÁK" kártyája ennyi (a legutóbb listázott) figurát mutat.
+const int dashboardPlays = 6;
+
+/// A figura labdása az animáció lépésenként: `labda` kulcs-pozíciónként a
+/// labdás sorszáma; ahol a következő pontnál más, ott a szakasz felénél
+/// "passzol" (a tervező vázlat-animációja — a böngészős 3D a passzt
+/// repülve, a következő pontra érkezve mutatja).
+List<int> setplayBallSteps(List<int> labda, int steps) {
+  if (labda.isEmpty) return List<int>.filled(steps, 0);
+  final k = labda.length;
+  return [
+    for (int s = 0; s < steps; s++)
+      () {
+        if (k == 1 || steps < 2) return labda.first;
+        final pos = s / (steps - 1) * (k - 1);
+        final i = pos.floor().clamp(0, k - 1);
+        if (i >= k - 1) return labda.last;
+        return pos - i >= 0.5 ? labda[i + 1] : labda[i];
+      }()
+  ];
+}
+
+/// A figura-tervező kulcs-pozícióinak felső határa (a motor 3D-je tízet
+/// is visz; a tervező oldalsávjában hat fér el).
+const int designerMaxPoints = 6;
+
+/// A figura támadóinak száma a tervezőben (a motor is legfeljebb hetet
+/// visz — FIGURA_3D_MAX_JATEKOS).
+const int designerMinAttackers = 2;
+const int designerMaxAttackers = 7;
+
+/// A kézi fal védőinek száma a tervezőben: 6 a teljes fal, 5 egy, 4 két
+/// kiállítás után (emberelőny-figura).
+const int designerMinDefenders = 4;
+const int designerMaxDefenders = 6;
+
+/// Az új támadó kezdő helye a tervezőben: az alap öt után a jobb szélső,
+/// majd a második beálló, aztán a pálya közepe felé (az edző elhúzza).
+Offset newAttackerSpot(int index) {
+  const helyek = [Offset(28, 18), Offset(31, 7), Offset(26, 10)];
+  final i = index - 5;
+  return i >= 0 && i < helyek.length ? helyek[i] : const Offset(26, 10);
+}
+
+/// Egy út `k` kulcs-pozícióra vetítve: egyenletes "idő"-lépésekkel a
+/// szakaszonként lineáris úton (a mentett, más pontszámú figura és a
+/// rövidebb utak a tervező közös pontszámára).
+List<Offset> resamplePath(List<Offset> ut, int k) {
+  if (ut.isEmpty) return const [];
+  if (ut.length == k) return List<Offset>.of(ut);
+  return [
+    for (int i = 0; i < k; i++)
+      () {
+        if (ut.length == 1 || k == 1) return ut.first;
+        final pos = i / (k - 1) * (ut.length - 1);
+        final j = pos.floor().clamp(0, ut.length - 2);
+        return Offset.lerp(ut[j], ut[j + 1], pos - j)!;
+      }()
+  ];
+}
+
+/// A kulcs-pozíció felirata a tervezőben: 3 pontnál "Kezdő / Közép / Vég",
+/// több pontnál sorszám (a sávban így fér el).
+String keypointLabel(int i, int k) {
+  if (k == 3) return const ["Kezdő", "Közép", "Vég"][i];
+  if (k == 2) return i == 0 ? "Kezdő" : "Vég";
+  return "${i + 1}";
+}
+
+/// A csapat linkje futónként (a figura támadói a hazai 1, 2, 3 …): a
+/// /kovet a vezetett figurára irányít, a `szem` a futó szemével nyitja.
+List<String> runnerLinks(String kovetUrl, int n) =>
+    [for (int i = 1; i <= n; i++) "$kovetUrl?szem=h$i"];
+
+/// A figura falának linkjei: a kapus (a motor FIGURA_KAPUS_MEZ-e, 1-es) és
+/// [n] védő (2, 3, …) — a játékos a figurát a fal tagjaként, a saját
+/// szemével nézi (a feje a labdát követi).
+List<String> defenderLinks(String kovetUrl, int n) =>
+    [for (int i = 1; i <= n + 1; i++) "$kovetUrl?szem=v$i"];
+
+/// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
+/// takarításához.
+String recordingSize(num? bajt) {
+  final b = (bajt ?? 0).toDouble();
+  if (b >= 1e9) return "${(b / 1e9).toStringAsFixed(1).replaceAll(".", ",")} GB";
+  if (b >= 1e7) return "${(b / 1e6).round()} MB";
+  return "${(b / 1e6).toStringAsFixed(1).replaceAll(".", ",")} MB";
+}
+
+String recordingSubtitle(Map<String, dynamic> f) {
+  final l = "${f["letrehozva"] ?? ""}";
+  final mikor =
+      l.length >= 16 ? l.substring(0, 16).replaceFirst("T", " ") : l;
+  final fejezetek = (f["fejezetek"] as num?)?.toInt() ?? 0;
+  final nezok = [for (final n in (f["nezok"] as List? ?? const [])) "$n"];
+  final jelen = (f["jelen"] as List?)?.length ?? 0;
+  final hossz = recordingClock(f["hossz_s"] as num?) +
+      (fejezetek > 1 ? " · $fejezetek fejezet" : "") +
+      (f["hang"] == true ? " · 🎙" : "") +
+      (jelen > 0 ? " · élőben $jelen" : "") +
+      (((f["meret"] as num?) ?? 0) >= 1e6
+          ? " · ${recordingSize(f["meret"] as num?)}"
+          : "") +
+      (nezok.isEmpty
+          ? ""
+          : nezok.length <= 3
+              ? " · megnézte: ${nezok.join(", ")}"
+              : " · megnézte: ${nezok.length} játékos");
+  return mikor.isEmpty ? hossz : "$mikor · $hossz";
+}
+
+/// Az app kamerájának jelenléte a motornak: [x, y, z, yaw] a böngésző
+/// three-terében (mint a browserViewpoint — a csarnok dobozába szorítva).
+List<double> browserPresence(double cx, double cy, double cz, double yaw) {
+  final v = browserViewpoint(cx, cy, cz, yaw, 0);
+  return [v["x"]!, v["y"]!, v["z"]!, v["yaw"]!];
+}
+
+/// A nyilak a böngészős nézet "rajz" link-paraméterének alakjában
+/// ("x1,y1,x2,y2,szín;…", 0,1 m-re kerekítve, a JS Math.round-jával
+/// azonosan) — a "Böngészőben" gomb így viszi át a rajzot.
+String encodeDrawing(List<(Offset, Offset, int)> nyilak) {
+  String szam(double v) {
+    final r = (v * 10 + 0.5).floor() / 10;
+    return r == r.roundToDouble() ? r.toInt().toString() : r.toString();
+  }
+
+  return [
+    for (final (a, b, k) in nyilak.take(drawingMax))
+      "${szam(a.dx)},${szam(a.dy)},${szam(b.dx)},${szam(b.dy)},$k"
+  ].join(";");
+}
+
+/// A jelenet-lista egy sora: idő (mp és "p:mm"), fajta ("d" döntés, "sz"
+/// szabad lövés, "e" labdavesztés), felirat, és hogy gól lett-e.
+class SceneRow {
+  final double s;
+  final String ido, tipus, szoveg;
+  final bool gol;
+  const SceneRow(this.s, this.ido, this.tipus, this.szoveg, this.gol);
+}
+
+/// A jelenet-lista sorai (a böngészős nézet `jelenetSorok`-jának tükre,
+/// UGYANAZOKKAL a feliratokkal): a döntés-, szabad-lövés-,
+/// labdavesztés-, lerohanás- és kapott-gól-pillanatok (az API sorai)
+/// időrendben; holtversenyben döntés, szabad lövés, labdavesztés,
+/// lerohanás, kapott gól. A kapott lerohanás és a kapott gól a VÉDEKEZŐ
+/// csapat sora ("kinek a hibája"); a kapott gól sora elmarad, ha ugyanarra
+/// a pillanatra szabad lövő GÓL-sor van (az már megnevezi).
+List<SceneRow> sceneRows(
+    List<Map<String, dynamic>> dontesek,
+    List<Map<String, dynamic>> szabadok,
+    List<Map<String, dynamic>> eladasok,
+    String nevH,
+    String nevV,
+    [List<Map<String, dynamic>> lerohanasok = const [],
+    List<Map<String, dynamic>> kapottGolok = const []]) {
+  String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
+  String csapat(dynamic side) => side == "home" ? nevH : nevV;
+  String ido(double s) {
+    final t = math.max(0, s.floor());
+    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+  }
+
+  const harmad = {"saját": "saját", "közép": "középső", "támadó": "támadó"};
+  final sorok = <SceneRow>[];
+  double sOf(Map<String, dynamic> d) => ((d["s"] as num?) ?? 0).toDouble();
+  for (final d in dontesek) {
+    sorok.add(SceneRow(sOf(d), "", "d",
+        "${csapat(d["team"])} — jobb opció is volt: "
+            "${d["best_kind"] == "shoot" ? "lövés" : "passz egy szabadabb társhoz"}",
+        false));
+  }
+  for (final d in szabadok) {
+    final tav = d["dist"] as num?;
+    final gol = d["goal"] == true;
+    sorok.add(SceneRow(sOf(d), "", "sz",
+        "${csapat(d["defending"])} védekezése — szabad lövő"
+            "${tav != null ? " (${sz1(tav)} m)" : ""}${gol ? " · GÓL" : ""}",
+        gol));
+  }
+  for (final d in eladasok) {
+    final gol = d["goal_after_s"] != null;
+    final mez = d["jersey"];
+    final h = harmad[d["zone"]];
+    sorok.add(SceneRow(sOf(d), "", "e",
+        "${csapat(d["team"])} — labdavesztés${mez != null ? " #$mez" : ""}"
+            "${h != null ? " ($h harmad)" : ""}${gol ? " · gól lett belőle" : ""}",
+        gol));
+  }
+  for (final d in lerohanasok) {
+    final gol = d["outcome"] == "goal";
+    final mez = d["shooter_jersey"];
+    final vege = gol
+        ? " · GÓL"
+        : d["outcome"] == "shot"
+            ? " · lövés"
+            : " · lövés nélkül";
+    sorok.add(SceneRow(sOf(d), "", "k",
+        "${csapat(d["defending"])} védekezése — kapott lerohanás: "
+            "${csapat(d["team"])}${mez != null ? " #$mez" : ""}$vege",
+        gol));
+  }
+  final szabadGolIdok = [
+    for (final d in szabadok) if (d["goal"] == true) sOf(d)
+  ];
+  for (final d in kapottGolok) {
+    final s = sOf(d);
+    if (szabadGolIdok.any((s0) => (s - s0).abs() < sceneSameMomentS)) continue;
+    final mez = d["shooter_jersey"];
+    final tav = d["def_dist"] as num?;
+    final mely = d["keeper_depth"] as num?;
+    final kapus = mely == null
+        ? ""
+        : d["keeper_out"] == true
+            ? " · kapus kint"
+            : " · kapus a vonalon";
+    sorok.add(SceneRow(s, "", "kg",
+        "${csapat(d["defending"])} védekezése — kapott gól: "
+            "${csapat(d["team"])}${mez != null ? " #$mez" : ""} (${d["zone"]})"
+            "${tav != null ? " · védő ${sz1(tav)} m" : ""}$kapus",
+        true));
+  }
+  const rend = {"d": 0, "sz": 1, "e": 2, "k": 3, "kg": 4};
+  sorok.sort((a, b) {
+    final c = a.s.compareTo(b.s);
+    return c != 0 ? c : rend[a.tipus]!.compareTo(rend[b.tipus]!);
+  });
+  return [
+    for (final r in sorok) SceneRow(r.s, ido(r.s), r.tipus, r.szoveg, r.gol)
+  ];
+}
+
+/// A lerohanás felirata (a böngészős nézet `kontraFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Lerohanás (Szeged): #7 fejezi be · második
+/// hullám · elszökött emberrel · 4,2 mp · GÓL" — a hiányzó részek (lövő,
+/// hullám, elszökés) kimaradnak. `k`: a /fast-break-moments egy sora.
+String fastBreakCaption(Map<String, dynamic> k, String nevH, String nevV) {
+  final csapat = k["team"] == "home" ? nevH : nevV;
+  final hossz = ((k["duration_s"] as num?) ?? 0).toDouble();
+  final reszek = <String>[
+    if (k["shooter_jersey"] != null) "#${k["shooter_jersey"]} fejezi be",
+    if (k["wave"] == "first") "első ember",
+    if (k["wave"] == "second") "második hullám",
+    if (k["ahead"] == true) "elszökött emberrel",
+    if (k["ahead"] == false) "együtt felfutva",
+    "${hossz.toStringAsFixed(1).replaceAll(".", ",")} mp",
+    k["outcome"] == "goal"
+        ? "GÓL"
+        : k["outcome"] == "shot"
+            ? "lövés"
+            : "lövés nélkül",
+  ];
+  return "Lerohanás ($csapat): ${reszek.join(" · ")}";
+}
+
+/// A hétméteres felirata (a böngészős nézet `hetesFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Hetes (Szeged): #7 · középre · GÓL · kapus
+/// 0,9 m-re a kaputól". `h`: a /seven-meter-moments egy sora.
+String sevenMeterCaption(Map<String, dynamic> h, String nevH, String nevV) {
+  const irany = {"bal": "balra", "közép": "középre", "jobb": "jobbra"};
+  const kim = {"gól": "GÓL", "védés": "védés", "kihagyva": "kihagyva"};
+  final mely = h["keeper_depth"] as num?;
+  final reszek = <String>[
+    if (h["shooter_jersey"] != null) "#${h["shooter_jersey"]}",
+    if (irany[h["irany"]] != null) irany[h["irany"]]!,
+    kim[h["outcome"]] ?? "kimenet ismeretlen",
+    mely == null
+        ? "kapus nem mérhető"
+        : "kapus ${mely.toDouble().toStringAsFixed(1).replaceAll(".", ",")} m-re a kaputól",
+  ];
+  return "Hetes (${h["team"] == "home" ? nevH : nevV}): ${reszek.join(" · ")}";
+}
+
+/// A kapott gól felirata (a böngészős nézet `kapottFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Kapott gól (Veszprém): Szeged #10 · 9 m-en
+/// túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus 0,9 m-re a
+/// vonalon · xG 0,09". `g`: a /conceded-goals egy sora.
+String concededGoalCaption(
+    Map<String, dynamic> g, String nevH, String nevV) {
+  String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
+  final ved = g["defending"] == "home" ? nevH : nevV;
+  final tam = g["team"] == "home" ? nevH : nevV;
+  final mez = g["shooter_jersey"];
+  final tav = g["def_dist"] as num?;
+  final mely = g["keeper_depth"] as num?;
+  final xg = ((g["xg"] as num?) ?? 0).toDouble();
+  final reszek = <String>[
+    "$tam${mez != null ? " #$mez" : ""}",
+    "${g["zone"]}, kapu-szög ${sz1((g["angle_deg"] as num?) ?? 0)}°",
+    tav == null
+        ? "védő nem mérhető"
+        : "védő ${sz1(tav)} m-re${g["free"] == true ? " — szabadon" : ""}",
+    mely == null
+        ? "kapus nem mérhető"
+        : "kapus ${sz1(mely)} m-re ${g["keeper_out"] == true ? "kint" : "a vonalon"}",
+    "xG ${xg.toStringAsFixed(2).replaceAll(".", ",")}",
+  ];
+  return "Kapott gól ($ved): ${reszek.join(" · ")}";
+}
+
+/// A gól-akció felirata (a böngészős nézet `golAkcioFelirat`-jának
+/// tükre, UGYANAZZAL a szöveggel): "Szeged gólja — #10 → #9 → #7 → #10
+/// lő · 3 passz, 6,5 mp"; hosszú láncnál az első kettő és az utolsó két
+/// passzoló marad. `g`: a /goal-build-ups egy sora.
+String goalBuildUpCaption(Map<String, dynamic> g, String nevH, String nevV) {
+  String m(dynamic j) => j != null ? "#$j" : "?";
+  final passzok = ((g["passes"] as List?) ?? const []).cast<Map>();
+  var nevek = [for (final p in passzok) m(p["from_jersey"])];
+  if (nevek.length > 4) {
+    nevek = [...nevek.take(2), "…", ...nevek.skip(nevek.length - 2)];
+  }
+  final lanc = nevek.isEmpty ? "" : "${nevek.join(" → ")} → ";
+  final n = ((g["n_passes"] as num?) ?? 0).toInt();
+  final hossz = ((g["duration_s"] as num?) ?? 0).toDouble();
+  final csapat = g["team"] == "home" ? nevH : nevV;
+  return "$csapat gólja — $lanc${m(g["shooter_jersey"])} lő · "
+      "${n > 0 ? "$n passz, ${hossz.toStringAsFixed(1).replaceAll(".", ",")} mp" : "passz nélkül"}";
+}
+
+/// Az emberelőny-jelző szövege (a böngészős nézet `emberSzoveg`-ének
+/// tükre, UGYANAZZAL a szöveggel): "Emberelőny: Szeged (Veszprém
+/// kiállítás miatt hiányos) · még 1:13 · az előny alatt eddig 1–0".
+/// `w`: a /powerplay-moments egy sora, `t`: a lejátszófej (mp).
+String powerplayCaption(
+    Map<String, dynamic> w, double t, String nevH, String nevV) {
+  final downH = w["team_down"] == "home";
+  final elony = downH ? nevV : nevH, hatrany = downH ? nevH : nevV;
+  final e = ((w["e"] as num?) ?? t).toDouble();
+  final hatra = math.max(0, (e - t).ceil());
+  final ido = "${hatra ~/ 60}:${(hatra % 60).toString().padLeft(2, "0")}";
+  var fel = 0, le = 0;
+  for (final g in ((w["goals"] as List?) ?? const [])) {
+    final mp = ((g as List)[0] as num).toDouble();
+    if (mp > t) continue;
+    if (g[1] == w["team_up"]) {
+      fel++;
+    } else {
+      le++;
+    }
+  }
+  return "Emberelőny: $elony ($hatrany kiállítás miatt hiányos) · még $ido "
+      "· az előny alatt eddig $fel–$le";
 }

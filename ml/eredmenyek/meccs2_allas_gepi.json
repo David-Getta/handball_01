@@ -1,0 +1,624 @@
+{
+ "vegeredmeny": [
+  35,
+  33
+ ],
+ "golok": [
+  {
+   "csapat": "hazai",
+   "t_tol": 64.4,
+   "t_ig": 64.8,
+   "allas_utana": [
+    1,
+    0
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 106.6,
+   "t_ig": 107.0,
+   "allas_utana": [
+    1,
+    1
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 130.8,
+   "t_ig": 131.2,
+   "allas_utana": [
+    1,
+    2
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 198.8,
+   "t_ig": 199.2,
+   "allas_utana": [
+    1,
+    3
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 285.4,
+   "t_ig": 285.8,
+   "allas_utana": [
+    2,
+    3
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 321.6,
+   "t_ig": 322.0,
+   "allas_utana": [
+    3,
+    3
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 372.8,
+   "t_ig": 373.2,
+   "allas_utana": [
+    3,
+    4
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 523.6,
+   "t_ig": 524.0,
+   "allas_utana": [
+    3,
+    5
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 536.2,
+   "t_ig": 536.6,
+   "allas_utana": [
+    4,
+    5
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 702.2,
+   "t_ig": 702.6,
+   "allas_utana": [
+    5,
+    5
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 711.8,
+   "t_ig": 713.8,
+   "allas_utana": [
+    5,
+    6
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 751.0,
+   "t_ig": 751.4,
+   "allas_utana": [
+    6,
+    6
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 891.2,
+   "t_ig": 891.6,
+   "allas_utana": [
+    6,
+    7
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1037.6,
+   "t_ig": 1039.2,
+   "allas_utana": [
+    6,
+    8
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 1283.2,
+   "t_ig": 1283.6,
+   "allas_utana": [
+    7,
+    8
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 1348.2,
+   "t_ig": 1361.8,
+   "allas_utana": [
+    8,
+    9
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1348.2,
+   "t_ig": 1361.8,
+   "allas_utana": [
+    8,
+    9
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1403.2,
+   "t_ig": 1403.6,
+   "allas_utana": [
+    8,
+    10
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 1505.2,
+   "t_ig": 1505.6,
+   "allas_utana": [
+    9,
+    10
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 1588.4,
+   "t_ig": 1588.8,
+   "allas_utana": [
+    10,
+    10
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1622.4,
+   "t_ig": 1622.8,
+   "allas_utana": [
+    10,
+    11
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1725.8,
+   "t_ig": 1727.8,
+   "allas_utana": [
+    10,
+    12
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 1759.2,
+   "t_ig": 1759.6,
+   "allas_utana": [
+    11,
+    12
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 1790.6,
+   "t_ig": 1791.0,
+   "allas_utana": [
+    11,
+    13
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 2068.2,
+   "t_ig": 2068.6,
+   "allas_utana": [
+    12,
+    13
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 2154.4,
+   "t_ig": 2154.8,
+   "allas_utana": [
+    13,
+    13
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2207.0,
+   "t_ig": 2207.8,
+   "allas_utana": [
+    13,
+    14
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 2269.2,
+   "t_ig": 2269.6,
+   "allas_utana": [
+    14,
+    14
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2386.4,
+   "t_ig": 2386.8,
+   "allas_utana": [
+    14,
+    15
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 2490.2,
+   "t_ig": 2490.6,
+   "allas_utana": [
+    15,
+    15
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2602.4,
+   "t_ig": 2602.8,
+   "allas_utana": [
+    15,
+    16
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 2648.0,
+   "t_ig": 2648.4,
+   "allas_utana": [
+    16,
+    16
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2749.8,
+   "t_ig": 2751.6,
+   "allas_utana": [
+    16,
+    17
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2787.4,
+   "t_ig": 2787.8,
+   "allas_utana": [
+    16,
+    18
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 2861.4,
+   "t_ig": 2861.8,
+   "allas_utana": [
+    16,
+    19
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3034.4,
+   "t_ig": 3034.8,
+   "allas_utana": [
+    17,
+    19
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3167.0,
+   "t_ig": 3167.4,
+   "allas_utana": [
+    18,
+    19
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 3184.6,
+   "t_ig": 3185.0,
+   "allas_utana": [
+    18,
+    20
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3224.2,
+   "t_ig": 3224.6,
+   "allas_utana": [
+    19,
+    20
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 3230.2,
+   "t_ig": 3242.6,
+   "allas_utana": [
+    19,
+    21
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3262.2,
+   "t_ig": 3262.6,
+   "allas_utana": [
+    20,
+    21
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3273.2,
+   "t_ig": 3298.0,
+   "allas_utana": [
+    21,
+    22
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 3273.2,
+   "t_ig": 3298.0,
+   "allas_utana": [
+    21,
+    22
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 3362.4,
+   "t_ig": 3363.8,
+   "allas_utana": [
+    21,
+    23
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 3575.8,
+   "t_ig": 3577.6,
+   "allas_utana": [
+    21,
+    24
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3603.2,
+   "t_ig": 3603.6,
+   "allas_utana": [
+    22,
+    24
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3791.6,
+   "t_ig": 3792.0,
+   "allas_utana": [
+    23,
+    24
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 3892.6,
+   "t_ig": 3911.4,
+   "allas_utana": [
+    24,
+    24
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4155.4,
+   "t_ig": 4157.0,
+   "allas_utana": [
+    24,
+    25
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4295.0,
+   "t_ig": 4295.4,
+   "allas_utana": [
+    25,
+    25
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4317.8,
+   "t_ig": 4318.2,
+   "allas_utana": [
+    25,
+    26
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4356.8,
+   "t_ig": 4357.2,
+   "allas_utana": [
+    26,
+    26
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4419.8,
+   "t_ig": 4421.6,
+   "allas_utana": [
+    27,
+    26
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4564.2,
+   "t_ig": 4566.2,
+   "allas_utana": [
+    28,
+    26
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4754.4,
+   "t_ig": 4754.8,
+   "allas_utana": [
+    28,
+    27
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4834.8,
+   "t_ig": 4836.6,
+   "allas_utana": [
+    28,
+    28
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4894.2,
+   "t_ig": 4895.6,
+   "allas_utana": [
+    29,
+    28
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4928.2,
+   "t_ig": 4944.6,
+   "allas_utana": [
+    29,
+    29
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 4957.0,
+   "t_ig": 4958.2,
+   "allas_utana": [
+    30,
+    29
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 4969.2,
+   "t_ig": 4969.6,
+   "allas_utana": [
+    30,
+    30
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 5039.0,
+   "t_ig": 5041.6,
+   "allas_utana": [
+    31,
+    30
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 5046.6,
+   "t_ig": 5047.0,
+   "allas_utana": [
+    31,
+    31
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 5170.4,
+   "t_ig": 5185.4,
+   "allas_utana": [
+    32,
+    31
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 5238.2,
+   "t_ig": 5240.4,
+   "allas_utana": [
+    33,
+    31
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 5294.2,
+   "t_ig": 5294.6,
+   "allas_utana": [
+    33,
+    32
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 5400.2,
+   "t_ig": 5401.0,
+   "allas_utana": [
+    34,
+    32
+   ]
+  },
+  {
+   "csapat": "vendeg",
+   "t_tol": 5490.8,
+   "t_ig": 5493.4,
+   "allas_utana": [
+    34,
+    33
+   ]
+  },
+  {
+   "csapat": "hazai",
+   "t_tol": 5508.6,
+   "t_ig": 5509.8,
+   "allas_utana": [
+    35,
+    33
+   ]
+  }
+ ],
+ "valtozasok": 66,
+ "elutasitott": [],
+ "allapotok": 387,
+ "olvashato": 386
+}

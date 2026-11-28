@@ -1,0 +1,334 @@
+<title>Meccs-lövésjelölő</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Elrendezés: felül a videó (kattintással a lövő megjelölése) és a kockaléptető, alatta a kérdések rácsban. A lövésjelölő színei. */
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --ink: #16202c; --muted: #5c6b7c; --line: #d6dde6;
+  --court: #1f5fa8; --court-ink: #ffffff; --signal: #e8731c; --ok: #1d8a4e; --warn: #b4521b; --replay: #7a4cc2;
+  --video-bg: #0d141c;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a; --ok: #3cb878; --warn: #f0995a; --replay: #a983e8;
+  --video-bg: #05080c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #17202a; --ink: #e6edf5; --muted: #93a3b5; --line: #2a3746;
+  --court: #3f86d6; --court-ink: #0b1118; --signal: #f08a3a; --ok: #3cb878; --warn: #f0995a; --replay: #a983e8;
+  --video-bg: #05080c; color-scheme: dark; }
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 16px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; justify-content: space-between; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; margin: 0; }
+.progress { font-variant-numeric: tabular-nums; color: var(--muted); }
+.progress b { color: var(--ink); }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+.notice { padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--warn); color: var(--warn); }
+.clipline { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.clipname { font-family: var(--font-mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .04em; text-transform: uppercase; padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line); }
+.tag.done { border-color: var(--ok); color: var(--ok); }
+.tag.replay { border-color: var(--replay); color: var(--replay); }
+.stage { position: relative; background: var(--video-bg); border-radius: 10px; overflow: hidden; cursor: crosshair; }
+video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: var(--video-bg); }
+.marker { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 3px solid var(--signal); border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.6); pointer-events: none; }
+.transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.frame { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 6px; min-width: 9ch; }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; min-height: 40px; touch-action: manipulation; }
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 3px solid var(--court); outline-offset: 2px; }
+button[disabled] { opacity: .45; cursor: default; }
+.icon { min-width: 44px; font-family: var(--font-mono); white-space: nowrap; }
+.release-btn { border-color: var(--signal); color: var(--signal); font-weight: 600; }
+.release-btn.set { background: var(--signal); color: var(--panel); }
+kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; margin-left: 6px; opacity: .7; }
+@media (hover: none) { kbd { display: none; } }
+.questions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+fieldset { margin: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 12px 14px 14px; min-width: 0; }
+legend { font-family: var(--font-display); font-weight: 700; font-size: 19px; padding: 0 4px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { flex: 1 1 auto; }
+.seg button[aria-pressed="true"], .goal button[aria-pressed="true"] { background: var(--court); color: var(--court-ink); border-color: var(--court); }
+.goal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; border: 3px solid var(--ink); border-bottom: none; border-radius: 4px 4px 0 0; max-width: 260px; }
+.goal button { min-height: 34px; padding: 4px; font-size: 12px; color: var(--muted); }
+.goalside { display: flex; justify-content: space-between; max-width: 260px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.shooter-state { font-size: 14px; }
+.shooter-state.set { color: var(--ok); font-weight: 600; }
+.extra { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.extra label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.primary { background: var(--court); color: var(--court-ink); border-color: var(--court); font-weight: 600; padding: 10px 18px; }
+.status { color: var(--muted); font-size: 13px; min-height: 1.4em; }
+.status.err { color: var(--warn); } .status.ok { color: var(--ok); }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+summary { cursor: pointer; font-weight: 600; }
+details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Meccs-lövésjelölő</h1>
+    <div class="progress" id="progress">Betöltés…</div>
+  </header>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <div class="notice" id="notice" hidden></div>
+
+  <div class="clipline">
+    <span class="clipname" id="clipname">—</span>
+    <span class="tags"><span class="tag replay" id="replaytag" hidden>ismétlés</span><span class="tag" id="cliptag">nincs jelölve</span></span>
+  </div>
+
+  <div class="stage" id="stage"><video id="video" playsinline muted preload="auto"></video><div class="marker" id="marker" hidden></div></div>
+
+  <div class="transport">
+    <button class="icon" id="back5">−5</button>
+    <button class="icon" id="back1">◀</button>
+    <button class="icon" id="play">▶</button>
+    <button class="icon" id="fwd1">▶|</button>
+    <button class="icon" id="fwd5">+5</button>
+    <span class="frame" id="frame">k = 0</span>
+    <button class="release-btn" id="release">Itt engedi el<kbd>E</kbd></button>
+  </div>
+
+  <div class="questions">
+    <fieldset>
+      <legend>Ki lő?</legend>
+      <p class="hint">Az elengedés kockáján kattints a lövőre a videón (a testére). Ebből tudja a gép, kit kövessen.</p>
+      <span class="shooter-state" id="shooterState">Még nincs megjelölve.</span>
+    </fieldset>
+    <fieldset>
+      <legend>Hol jön ki a labda?</legend>
+      <p class="hint">Amit a kapus lát, a karformától függetlenül.</p>
+      <div class="seg" data-field="kartartas">
+        <button data-v="fent">Fent<kbd>1</kbd></button>
+        <button data-v="fej_mellett">Fej mellett<kbd>2</kbd></button>
+        <button data-v="oldalt">Oldalt<kbd>3</kbd></button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Lövőkéz</legend>
+      <div class="seg" data-field="lovokez">
+        <button data-v="jobb">Jobb<kbd>J</kbd></button>
+        <button data-v="bal">Bal<kbd>B</kbd></button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Hova ment</legend>
+      <p class="hint">A kapus szemszögéből: ő a gólvonalon áll, arccal a lövő felé.</p>
+      <div class="goal" data-field="zona">
+        <button data-v="fent-bal">bal felső</button><button data-v="fent-kozep">felső</button><button data-v="fent-jobb">jobb felső</button>
+        <button data-v="kozep-bal">bal</button><button data-v="kozep">közép</button><button data-v="kozep-jobb">jobb</button>
+        <button data-v="lent-bal">bal alsó</button><button data-v="lent-kozep">alsó</button><button data-v="lent-jobb">jobb alsó</button>
+      </div>
+      <div class="goalside"><span>← kapus bal keze</span><span>kapus jobb keze →</span></div>
+    </fieldset>
+    <fieldset>
+      <legend>Kimenet</legend>
+      <p class="hint">A meccsjelölésedből előre kitöltve; javíthatod.</p>
+      <div class="seg" data-field="kimenet">
+        <button data-v="gol">Gól</button><button data-v="vedes">Védés</button><button data-v="melle">Mellé / fölé</button><button data-v="blokk">Blokk</button>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="extra">
+    <label><input type="checkbox" id="rossz"> Nem lövés / nem jelölhető (pl. a klip máshol jár, a lövés nem látszik)</label>
+  </div>
+
+  <div class="actions">
+    <div class="seg">
+      <button id="prev">← Előző</button>
+      <button id="next">Következő →</button>
+      <button id="firstOpen">Első jelöletlen</button>
+    </div>
+    <button class="primary" id="save">Mentés és következő<kbd>Enter</kbd></button>
+  </div>
+  <div class="status" id="status" role="status"></div>
+
+  <details>
+    <summary>Hogyan jelölj</summary>
+    <ul>
+      <li>A videó a gombnyomásod előtt kicsivel áll meg (a nyomás a lövés UTÁN jött). Lépkedj ◀ ▶ nyilakkal oda, ahol a labda elhagyja a kezet, és nyomd meg az <b>E</b>-t.</li>
+      <li>Ugyanezen a kockán kattints a lövőre a videón. Kötelező: elengedés, lövő, „hol jön ki”, lövőkéz.</li>
+      <li>A zónát akkor jelöld, ha látod, hova ment a labda; ha nem, hagyd üresen.</li>
+      <li>Ismétlés-klipeknél (lila „ismétlés” címke) ugyanígy jelölj; a lassított kép kifejezetten jó a pontos elengedéshez.</li>
+      <li>Kockaszám a videó bal felső sarkában is látszik. <b>Enter</b> ment és továbblép.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const video = $("video");
+  const COLL = "cimkek_m1";
+  let clips = [], idx = 0, labels = {}, form = {};
+  let db = null, userId = null, canSave = false, loaded = false;
+
+  function status(msg, cls) { const s = $("status"); s.textContent = msg; s.className = "status" + (cls ? " " + cls : ""); }
+  function clip() { return clips[idx]; }
+  function fps() { return clip() ? clip().fps : 25; }
+  function curFrame() { const c = clip(); const last = c ? c.frames - 1 : 0; return Math.max(0, Math.min(last, Math.floor(video.currentTime * fps() + 1e-3))); }
+  function seekFrame(k) { const c = clip(); if (!c) return; k = Math.max(0, Math.min(c.frames - 1, k)); video.pause(); video.currentTime = (k + 0.5) / fps(); showFrame(k); }
+  function showFrame(k = curFrame()) { const c = clip(); if (c) $("frame").textContent = "k = " + k + " / " + (c.frames - 1); }
+
+  function renderProgress() {
+    const done = clips.filter((c) => labels[c.id]).length;
+    $("progress").innerHTML = "<b>" + done + "</b> / " + clips.length + " lövés jelölve";
+    $("bar").style.width = clips.length ? (100 * done / clips.length) + "%" : "0";
+  }
+  function renderMarker() {
+    const m = $("marker");
+    if (form.lovo) { m.hidden = false; m.style.left = (100 * form.lovo.x) + "%"; m.style.top = (100 * form.lovo.y) + "%"; }
+    else m.hidden = true;
+    const s = $("shooterState");
+    s.textContent = form.lovo ? "Megjelölve (k = " + form.lovo.k + ")." : "Még nincs megjelölve.";
+    s.classList.toggle("set", !!form.lovo);
+  }
+  function renderForm() {
+    document.querySelectorAll("[data-field]").forEach((g) => {
+      g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(form[g.dataset.field] === b.dataset.v)));
+    });
+    const r = $("release");
+    if (Number.isInteger(form.elengedes)) { r.classList.add("set"); r.firstChild.textContent = "Elengedés: k = " + form.elengedes; }
+    else { r.classList.remove("set"); r.firstChild.textContent = "Itt engedi el"; }
+    $("rossz").checked = !!form.rossz;
+    renderMarker();
+  }
+  function renderTag() {
+    const c = clip(); if (!c) return;
+    const t = $("cliptag"); t.textContent = labels[c.id] ? "jelölve" : "nincs jelölve"; t.classList.toggle("done", !!labels[c.id]);
+    $("replaytag").hidden = !c.ismetles;
+  }
+
+  function loadClip(i) {
+    if (!clips.length) return;
+    idx = (i + clips.length) % clips.length;
+    const c = clip(); const saved = labels[c.id];
+    form = saved ? JSON.parse(JSON.stringify(saved)) : { kimenet: c.eredmeny || undefined };
+    $("clipname").textContent = (idx + 1) + ". " + c.id + "  ·  meccsidő " + Math.floor(c.t_video / 60) + ":" + String(Math.floor(c.t_video % 60)).padStart(2, "0");
+    renderTag();
+    video.src = c.src; video.load();
+    // a nyomás a lövés után jön (reakcióidő): kb. 0,4 s-mal korábbra állunk
+    const start = Number.isInteger(form.elengedes) ? form.elengedes : Math.max(0, c.press_k - Math.round(0.4 * c.fps));
+    video.addEventListener("loadeddata", () => seekFrame(start), { once: true });
+    renderForm(); status("");
+  }
+  function firstOpen(from = 0) {
+    for (let j = 0; j < clips.length; j++) { const i = (from + j) % clips.length; if (!labels[clips[i].id]) return i; }
+    return -1;
+  }
+
+  async function save() {
+    const c = clip(); if (!c) return;
+    if (!canSave) { status("A mentéshez bejelentkezés és szerkesztési jog kell.", "err"); return; }
+    if (!form.rossz) {
+      const miss = [];
+      if (!Number.isInteger(form.elengedes)) miss.push("elengedés (E)");
+      if (!form.lovo) miss.push("a lövő (kattints rá a videón)");
+      if (!form.kartartas) miss.push("hol jön ki (1/2/3)");
+      if (!form.lovokez) miss.push("lövőkéz (J/B)");
+      if (miss.length) { status("Még hiányzik: " + miss.join(", ") + ".", "err"); return; }
+    }
+    const doc = { klip: c.id, t_video: c.t_video, t_start: c.t_start, fps: c.fps, ismetles: !!c.ismetles,
+      elengedes: Number.isInteger(form.elengedes) ? form.elengedes : null, lovo: form.lovo || null,
+      kartartas: form.kartartas || null, lovokez: form.lovokez || null, zona: form.zona || null,
+      kimenet: form.kimenet || null, rossz: !!form.rossz, ki: userId, ido: new Date().toISOString() };
+    const btn = $("save"); btn.disabled = true;
+    try {
+      await db.collection(COLL).doc(c.id).set(doc);
+      labels[c.id] = doc; renderProgress();
+      const nxt = firstOpen(idx + 1);
+      if (nxt === -1) { status("Mentve. Minden lövés jelölve — köszönöm!", "ok"); loadClip(idx); }
+      else { loadClip(nxt); status("Mentve: " + c.id, "ok"); }
+    } catch (e) { status("Nem sikerült menteni (" + (e && e.code || "hiba") + "). Próbáld újra.", "err"); }
+    finally { btn.disabled = false; }
+  }
+
+  // --- vezérlők ---
+  $("back1").onclick = () => seekFrame(curFrame() - 1);
+  $("back5").onclick = () => seekFrame(curFrame() - 5);
+  $("fwd1").onclick = () => seekFrame(curFrame() + 1);
+  $("fwd5").onclick = () => seekFrame(curFrame() + 5);
+  $("play").onclick = () => { if (video.paused) { if (video.ended) video.currentTime = 0; video.play().catch(() => {}); } else video.pause(); };
+  video.addEventListener("play", () => { $("play").textContent = "❚❚"; tick(); });
+  video.addEventListener("pause", () => { $("play").textContent = "▶"; showFrame(); });
+  video.addEventListener("seeked", () => showFrame());
+  function tick() { showFrame(); if (!video.paused) requestAnimationFrame(tick); }
+  $("release").onclick = () => { video.pause(); form.elengedes = curFrame(); renderForm(); };
+  // a lövő megjelölése: kattintás a videón (arányos koordináta, 0..1)
+  $("stage").addEventListener("click", (e) => {
+    const r = video.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    video.pause();
+    form.lovo = { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, k: curFrame() };
+    if (!Number.isInteger(form.elengedes)) form.elengedes = form.lovo.k;
+    renderForm();
+  });
+  document.querySelectorAll("[data-field]").forEach((g) => g.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const f = g.dataset.field; form[f] = form[f] === b.dataset.v ? undefined : b.dataset.v; renderForm();
+  }));
+  $("rossz").onchange = (e) => { form.rossz = e.target.checked; };
+  $("prev").onclick = () => loadClip(idx - 1);
+  $("next").onclick = () => loadClip(idx + 1);
+  $("firstOpen").onclick = () => { const i = firstOpen(0); if (i >= 0) loadClip(i); else status("Nincs jelöletlen lövés.", "ok"); };
+  $("save").onclick = save;
+  document.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) b.blur(); });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key; const set = (f, v) => { form[f] = v; renderForm(); };
+    if (k === "ArrowLeft") seekFrame(curFrame() - (e.shiftKey ? 5 : 1));
+    else if (k === "ArrowRight") seekFrame(curFrame() + (e.shiftKey ? 5 : 1));
+    else if (k === " ") $("play").click();
+    else if (k === "e" || k === "E") $("release").click();
+    else if (k === "1") set("kartartas", "fent");
+    else if (k === "2") set("kartartas", "fej_mellett");
+    else if (k === "3") set("kartartas", "oldalt");
+    else if (k === "j" || k === "J") set("lovokez", "jobb");
+    else if (k === "b" || k === "B") set("lovokez", "bal");
+    else if (k === "Enter") save();
+    else return;
+    e.preventDefault();
+  });
+
+  async function start() {
+    try { clips = (await (await fetch("manifest.json")).json()).clips || []; }
+    catch (e) { $("progress").textContent = "A klip-lista nem töltődött be."; return; }
+    renderProgress(); loadClip(0);
+    if (!window.claude || !window.claude.use) { showNotice("A mentés csak a claude.ai-n megnyitva működik."); return; }
+    const [dbNs, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    db = dbNs;
+    if (!db) { showNotice("A mentéshez jelentkezz be a claude.ai-ra."); return; }
+    userId = user ? await user.id() : null;
+    const can = user ? await user.can("data.write") : null;
+    canSave = can !== false;
+    if (!canSave) showNotice("Ehhez az oldalhoz csak olvasási jogod van, a jelölés nem menthető.");
+    const timer = setTimeout(() => showNotice("A mentett jelölések még nem érkeztek meg; ellenőrizd a kapcsolatot."), 10000);
+    db.collection(COLL).onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { clearTimeout(timer); $("notice").hidden = true; }
+      const fresh = {}; snap.docs.forEach((d) => { fresh[d.id] = d.data(); });
+      labels = fresh; renderProgress(); renderTag();
+      if (!loaded && !snap.metadata.fromCache) { loaded = true; const i = firstOpen(0); if (i >= 0 && i !== idx) loadClip(i); }
+    }, (e) => { clearTimeout(timer); showNotice("A jelölések nem olvashatók (" + e.code + ")."); });
+  }
+  function showNotice(t) { const n = $("notice"); n.textContent = t; n.hidden = false; }
+  start();
+})();
+</script>

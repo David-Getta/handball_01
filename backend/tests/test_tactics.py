@@ -671,3 +671,445 @@ def test_attack_side_shift_stable_or_no_halftime_none():
 
     nob, _t = _sds_half_frames(0, 3.0)
     assert attack_side_shift(Match(meta, nob))["home"]["verdict"] is None
+
+
+# ---- Álló-poszt (melyik posztjuk áll labda nélkül) -------------------------
+
+
+def _sar_match(wing_moves=True, fps=25.0):
+    """Szervezett hazai támadás: a beálló (7) áll, a szélső (9) —
+    ha wing_moves — ingázik a sávjában."""
+    frames = []
+    t = 0
+    y9 = 2.0
+    dy = 0.2
+    for _ in range(600):
+        if wing_moves:
+            y9 += dy
+            if y9 >= 7.0 or y9 <= 2.0:
+                dy = -dy
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, y9)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_static_attacker_roles_names_the_standing_post():
+    """A beálló áll, a szélső ingázik → a beálló védője otthagyhatja."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match())["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["verdict"] and "otthagyhatja" in rec["verdict"], rec
+
+
+def test_static_attacker_roles_silent_when_all_static():
+    """Ha mindenki egyformán (nem) mozog, nincs kiugró álló poszt."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match(wing_moves=False))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _atv_match(hosszak_s, fps=25.0):
+    """Hazai támadó-szakaszok a megadott hosszakkal, közöttük szünettel."""
+    from handball.pipeline.tactics import ATV_MIN_SPAN_S  # noqa: F401
+    meta = MatchMeta(match_id="atv", home_team="H", away_team="A", fps=fps)
+    frames = []
+    t = 0
+    for h in hosszak_s:
+        for _ in range(int(h * fps)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Szakasz-zárás: szabad labda a felezőnél (senki a közelben).
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_attack_tempo_variety_egy_tempo():
+    """Kilenc rövid támadás → EGY tempó, gyors befejezéssel."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([8.0] * 9))
+    rec = atv["home"]
+    assert rec["attacks"] == 9
+    assert rec["fast"] == 9 and rec["mid"] == 0 and rec["slow"] == 0
+    assert rec["top_share_pct"] == 100.0
+    assert rec["verdict"] is not None
+    assert "egy tempóban" in rec["verdict"]
+    assert "gyorsan" in rec["verdict"]
+
+
+def test_attack_tempo_variety_valtogatas():
+    """Három sávban egyenletesen elosztott támadások → váltogatják."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(
+        _atv_match([8.0, 8.0, 8.0, 20.0, 20.0, 20.0, 34.0, 34.0, 34.0]))
+    rec = atv["home"]
+    assert rec["attacks"] == 9
+    assert (rec["fast"], rec["mid"], rec["slow"]) == (3, 3, 3)
+    assert rec["verdict"] == "váltogatják a tempót"
+
+
+def test_attack_tempo_variety_keves_mintanal_nincs_itelet():
+    """Négy támadásból nem szabad ritmust állítani."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([8.0] * 4))
+    rec = atv["home"]
+    assert rec["attacks"] == 4
+    assert rec["verdict"] is None
+    assert rec["top_share_pct"] is None
+    # A másik csapatnak egy támadása sincs — ott sem születhet ítélet.
+    assert atv["away"]["attacks"] == 0
+    assert atv["away"]["verdict"] is None
+
+
+def test_attack_tempo_variety_rovid_szakasz_nem_tamadas():
+    """A 3 mp alatti fázis-billegés nem támadás — nem szabad beszámítani."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([1.0] * 9))
+    assert atv["home"]["attacks"] == 0
+    assert atv["home"]["verdict"] is None
+
+
+# ---- segment_phases / most_common_formations -------------------------------
+
+def test_segment_phases_frame_enkent_sorrendben():
+    """A fázis-címkék kockánként, a meccs sorrendjében jönnek: hazai támadás,
+    vendég támadás, saját térfeles felépítés (átmenet), labda nélküli kocka."""
+    from handball.pipeline.tactics import segment_phases
+
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=30.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(11, Team.AWAY, 8.0, 10.0)],
+              ball=Ball(x=8.0, y=10.0, confidence=1.0)),
+        Frame(t=2, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+              ball=Ball(x=10.0, y=10.0, confidence=1.0)),
+        Frame(t=3, players=[_pl(1, Team.HOME, 30.0, 10.0)], ball=None),
+    ]
+    assert segment_phases(Match(_meta(), frames)) == [
+        Phase.HOME_ATTACK, Phase.AWAY_ATTACK, Phase.TRANSITION, Phase.UNKNOWN]
+
+
+def test_segment_phases_ures_meccs_es_forditott_irany():
+    """Üres meccsen nincs címke; fordított támadási iránynál ugyanaz a kocka
+    a hazai SAJÁT térfele lesz (átmenet), nem támadás."""
+    from handball.pipeline.tactics import segment_phases
+
+    assert segment_phases(Match(_meta(), [])) == []
+    frames = [Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                    ball=Ball(x=30.0, y=10.0, confidence=1.0))]
+    cfg = TacticsConfig(home_attacks_positive=False)
+    assert segment_phases(Match(_meta(), frames), cfg) == [Phase.TRANSITION]
+
+
+def _mcf_frame(t, defenders):
+    """Hazai támadás (labda a hazai támadó térfelén), a vendég védőfal a
+    megadott helyeken (vendég saját kapuja x=40)."""
+    players = [_pl(1, Team.HOME, 28.0, 10.0)]
+    players += [_pl(11 + i, Team.AWAY, x, y) for i, (x, y) in enumerate(defenders)]
+    return Frame(t=t, players=players, ball=Ball(x=28.0, y=10.0, confidence=1.0))
+
+
+def test_most_common_formations_a_vedekezo_csapat_leggyakoribb_formaja():
+    """Három 6-0-s és egy 5-1-es védekező kocka → a vendég formája 6-0; a
+    hazai nem védekezett → "—" (nincs minta, nincs kitalált forma)."""
+    from handball.pipeline.tactics import most_common_formations
+
+    hat_null = [(34.0, y) for y in (3, 6, 9, 11, 14, 17)]
+    ot_egy = [(34.0, 3), (34.0, 6), (34.0, 9), (34.0, 11), (34.0, 14),
+              (30.5, 14)]
+    frames = [_mcf_frame(0, hat_null), _mcf_frame(1, ot_egy),
+              _mcf_frame(2, hat_null), _mcf_frame(3, hat_null)]
+    res = most_common_formations(Match(_meta(), frames))
+    assert res == {"away": "6-0", "home": "—"}
+
+
+def test_most_common_formations_vedekezes_nelkul_nincs_forma():
+    """Csak átmenet és labda nélküli kocka: egyik csapat sem védekezett
+    szervezett támadás ellen → mindkettő "—"."""
+    from handball.pipeline.tactics import most_common_formations
+
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+              ball=Ball(x=10.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(11, Team.AWAY, 34.0, 10.0)], ball=None),
+    ]
+    assert most_common_formations(Match(_meta(), frames)) == {
+        "home": "—", "away": "—"}
+    assert most_common_formations(Match(_meta(), [])) == {
+        "home": "—", "away": "—"}
+
+
+# ---- TacticsConfig: melyik kapu kié ----------------------------------------
+
+def test_attacks_toward_x_az_ellenfel_kapuja():
+    """Alapértelmezésben a hazai a +x (x=40) kapura támad, a vendég a x=0-ra;
+    a támadott kapu mindig az ELLENFÉL saját kapuja."""
+    cfg = TacticsConfig()
+    assert cfg.attacks_toward_x(Team.HOME) == 40.0
+    assert cfg.attacks_toward_x(Team.AWAY) == 0.0
+    assert cfg.attacks_toward_x(Team.HOME) == cfg.own_goal_x(Team.AWAY)
+    assert cfg.attacks_toward_x(Team.AWAY) == cfg.own_goal_x(Team.HOME)
+
+
+def test_attacks_toward_x_forditott_iranynal_megfordul():
+    """Fordított támadási iránynál (térfélcsere) a két kapu szerepet cserél,
+    és egy csapat sosem a saját kapujára támad."""
+    cfg = TacticsConfig(home_attacks_positive=False)
+    assert cfg.attacks_toward_x(Team.HOME) == 0.0
+    assert cfg.attacks_toward_x(Team.AWAY) == 40.0
+    for team in (Team.HOME, Team.AWAY):
+        assert cfg.attacks_toward_x(team) != cfg.own_goal_x(team)
+
+
+# ---- Belső segédek közvetlenül: forma-név, támadáshossz, labdasebesség -------
+
+def test_formation_label_a_szokasos_formanevek():
+    """A sáv-létszámokból (hátsó, közép, előretolt) a kézilabda formanév:
+    6-0, 5-1 (az előretolt bármelyik sávban), 4-2, 3-2-1, 3-3."""
+    from handball.pipeline.tactics import _formation_label
+
+    assert _formation_label(6, 0, 0) == "6-0"
+    assert _formation_label(5, 1, 0) == "5-1"
+    assert _formation_label(5, 0, 1) == "5-1"
+    assert _formation_label(4, 2, 0) == "4-2"
+    assert _formation_label(3, 2, 1) == "3-2-1"
+    assert _formation_label(3, 3, 0) == "3-3"
+    assert _formation_label(3, 1, 2) == "3-3"
+    assert _formation_label(3, 0, 3) == "3-3"
+
+
+def test_formation_label_nem_tipikus_vagy_hianyos_fal_leiro_cimke():
+    """Ha a fal nem hat védő (kiállítás, takarás), vagy a hat védő nem
+    tipikus formában áll, nem erőltetünk rá formanevet: a sávok száma
+    megy ki leíró címkeként."""
+    from handball.pipeline.tactics import _formation_label
+
+    assert _formation_label(5, 0, 0) == "5-0-0 (hátsó-közép-előre)"
+    assert _formation_label(4, 1, 0) == "4-1-0 (hátsó-közép-előre)"
+    assert _formation_label(0, 0, 0) == "0-0-0 (hátsó-közép-előre)"
+    assert _formation_label(7, 0, 0) == "7-0-0 (hátsó-közép-előre)"
+    # Hat védő, de nem tipikus lépcsőzés.
+    assert _formation_label(4, 1, 1) == "4-1-1 (hátsó-közép-előre)"
+    assert _formation_label(4, 0, 2) == "4-0-2 (hátsó-közép-előre)"
+    assert _formation_label(2, 2, 2) == "2-2-2 (hátsó-közép-előre)"
+    assert _formation_label(2, 4, 0) == "2-4-0 (hátsó-közép-előre)"
+
+
+def test_detect_formation_a_cimket_a_savokbol_adja():
+    """A VALÓDI úton: a kockáról leolvasott sáv-létszámok címkéje ugyanaz,
+    amit a segéd ad — az 5-1-nél az előretolt védő a középső sávban áll."""
+    from handball.pipeline.tactics import _formation_label
+
+    players = [_pl(11 + i, Team.AWAY, 34.0, y)
+               for i, y in enumerate((3, 6, 9, 11, 14))]
+    players.append(_pl(16, Team.AWAY, 30.5, 10.0))
+    frame = Frame(t=0, players=players + [_pl(1, Team.HOME, 28.0, 10.0)],
+                  ball=Ball(x=28.0, y=10.0, confidence=1.0))
+    forma = detect_formation(frame, Team.AWAY, TacticsConfig())
+    assert (forma.back, forma.mid, forma.high) == (5, 1, 0)
+    assert forma.label == _formation_label(5, 1, 0) == "5-1"
+
+
+def _tamadas_kockak(t0, n, team):
+    """n kocka szervezett támadás (a labda a csapat támadó térfelén)."""
+    x = 30.0 if team == Team.HOME else 10.0
+    tid = 1 if team == Team.HOME else 11
+    return [Frame(t=t0 + i, players=[_pl(tid, team, x, 10.0)],
+                  ball=Ball(x=x, y=10.0, confidence=1.0)) for i in range(n)]
+
+
+def _atmenet_kockak(t0, n):
+    """n kocka átmenet (hazai labda a SAJÁT térfelén)."""
+    return [Frame(t=t0 + i, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+                  ball=Ball(x=10.0, y=10.0, confidence=1.0))
+            for i in range(n)]
+
+
+def test_avg_attack_duration_a_tamadas_szakaszok_atlaga():
+    """Az azonos támadó-fázisú, egymást követő kockák egy szakasz; a
+    szakaszok átlaghossza másodpercben. Két hazai (50 és 100 kocka) és
+    egy vendég (25 kocka) támadás, átmenettel elválasztva: (2+4+1)/3 mp."""
+    from handball.pipeline.tactics import _avg_attack_duration_s
+
+    frames = (_tamadas_kockak(0, 50, Team.HOME) + _atmenet_kockak(50, 10)
+              + _tamadas_kockak(60, 100, Team.HOME)
+              + _tamadas_kockak(160, 25, Team.AWAY))
+    m = Match(_meta(), frames)
+    assert abs(_avg_attack_duration_s(m, TacticsConfig()) - 7.0 / 3.0) < 1e-9
+    # A csapatváltás átmenet nélkül is szakasz-határ: 100 + 25 kocka.
+    ketto = Match(_meta(), _tamadas_kockak(0, 100, Team.HOME)
+                  + _tamadas_kockak(100, 25, Team.AWAY))
+    assert abs(_avg_attack_duration_s(ketto, TacticsConfig()) - 2.5) < 1e-9
+    # A tempó-metrika ezt az értéket viszi.
+    assert compute_tempo(m).avg_attack_duration_s == \
+        _avg_attack_duration_s(m, TacticsConfig())
+
+
+def test_avg_attack_duration_masodpercben_el_es_tamadas_nelkul_nulla():
+    """A hossz MÁSODPERC: harmad-fps-en ugyanaz a 6 mp-es támadás 50
+    kockából is 6 mp. Szervezett támadás nélkül (csak átmenet, vagy üres
+    meccs) az átlag 0,0 — nem osztás nullával."""
+    from handball.pipeline.tactics import _avg_attack_duration_s
+
+    suru = Match(_meta(), _tamadas_kockak(0, 150, Team.HOME))
+    ritka = Match(MatchMeta(match_id="r", home_team="H", away_team="A",
+                            fps=25.0 / 3.0),
+                  _tamadas_kockak(0, 50, Team.HOME))
+    cfg = TacticsConfig()
+    assert abs(_avg_attack_duration_s(suru, cfg) - 6.0) < 1e-9
+    assert abs(_avg_attack_duration_s(ritka, cfg) - 6.0) < 1e-9
+    assert _avg_attack_duration_s(Match(_meta(), _atmenet_kockak(0, 40)),
+                                  cfg) == 0.0
+    assert _avg_attack_duration_s(Match(_meta(), []), cfg) == 0.0
+
+
+def test_avg_ball_speed_az_egymast_koveto_labdas_kockakbol():
+    """A labda átlagsebessége az egymást követő labdás kockák közti
+    elmozdulásból: 0,4 m/kocka 25 fps-en 10 m/s; a labda nélküli kocka
+    megszakítja a láncot (a lyukon át nem mérünk "sebességet")."""
+    from handball.pipeline.tactics import _avg_ball_speed_ms
+
+    def meccs(pontok, fps=25.0):
+        return Match(MatchMeta(match_id="b", home_team="H", away_team="A",
+                               fps=fps),
+                     [Frame(t=i, players=[],
+                            ball=None if p is None
+                            else Ball(x=p[0], y=p[1], confidence=1.0))
+                      for i, p in enumerate(pontok)])
+
+    egyenletes = meccs([(10.0 + 0.4 * i, 10.0) for i in range(11)])
+    assert abs(_avg_ball_speed_ms(egyenletes) - 10.0) < 1e-9
+    # Lyuk: 10 → (nincs) → 30 m. A 20 m-es "ugrás" nem számít lépésnek.
+    lyukas = meccs([(10.0, 10.0), (10.4, 10.0), None, (30.0, 10.0),
+                    (30.4, 10.0)])
+    assert abs(_avg_ball_speed_ms(lyukas) - 10.0) < 1e-9
+    # Harmad-fps-en ugyanaz a pálya (1,2 m/kocka) ugyanaz a sebesség.
+    ritka = meccs([(10.0 + 1.2 * i, 10.0) for i in range(5)], fps=25.0 / 3.0)
+    assert abs(_avg_ball_speed_ms(ritka) - 10.0) < 1e-9
+    assert compute_tempo(egyenletes).avg_ball_speed_ms == \
+        _avg_ball_speed_ms(egyenletes)
+
+
+def test_avg_ball_speed_keves_labdas_kockanal_nulla():
+    """Labda nélkül, egyetlen labdás kockával vagy csupa magányos
+    (lyukkal elválasztott) labdás kockával nincs lépés: 0,0 — nem osztás
+    nullával; az álló labda sebessége is 0."""
+    from handball.pipeline.tactics import _avg_ball_speed_ms
+
+    def meccs(pontok):
+        return Match(_meta(), [Frame(
+            t=i, players=[], ball=None if p is None
+            else Ball(x=p[0], y=p[1], confidence=1.0))
+            for i, p in enumerate(pontok)])
+
+    assert _avg_ball_speed_ms(meccs([])) == 0.0
+    assert _avg_ball_speed_ms(meccs([None, None])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(10.0, 10.0)])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(10.0, 10.0), None, (30.0, 10.0),
+                                     None])) == 0.0
+    assert _avg_ball_speed_ms(meccs([(20.0, 10.0)] * 10)) == 0.0
+
+
+# ---- Belső segédek közvetlenül (harmadik kör) -------------------------------
+
+def test_possession_team_nyers_szamitas_a_legkozelebbi_jatekos_csapata():
+    """A gyorsítótár MÖGÖTTI számítás: a labdához legközelebbi játékos
+    csapata, ha a birtoklás sugarán (3 m) belül van; labda vagy játékos
+    nélkül, illetve távoli labdánál None ("szabad labda")."""
+    from handball.pipeline.tactics import _possession_team
+
+    cfg = TacticsConfig()
+    assert cfg.possession_radius_m == 3.0
+    jatekosok = [_pl(1, Team.HOME, 10.0, 10.0), _pl(11, Team.AWAY, 14.0, 10.0)]
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=11.0, y=10.0)), cfg) == Team.HOME
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=13.5, y=10.0)), cfg) == Team.AWAY
+    # A sugár széle még birtoklás, egy centivel kijjebb már szabad labda.
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=17.0, y=10.0)), cfg) == Team.AWAY
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=17.01, y=10.0)), cfg) is None
+    assert _possession_team(Frame(t=0, players=jatekosok, ball=None),
+                            cfg) is None
+    assert _possession_team(Frame(t=0, players=[],
+                                  ball=Ball(x=11.0, y=10.0)), cfg) is None
+    # A sugár a beállításból jön.
+    szuk = TacticsConfig(possession_radius_m=0.5)
+    assert _possession_team(Frame(t=0, players=jatekosok,
+                                  ball=Ball(x=11.0, y=10.0)), szuk) is None
+
+
+def test_classify_phase_nyers_szamitas_tamadas_atmenet_ismeretlen():
+    """A gyorsítótár MÖGÖTTI besorolás: szervezett támadás, ha a
+    birtokos csapat a TÁMADÓ térfelén tartja a labdát; saját térfélen
+    vagy szabad labdánál átmenet; labda nélkül ismeretlen. Térfélcsere
+    után (fordított támadási irány) a térfelek szerepe megfordul."""
+    from handball.pipeline.tactics import _classify_phase
+
+    cfg = TacticsConfig()
+
+    def kocka(csapat, x):
+        return Frame(t=0, players=[_pl(1, csapat, x, 10.0)],
+                     ball=Ball(x=x + 0.5, y=10.0))
+
+    assert _classify_phase(kocka(Team.HOME, 30.0), cfg) == Phase.HOME_ATTACK
+    assert _classify_phase(kocka(Team.HOME, 8.0), cfg) == Phase.TRANSITION
+    assert _classify_phase(kocka(Team.AWAY, 8.0), cfg) == Phase.AWAY_ATTACK
+    assert _classify_phase(kocka(Team.AWAY, 30.0), cfg) == Phase.TRANSITION
+    # Szabad labda (senki sincs a sugáron belül) és hiányzó labda.
+    assert _classify_phase(Frame(t=0, players=[_pl(1, Team.HOME, 5.0, 5.0)],
+                                 ball=Ball(x=30.0, y=10.0)),
+                           cfg) == Phase.TRANSITION
+    assert _classify_phase(Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                 ball=None), cfg) == Phase.UNKNOWN
+    # Fordított támadási irány: a hazai a x=0 kapura támad.
+    forditott = TacticsConfig(home_attacks_positive=False)
+    assert _classify_phase(kocka(Team.HOME, 8.0),
+                           forditott) == Phase.HOME_ATTACK
+    assert _classify_phase(kocka(Team.HOME, 30.0),
+                           forditott) == Phase.TRANSITION
+    assert _classify_phase(kocka(Team.AWAY, 30.0),
+                           forditott) == Phase.AWAY_ATTACK
+
+
+def test_a_gyorsitotaras_valtozat_ugyanazt_adja_mint_a_nyers():
+    """ŐR: a `possession_team` / `classify_phase` (kocka-szintű
+    gyorsítótárral) minden kockán ugyanazt adja, mint a nyers számítás —
+    nyitott hatókörben, ismételt hívásra és más beállítással is (a
+    kulcsban benne van a sugár és a támadási irány)."""
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.tactics import _classify_phase, _possession_team
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=4)
+    beallitasok = [TacticsConfig(), TacticsConfig(possession_radius_m=1.0),
+                   TacticsConfig(home_attacks_positive=False)]
+    nyers = [[(_possession_team(f, c), _classify_phase(f, c))
+              for f in m.frames] for c in beallitasok]
+    # A fixture ne legyen egyhangú: többféle birtokos és fázis is van.
+    assert len({p for p, _ in nyers[0]}) >= 2
+    assert len({ph for _, ph in nyers[0]}) >= 2
+    assert nyers[0] != nyers[1] and nyers[0] != nyers[2]
+    with primitive_cache(m):
+        for _ in range(2):                       # másodszor a tárból jön
+            for c, vart in zip(beallitasok, nyers):
+                kapott = [(possession_team(f, c), classify_phase(f, c))
+                          for f in m.frames]
+                assert kapott == vart
+    # Hatókör nélkül is ugyanaz (ott a burkoló egyszerűen számol).
+    assert [(possession_team(f, beallitasok[0]),
+             classify_phase(f, beallitasok[0])) for f in m.frames] == nyers[0]
